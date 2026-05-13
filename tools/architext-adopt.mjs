@@ -13,6 +13,13 @@ const appendixPath = path.join(templateDir, "AGENTS_APPENDIX.md");
 const skippedDirectories = new Set(["node_modules", "dist", ".git"]);
 const skippedFiles = new Set([".DS_Store"]);
 const instructionFiles = ["AGENTS.md", "CLAUDE.md"];
+const gitignoreBlock = [
+  "# Architext local dependency/build artifacts. Source files under docs/architext",
+  "# are tracked intentionally; generated dependencies and builds are not.",
+  "docs/architext/node_modules/",
+  "docs/architext/dist/"
+].join("\n");
+const gitignoreEntries = ["docs/architext/node_modules/", "docs/architext/dist/"];
 
 function usage() {
   return `Usage:
@@ -26,6 +33,8 @@ Options:
   --overwrite-data         Replace docs/architext/data/*.json with neutral starter data during upgrade.
   --append-agents          Append/create both AGENTS.md and CLAUDE.md without prompting.
   --no-agents              Do not prompt for AGENTS.md or CLAUDE.md changes.
+  --update-gitignore       Add Architext generated artifact ignores without prompting.
+  --no-gitignore           Do not prompt for .gitignore changes.
   --skip-install           Do not run npm install after writing artifacts.
   --skip-validate          Do not run npm run validate after writing artifacts.
   --branch current         Use the current branch without prompting.
@@ -54,6 +63,8 @@ function parseArgs(argv) {
     overwriteData: false,
     appendAgents: false,
     noAgents: false,
+    updateGitignore: false,
+    noGitignore: false,
     skipInstall: false,
     skipValidate: false,
     branch: "",
@@ -76,6 +87,10 @@ function parseArgs(argv) {
       options.appendAgents = true;
     } else if (arg === "--no-agents") {
       options.noAgents = true;
+    } else if (arg === "--update-gitignore") {
+      options.updateGitignore = true;
+    } else if (arg === "--no-gitignore") {
+      options.noGitignore = true;
     } else if (arg === "--skip-install") {
       options.skipInstall = true;
     } else if (arg === "--skip-validate") {
@@ -546,6 +561,31 @@ async function chooseInstructionFiles({ options, rl }) {
   return selected;
 }
 
+async function chooseGitignoreUpdate({ options, rl }) {
+  if (options.noGitignore) return false;
+  if (options.updateGitignore || options.yes) return true;
+  return promptYesNo(rl, "Ensure .gitignore excludes Architext generated artifacts?", true);
+}
+
+async function upsertGitignore({ target, dryRun }) {
+  const destination = path.join(target, ".gitignore");
+  const existing = existsSync(destination) ? await readFile(destination, "utf8") : "";
+  const missing = gitignoreEntries.filter((entry) => !existing.split(/\r?\n/).includes(entry));
+
+  if (missing.length === 0) {
+    return { destination, changed: false, reason: "already present", missing };
+  }
+
+  if (!dryRun) {
+    await mkdir(path.dirname(destination), { recursive: true });
+    const prefix = existing.trimEnd();
+    const next = `${prefix}${prefix ? "\n\n" : ""}${gitignoreBlock}\n`;
+    await writeFile(destination, next, "utf8");
+  }
+
+  return { destination, changed: true, created: !existing, missing };
+}
+
 async function runPostInstall({ target, options, wroteTemplate }) {
   if (options.dryRun || !wroteTemplate) return;
 
@@ -592,13 +632,14 @@ async function main() {
   const rl = createInterface({ input, output });
   try {
     const files = await chooseInstructionFiles({ options, rl });
+    const updateGitignore = await chooseGitignoreUpdate({ options, rl });
     const hasTemplateWrites = detected.shouldWrite || options.force;
 
     if (!hasTemplateWrites) {
       console.log("No template upgrade needed. Use --force to refresh template-owned files anyway.");
     }
 
-    if (!hasTemplateWrites && files.length === 0) {
+    if (!hasTemplateWrites && files.length === 0 && !updateGitignore) {
       return;
     }
 
@@ -636,6 +677,16 @@ async function main() {
         instructionResult.changed
           ? `${verb} ${instructionResult.destination}`
           : `Skipped ${instructionResult.destination}: ${instructionResult.reason}`
+      );
+    }
+
+    if (updateGitignore) {
+      const gitignoreResult = await upsertGitignore({ target, dryRun: options.dryRun });
+      const verb = options.dryRun ? "Would update" : "Updated";
+      console.log(
+        gitignoreResult.changed
+          ? `${verb} ${gitignoreResult.destination} with ${gitignoreResult.missing.length} Architext ignore entries`
+          : `Skipped ${gitignoreResult.destination}: ${gitignoreResult.reason}`
       );
     }
   } finally {

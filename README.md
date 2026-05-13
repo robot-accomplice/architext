@@ -21,6 +21,11 @@ Architecture documentation usually fails in one of two ways:
 Architext takes a different position: the machine-readable architecture model is
 the source of truth, and the human site is a projection of that model.
 
+The visual direction was inspired by [Dave J's x.com post about interactive
+architecture and flow visualization](https://x.com/davej/status/2053867258653339746?s=46&t=e_qP9a_xUWuOJ6eKxFpaAQ).
+Architext turns that kind of engineer-friendly architecture map into a local,
+JSON-backed template that can live inside any project repository.
+
 The JSON is intentionally not optimized for hand editing. LLMs are expected to
 maintain it as architecture changes. Humans review the rendered site and the
 JSON diffs.
@@ -149,6 +154,9 @@ Useful options:
 - `--append-agents` creates or appends both `AGENTS.md` and `CLAUDE.md` with the
   Architext instructions.
 - `--no-agents` skips `AGENTS.md` and `CLAUDE.md` prompts.
+- `--update-gitignore` adds Architext generated artifact ignores without
+  prompting.
+- `--no-gitignore` skips `.gitignore` prompts.
 - `--skip-install` skips dependency installation after writing artifacts.
 - `--skip-validate` skips architecture JSON validation after writing artifacts.
 - `--force` refreshes template-owned files even when the installed version is
@@ -158,6 +166,11 @@ Upgrade preserves `docs/architext/data/*.json` by default because those files
 belong to the target project. It refreshes the viewer, schemas, validation
 tooling, package files, and Architext docs. Use `--overwrite-data` only when
 intentionally resetting the target architecture data to neutral starter data.
+
+By default, the script also prompts to keep `docs/architext/node_modules/` and
+`docs/architext/dist/` ignored. Those directories are generated locally and
+should not be committed; the JSON data, schema, viewer source, package files,
+tools, and public assets should be committed.
 
 ## Local Usage
 

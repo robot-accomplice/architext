@@ -95,6 +95,11 @@ target `AGENTS.md` or `CLAUDE.md` file when explicitly requested. It must avoid
 duplicate appendix insertion by checking for the Architext heading before
 appending.
 
+The script should maintain deterministic ignore rules for generated local
+artifacts. `docs/architext/node_modules/` and `docs/architext/dist/` should be
+ignored, while data, schemas, viewer source, package files, tools, and public
+assets remain project-owned files that can be committed.
+
 The workflow must avoid POSIX-only shell behavior. Use Node filesystem APIs for
 copying, directory creation, path handling, and file updates so the same command
 works on Windows, Linux, and macOS.

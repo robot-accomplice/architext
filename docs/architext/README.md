@@ -55,6 +55,11 @@ Upgrade preserves `docs/architext/data/*.json` by default. Those files are the
 project-owned architecture record and should not be overwritten by template
 updates unless a maintainer explicitly passes `--overwrite-data`.
 
+The script can also maintain the target repository `.gitignore`. Generated
+local artifacts, especially `docs/architext/node_modules/` and
+`docs/architext/dist/`, should be ignored. Architecture JSON, schemas, viewer
+source, package files, tools, and public assets should be committed.
+
 ## Data Entry Point
 
 The viewer loads:
