@@ -1058,6 +1058,14 @@ function SystemMap({
     return { cost, samples };
   };
 
+  const nearestSample = (samples: Point[], target: Point): Point => {
+    return samples.reduce((nearest, sample) => {
+      const nearestDistance = Math.hypot(nearest.x - target.x, nearest.y - target.y);
+      const sampleDistance = Math.hypot(sample.x - target.x, sample.y - target.y);
+      return sampleDistance < nearestDistance ? sample : nearest;
+    }, samples[0] ?? target);
+  };
+
   const cubicRoute = (
     fromId: Id,
     toId: Id,
@@ -1071,10 +1079,11 @@ function SystemMap({
     const start = anchorFor(rectFor(fromId), startSide);
     const end = anchorFor(rectFor(toId), endSide);
     const scored = routeCost(start, controlA, controlB, end, label, fromId, toId, usedRoutes);
+    const labelPoint = nearestSample(scored.samples, label);
     return {
       d: `M ${start.x} ${start.y} C ${controlA.x} ${controlA.y}, ${controlB.x} ${controlB.y}, ${end.x} ${end.y}`,
-      labelX: label.x,
-      labelY: label.y,
+      labelX: labelPoint.x,
+      labelY: labelPoint.y,
       cost: scored.cost,
       samples: scored.samples
     };
