@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
 import "./styles.css";
@@ -147,6 +147,11 @@ type DiagramTransform = {
   focused: boolean;
 };
 
+type ViewportSize = {
+  width: number;
+  height: number;
+};
+
 type Relationship = {
   id: Id;
   from: Id;
@@ -287,6 +292,23 @@ function Badge({ children, tone }: { children: React.ReactNode; tone?: string })
   return <span className={`badge ${tone ?? ""}`}>{children}</span>;
 }
 
+function useElementSize<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null);
+  const [size, setSize] = useState<ViewportSize>({ width: 0, height: 0 });
+
+  useEffect(() => {
+    if (!ref.current) return;
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect;
+      setSize({ width, height });
+    });
+    observer.observe(ref.current);
+    return () => observer.disconnect();
+  }, []);
+
+  return [ref, size] as const;
+}
+
 function sectionId(title: string): string {
   const normalized = title.toLowerCase();
   if (normalized.includes("runtime")) return "runtime";
@@ -329,6 +351,9 @@ function App() {
   const [activeFlowId, setActiveFlowId] = useState<Id>("");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [diagramTransform, setDiagramTransform] = useState<DiagramTransform>({ zoom: 1, focused: false });
+  const [riskFilter, setRiskFilter] = useState("all");
+  const [stepsCollapsed, setStepsCollapsed] = useState(false);
+  const [diagramViewportRef, diagramViewportSize] = useElementSize<HTMLElement>();
 
   useEffect(() => {
     loadModel()
@@ -353,17 +378,24 @@ function App() {
   }, [rightCollapsed]);
 
   useEffect(() => {
-    const constrainedWidth = window.matchMedia("(max-width: 760px)");
-    const collapseForNarrowViewport = () => {
-      if (constrainedWidth.matches) {
+    const narrowWidth = window.matchMedia("(max-width: 760px)");
+    const laptopWidth = window.matchMedia("(max-width: 1180px)");
+    const collapseForViewport = () => {
+      if (narrowWidth.matches) {
         setNavCollapsed(true);
+        setRightCollapsed(true);
+      } else if (laptopWidth.matches) {
         setRightCollapsed(true);
       }
     };
 
-    collapseForNarrowViewport();
-    constrainedWidth.addEventListener("change", collapseForNarrowViewport);
-    return () => constrainedWidth.removeEventListener("change", collapseForNarrowViewport);
+    collapseForViewport();
+    narrowWidth.addEventListener("change", collapseForViewport);
+    laptopWidth.addEventListener("change", collapseForViewport);
+    return () => {
+      narrowWidth.removeEventListener("change", collapseForViewport);
+      laptopWidth.removeEventListener("change", collapseForViewport);
+    };
   }, []);
 
   if (error) {
@@ -419,10 +451,44 @@ function App() {
     return text.includes(query.toLowerCase());
   });
 
+  const estimateCanvasSize = (mode: Mode, view: View, flow: Flow): ViewportSize => {
+    if (mode === "sequence") {
+      const participantCount = new Set(flow.steps.flatMap((step) => [step.from, step.to])).size;
+      return {
+        width: 56 + participantCount * 146,
+        height: 88 + flow.steps.length * 56 + 56
+      };
+    }
+
+    if (mode === "c4") {
+      return {
+        width: Math.max(760, 112 + view.lanes.length * 210),
+        height: Math.max(440, 72 + Math.max(...view.lanes.map((lane) => lane.nodeIds.length), 1) * 86 + 96)
+      };
+    }
+
+    return {
+      width: 192 + view.lanes.length * 210,
+      height: Math.max(380, 86 + Math.max(...view.lanes.map((lane) => lane.nodeIds.length), 1) * 84 + 104)
+    };
+  };
+
+  const fitZoomFor = (mode: Mode, view: View, flow: Flow) => {
+    const estimate = estimateCanvasSize(mode, view, flow);
+    const availableWidth = Math.max(diagramViewportSize.width - 24, 1);
+    const availableHeight = Math.max(diagramViewportSize.height - 24, 1);
+    const nextZoom = Math.min(availableWidth / estimate.width, availableHeight / estimate.height);
+    return Math.min(1, Math.max(0.6, Number(nextZoom.toFixed(2))));
+  };
+
   const switchMode = (mode: Mode) => {
     const nextView = defaultViewForMode(mode, model.views, fallbackView);
     setActiveMode(mode);
     setActiveViewId(nextView.id);
+    if (diagramViewportSize.width && diagramViewportSize.height) {
+      const nextZoom = fitZoomFor(mode, nextView, activeFlow);
+      setDiagramTransform((value) => ({ ...value, zoom: Math.min(value.zoom, nextZoom) }));
+    }
     if (mode === "c4") {
       setSelection({ kind: "node", id: nextView.lanes.flatMap((lane) => lane.nodeIds)[0] ?? model.nodes[0]?.id ?? "" });
     } else if (mode === "data-risks") {
@@ -455,8 +521,10 @@ function App() {
       <header className="topbar">
         <div>
           <p className="eyebrow">Architext / {model.manifest.schemaVersion}</p>
-          <h1>{model.manifest.project.name}</h1>
-          <p>{model.manifest.project.summary}</p>
+          <div className="project-title-line">
+            <h1>{model.manifest.project.name}</h1>
+            <p>{model.manifest.project.summary}</p>
+          </div>
         </div>
         <div className="topbar-actions">
           <div className="mode-tabs" role="tablist" aria-label="Architext modes">
@@ -502,6 +570,8 @@ function App() {
             nodes={model.nodes}
             dataClasses={model.dataClasses}
             risks={model.risks}
+            riskFilter={riskFilter}
+            onRiskFilterChange={setRiskFilter}
             onSelectFlow={(flowId) => {
               setActiveFlowId(flowId);
               setSelection({ kind: "flow", id: flowId });
@@ -514,7 +584,7 @@ function App() {
 
       <main className="diagram-area">
         <section className="diagram-header">
-          <div>
+          <div className="diagram-title-line">
             <h2>{activeView.name}</h2>
             <p>{activeView.summary}</p>
           </div>
@@ -522,73 +592,92 @@ function App() {
             transform={diagramTransform}
             onZoomIn={() => setDiagramTransform((value) => ({ ...value, zoom: Math.min(1.6, Number((value.zoom + 0.1).toFixed(2))) }))}
             onZoomOut={() => setDiagramTransform((value) => ({ ...value, zoom: Math.max(0.7, Number((value.zoom - 0.1).toFixed(2))) }))}
-            onFit={() => setDiagramTransform((value) => ({ ...value, zoom: 0.85 }))}
+            onFit={() => setDiagramTransform((value) => ({ ...value, zoom: fitZoomFor(activeMode, activeView, activeFlow) }))}
             onReset={() => setDiagramTransform((value) => ({ ...value, zoom: 1 }))}
-            onToggleFocus={() => setDiagramTransform((value) => ({ ...value, focused: !value.focused }))}
+            onToggleFocus={() => setDiagramTransform((value) => {
+              const focused = !value.focused;
+              return { ...value, focused, zoom: focused ? fitZoomFor(activeMode, activeView, activeFlow) : value.zoom };
+            })}
           />
-          <div className="legend">
-            {(["actor", "software-system", "client", "service", "worker", "queue", "data-store", "external-service"] as NodeType[]).map((type) => (
-              <span key={type}><i className={`dot ${type}`} />{type}</span>
-            ))}
-          </div>
-        </section>
-
-        {isSequenceView ? (
-          <SequenceDiagram
-            activeFlow={activeFlow}
-            nodesById={nodesById}
-            dataById={dataById}
-            selectedStepId={selectedStepId}
-            transform={diagramTransform}
-            onSelectStep={(stepId) => setSelection({ kind: "step", flowId: activeFlow.id, stepId })}
-            onSelectRelationship={selectRelationship}
-          />
-        ) : isC4View ? (
-          <C4Diagram
-            view={activeView}
-            nodesById={nodesById}
-            selectedNodeId={selectedNodeId}
-            selectedRelationship={selection?.kind === "relationship" ? selection : null}
-            transform={diagramTransform}
-            onSelectNode={(id) => setSelection({ kind: "node", id })}
-            onSelectRelationship={selectRelationship}
-          />
-        ) : (
-          <SystemMap
-            view={activeView}
-            nodesById={nodesById}
-            activeFlow={isC4View ? null : activeFlow}
-            showStructuralConnections={isC4View}
-            selectedStepId={selectedStepId}
-            selectedRelationship={selection?.kind === "relationship" ? selection : null}
-            selectedNodeId={selectedNodeId}
-            transform={diagramTransform}
-            onSelectNode={(id) => setSelection({ kind: "node", id })}
-            onSelectRelationship={selectRelationship}
-          />
-        )}
-
-        {showStepSummary && (
-          <section className="steps">
-            <div className="steps-head">
-              <h2>{activeFlow.name}</h2>
-              <Badge tone={activeFlow.status}>{statusLabels[activeFlow.status]}</Badge>
-            </div>
-            <p>{activeFlow.summary}</p>
-            <div className="step-list">
-              {activeFlow.steps.map((step, index) => (
-                <button
-                  key={step.id}
-                  type="button"
-                  className={`step-card ${selectedStepId === step.id ? "active" : ""}`}
-                  onClick={() => setSelection({ kind: "step", flowId: activeFlow.id, stepId: step.id })}
-                >
-                  <span className="step-number">{index + 1}</span>
-                  <strong>{nodesById.get(step.from)?.name ?? step.from} {"->"} {nodesById.get(step.to)?.name ?? step.to}</strong>
-                  <span>{step.action}</span>
-                </button>
+          <details className="legend">
+            <summary>Legend</summary>
+            <div>
+              {(["actor", "software-system", "client", "service", "worker", "queue", "data-store", "external-service"] as NodeType[]).map((type) => (
+                <span key={type}><i className={`dot ${type}`} />{type}</span>
               ))}
             </div>
+          </details>
+        </section>
+
+        <section className="diagram-viewport" ref={diagramViewportRef}>
+          {isSequenceView ? (
+            <SequenceDiagram
+              activeFlow={activeFlow}
+              nodesById={nodesById}
+              dataById={dataById}
+              selectedStepId={selectedStepId}
+              transform={diagramTransform}
+              onSelectStep={(stepId) => setSelection({ kind: "step", flowId: activeFlow.id, stepId })}
+              onSelectRelationship={selectRelationship}
+            />
+          ) : isC4View ? (
+            <C4Diagram
+              view={activeView}
+              nodesById={nodesById}
+              selectedNodeId={selectedNodeId}
+              selectedRelationship={selection?.kind === "relationship" ? selection : null}
+              transform={diagramTransform}
+              onSelectNode={(id) => setSelection({ kind: "node", id })}
+              onSelectRelationship={selectRelationship}
+            />
+          ) : (
+            <SystemMap
+              view={activeView}
+              nodesById={nodesById}
+              activeFlow={isC4View ? null : activeFlow}
+              showStructuralConnections={isC4View}
+              selectedStepId={selectedStepId}
+              selectedRelationship={selection?.kind === "relationship" ? selection : null}
+              selectedNodeId={selectedNodeId}
+              transform={diagramTransform}
+              onSelectNode={(id) => setSelection({ kind: "node", id })}
+              onSelectRelationship={selectRelationship}
+            />
+          )}
+        </section>
+
+        {showStepSummary && (
+          <section className={`steps ${stepsCollapsed ? "collapsed" : ""}`}>
+            <div className="steps-head">
+              <div className="steps-title-line">
+                <h2>{activeFlow.name}</h2>
+                {!stepsCollapsed && <p>{activeFlow.summary}</p>}
+              </div>
+              <div className="steps-actions">
+                <Badge tone={activeFlow.status}>{statusLabels[activeFlow.status]}</Badge>
+                <button type="button" onClick={() => setStepsCollapsed((value) => !value)}>
+                  {stepsCollapsed ? "Show steps" : "Hide steps"}
+                </button>
+              </div>
+            </div>
+            {!stepsCollapsed && (
+              <>
+                <div className="step-list">
+                  {activeFlow.steps.map((step, index) => (
+                    <button
+                      key={step.id}
+                      type="button"
+                      className={`step-card ${selectedStepId === step.id ? "active" : ""}`}
+                      onClick={() => setSelection({ kind: "step", flowId: activeFlow.id, stepId: step.id })}
+                    >
+                      <span className="step-number">{index + 1}</span>
+                      <strong>{nodesById.get(step.from)?.name ?? step.from} {"→"} {nodesById.get(step.to)?.name ?? step.to}</strong>
+                      <span>{step.action}</span>
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
           </section>
         )}
       </main>
@@ -642,6 +731,8 @@ function LeftPanel({
   nodes,
   dataClasses,
   risks,
+  riskFilter,
+  onRiskFilterChange,
   onSelectFlow,
   onSelectView,
   onSelectNode
@@ -657,6 +748,8 @@ function LeftPanel({
   nodes: ArchNode[];
   dataClasses: DataClass[];
   risks: Risk[];
+  riskFilter: string;
+  onRiskFilterChange: (value: string) => void;
   onSelectFlow: (id: Id) => void;
   onSelectView: (id: Id) => void;
   onSelectNode: (id: Id) => void;
@@ -708,15 +801,44 @@ function LeftPanel({
   }
 
   if (mode === "data-risks") {
+    const riskTones = ["all", "critical", "high", "medium", "low"];
+    const normalizedQuery = query.toLowerCase();
+    const filteredDataClasses = dataClasses.filter((item) => (
+      [item.name, item.handling, item.sensitivity].join(" ").toLowerCase().includes(normalizedQuery)
+    ));
+    const filteredRisks = risks.filter((risk) => {
+      const matchesText = [risk.title, risk.summary, risk.severity].join(" ").toLowerCase().includes(normalizedQuery);
+      const matchesTone = riskFilter === "all" || risk.severity === riskFilter;
+      return matchesText && matchesTone;
+    });
     return (
       <>
         <div className="panel-head">
           <h2>Data / Risks</h2>
+          <input
+            type="search"
+            value={query}
+            placeholder="Filter data or risks"
+            aria-label="Filter data or risks"
+            onChange={(event) => onQueryChange(event.target.value)}
+          />
+          <div className="filter-row" aria-label="Risk severity filters">
+            {riskTones.map((tone) => (
+              <button
+                key={tone}
+                type="button"
+                className={riskFilter === tone ? "active" : ""}
+                onClick={() => onRiskFilterChange(tone)}
+              >
+                {tone}
+              </button>
+            ))}
+          </div>
           <p>{dataClasses.length} data classes · {risks.length} risks</p>
         </div>
         <div className="entity-list">
           <h3>Data Classes</h3>
-          {dataClasses.map((item) => (
+          {filteredDataClasses.map((item) => (
             <article className="entity-card passive" key={item.id}>
               <strong>{item.name}</strong>
               <span>{item.handling}</span>
@@ -724,7 +846,7 @@ function LeftPanel({
             </article>
           ))}
           <h3>Risks</h3>
-          {risks.map((risk) => (
+          {filteredRisks.map((risk) => (
             <article className="entity-card passive" key={risk.id}>
               <strong>{risk.title}</strong>
               <span>{risk.summary}</span>
@@ -819,13 +941,13 @@ function SystemMap({
 }) {
   const visibleNodeIds = new Set(view.lanes.flatMap((lane) => lane.nodeIds));
   const flowNodeIds = new Set(activeFlow ? activeFlow.steps.flatMap((step) => [step.from, step.to]) : Array.from(visibleNodeIds));
-  const nodeWidth = 150;
-  const nodeHeight = 48;
-  const laneWidth = 188;
-  const rowGap = 66;
-  const routeGutter = 88;
-  const marginX = routeGutter + 58;
-  const marginY = 82;
+  const nodeWidth = 136;
+  const nodeHeight = 54;
+  const laneWidth = 210;
+  const rowGap = 84;
+  const routeGutter = 96;
+  const marginX = routeGutter + 48;
+  const marginY = 76;
   const laneIndexByNode = new Map<Id, number>();
   const rowIndexByNode = new Map<Id, number>();
 
@@ -837,8 +959,8 @@ function SystemMap({
   });
 
   const laneHeight = Math.max(...view.lanes.map((lane) => lane.nodeIds.length), 1) * rowGap + marginY + 24;
-  const canvasWidth = marginX * 2 + view.lanes.length * laneWidth;
-  const canvasHeight = Math.max(360, laneHeight);
+  const canvasWidth = marginX * 2 + view.lanes.length * laneWidth + 40;
+  const canvasHeight = Math.max(340, laneHeight + 64);
   const nodePosition = (nodeId: Id) => {
     const laneIndex = laneIndexByNode.get(nodeId) ?? 0;
     const rowIndex = rowIndexByNode.get(nodeId) ?? 0;
@@ -981,6 +1103,44 @@ function SystemMap({
     return samples;
   };
 
+  const routeCostFromSamples = (
+    samples: Point[],
+    label: Point,
+    fromId: Id,
+    toId: Id,
+    usedRoutes: Point[][]
+  ) => {
+    const blockers = Array.from(visibleNodeIds)
+      .filter((nodeId) => nodeId !== fromId && nodeId !== toId)
+      .map(rectFor);
+    let cost = 0;
+    for (let index = 0; index < samples.length - 1; index += 1) {
+      cost += Math.hypot(samples[index + 1].x - samples[index].x, samples[index + 1].y - samples[index].y);
+    }
+    for (const point of samples) {
+      if (point.y < 30 || point.x < 16 || point.x > canvasWidth - 16 || point.y > canvasHeight - 16) {
+        cost += 14000;
+      }
+      for (const rect of blockers) {
+        const distance = distanceToRect(point, rect);
+        if (distance < 14) cost += 12000;
+        if (distance < 30) cost += (30 - distance) * 120;
+      }
+      for (const usedRoute of usedRoutes) {
+        for (let usedIndex = 0; usedIndex < usedRoute.length; usedIndex += 2) {
+          const used = usedRoute[usedIndex];
+          const distance = Math.hypot(point.x - used.x, point.y - used.y);
+          if (distance < 26) cost += 1800;
+          if (distance < 12) cost += 7000;
+        }
+      }
+    }
+    for (const rect of blockers) {
+      if (distanceToRect(label, rect) < 34) cost += 24000;
+    }
+    return cost;
+  };
+
   const outerGutterRoute = (fromId: Id, toId: Id, bottomCorridor: number, routeOffset: number): Route => {
     const fromRectLocal = rectFor(fromId);
     const toRectLocal = rectFor(toId);
@@ -1005,7 +1165,7 @@ function SystemMap({
       d: `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y} L ${points[2].x} ${points[2].y} L ${points[3].x} ${points[3].y} L ${points[4].x} ${points[4].y}`,
       labelX: (gutterX + end.x) / 2,
       labelY: bottomCorridor - 8,
-      cost: 0,
+      cost: routeCostFromSamples(samples, { x: (gutterX + end.x) / 2, y: bottomCorridor - 8 }, fromId, toId, []),
       samples
     };
   };
@@ -1028,7 +1188,7 @@ function SystemMap({
       d: `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y} L ${points[2].x} ${points[2].y} L ${points[3].x} ${points[3].y}`,
       labelX: gutterX,
       labelY: (start.y + end.y) / 2,
-      cost: 0,
+      cost: routeCostFromSamples(samples, { x: gutterX, y: (start.y + end.y) / 2 }, fromId, toId, []),
       samples
     };
   };
@@ -1061,17 +1221,9 @@ function SystemMap({
       ...spanBlockers.map((rect) => rect.y + rect.height)
     ) + 42 + routeOffset;
 
-    if (fromLane === toLane && Math.abs((rowIndexByNode.get(fromId) ?? 0) - (rowIndexByNode.get(toId) ?? 0)) > 1) {
-      return sideGutterRoute(fromId, toId, routeOffset);
-    }
-
-    if (pairIndex % 2 === 1) {
-      return outerGutterRoute(fromId, toId, bottomCorridor, routeOffset);
-    }
-
     const rowDelta = (rowIndexByNode.get(toId) ?? 0) - (rowIndexByNode.get(fromId) ?? 0);
     if (Math.abs(rowDelta) > 1) {
-      return cubicRoute(
+      candidates.push(cubicRoute(
         fromId,
         toId,
         rowDelta < 0 ? "top" : "bottom",
@@ -1080,11 +1232,11 @@ function SystemMap({
         { x: toCenter.x, y: rowDelta < 0 ? topCorridor : bottomCorridor },
         { x: mid.x, y: rowDelta < 0 ? topCorridor : bottomCorridor },
         usedRoutes
-      );
+      ));
     }
 
     if (Math.abs(toLane - fromLane) > 1) {
-      return cubicRoute(
+      candidates.push(cubicRoute(
         fromId,
         toId,
         "top",
@@ -1093,7 +1245,7 @@ function SystemMap({
         { x: toCenter.x, y: topCorridor },
         { x: mid.x, y: topCorridor },
         usedRoutes
-      );
+      ));
     }
 
     (["left", "right", "top", "bottom"] as Side[]).forEach((startSide) => {
@@ -1339,7 +1491,7 @@ function SystemMap({
                   d={route.d}
                   markerEnd={isSelected ? "url(#arrowhead-selected)" : "url(#arrowhead)"}
                 />
-                <circle className="flow-step-dot" cx={route.labelX} cy={route.labelY} r="13" />
+                <rect className="flow-step-dot" x={route.labelX - 10} y={route.labelY - 10} width="20" height="20" />
                 <text className="flow-step-label" x={route.labelX} y={route.labelY + 4}>{index + 1}</text>
               </g>
             );
@@ -1376,10 +1528,16 @@ function SystemMap({
       </div>
       {activeFlow ? (
         <div className="edge-strip">
-          {activeFlow.steps.map((step, index) => (
-            <span className="edge-chip" key={step.id} title={step.summary}>
-              {index + 1}. {step.from} {"->"} {step.to}
-            </span>
+          {flowRelationships.map((relationship, index) => (
+            <button
+              type="button"
+              className={`edge-chip ${selectedStepId === relationship.stepId ? "active" : ""}`}
+              key={relationship.id}
+              title={relationship.summary}
+              onClick={() => onSelectRelationship(relationship)}
+            >
+              {index + 1}. {relationship.from} {"→"} {relationship.to}
+            </button>
           ))}
           <span className="edge-count">{activeFlow.steps.length} ordered transitions</span>
         </div>
@@ -1409,16 +1567,16 @@ function C4Diagram({
   onSelectNode: (id: Id) => void;
   onSelectRelationship: (relationship: Relationship) => void;
 }) {
-  const nodeWidth = 172;
-  const nodeHeight = 70;
-  const laneWidth = 240;
-  const marginX = 72;
-  const marginY = 88;
-  const rowGap = 104;
+  const nodeWidth = 156;
+  const nodeHeight = 62;
+  const laneWidth = 210;
+  const marginX = 56;
+  const marginY = 76;
+  const rowGap = 86;
   const allNodeIds = view.lanes.flatMap((lane) => lane.nodeIds);
   const visibleNodeIds = new Set(allNodeIds);
-  const canvasWidth = Math.max(860, marginX * 2 + view.lanes.length * laneWidth);
-  const canvasHeight = Math.max(520, marginY + Math.max(...view.lanes.map((lane) => lane.nodeIds.length), 1) * rowGap + 90);
+  const canvasWidth = Math.max(760, marginX * 2 + view.lanes.length * laneWidth + 40);
+  const canvasHeight = Math.max(440, marginY + Math.max(...view.lanes.map((lane) => lane.nodeIds.length), 1) * rowGap + 88);
   const positionFor = (nodeId: Id) => {
     const laneIndex = view.lanes.findIndex((lane) => lane.nodeIds.includes(nodeId));
     const rowIndex = view.lanes[Math.max(laneIndex, 0)]?.nodeIds.indexOf(nodeId) ?? 0;
@@ -1453,7 +1611,7 @@ function C4Diagram({
     const from = centerFor(relationship.from);
     const to = centerFor(relationship.to);
     const direction = to.x >= from.x ? 1 : -1;
-    const offset = (index % 3 - 1) * 22;
+    const offset = (index % 3 - 1) * 18;
     const startX = from.x + direction * (nodeWidth / 2);
     const endX = to.x - direction * (nodeWidth / 2);
     const startY = from.y + offset;
@@ -1462,7 +1620,7 @@ function C4Diagram({
     return {
       d: `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`,
       labelX: midX,
-      labelY: (startY + endY) / 2 - 8
+      labelY: Math.min(startY, endY) - 10
     };
   };
 
@@ -1563,17 +1721,38 @@ function SequenceDiagram({
   onSelectStep: (stepId: Id) => void;
 }) {
   const participantIds = Array.from(new Set(activeFlow.steps.flatMap((step) => [step.from, step.to])));
-  const participantWidth = 158;
-  const rowHeight = 70;
-  const marginX = 34;
-  const headerY = 26;
-  const messageStartY = 112;
+  const participantWidth = 146;
+  const rowHeight = 56;
+  const marginX = 28;
+  const headerY = 18;
+  const messageStartY = 68;
   const width = marginX * 2 + participantIds.length * participantWidth;
-  const height = messageStartY + activeFlow.steps.length * rowHeight + 42;
+  const height = messageStartY + activeFlow.steps.length * rowHeight + 38;
   const xFor = (id: Id) => marginX + participantIds.indexOf(id) * participantWidth + participantWidth / 2;
 
   return (
     <section className="map-shell sequence-shell">
+      <div
+        className="sequence-participant-rail"
+        style={{ width, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
+      >
+        {participantIds.map((id) => {
+          const node = nodesById.get(id);
+          const x = xFor(id);
+          return (
+            <button
+              key={id}
+              type="button"
+              className={`sequence-participant-card ${node?.type ?? ""}`}
+              style={{ left: x - 58, width: 116 }}
+              aria-label={`${node?.name ?? id} participant`}
+            >
+              <strong>{node?.name ?? id}</strong>
+              <span>{node?.type ?? "node"}</span>
+            </button>
+          );
+        })}
+      </div>
       <svg
         className="sequence-canvas"
         width={width}
@@ -1586,6 +1765,12 @@ function SequenceDiagram({
           <marker id="sequence-arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
             <path d="M 0 0 L 8 4 L 0 8 z" />
           </marker>
+          <marker id="sequence-arrowhead-response" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M 0 0 L 8 4 L 0 8 z" />
+          </marker>
+          <marker id="sequence-arrowhead-persistence" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+            <path d="M 0 0 L 8 4 L 0 8 z" />
+          </marker>
           <marker id="sequence-arrowhead-selected" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
             <path d="M 0 0 L 8 4 L 0 8 z" />
           </marker>
@@ -1595,9 +1780,6 @@ function SequenceDiagram({
           const x = xFor(id);
           return (
             <g key={id}>
-              <rect className={`sequence-participant ${node?.type ?? ""}`} x={x - 64} y={headerY} width="128" height="46" rx="6" />
-              <text className="sequence-title" x={x} y={headerY + 20}>{node?.name ?? id}</text>
-              <text className="sequence-kind" x={x} y={headerY + 35}>{node?.type ?? "node"}</text>
               <line className="lifeline" x1={x} y1={headerY + 48} x2={x} y2={height - 22} />
             </g>
           );
@@ -1609,6 +1791,13 @@ function SequenceDiagram({
           const midX = (fromX + toX) / 2;
           const dataLabel = step.data.map((id) => dataById.get(id)?.name ?? id).join(", ");
           const messageKind = step.to.includes("queue") ? "async" : step.to.includes("db") || step.to.includes("store") ? "persistence" : toX < fromX ? "response" : "request";
+          const markerId = selectedStepId === step.id
+            ? "sequence-arrowhead-selected"
+            : messageKind === "response"
+              ? "sequence-arrowhead-response"
+              : messageKind === "persistence"
+                ? "sequence-arrowhead-persistence"
+                : "sequence-arrowhead";
           const relationship = {
             id: step.id,
             from: step.from,
@@ -1643,9 +1832,9 @@ function SequenceDiagram({
                 y1={y}
                 x2={toX}
                 y2={y}
-                markerEnd={selectedStepId === step.id ? "url(#sequence-arrowhead-selected)" : "url(#sequence-arrowhead)"}
+                markerEnd={`url(#${markerId})`}
               />
-              <circle className="sequence-step-dot" cx={midX} cy={y} r="13" />
+              <rect className="sequence-step-dot" x={midX - 10} y={y - 10} width="20" height="20" />
               <text className="sequence-step-label" x={midX} y={y + 4}>{index + 1}</text>
               <text className="sequence-action" x={midX} y={y - 17}>{step.action.length > 26 ? `${step.action.slice(0, 23)}...` : step.action}</text>
               <text className="sequence-data" x={midX} y={y + 30}>{dataLabel}</text>
@@ -1690,7 +1879,7 @@ function DetailPanel({
       : null;
     const flow = selection.flowId ? flowsById.get(selection.flowId) : null;
     return (
-      <DetailShell eyebrow="Relationship" title={`${from?.name ?? selection.from} -> ${to?.name ?? selection.to}`} summary={selection.label}>
+      <DetailShell eyebrow="Relationship" title={`${from?.name ?? selection.from} → ${to?.name ?? selection.to}`} summary={selection.label}>
         <div className="badge-row">
           <Badge>{selection.relationshipType}</Badge>
           {flow && <Badge>{flow.name}</Badge>}
@@ -1700,7 +1889,7 @@ function DetailPanel({
           <h3>Endpoints</h3>
           <div className="path-pair">
             <button type="button" onClick={() => onSelectNode(selection.from)}>{from?.name ?? selection.from}</button>
-            <span>{"->"}</span>
+            <span>{"→"}</span>
             <button type="button" onClick={() => onSelectNode(selection.to)}>{to?.name ?? selection.to}</button>
           </div>
         </section>
@@ -1748,7 +1937,7 @@ function DetailPanel({
       <DetailShell eyebrow="Flow step" title={selectedStep.action} summary={selectedStep.summary}>
         <div className="path-pair">
           <button type="button" onClick={() => onSelectNode(selectedStep.from)}>{from?.name ?? selectedStep.from}</button>
-          <span>{"->"}</span>
+          <span>{"→"}</span>
           <button type="button" onClick={() => onSelectNode(selectedStep.to)}>{to?.name ?? selectedStep.to}</button>
         </div>
         <section className="detail-section">
