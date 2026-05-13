@@ -88,7 +88,90 @@
           "nodeIds": ["auth0", "fraudscore-api", "payment-gateway"]
         }
       ]
+    },
+    {
+      "id": "c4-context",
+      "name": "C4 Context",
+      "type": "c4-context",
+      "summary": "ClaimsDesk as a system with actors and external systems around it.",
+      "lanes": [
+        {
+          "id": "people",
+          "name": "People",
+          "nodeIds": ["claimant", "claims-adjuster"]
+        },
+        {
+          "id": "system",
+          "name": "ClaimsDesk System",
+          "nodeIds": ["web-app", "claims-api", "fraud-worker"]
+        },
+        {
+          "id": "external-systems",
+          "name": "External Systems",
+          "nodeIds": ["auth0", "fraudscore-api", "payment-gateway"]
+        }
+      ]
+    },
+    {
+      "id": "c4-container",
+      "name": "C4 Container",
+      "type": "c4-container",
+      "summary": "Deployable ClaimsDesk containers and the stores/services they communicate with.",
+      "lanes": [
+        {
+          "id": "users",
+          "name": "Users",
+          "nodeIds": ["claimant", "claims-adjuster"]
+        },
+        {
+          "id": "containers",
+          "name": "Containers",
+          "nodeIds": ["web-app", "claims-api", "fraud-worker"]
+        },
+        {
+          "id": "stateful-services",
+          "name": "Stateful Services",
+          "nodeIds": ["claims-db", "document-store", "work-queue", "audit-log", "analytics-warehouse"]
+        },
+        {
+          "id": "external-services",
+          "name": "External Services",
+          "nodeIds": ["auth0", "fraudscore-api", "payment-gateway"]
+        }
+      ]
+    },
+    {
+      "id": "c4-component",
+      "name": "C4 Component",
+      "type": "c4-component",
+      "summary": "Claims API-adjacent components and dependencies used by the selected flows.",
+      "lanes": [
+        {
+          "id": "client",
+          "name": "Client",
+          "nodeIds": ["web-app"]
+        },
+        {
+          "id": "api-boundary",
+          "name": "Claims API Boundary",
+          "nodeIds": ["claims-api"]
+        },
+        {
+          "id": "async-processing",
+          "name": "Async Processing",
+          "nodeIds": ["work-queue", "fraud-worker"]
+        },
+        {
+          "id": "persistence",
+          "name": "Persistence",
+          "nodeIds": ["claims-db", "document-store", "audit-log"]
+        },
+        {
+          "id": "vendors",
+          "name": "Vendors",
+          "nodeIds": ["auth0", "fraudscore-api", "payment-gateway"]
+        }
+      ]
     }
   ]
 }
-

@@ -74,8 +74,16 @@ input:focus {
   overflow: hidden;
 }
 
-.app.nav-collapsed {
-  grid-template-columns: 0 minmax(0, 1fr) 390px;
+.app.left-collapsed {
+  grid-template-columns: 52px minmax(0, 1fr) 390px;
+}
+
+.app.right-collapsed {
+  grid-template-columns: 320px minmax(0, 1fr) 52px;
+}
+
+.app.left-collapsed.right-collapsed {
+  grid-template-columns: 52px minmax(0, 1fr) 52px;
 }
 
 .topbar {
@@ -161,13 +169,59 @@ input:focus {
   grid-row: 2;
 }
 
-.app.nav-collapsed .left-nav {
-  display: none;
-}
-
 .left-nav {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+}
+
+.panel-rail {
+  height: 100%;
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  user-select: none;
+}
+
+.panel-toggle {
+  position: fixed;
+  z-index: 60;
+  top: 96px;
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 999px;
+  border-color: rgba(245, 200, 76, 0.58);
+  color: #15110a;
+  background: var(--yellow);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+  font-weight: 900;
+  line-height: 1;
+}
+
+.left-panel-toggle {
+  left: 332px;
+  transform: translateX(-50%);
+}
+
+.app.left-collapsed .left-panel-toggle {
+  left: 64px;
+}
+
+.right-panel-toggle {
+  right: 402px;
+  transform: translateX(50%);
+}
+
+.app.right-collapsed .right-panel-toggle {
+  right: 64px;
 }
 
 .panel-head {
@@ -230,12 +284,13 @@ input:focus {
 
 .diagram-area {
   display: grid;
-  grid-template-rows: auto minmax(430px, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
 }
 
 .diagram-header,
 .steps {
-  padding: 14px;
+  padding: 10px 14px;
 }
 
 .diagram-header {
@@ -271,6 +326,7 @@ input:focus {
 .map-shell {
   position: relative;
   min-width: 0;
+  min-height: 0;
   overflow: auto;
   background:
     linear-gradient(#151b26 1px, transparent 1px),
@@ -279,39 +335,68 @@ input:focus {
   background-size: 28px 28px;
 }
 
-.lane-grid {
-  display: grid;
-  gap: 12px;
-  min-width: 980px;
-  min-height: 430px;
-  padding: 16px;
+.diagram-canvas {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
 }
 
-.lane {
-  min-width: 0;
+.flow-lines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.flow-line {
+  fill: none;
+  stroke: var(--yellow);
+  stroke-width: 2.25;
+  stroke-linecap: round;
+  opacity: 0.9;
+}
+
+.flow-lines marker path {
+  fill: var(--yellow);
+}
+
+.flow-step-dot {
+  fill: var(--yellow);
+  stroke: #171103;
+  stroke-width: 2;
+}
+
+.flow-step-label {
+  fill: #171103;
+  font-size: 11px;
+  font-weight: 900;
+  text-anchor: middle;
+  pointer-events: none;
+}
+
+.lane-column {
+  position: absolute;
+  top: 14px;
   border-left: 1px dashed var(--line);
-  padding-left: 10px;
+  pointer-events: none;
 }
 
-.lane h3 {
-  margin: 0 0 14px;
+.lane-column h3 {
+  margin: 0;
+  padding-left: 8px;
   color: var(--muted);
-  font-size: 12px;
+  font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
 
-.lane-nodes {
-  display: grid;
-  gap: 10px;
-}
-
 .node-card {
-  min-height: 66px;
-  padding: 10px;
+  position: absolute;
+  padding: 7px 9px;
   text-align: left;
   opacity: 0.45;
-  border-left-width: 5px;
+  border-left-width: 4px;
+  overflow: hidden;
 }
 
 .node-card.in-flow {
@@ -386,23 +471,25 @@ input:focus {
   align-items: center;
   justify-content: space-between;
   gap: 10px;
-  margin-bottom: 6px;
+  margin-bottom: 4px;
 }
 
 .step-list {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  display: flex;
   gap: 8px;
-  margin-top: 12px;
+  margin-top: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 
 .step-card {
+  flex: 0 0 225px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
   grid-template-rows: auto auto;
   gap: 3px 8px;
-  min-height: 70px;
-  padding: 9px;
+  min-height: 46px;
+  padding: 7px;
   text-align: left;
 }
 
@@ -564,7 +651,9 @@ input:focus {
 
 @media (max-width: 1100px) {
   .app,
-  .app.nav-collapsed {
+  .app.left-collapsed,
+  .app.right-collapsed,
+  .app.left-collapsed.right-collapsed {
     grid-template-columns: 1fr;
     grid-template-rows: auto auto minmax(480px, 1fr) auto;
     overflow: auto;
@@ -580,5 +669,9 @@ input:focus {
   .left-nav,
   .details {
     max-height: 420px;
+  }
+
+  .panel-toggle {
+    display: none;
   }
 }

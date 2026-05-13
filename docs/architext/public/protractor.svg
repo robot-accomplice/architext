@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Architext protractor favicon">
+  <rect width="64" height="64" rx="12" fill="#080b10"/>
+  <path d="M12 48a20 20 0 0 1 40 0Z" fill="#111620" stroke="#f5c84c" stroke-width="4" stroke-linejoin="round"/>
+  <path d="M20 48a12 12 0 0 1 24 0" fill="none" stroke="#58a6ff" stroke-width="3" stroke-linecap="round"/>
+  <path d="M32 48V18" stroke="#e9edf4" stroke-width="3" stroke-linecap="round"/>
+  <path d="M17 48h30" stroke="#e9edf4" stroke-width="3" stroke-linecap="round"/>
+  <path d="M22 43l-4-4M42 43l4-4M26 38l-2-5M38 38l2-5" stroke="#9aa6b7" stroke-width="2" stroke-linecap="round"/>
+</svg>

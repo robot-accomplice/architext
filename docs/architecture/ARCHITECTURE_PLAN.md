@@ -275,7 +275,21 @@ Required interactions:
 - highlight ordered path
 - pan/zoom/fit diagram
 - maximize diagram
+- independent left-panel collapse and right-panel collapse
+- collapse controls visible from both panel edges so either side can reclaim
+  diagram space without hunting in a global toolbar
+- persisted collapse state across reloads
 - right-panel deep links to sections
+
+Collapse behavior should follow the pattern used in Palm Command Center: a
+small control straddles the panel/content border, the panel shrinks to a narrow
+rail instead of disappearing entirely, and the expanded/collapsed affordance is
+clear from the icon orientation. Architext needs this on both sides because the
+diagram canvas is the primary work area.
+
+The first demo currently falls short here: it only collapses the left panel from
+the top toolbar, has no right-panel collapse, and hides the left panel entirely
+instead of retaining a useful rail.
 
 The right panel should be scrollable and sectioned:
 
@@ -302,6 +316,62 @@ must not provide custom CSS, arbitrary palettes, or custom rendering grammar.
 
 The UI should be quiet, utilitarian, and optimized for engineers. Diagram space
 is more important than branding.
+
+Node cards should stay compact. The screenshot target shows dense cards with
+short labels and secondary metadata; large dashboard cards waste diagram space.
+Architext should prefer compact node boxes, lane headers, and scrollable/pannable
+canvas behavior over large fixed cards.
+
+Vertical space should be allocated the same way: non-diagram sections should
+auto-size to their content, while the diagram canvas takes the remaining height.
+Headers, filters, legends, and selected-flow step summaries are supporting
+controls, not primary layout regions.
+
+Flows must be visible as lines between boxes, not only as a textual list of
+steps. A selected flow should draw directional edges between involved nodes,
+with numbered step markers or labels where legible. The textual ordered step
+list remains useful, but it is not a substitute for visual relationships.
+
+## C4 And Architecture Views
+
+Architext must include first-class C4-inspired views, not merely generic
+groupings:
+
+- **Context:** project/system in the center, actors and external systems around
+  it, labeled relationships.
+- **Container:** deployable/runtime units, databases, queues, browsers, workers,
+  and external systems with communication labels.
+- **Component:** major components inside a selected container, with dependencies
+  and source paths.
+
+Each view should be generated from the same JSON model. C4 views are projections
+over nodes, flows, and relationships, not separate hand-maintained diagrams.
+
+The first demo currently has only system map, dataflow, and deployment views.
+That is insufficient for the original requirement.
+
+## Alignment Checkpoint
+
+Against the original brief:
+
+- **Locally hosted:** aligned. The viewer requires a local server and avoids
+  `file://` behavior.
+- **JSON-backed:** aligned. JSON files are the data source and LLM architecture
+  map.
+- **LLM-targeted markdown:** aligned as a first draft, but it still needs
+  installer/adoption workflow details.
+- **Consistent directory structure:** aligned as a first draft.
+- **Architext-specific look and feel:** partially aligned. The plan says this,
+  but the implementation still needs a more compact diagram-first layout.
+- **Left navigation:** aligned.
+- **Collapsible navigation:** partially aligned. Needs panel-edge controls,
+  right-panel collapse, and persisted state.
+- **Engineer-first UX:** partially aligned. Search/details exist, but visual
+  flow lines and C4 views are missing.
+- **Right-hand details panel:** aligned, but it also needs collapse behavior.
+- **Fictitious example project:** aligned with ClaimsDesk.
+- **AGENTS/CLAUDE mandate:** aligned as appendix text, but adoption scripting is
+  still pending.
 
 ## Fictitious Example Project
 

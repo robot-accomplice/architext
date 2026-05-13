@@ -248,7 +248,8 @@ function FieldList({ title, items }: { title: string; items: string[] }) {
 function App() {
   const [model, setModel] = useState<Model | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [navCollapsed, setNavCollapsed] = useState(() => localStorage.getItem("architext-left-collapsed") === "true");
+  const [rightCollapsed, setRightCollapsed] = useState(() => localStorage.getItem("architext-right-collapsed") === "true");
   const [query, setQuery] = useState("");
   const [activeViewId, setActiveViewId] = useState<Id>("");
   const [activeFlowId, setActiveFlowId] = useState<Id>("");
@@ -266,6 +267,14 @@ function App() {
         setError(loadError instanceof Error ? loadError.message : String(loadError));
       });
   }, []);
+
+  useEffect(() => {
+    localStorage.setItem("architext-left-collapsed", String(navCollapsed));
+  }, [navCollapsed]);
+
+  useEffect(() => {
+    localStorage.setItem("architext-right-collapsed", String(rightCollapsed));
+  }, [rightCollapsed]);
 
   if (error) {
     return (
@@ -304,7 +313,7 @@ function App() {
   });
 
   return (
-    <div className={`app ${navCollapsed ? "nav-collapsed" : ""}`}>
+    <div className={`app ${navCollapsed ? "left-collapsed" : ""} ${rightCollapsed ? "right-collapsed" : ""}`}>
       <header className="topbar">
         <div>
           <p className="eyebrow">Architext / {model.manifest.schemaVersion}</p>
@@ -317,40 +326,53 @@ function App() {
               <option key={view.id} value={view.id}>{view.name}</option>
             ))}
           </select>
-          <button type="button" onClick={() => setNavCollapsed((value) => !value)}>
-            {navCollapsed ? "Show nav" : "Collapse nav"}
-          </button>
         </div>
       </header>
 
       <aside className="left-nav">
-        <div className="panel-head">
-          <h2>Flows</h2>
-          <input
-            type="search"
-            value={query}
-            placeholder="Search flows"
-            onChange={(event) => setQuery(event.target.value)}
-          />
-        </div>
-        <div className="flow-list">
-          {filteredFlows.map((flow) => (
-            <button
-              key={flow.id}
-              type="button"
-              className={`flow-card ${flow.id === activeFlow.id ? "active" : ""}`}
-              onClick={() => {
-                setActiveFlowId(flow.id);
-                setSelection({ kind: "flow", id: flow.id });
-              }}
-            >
-              <strong>{flow.name}</strong>
-              <span>{flow.summary}</span>
-              <Badge tone={flow.status}>{statusLabels[flow.status]}</Badge>
-            </button>
-          ))}
-        </div>
+        {navCollapsed ? (
+          <div className="panel-rail">Flows</div>
+        ) : (
+          <>
+            <div className="panel-head">
+              <h2>Flows</h2>
+              <input
+                type="search"
+                value={query}
+                placeholder="Search flows"
+                onChange={(event) => setQuery(event.target.value)}
+              />
+            </div>
+            <div className="flow-list">
+              {filteredFlows.map((flow) => (
+                <button
+                  key={flow.id}
+                  type="button"
+                  className={`flow-card ${flow.id === activeFlow.id ? "active" : ""}`}
+                  onClick={() => {
+                    setActiveFlowId(flow.id);
+                    setSelection({ kind: "flow", id: flow.id });
+                  }}
+                >
+                  <strong>{flow.name}</strong>
+                  <span>{flow.summary}</span>
+                  <Badge tone={flow.status}>{statusLabels[flow.status]}</Badge>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </aside>
+
+      <button
+        type="button"
+        className="panel-toggle left-panel-toggle"
+        onClick={() => setNavCollapsed((value) => !value)}
+        aria-label={navCollapsed ? "Expand left navigation" : "Collapse left navigation"}
+        title={navCollapsed ? "Expand left navigation" : "Collapse left navigation"}
+      >
+        {navCollapsed ? ">" : "<"}
+      </button>
 
       <main className="diagram-area">
         <section className="diagram-header">
@@ -397,24 +419,38 @@ function App() {
       </main>
 
       <aside className="details">
-        <DetailPanel
-          model={model}
-          nodesById={nodesById}
-          flowsById={flowsById}
-          dataById={dataById}
-          decisionsById={decisionsById}
-          risksById={risksById}
-          flowNodeIds={flowNodeIds}
-          selection={selection}
-          selectedStep={selectedStep}
-          activeFlow={activeFlow}
-          onSelectNode={(id) => setSelection({ kind: "node", id })}
-          onSelectFlow={(id) => {
-            setActiveFlowId(id);
-            setSelection({ kind: "flow", id });
-          }}
-        />
+        {rightCollapsed ? (
+          <div className="panel-rail">Details</div>
+        ) : (
+          <DetailPanel
+            model={model}
+            nodesById={nodesById}
+            flowsById={flowsById}
+            dataById={dataById}
+            decisionsById={decisionsById}
+            risksById={risksById}
+            flowNodeIds={flowNodeIds}
+            selection={selection}
+            selectedStep={selectedStep}
+            activeFlow={activeFlow}
+            onSelectNode={(id) => setSelection({ kind: "node", id })}
+            onSelectFlow={(id) => {
+              setActiveFlowId(id);
+              setSelection({ kind: "flow", id });
+            }}
+          />
+        )}
       </aside>
+
+      <button
+        type="button"
+        className="panel-toggle right-panel-toggle"
+        onClick={() => setRightCollapsed((value) => !value)}
+        aria-label={rightCollapsed ? "Expand right details" : "Collapse right details"}
+        title={rightCollapsed ? "Expand right details" : "Collapse right details"}
+      >
+        {rightCollapsed ? "<" : ">"}
+      </button>
     </div>
   );
 }
@@ -433,35 +469,95 @@ function SystemMap({
   onSelectNode: (id: Id) => void;
 }) {
   const flowNodeIds = new Set(activeFlow.steps.flatMap((step) => [step.from, step.to]));
-  const edgePairs = new Set(activeFlow.steps.map((step) => `${step.from}->${step.to}`));
+  const nodeWidth = 150;
+  const nodeHeight = 48;
+  const laneWidth = 188;
+  const rowGap = 66;
+  const marginX = 26;
+  const marginY = 48;
+  const laneIndexByNode = new Map<Id, number>();
+  const rowIndexByNode = new Map<Id, number>();
+
+  view.lanes.forEach((lane, laneIndex) => {
+    lane.nodeIds.forEach((nodeId, rowIndex) => {
+      laneIndexByNode.set(nodeId, laneIndex);
+      rowIndexByNode.set(nodeId, rowIndex);
+    });
+  });
+
+  const laneHeight = Math.max(...view.lanes.map((lane) => lane.nodeIds.length), 1) * rowGap + marginY + 24;
+  const canvasWidth = marginX * 2 + view.lanes.length * laneWidth;
+  const canvasHeight = Math.max(360, laneHeight);
+  const nodePosition = (nodeId: Id) => {
+    const laneIndex = laneIndexByNode.get(nodeId) ?? 0;
+    const rowIndex = rowIndexByNode.get(nodeId) ?? 0;
+    return {
+      x: marginX + laneIndex * laneWidth,
+      y: marginY + rowIndex * rowGap
+    };
+  };
 
   return (
     <section className="map-shell">
-      <div className="lane-grid" style={{ gridTemplateColumns: `repeat(${view.lanes.length}, minmax(180px, 1fr))` }}>
-        {view.lanes.map((lane) => (
-          <div className="lane" key={lane.id}>
+      <div className="diagram-canvas" style={{ width: canvasWidth, height: canvasHeight }}>
+        <svg className="flow-lines" width={canvasWidth} height={canvasHeight} aria-hidden="true">
+          <defs>
+            <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M 0 0 L 8 4 L 0 8 z" />
+            </marker>
+          </defs>
+          {activeFlow.steps.map((step, index) => {
+            if (!laneIndexByNode.has(step.from) || !laneIndexByNode.has(step.to)) {
+              return null;
+            }
+            const from = nodePosition(step.from);
+            const to = nodePosition(step.to);
+            const startX = from.x + nodeWidth;
+            const startY = from.y + nodeHeight / 2;
+            const endX = to.x;
+            const endY = to.y + nodeHeight / 2;
+            const curve = Math.max(28, Math.abs(endX - startX) * 0.38);
+            return (
+              <g key={step.id}>
+                <path
+                  className="flow-line"
+                  d={`M ${startX} ${startY} C ${startX + curve} ${startY}, ${endX - curve} ${endY}, ${endX} ${endY}`}
+                  markerEnd="url(#arrowhead)"
+                />
+                <circle className="flow-step-dot" cx={(startX + endX) / 2} cy={(startY + endY) / 2} r="10" />
+                <text className="flow-step-label" x={(startX + endX) / 2} y={(startY + endY) / 2 + 4}>{index + 1}</text>
+              </g>
+            );
+          })}
+        </svg>
+        {view.lanes.map((lane, laneIndex) => (
+          <div
+            className="lane-column"
+            key={lane.id}
+            style={{ left: marginX + laneIndex * laneWidth, width: nodeWidth, height: canvasHeight - 20 }}
+          >
             <h3>{lane.name}</h3>
-            <div className="lane-nodes">
-              {lane.nodeIds.map((nodeId) => {
-                const node = nodesById.get(nodeId);
-                if (!node) return null;
-                const isActive = flowNodeIds.has(node.id);
-                const isSelected = selectedNodeId === node.id;
-                return (
-                  <button
-                    key={node.id}
-                    type="button"
-                    className={`node-card ${node.type} ${isActive ? "in-flow" : ""} ${isSelected ? "selected" : ""}`}
-                    onClick={() => onSelectNode(node.id)}
-                  >
-                    <strong>{node.name}</strong>
-                    <span>{node.type}</span>
-                  </button>
-                );
-              })}
-            </div>
           </div>
         ))}
+        {view.lanes.flatMap((lane) => lane.nodeIds).map((nodeId) => {
+          const node = nodesById.get(nodeId);
+          if (!node) return null;
+          const isActive = flowNodeIds.has(node.id);
+          const isSelected = selectedNodeId === node.id;
+          const position = nodePosition(node.id);
+          return (
+            <button
+              key={node.id}
+              type="button"
+              className={`node-card ${node.type} ${isActive ? "in-flow" : ""} ${isSelected ? "selected" : ""}`}
+              style={{ left: position.x, top: position.y, width: nodeWidth, height: nodeHeight }}
+              onClick={() => onSelectNode(node.id)}
+            >
+              <strong>{node.name}</strong>
+              <span>{node.type}</span>
+            </button>
+          );
+        })}
       </div>
       <div className="edge-strip">
         {activeFlow.steps.map((step, index) => (
@@ -469,7 +565,7 @@ function SystemMap({
             {index + 1}. {step.from} {"->"} {step.to}
           </span>
         ))}
-        <span className="edge-count">{edgePairs.size} highlighted transitions</span>
+        <span className="edge-count">{activeFlow.steps.length} ordered transitions</span>
       </div>
     </section>
   );
