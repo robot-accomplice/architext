@@ -67,6 +67,38 @@ NPM scripts should call Node/Vite entrypoints directly and avoid shell command
 chains, environment-variable syntax, or utilities that are not available on all
 target operating systems.
 
+## Adoption And Upgrade Workflow
+
+Architext needs a cross-platform Node adoption script because copying the
+template by hand is both error-prone and difficult to upgrade consistently.
+
+The script should support two explicit operations:
+
+- **Install:** copy the Architext template into a target repository at
+  `docs/architext`. This includes the demo JSON data so developers can run a
+  working site immediately and then ask an LLM to replace the example with the
+  target project's architecture.
+- **Upgrade:** refresh Architext viewer code, schemas, validation tooling,
+  package files, and local documentation in a target repository that already
+  has `docs/architext`.
+
+Upgrade must preserve target-owned architecture data by default:
+
+- do not overwrite `docs/architext/data/*.json`
+- do overwrite template-owned implementation files such as `src/`, `schema/`,
+  `tools/`, `public/`, `index.html`, `package.json`, and `package-lock.json`
+- allow an explicit data overwrite flag only for demo resets or controlled
+  migrations
+
+The script should also be able to append the Architext agent mandate to a
+target `AGENTS.md` or `CLAUDE.md` file when explicitly requested. It must avoid
+duplicate appendix insertion by checking for the Architext heading before
+appending.
+
+The workflow must avoid POSIX-only shell behavior. Use Node filesystem APIs for
+copying, directory creation, path handling, and file updates so the same command
+works on Windows, Linux, and macOS.
+
 ## Template Placement
 
 In a consuming project, the intended structure is:
@@ -349,6 +381,11 @@ relationships should reserve a clean corridor above or below the involved boxes
 instead of crossing behind active nodes. The canvas should keep enough left and
 top breathing room for these gutters so the columnar layout does not force
 unreadable paths.
+
+Two distinct edges should not share the same route unless there is no readable
+alternative. Even when two edges connect the same pair of nodes, the renderer
+should fan them into separate nearby lanes or corridors so each relationship can
+be followed independently and its marker remains legible.
 
 Architext should also support sequence diagrams as a separate view type. A
 sequence diagram is not the same as the free-form flow map: it shows the ordered

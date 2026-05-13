@@ -38,6 +38,23 @@ npm run preview
 The npm scripts avoid shell-specific command chains so they work on Windows,
 Linux, and macOS.
 
+## Upgrades
+
+This directory is intended to be managed by the Architext adoption script from
+the source repository. From the target project root:
+
+```sh
+node /path/to/architext/tools/architext-adopt.mjs
+```
+
+The script detects whether Architext is absent, current, or needs an upgrade.
+It prompts before writing files and can create a git branch before making
+changes. After writing artifacts, it runs `npm install` and `npm run validate`
+inside `docs/architext` unless `--skip-install` or `--skip-validate` is passed.
+Upgrade preserves `docs/architext/data/*.json` by default. Those files are the
+project-owned architecture record and should not be overwritten by template
+updates unless a maintainer explicitly passes `--overwrite-data`.
+
 ## Data Entry Point
 
 The viewer loads:
@@ -59,4 +76,3 @@ remote URLs.
   decisions, and data classifications
 
 If validation fails, the architecture model is not trustworthy.
-
