@@ -86,6 +86,10 @@ input:focus {
   grid-template-columns: 52px minmax(0, 1fr) 52px;
 }
 
+.app.diagram-focused {
+  grid-template-columns: 52px minmax(0, 1fr) 52px;
+}
+
 .topbar {
   grid-column: 1 / -1;
   display: flex;
@@ -141,6 +145,26 @@ input:focus {
 .topbar-actions select {
   min-height: 36px;
   padding: 7px 10px;
+}
+
+.mode-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.mode-tabs button {
+  min-width: 78px;
+  border-color: var(--line);
+  color: var(--muted);
+  background: #101722;
+}
+
+.mode-tabs button.active {
+  border-color: var(--yellow);
+  color: var(--ink);
+  background: #1d1b12;
 }
 
 .left-nav,
@@ -276,6 +300,13 @@ input:focus {
   text-transform: uppercase;
 }
 
+.panel-head p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
 .panel-head input {
   width: 100%;
   min-height: 36px;
@@ -290,7 +321,22 @@ input:focus {
   padding: 10px;
 }
 
-.flow-card {
+.entity-list {
+  min-height: 0;
+  overflow: auto;
+  padding: 10px;
+}
+
+.entity-list h3 {
+  margin: 10px 0 6px;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.flow-card,
+.entity-card {
   width: 100%;
   display: grid;
   gap: 7px;
@@ -300,12 +346,18 @@ input:focus {
   background: #131925;
 }
 
-.flow-card.active {
+.entity-card.passive {
+  cursor: default;
+}
+
+.flow-card.active,
+.entity-card.active {
   border-color: var(--yellow);
   background: #1c1d20;
 }
 
 .flow-card strong,
+.entity-card strong,
 .step-card strong,
 .node-card strong,
 .mini-record strong {
@@ -313,6 +365,7 @@ input:focus {
 }
 
 .flow-card span,
+.entity-card span,
 .node-card span,
 .step-card span {
   color: var(--muted);
@@ -333,9 +386,30 @@ input:focus {
 
 .diagram-header {
   display: flex;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 16px;
   border-bottom: 1px solid var(--line);
+}
+
+.diagram-controls {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.diagram-controls button {
+  min-height: 30px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+.diagram-controls span {
+  min-width: 44px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: center;
 }
 
 .legend {
@@ -386,6 +460,17 @@ input:focus {
   overflow: visible;
 }
 
+.flow-edge,
+.relationship-edge {
+  cursor: pointer;
+  pointer-events: all;
+}
+
+.flow-edge:focus,
+.relationship-edge:focus {
+  outline: none;
+}
+
 .flow-line {
   fill: none;
   stroke: var(--yellow);
@@ -403,6 +488,21 @@ input:focus {
   stroke-linejoin: round;
   stroke-dasharray: 6 6;
   opacity: 0.85;
+}
+
+.relationship-label {
+  fill: var(--muted);
+  paint-order: stroke;
+  stroke: #0b0f16;
+  stroke-width: 5px;
+  font-size: 11px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.relationship-edge.selected .structural-line,
+.relationship-edge.selected .c4-relationship {
+  stroke: var(--blue);
 }
 
 .flow-lines marker path {
@@ -485,6 +585,18 @@ input:focus {
   stroke-linecap: round;
 }
 
+.sequence-message.async .sequence-line {
+  stroke-dasharray: 7 5;
+}
+
+.sequence-message.persistence .sequence-line {
+  stroke: var(--green);
+}
+
+.sequence-message.response .sequence-line {
+  stroke: var(--cyan);
+}
+
 .sequence-canvas marker path {
   fill: var(--yellow);
 }
@@ -511,6 +623,9 @@ input:focus {
   font-size: 12px;
   font-weight: 800;
   text-anchor: middle;
+  paint-order: stroke;
+  stroke: #0b0f16;
+  stroke-width: 4px;
 }
 
 .sequence-message.selected .sequence-line {
@@ -583,6 +698,87 @@ input:focus {
 
 .node-card.external-service {
   border-left-color: var(--muted);
+}
+
+.c4-shell {
+  background: #0b0f16;
+}
+
+.c4-canvas {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.c4-boundary {
+  position: absolute;
+  inset: 62px 42px 40px 42px;
+  border: 1px dashed rgba(79, 209, 217, 0.35);
+  border-radius: 8px;
+  pointer-events: none;
+}
+
+.c4-boundary span {
+  position: absolute;
+  top: -12px;
+  left: 18px;
+  padding: 2px 8px;
+  color: var(--cyan);
+  background: #0b0f16;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.c4-lane-label {
+  position: absolute;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.c4-node {
+  position: absolute;
+  display: grid;
+  gap: 4px;
+  padding: 11px;
+  text-align: left;
+  border-color: var(--line-strong);
+  border-left-width: 5px;
+  background: #151b26;
+}
+
+.c4-node.selected {
+  border-color: var(--yellow);
+  background: #242210;
+}
+
+.c4-node small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
+}
+
+.c4-relationship {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  stroke-dasharray: 6 6;
+}
+
+.c4-lines marker path {
+  fill: var(--muted);
+}
+
+#c4-arrowhead-selected path {
+  fill: var(--blue);
+}
+
+.c4-label {
+  fill: var(--ink);
 }
 
 .edge-strip {
@@ -668,7 +864,16 @@ input:focus {
 .detail-content {
   height: 100%;
   overflow: auto;
-  padding: 16px;
+  padding: 0 16px 16px;
+}
+
+.detail-sticky {
+  position: sticky;
+  z-index: 5;
+  top: 0;
+  padding: 16px 0 10px;
+  border-bottom: 1px solid var(--line);
+  background: rgba(17, 22, 32, 0.97);
 }
 
 .detail-content h2 {
@@ -681,6 +886,24 @@ input:focus {
   flex-wrap: wrap;
   gap: 6px;
   margin: 12px 0;
+}
+
+.detail-index {
+  display: flex;
+  gap: 6px;
+  margin-top: 12px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+}
+
+.detail-index a {
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 11px;
+  text-decoration: none;
 }
 
 .badge {
@@ -826,5 +1049,54 @@ input:focus {
 
   .side-toggle {
     display: none;
+  }
+
+  .topbar,
+  .diagram-header {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .mode-tabs,
+  .legend {
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 760px) {
+  .app,
+  .app.left-collapsed,
+  .app.right-collapsed,
+  .app.left-collapsed.right-collapsed {
+    padding: 8px;
+    gap: 8px;
+  }
+
+  .app.left-collapsed,
+  .app.right-collapsed,
+  .app.left-collapsed.right-collapsed {
+    grid-template-rows: auto auto minmax(520px, 1fr) auto;
+  }
+
+  .app.left-collapsed .left-nav,
+  .app.right-collapsed .details {
+    min-height: 48px;
+    max-height: 56px;
+  }
+
+  .side-toggle {
+    display: grid;
+  }
+
+  .details {
+    max-height: 70vh;
+  }
+
+  .step-card {
+    flex-basis: 260px;
+  }
+
+  .diagram-controls {
+    flex-wrap: wrap;
   }
 }

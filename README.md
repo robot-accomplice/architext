@@ -78,6 +78,19 @@ The viewer will use a dense engineering layout:
 The UI should be functional before it is pretty. Diagram space, legibility, and
 fast inspection matter more than branding.
 
+## Current Demo Screens
+
+The repository demo uses the fictitious `ClaimsDesk` project to show the
+expected end state after a target project has real Architext JSON.
+
+![Architext flows mode](docs/assets/screenshots/architext-flows.png)
+
+![Architext sequence mode](docs/assets/screenshots/architext-sequence.png)
+
+![Architext C4 drilldown mode](docs/assets/screenshots/architext-c4.png)
+
+![Architext data and risks mode](docs/assets/screenshots/architext-data-risks.png)
+
 ## Install Or Upgrade In A Project
 
 From a target project repository, invoke the Architext adoption script by path:
@@ -144,7 +157,7 @@ Useful options:
 Upgrade preserves `docs/architext/data/*.json` by default because those files
 belong to the target project. It refreshes the viewer, schemas, validation
 tooling, package files, and Architext docs. Use `--overwrite-data` only when
-intentionally resetting the target architecture data to the template demo.
+intentionally resetting the target architecture data to neutral starter data.
 
 ## Local Usage
 
@@ -193,7 +206,7 @@ First read:
 - docs/architext/schema/*.schema.json
 - docs/architext/data/*.json
 
-Then inspect the codebase and replace the ClaimsDesk demo data with this
+Then inspect the codebase and replace the neutral starter data with this
 project's real architecture data. Update only docs/architext/data/*.json unless
 the schema or Architext template itself is clearly wrong.
 
@@ -211,6 +224,30 @@ Required output:
 - risks.json: real architecture, security, privacy, operational, and data risks
 - glossary.json: project terms that future LLMs need to understand
 - manifest.json: project identity, default view, and file references
+
+Persist in git:
+- docs/architext/data/*.json
+- docs/architext/schema/*.schema.json
+- docs/architext/LLM_ARCHITEXT.md
+- docs/architext/README.md
+- docs/architext/AGENTS_APPENDIX.md
+- docs/architext/package.json
+- docs/architext/package-lock.json
+- docs/architext/index.html
+- docs/architext/src/**
+- docs/architext/public/**
+- docs/architext/tools/**
+- docs/architext/tsconfig.json
+- docs/architext/vite.config.ts
+
+Ensure these generated/local artifacts are ignored:
+- docs/architext/node_modules/
+- docs/architext/dist/
+- .DS_Store
+- editor/OS temp files
+- local server logs
+- screenshots created only for debugging unless intentionally added to project
+  documentation
 
 Rules:
 - Reuse stable IDs for existing concepts.
@@ -311,10 +348,10 @@ before a real project adopts the template.
 
 ## Repository Status
 
-This repository is in the planning stage. Architecture and documentation are
-being defined before implementation.
+This repository now includes the working local viewer, schemas, validation
+tooling, adoption script, and the ClaimsDesk demo model.
 
-Current planning documents:
+Core documents:
 
 - [Architecture Plan](docs/architecture/ARCHITECTURE_PLAN.md)
 - [LLM Architext Contract](docs/architecture/LLM_ARCHITEXT.md)

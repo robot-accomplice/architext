@@ -439,9 +439,21 @@ from, writes to, publishes to, or depends on another element. It should not show
 the numbered step-by-step path for a selected flow. Ordered behavior belongs in
 flow, dynamic, or sequence diagrams.
 
-The current implementation still falls short: C4 view options exist, but they
-reuse the same generic node canvas. This must be replaced by C4-specific
-projection logic and drilldown state.
+The UI implementation should now move from a generic "view dropdown" toward
+work modes. Flows, sequence, C4, deployment, and data/risk review are different
+jobs for engineers and should expose different left-panel navigation, diagram
+controls, and details states.
+
+The first dedicated C4 renderer does not need full Structurizr parity, but it
+must stop behaving like an ordered flow diagram. It should show a system
+boundary, actor/external context, relationship labels, and level switching
+between context, container, and component projections. C4 edges are structural
+relationships and should never use numbered workflow markers.
+
+Diagram inspection is a core workflow. The viewer should expose zoom, fit,
+reset, and focus-mode controls; selectable/hoverable edges; keyboard-focusable
+nodes and relationships; and right-panel details that distinguish node, flow,
+step, and relationship selections.
 
 ## Alignment Checkpoint
 
