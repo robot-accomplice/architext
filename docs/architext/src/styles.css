@@ -146,11 +146,15 @@ input:focus {
 .left-nav,
 .diagram-area,
 .details {
+  position: relative;
   min-height: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel);
   box-shadow: var(--shadow);
+}
+
+.diagram-area {
   overflow: hidden;
 }
 
@@ -188,40 +192,76 @@ input:focus {
   user-select: none;
 }
 
-.panel-toggle {
-  position: fixed;
-  z-index: 60;
-  top: 96px;
-  width: 26px;
-  height: 26px;
+.side-toggle {
+  position: absolute;
+  z-index: 20;
+  top: 20px;
+  width: 28px;
+  height: 28px;
   display: grid;
   place-items: center;
   padding: 0;
   border-radius: 999px;
-  border-color: rgba(245, 200, 76, 0.58);
-  color: #15110a;
-  background: var(--yellow);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.38);
+  border: 1px solid rgba(245, 200, 76, 0.82);
+  color: var(--yellow);
+  background: #121925;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.42), 0 0 0 4px rgba(8, 11, 16, 0.55);
   font-weight: 900;
   line-height: 1;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
 }
 
-.left-panel-toggle {
-  left: 332px;
-  transform: translateX(-50%);
+.side-toggle:hover {
+  background: #1a2231;
+  transform: scale(1.06);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.5), 0 0 0 5px rgba(245, 200, 76, 0.1);
 }
 
-.app.left-collapsed .left-panel-toggle {
-  left: 64px;
+.side-toggle::after {
+  position: absolute;
+  top: 50%;
+  min-width: max-content;
+  padding: 5px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--ink);
+  background: #080b10;
+  box-shadow: var(--shadow);
+  content: attr(data-tooltip);
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-50%);
+  transition: opacity 0.12s ease;
 }
 
-.right-panel-toggle {
-  right: 402px;
-  transform: translateX(50%);
+.side-toggle:hover::after {
+  opacity: 1;
 }
 
-.app.right-collapsed .right-panel-toggle {
-  right: 64px;
+.left-side-toggle {
+  right: -14px;
+}
+
+.app.left-collapsed .left-side-toggle {
+  right: -14px;
+}
+
+.right-side-toggle {
+  left: -14px;
+}
+
+.app.right-collapsed .right-side-toggle {
+  left: -14px;
+}
+
+.left-side-toggle::after {
+  left: 36px;
+}
+
+.right-side-toggle::after {
+  right: 36px;
 }
 
 .panel-head {
@@ -242,9 +282,7 @@ input:focus {
   padding: 7px 9px;
 }
 
-.flow-list,
-.details,
-.diagram-area {
+.flow-list {
   overflow: auto;
 }
 
@@ -351,13 +389,37 @@ input:focus {
 .flow-line {
   fill: none;
   stroke: var(--yellow);
-  stroke-width: 2.25;
+  stroke-width: 2.5;
   stroke-linecap: round;
+  stroke-linejoin: round;
   opacity: 0.9;
+}
+
+.structural-line {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-dasharray: 6 6;
+  opacity: 0.85;
 }
 
 .flow-lines marker path {
   fill: var(--yellow);
+}
+
+#arrowhead-selected path,
+#sequence-arrowhead-selected path {
+  fill: var(--blue);
+}
+
+.flow-edge.selected .flow-line {
+  stroke: var(--blue);
+}
+
+.flow-edge.selected .flow-step-dot {
+  fill: var(--blue);
 }
 
 .flow-step-dot {
@@ -368,10 +430,95 @@ input:focus {
 
 .flow-step-label {
   fill: #171103;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 900;
   text-anchor: middle;
   pointer-events: none;
+}
+
+.sequence-shell {
+  background:
+    linear-gradient(#151b26 1px, transparent 1px),
+    #0b0f16;
+  background-size: 28px 28px;
+}
+
+.sequence-canvas {
+  display: block;
+  min-width: 100%;
+  min-height: 100%;
+}
+
+.sequence-participant {
+  fill: var(--panel-2);
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+}
+
+.sequence-title {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.sequence-kind,
+.sequence-data {
+  fill: var(--muted);
+  font-size: 11px;
+  text-anchor: middle;
+}
+
+.lifeline {
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 5;
+}
+
+.sequence-message {
+  cursor: pointer;
+}
+
+.sequence-line {
+  stroke: var(--yellow);
+  stroke-width: 2.4;
+  stroke-linecap: round;
+}
+
+.sequence-canvas marker path {
+  fill: var(--yellow);
+}
+
+#sequence-arrowhead-selected path {
+  fill: var(--blue);
+}
+
+.sequence-step-dot {
+  fill: var(--yellow);
+  stroke: #171103;
+  stroke-width: 2;
+}
+
+.sequence-step-label {
+  fill: #171103;
+  font-size: 12px;
+  font-weight: 900;
+  text-anchor: middle;
+}
+
+.sequence-action {
+  fill: var(--ink);
+  font-size: 12px;
+  font-weight: 800;
+  text-anchor: middle;
+}
+
+.sequence-message.selected .sequence-line {
+  stroke: var(--blue);
+}
+
+.sequence-message.selected .sequence-step-dot {
+  fill: var(--blue);
 }
 
 .lane-column {
@@ -411,6 +558,10 @@ input:focus {
 
 .node-card.actor {
   border-left-color: var(--pink);
+}
+
+.node-card.software-system {
+  border-left-color: var(--cyan);
 }
 
 .node-card.client {
@@ -515,6 +666,8 @@ input:focus {
 }
 
 .detail-content {
+  height: 100%;
+  overflow: auto;
   padding: 16px;
 }
 
@@ -671,7 +824,7 @@ input:focus {
     max-height: 420px;
   }
 
-  .panel-toggle {
+  .side-toggle {
     display: none;
   }
 }

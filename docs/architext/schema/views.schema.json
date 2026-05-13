@@ -17,7 +17,7 @@
           "name": { "type": "string", "minLength": 1 },
           "type": {
             "type": "string",
-            "enum": ["system-map", "flow-explorer", "c4-context", "c4-container", "c4-component", "dataflow", "deployment", "risk-overlay"]
+            "enum": ["system-map", "flow-explorer", "c4-context", "c4-container", "c4-component", "dataflow", "deployment", "risk-overlay", "sequence"]
           },
           "summary": { "type": "string", "minLength": 1 },
           "lanes": {
@@ -46,4 +46,3 @@
     }
   }
 }
-

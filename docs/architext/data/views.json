@@ -62,6 +62,19 @@
       ]
     },
     {
+      "id": "sequence",
+      "name": "Sequence",
+      "type": "sequence",
+      "summary": "Ordered message sequence for the selected ClaimsDesk flow.",
+      "lanes": [
+        {
+          "id": "participants",
+          "name": "Participants",
+          "nodeIds": ["claimant", "claims-adjuster", "web-app", "auth0", "claims-api", "claims-db", "document-store", "work-queue", "fraud-worker", "fraudscore-api", "audit-log", "payment-gateway", "analytics-warehouse"]
+        }
+      ]
+    },
+    {
       "id": "deployment",
       "name": "Deployment",
       "type": "deployment",
@@ -103,7 +116,7 @@
         {
           "id": "system",
           "name": "ClaimsDesk System",
-          "nodeIds": ["web-app", "claims-api", "fraud-worker"]
+          "nodeIds": ["claimsdesk-system"]
         },
         {
           "id": "external-systems",

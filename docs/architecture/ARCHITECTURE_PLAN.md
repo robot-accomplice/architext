@@ -276,16 +276,16 @@ Required interactions:
 - pan/zoom/fit diagram
 - maximize diagram
 - independent left-panel collapse and right-panel collapse
-- collapse controls visible from both panel edges so either side can reclaim
-  diagram space without hunting in a global toolbar
+- collapse controls attached to the sidebars they control so either side can
+  reclaim diagram space without hunting in a global toolbar
 - persisted collapse state across reloads
 - right-panel deep links to sections
 
 Collapse behavior should follow the pattern used in Palm Command Center: a
-small control straddles the panel/content border, the panel shrinks to a narrow
-rail instead of disappearing entirely, and the expanded/collapsed affordance is
-clear from the icon orientation. Architext needs this on both sides because the
-diagram canvas is the primary work area.
+small polished control lives on the controlled panel edge, the panel shrinks to
+a narrow rail instead of disappearing entirely, and the expanded/collapsed
+affordance is clear from the icon orientation. Architext needs this on both
+sides because the diagram canvas is the primary work area.
 
 The first demo currently falls short here: it only collapses the left panel from
 the top toolbar, has no right-panel collapse, and hides the left panel entirely
@@ -332,6 +332,29 @@ steps. A selected flow should draw directional edges between involved nodes,
 with numbered step markers or labels where legible. The textual ordered step
 list remains useful, but it is not a substitute for visual relationships.
 
+Flow routing must optimize readability over geometric cleverness. The original
+visual target uses compact boxes and readable highlighted paths; Architext
+should preserve that. Lines should not take surprising paths, pass behind
+related boxes, or hide numbered markers. Prefer simple direct or gently curved
+paths through clear gutters, with step markers placed on readable line segments.
+If a clean route cannot be drawn in a dense canvas, the renderer should choose a
+simpler layout or require explicit layout hints.
+
+Any side of a node box is a valid source or target for an edge. The renderer
+should choose the least contentious attachment surface and path for the actual
+node positions: under, over, or around objects is acceptable when it is clear;
+behind a node or through an ambiguous overlap is not. Same-column relationships
+should usually route through an outside gutter. Backward or cross-lane
+relationships should reserve a clean corridor above or below the involved boxes
+instead of crossing behind active nodes. The canvas should keep enough left and
+top breathing room for these gutters so the columnar layout does not force
+unreadable paths.
+
+Architext should also support sequence diagrams as a separate view type. A
+sequence diagram is not the same as the free-form flow map: it shows the ordered
+messages in one selected flow across lifelines, with message numbers,
+participants, and payload/data classifications.
+
 ## C4 And Architecture Views
 
 Architext must include first-class C4-inspired views, not merely generic
@@ -347,8 +370,41 @@ groupings:
 Each view should be generated from the same JSON model. C4 views are projections
 over nodes, flows, and relationships, not separate hand-maintained diagrams.
 
-The first demo currently has only system map, dataflow, and deployment views.
-That is insufficient for the original requirement.
+The first demo previously mislabeled lane-grouped views as C4 views. That is
+not acceptable. C4 levels are semantic zoom levels, not alternate column
+groupings:
+
+- Context shows the system boundary and its relationships to actors and external
+  systems. It should not expose internal containers.
+- Container shows deployable/runtime units inside the system boundary plus
+  external context. It should label communication protocols or interaction
+  styles.
+- Component shows major components inside one selected container. It should not
+  mix unrelated runtime units from the whole system.
+
+The schema needs enough relationship metadata to render these levels honestly:
+relationship label, technology/protocol where known, source, target, and whether
+the source/target is inside or outside the system boundary.
+
+The UI should expose C4 as drilldown navigation:
+
+1. **Context:** select the system boundary.
+2. **Container:** drill into that system to see deployable/runtime units.
+3. **Component:** drill into one selected container to see internal modules.
+
+This should not be rendered like a selected ordered flow. Flow diagrams show
+scenario paths. C4 diagrams show structural containment and static
+relationships at a chosen abstraction level.
+
+C4 diagrams should show structural connections, not workflows. A C4 Context,
+Container, or Component diagram may show that one element uses, calls, reads
+from, writes to, publishes to, or depends on another element. It should not show
+the numbered step-by-step path for a selected flow. Ordered behavior belongs in
+flow, dynamic, or sequence diagrams.
+
+The current implementation still falls short: C4 view options exist, but they
+reuse the same generic node canvas. This must be replaced by C4-specific
+projection logic and drilldown state.
 
 ## Alignment Checkpoint
 

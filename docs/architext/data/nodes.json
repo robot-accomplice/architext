@@ -10,7 +10,7 @@
       "sourcePaths": [],
       "runtime": "Browser or mobile web client",
       "interfaces": ["ClaimsDesk web UI"],
-      "dependencies": ["web-app"],
+      "dependencies": ["claimsdesk-system", "web-app"],
       "dataHandled": ["customer-pii", "claim-content"],
       "security": ["Untrusted actor", "Authenticated through Auth0"],
       "observability": ["User actions correlated through request IDs"],
@@ -29,7 +29,7 @@
       "sourcePaths": [],
       "runtime": "Browser",
       "interfaces": ["ClaimsDesk admin UI"],
-      "dependencies": ["web-app", "claims-api"],
+      "dependencies": ["claimsdesk-system", "web-app", "claims-api"],
       "dataHandled": ["customer-pii", "claim-content", "payment-instruction"],
       "security": ["Requires staff role", "Actions written to audit log"],
       "observability": ["Approval actions produce audit events"],
@@ -37,6 +37,25 @@
       "relatedDecisions": ["adr-local-architecture-state"],
       "knownRisks": ["risk-overbroad-staff-access"],
       "verification": ["tests/e2e/admin-approval.spec.ts"]
+    },
+    {
+      "id": "claimsdesk-system",
+      "type": "software-system",
+      "name": "ClaimsDesk",
+      "summary": "Claims-processing SaaS that lets claimants submit claims and staff review, audit, and approve payouts.",
+      "responsibilities": ["Capture claims", "Coordinate fraud review", "Support staff review", "Record audit evidence", "Initiate approved payouts"],
+      "owner": "ClaimsDesk product engineering",
+      "sourcePaths": ["apps/web", "services/claims-api", "workers/fraud-review"],
+      "runtime": "Project system boundary across web, API, workers, and managed state",
+      "interfaces": ["Browser UI", "REST API", "Queue messages", "Vendor APIs"],
+      "dependencies": ["auth0", "fraudscore-api", "payment-gateway"],
+      "dataHandled": ["customer-pii", "claim-content", "auth-token", "payment-instruction", "operational-telemetry"],
+      "security": ["Tenant-scoped access", "Staff role enforcement", "External vendor calls minimized"],
+      "observability": ["Trace IDs connect frontend, API, workers, and audit events"],
+      "relatedFlows": ["user-signup", "claim-submission", "document-upload", "fraud-review", "approval-payout", "audit-export"],
+      "relatedDecisions": ["adr-spa-api-split", "adr-async-fraud-review", "adr-managed-identity"],
+      "knownRisks": ["risk-account-takeover", "risk-overbroad-staff-access", "risk-identity-provider-outage"],
+      "verification": ["npm run test", "npm run test:e2e"]
     },
     {
       "id": "web-app",
@@ -249,4 +268,3 @@
     }
   ]
 }
-
