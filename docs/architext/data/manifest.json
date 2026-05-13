@@ -1,0 +1,24 @@
+{
+  "schemaVersion": "0.1.0",
+  "project": {
+    "id": "claimsdesk",
+    "name": "ClaimsDesk",
+    "summary": "Fictitious claims-processing SaaS used as the reference Architext project."
+  },
+  "generatedAt": "2026-05-13T00:00:00Z",
+  "defaultViewId": "system-map",
+  "files": {
+    "nodes": "nodes.json",
+    "flows": "flows.json",
+    "views": "views.json",
+    "dataClassification": "data-classification.json",
+    "decisions": "decisions.json",
+    "risks": "risks.json",
+    "glossary": "glossary.json"
+  },
+  "notes": [
+    "ClaimsDesk is fictitious and intentionally broad enough to exercise auth, PII, queues, documents, external integrations, audit, analytics, and deployment views.",
+    "The JSON files are maintained as LLM-owned architecture state."
+  ]
+}
+

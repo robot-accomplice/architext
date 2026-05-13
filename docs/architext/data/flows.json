@@ -1,0 +1,295 @@
+{
+  "flows": [
+    {
+      "id": "user-signup",
+      "name": "User signup",
+      "status": "implemented",
+      "summary": "A claimant creates an account through the web app and receives a tenant-scoped session.",
+      "trigger": "Claimant clicks sign up",
+      "actors": ["claimant"],
+      "steps": [
+        {
+          "id": "signup-1",
+          "from": "claimant",
+          "to": "web-app",
+          "action": "openSignup",
+          "summary": "Claimant opens the signup screen.",
+          "data": ["public-metadata"]
+        },
+        {
+          "id": "signup-2",
+          "from": "web-app",
+          "to": "auth0",
+          "action": "redirectForAuthentication",
+          "summary": "Web app redirects to Auth0 using the configured OIDC client.",
+          "data": ["customer-pii"]
+        },
+        {
+          "id": "signup-3",
+          "from": "auth0",
+          "to": "web-app",
+          "action": "returnAuthorizationCode",
+          "summary": "Auth0 redirects back with an authorization code.",
+          "data": ["auth-token"]
+        },
+        {
+          "id": "signup-4",
+          "from": "web-app",
+          "to": "claims-api",
+          "action": "createUserProfile",
+          "summary": "Web app calls the Claims API to create the claimant profile.",
+          "data": ["auth-token", "customer-pii"]
+        },
+        {
+          "id": "signup-5",
+          "from": "claims-api",
+          "to": "claims-db",
+          "action": "persistUserProfile",
+          "summary": "Claims API stores the claimant profile and tenant relationship.",
+          "data": ["customer-pii"]
+        }
+      ],
+      "guarantees": ["Claims API validates token issuer, audience, expiry, and tenant scope before writing a profile."],
+      "failureBehavior": ["Invalid token returns 401", "Duplicate profile returns idempotent profile response"],
+      "observability": ["Trace spans from web app to Claims API", "Auth errors counted by reason"],
+      "verification": ["tests/integration/user-signup.test.ts"],
+      "knownGaps": ["Account recovery flow is not represented yet."]
+    },
+    {
+      "id": "claim-submission",
+      "name": "Claim submission",
+      "status": "implemented",
+      "summary": "A claimant submits claim details, the API persists the claim, and asynchronous fraud review is queued.",
+      "trigger": "Claimant submits the claim form",
+      "actors": ["claimant"],
+      "steps": [
+        {
+          "id": "claim-submit-1",
+          "from": "claimant",
+          "to": "web-app",
+          "action": "submitClaimForm",
+          "summary": "Claimant submits structured claim information.",
+          "data": ["customer-pii", "claim-content"]
+        },
+        {
+          "id": "claim-submit-2",
+          "from": "web-app",
+          "to": "claims-api",
+          "action": "createClaim",
+          "summary": "Web app sends the claim payload with bearer token and trace ID.",
+          "data": ["auth-token", "customer-pii", "claim-content"]
+        },
+        {
+          "id": "claim-submit-3",
+          "from": "claims-api",
+          "to": "claims-db",
+          "action": "persistClaim",
+          "summary": "Claims API validates and stores the claim in pending review state.",
+          "data": ["customer-pii", "claim-content"]
+        },
+        {
+          "id": "claim-submit-4",
+          "from": "claims-api",
+          "to": "work-queue",
+          "action": "publishFraudReviewJob",
+          "summary": "Claims API publishes a minimal fraud review job.",
+          "data": ["claim-content", "operational-telemetry"]
+        }
+      ],
+      "guarantees": ["Fraud review publication happens only after the claim transaction commits."],
+      "failureBehavior": ["Validation errors return 422", "Queue publication failures leave claim in submitted-awaiting-review state"],
+      "observability": ["Claim creation metric", "Queue publish failures alert"],
+      "verification": ["tests/integration/claim-submission.test.ts"],
+      "knownGaps": ["Large claim attachments are handled by a separate document upload flow."]
+    },
+    {
+      "id": "document-upload",
+      "name": "Document upload",
+      "status": "partial",
+      "summary": "A claimant uploads supporting evidence through a signed URL and the API attaches metadata to the claim.",
+      "trigger": "Claimant selects evidence files",
+      "actors": ["claimant"],
+      "steps": [
+        {
+          "id": "document-upload-1",
+          "from": "web-app",
+          "to": "claims-api",
+          "action": "requestSignedUploadUrl",
+          "summary": "Web app requests a signed upload URL for a claim document.",
+          "data": ["auth-token", "claim-content"]
+        },
+        {
+          "id": "document-upload-2",
+          "from": "claims-api",
+          "to": "document-store",
+          "action": "createSignedUploadUrl",
+          "summary": "Claims API creates a short-lived signed URL for the private object store.",
+          "data": ["claim-content"]
+        },
+        {
+          "id": "document-upload-3",
+          "from": "web-app",
+          "to": "document-store",
+          "action": "uploadDocument",
+          "summary": "Browser uploads the file directly to object storage.",
+          "data": ["customer-pii", "claim-content"]
+        },
+        {
+          "id": "document-upload-4",
+          "from": "web-app",
+          "to": "claims-api",
+          "action": "attachDocumentMetadata",
+          "summary": "Web app tells the API which uploaded object belongs to the claim.",
+          "data": ["auth-token", "claim-content"]
+        }
+      ],
+      "guarantees": ["Signed URLs expire quickly and are scoped to one object key."],
+      "failureBehavior": ["Expired URLs require a new signed URL", "Metadata attach rejects objects outside the claimant's tenant"],
+      "observability": ["Upload failures by object status", "Document metadata attach audit event"],
+      "verification": ["tests/integration/document-upload.test.ts"],
+      "knownGaps": ["Virus scanning is planned but not represented as an enforced step."]
+    },
+    {
+      "id": "fraud-review",
+      "name": "Fraud review",
+      "status": "partial",
+      "summary": "The fraud worker consumes review jobs, calls the external fraud scoring service, and stores the recommendation.",
+      "trigger": "Claims Work Queue receives a fraud review job",
+      "actors": ["fraud-worker"],
+      "steps": [
+        {
+          "id": "fraud-review-1",
+          "from": "work-queue",
+          "to": "fraud-worker",
+          "action": "deliverReviewJob",
+          "summary": "Queue delivers a claim review job to the worker.",
+          "data": ["claim-content", "operational-telemetry"]
+        },
+        {
+          "id": "fraud-review-2",
+          "from": "fraud-worker",
+          "to": "claims-db",
+          "action": "loadClaimContext",
+          "summary": "Worker loads the minimum claim context required for scoring.",
+          "data": ["customer-pii", "claim-content"]
+        },
+        {
+          "id": "fraud-review-3",
+          "from": "fraud-worker",
+          "to": "fraudscore-api",
+          "action": "requestFraudScore",
+          "summary": "Worker sends minimized scoring attributes to FraudScore API.",
+          "data": ["customer-pii", "claim-content"]
+        },
+        {
+          "id": "fraud-review-4",
+          "from": "fraud-worker",
+          "to": "claims-db",
+          "action": "persistRecommendation",
+          "summary": "Worker stores score, reasons, and vendor provenance.",
+          "data": ["claim-content", "operational-telemetry"]
+        },
+        {
+          "id": "fraud-review-5",
+          "from": "fraud-worker",
+          "to": "audit-log",
+          "action": "recordAutomatedReview",
+          "summary": "Worker records the automated review event.",
+          "data": ["operational-telemetry"]
+        }
+      ],
+      "guarantees": ["FraudScore receives minimized data, not raw uploaded documents."],
+      "failureBehavior": ["Transient vendor errors are retried", "Permanent errors move the job to manual review"],
+      "observability": ["Fraud API latency", "Worker retry count", "Dead-letter queue count"],
+      "verification": ["tests/integration/fraud-review-worker.test.ts"],
+      "knownGaps": ["Vendor outage fallback policy needs product confirmation."]
+    },
+    {
+      "id": "approval-payout",
+      "name": "Approval payout",
+      "status": "planned",
+      "summary": "A claims adjuster approves a claim and the system sends a payout instruction to the payment gateway.",
+      "trigger": "Claims adjuster clicks approve payout",
+      "actors": ["claims-adjuster"],
+      "steps": [
+        {
+          "id": "approval-payout-1",
+          "from": "claims-adjuster",
+          "to": "web-app",
+          "action": "approvePayout",
+          "summary": "Adjuster approves payout in the staff UI.",
+          "data": ["payment-instruction", "customer-pii"]
+        },
+        {
+          "id": "approval-payout-2",
+          "from": "web-app",
+          "to": "claims-api",
+          "action": "submitApproval",
+          "summary": "Web app sends approval command with staff token.",
+          "data": ["auth-token", "payment-instruction"]
+        },
+        {
+          "id": "approval-payout-3",
+          "from": "claims-api",
+          "to": "claims-db",
+          "action": "markApproved",
+          "summary": "Claims API records approved payout state in a transaction.",
+          "data": ["payment-instruction", "customer-pii"]
+        },
+        {
+          "id": "approval-payout-4",
+          "from": "claims-api",
+          "to": "audit-log",
+          "action": "recordApproval",
+          "summary": "Claims API writes the staff approval event.",
+          "data": ["payment-instruction", "operational-telemetry"]
+        },
+        {
+          "id": "approval-payout-5",
+          "from": "claims-api",
+          "to": "payment-gateway",
+          "action": "sendPayoutInstruction",
+          "summary": "Claims API sends payout instruction to the payment gateway.",
+          "data": ["payment-instruction", "customer-pii"]
+        }
+      ],
+      "guarantees": ["Only staff with payout approval permission can initiate payment instructions."],
+      "failureBehavior": ["Gateway timeout leaves claim in approved-payment-pending state", "Webhook reconciliation updates settlement status later"],
+      "observability": ["Approval audit event", "Gateway request metric", "Payment pending age alert"],
+      "verification": ["tests/e2e/approval-payout.spec.ts"],
+      "knownGaps": ["Four-eyes approval is planned but not implemented."]
+    },
+    {
+      "id": "audit-export",
+      "name": "Audit export",
+      "status": "implemented",
+      "summary": "Audit and claim metrics are exported to the analytics warehouse after redaction.",
+      "trigger": "Scheduled analytics export",
+      "actors": ["analytics-warehouse"],
+      "steps": [
+        {
+          "id": "audit-export-1",
+          "from": "audit-log",
+          "to": "analytics-warehouse",
+          "action": "loadAuditMetrics",
+          "summary": "Audit events are transformed into de-identified metrics.",
+          "data": ["operational-telemetry"]
+        },
+        {
+          "id": "audit-export-2",
+          "from": "claims-db",
+          "to": "analytics-warehouse",
+          "action": "loadClaimMetrics",
+          "summary": "Claim records are aggregated and stripped of direct identifiers before load.",
+          "data": ["operational-telemetry"]
+        }
+      ],
+      "guarantees": ["PII is stripped before analytics load."],
+      "failureBehavior": ["Failed load preserves previous warehouse snapshot and alerts data team"],
+      "observability": ["Pipeline freshness", "Redaction test result", "Load failure alert"],
+      "verification": ["tests/data/analytics-redaction.test.ts"],
+      "knownGaps": ["Re-identification risk review is not automated."]
+    }
+  ]
+}
+

@@ -1,0 +1,94 @@
+{
+  "views": [
+    {
+      "id": "system-map",
+      "name": "System Map",
+      "type": "system-map",
+      "summary": "All ClaimsDesk components grouped by architectural lane.",
+      "lanes": [
+        {
+          "id": "actors",
+          "name": "Actors",
+          "nodeIds": ["claimant", "claims-adjuster"]
+        },
+        {
+          "id": "clients",
+          "name": "Client Surfaces",
+          "nodeIds": ["web-app"]
+        },
+        {
+          "id": "services",
+          "name": "Services",
+          "nodeIds": ["claims-api", "fraud-worker"]
+        },
+        {
+          "id": "state",
+          "name": "State",
+          "nodeIds": ["claims-db", "document-store", "work-queue", "audit-log", "analytics-warehouse"]
+        },
+        {
+          "id": "external",
+          "name": "External Services",
+          "nodeIds": ["auth0", "fraudscore-api", "payment-gateway"]
+        }
+      ]
+    },
+    {
+      "id": "dataflow",
+      "name": "Dataflow",
+      "type": "dataflow",
+      "summary": "Sensitive data movement across ClaimsDesk flows.",
+      "lanes": [
+        {
+          "id": "entry",
+          "name": "Entry",
+          "nodeIds": ["claimant", "claims-adjuster", "web-app"]
+        },
+        {
+          "id": "control",
+          "name": "Control Plane",
+          "nodeIds": ["auth0", "claims-api", "fraud-worker"]
+        },
+        {
+          "id": "persistence",
+          "name": "Persistence",
+          "nodeIds": ["claims-db", "document-store", "audit-log", "analytics-warehouse"]
+        },
+        {
+          "id": "external-risk",
+          "name": "External Risk",
+          "nodeIds": ["fraudscore-api", "payment-gateway"]
+        }
+      ]
+    },
+    {
+      "id": "deployment",
+      "name": "Deployment",
+      "type": "deployment",
+      "summary": "Runtime placement for ClaimsDesk components.",
+      "lanes": [
+        {
+          "id": "browser",
+          "name": "Browser",
+          "nodeIds": ["claimant", "claims-adjuster", "web-app"]
+        },
+        {
+          "id": "kubernetes",
+          "name": "Kubernetes",
+          "nodeIds": ["claims-api", "fraud-worker"]
+        },
+        {
+          "id": "managed-state",
+          "name": "Managed State",
+          "nodeIds": ["claims-db", "document-store", "work-queue", "audit-log", "analytics-warehouse"]
+        },
+        {
+          "id": "vendors",
+          "name": "Vendors",
+          "nodeIds": ["auth0", "fraudscore-api", "payment-gateway"]
+        }
+      ]
+    }
+  ]
+}
+

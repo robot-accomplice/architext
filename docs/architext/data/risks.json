@@ -1,0 +1,115 @@
+{
+  "risks": [
+    {
+      "id": "risk-account-takeover",
+      "title": "Account takeover exposes claim data",
+      "category": "security",
+      "severity": "high",
+      "status": "mitigating",
+      "summary": "A compromised claimant account could expose claim content and uploaded documents.",
+      "mitigations": ["OIDC token validation", "Short session lifetime", "Suspicious login monitoring"],
+      "relatedNodes": ["claimant", "web-app", "auth0"],
+      "relatedFlows": ["user-signup", "document-upload"]
+    },
+    {
+      "id": "risk-overbroad-staff-access",
+      "title": "Overbroad staff access to claimant data",
+      "category": "security",
+      "severity": "high",
+      "status": "open",
+      "summary": "Claims adjusters need sensitive data access, but excess access creates privacy and compliance risk.",
+      "mitigations": ["Role checks", "Audit events", "Planned least-privilege review"],
+      "relatedNodes": ["claims-adjuster", "claims-api", "claims-db"],
+      "relatedFlows": ["approval-payout"]
+    },
+    {
+      "id": "risk-identity-provider-outage",
+      "title": "Identity provider outage blocks login",
+      "category": "operational",
+      "severity": "medium",
+      "status": "accepted",
+      "summary": "Auth0 outage prevents new login and token refresh.",
+      "mitigations": ["Short incident runbook", "Status page monitoring", "Existing sessions continue until expiry"],
+      "relatedNodes": ["auth0"],
+      "relatedFlows": ["user-signup"]
+    },
+    {
+      "id": "risk-pii-retention",
+      "title": "PII retained longer than required",
+      "category": "data",
+      "severity": "high",
+      "status": "open",
+      "summary": "Claims records include PII and need explicit retention handling.",
+      "mitigations": ["Retention policy planned", "Data classification tracked in Architext"],
+      "relatedNodes": ["claims-db"],
+      "relatedFlows": ["claim-submission"]
+    },
+    {
+      "id": "risk-document-url-leak",
+      "title": "Signed document URL leakage",
+      "category": "security",
+      "severity": "high",
+      "status": "mitigating",
+      "summary": "Leaked signed URLs could expose claim evidence during their validity window.",
+      "mitigations": ["Short-lived URLs", "Object-key scoping", "No signed URLs in logs"],
+      "relatedNodes": ["document-store", "web-app", "claims-api"],
+      "relatedFlows": ["document-upload"]
+    },
+    {
+      "id": "risk-queue-backlog",
+      "title": "Fraud review backlog delays claims",
+      "category": "operational",
+      "severity": "medium",
+      "status": "mitigating",
+      "summary": "Queue backlog can delay fraud review and leave claims pending.",
+      "mitigations": ["Queue depth alerts", "Worker autoscaling", "Dead-letter monitoring"],
+      "relatedNodes": ["work-queue", "fraud-worker"],
+      "relatedFlows": ["fraud-review"]
+    },
+    {
+      "id": "risk-fraud-vendor-data-sharing",
+      "title": "Fraud vendor receives sensitive claim data",
+      "category": "data",
+      "severity": "high",
+      "status": "open",
+      "summary": "Fraud scoring requires some sensitive attributes to leave the ClaimsDesk trust boundary.",
+      "mitigations": ["Payload minimization", "Vendor contract review", "Provenance recorded"],
+      "relatedNodes": ["fraud-worker", "fraudscore-api"],
+      "relatedFlows": ["fraud-review"]
+    },
+    {
+      "id": "risk-audit-log-tampering",
+      "title": "Audit log tampering weakens compliance evidence",
+      "category": "security",
+      "severity": "high",
+      "status": "open",
+      "summary": "Append-only behavior alone may not prove events were not modified later.",
+      "mitigations": ["Append-only writes", "Tamper-evident digest planned"],
+      "relatedNodes": ["audit-log"],
+      "relatedFlows": ["approval-payout", "audit-export"]
+    },
+    {
+      "id": "risk-payment-webhook-spoofing",
+      "title": "Spoofed payment webhook changes settlement state",
+      "category": "security",
+      "severity": "critical",
+      "status": "planned",
+      "summary": "An attacker could attempt to forge gateway callbacks.",
+      "mitigations": ["Webhook signature verification", "Idempotent reconciliation"],
+      "relatedNodes": ["payment-gateway", "claims-api"],
+      "relatedFlows": ["approval-payout"]
+    },
+    {
+      "id": "risk-analytics-reidentification",
+      "title": "Analytics data can be re-identified",
+      "category": "data",
+      "severity": "medium",
+      "status": "open",
+      "summary": "Aggregated exports may still allow re-identification if dimensions are too granular.",
+      "mitigations": ["Strip direct identifiers", "Planned k-anonymity checks"],
+      "relatedNodes": ["analytics-warehouse"],
+      "relatedFlows": ["audit-export"]
+    }
+  ]
+}
+

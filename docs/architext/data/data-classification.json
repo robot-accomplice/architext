@@ -1,0 +1,41 @@
+{
+  "classes": [
+    {
+      "id": "public-metadata",
+      "name": "Public metadata",
+      "sensitivity": "low",
+      "handling": "Can be shown in user interfaces and logs when not combined with sensitive identifiers."
+    },
+    {
+      "id": "customer-pii",
+      "name": "Customer PII",
+      "sensitivity": "high",
+      "handling": "Minimize collection, avoid raw logs, encrypt at rest, and restrict access to claims staff."
+    },
+    {
+      "id": "claim-content",
+      "name": "Claim content",
+      "sensitivity": "high",
+      "handling": "Treat as customer confidential data. Store encrypted and expose only through authorized claim workflows."
+    },
+    {
+      "id": "auth-token",
+      "name": "Auth token",
+      "sensitivity": "critical",
+      "handling": "Never persist in logs. Validate issuer, audience, expiry, and tenant scope at service boundaries."
+    },
+    {
+      "id": "payment-instruction",
+      "name": "Payment instruction",
+      "sensitivity": "critical",
+      "handling": "Require explicit approval state, audit trail, and privileged service access."
+    },
+    {
+      "id": "operational-telemetry",
+      "name": "Operational telemetry",
+      "sensitivity": "medium",
+      "handling": "Redact identifiers and preserve enough context for incident response."
+    }
+  ]
+}
+

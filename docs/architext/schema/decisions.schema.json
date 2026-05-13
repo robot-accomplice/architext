@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architext.local/schema/decisions.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["decisions"],
+  "properties": {
+    "decisions": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "status", "title", "context", "decision", "consequences", "relatedNodes", "relatedFlows"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "status": { "type": "string", "enum": ["planned", "accepted", "deprecated", "superseded"] },
+          "title": { "type": "string", "minLength": 1 },
+          "context": { "type": "string", "minLength": 1 },
+          "decision": { "type": "string", "minLength": 1 },
+          "consequences": { "$ref": "#/$defs/stringList" },
+          "relatedNodes": { "$ref": "#/$defs/idList" },
+          "relatedFlows": { "$ref": "#/$defs/idList" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "idList": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+    "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+  }
+}
+

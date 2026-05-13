@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architext.local/schema/manifest.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "project", "generatedAt", "defaultViewId", "files", "notes"],
+  "properties": {
+    "schemaVersion": { "type": "string", "minLength": 1 },
+    "project": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "summary"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 }
+      }
+    },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "defaultViewId": { "$ref": "#/$defs/id" },
+    "files": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["nodes", "flows", "views", "dataClassification", "decisions", "risks", "glossary"],
+      "properties": {
+        "nodes": { "type": "string", "minLength": 1 },
+        "flows": { "type": "string", "minLength": 1 },
+        "views": { "type": "string", "minLength": 1 },
+        "dataClassification": { "type": "string", "minLength": 1 },
+        "decisions": { "type": "string", "minLength": 1 },
+        "risks": { "type": "string", "minLength": 1 },
+        "glossary": { "type": "string", "minLength": 1 }
+      }
+    },
+    "notes": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    }
+  }
+}
+

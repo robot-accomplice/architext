@@ -1,0 +1,70 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architext.local/schema/nodes.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["nodes"],
+  "properties": {
+    "nodes": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "type",
+          "name",
+          "summary",
+          "responsibilities",
+          "owner",
+          "sourcePaths",
+          "runtime",
+          "interfaces",
+          "dependencies",
+          "dataHandled",
+          "security",
+          "observability",
+          "relatedFlows",
+          "relatedDecisions",
+          "knownRisks",
+          "verification"
+        ],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "type": {
+            "type": "string",
+            "enum": ["actor", "client", "service", "module", "worker", "queue", "data-store", "external-service", "deployment-unit", "trust-boundary"]
+          },
+          "name": { "type": "string", "minLength": 1 },
+          "summary": { "type": "string", "minLength": 1 },
+          "responsibilities": { "$ref": "#/$defs/stringList" },
+          "owner": { "type": "string", "minLength": 1 },
+          "sourcePaths": { "$ref": "#/$defs/stringList" },
+          "runtime": { "type": "string", "minLength": 1 },
+          "interfaces": { "$ref": "#/$defs/stringList" },
+          "dependencies": { "$ref": "#/$defs/idList" },
+          "dataHandled": { "$ref": "#/$defs/idList" },
+          "security": { "$ref": "#/$defs/stringList" },
+          "observability": { "$ref": "#/$defs/stringList" },
+          "relatedFlows": { "$ref": "#/$defs/idList" },
+          "relatedDecisions": { "$ref": "#/$defs/idList" },
+          "knownRisks": { "$ref": "#/$defs/idList" },
+          "verification": { "$ref": "#/$defs/stringList" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "idList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "stringList": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}
+

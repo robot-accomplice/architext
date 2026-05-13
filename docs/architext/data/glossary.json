@@ -1,0 +1,21 @@
+{
+  "terms": [
+    {
+      "term": "Claim",
+      "definition": "A customer request for reimbursement or coverage review."
+    },
+    {
+      "term": "Fraud review",
+      "definition": "Automated and manual evaluation of whether a claim appears suspicious."
+    },
+    {
+      "term": "Signed URL",
+      "definition": "Short-lived URL granting scoped access to upload or download one object."
+    },
+    {
+      "term": "Payment instruction",
+      "definition": "A command sent to the payment gateway to execute an approved payout."
+    }
+  ]
+}
+

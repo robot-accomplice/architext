@@ -1,0 +1,72 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architext.local/schema/flows.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["flows"],
+  "properties": {
+    "flows": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "name",
+          "status",
+          "summary",
+          "trigger",
+          "actors",
+          "steps",
+          "guarantees",
+          "failureBehavior",
+          "observability",
+          "verification",
+          "knownGaps"
+        ],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "name": { "type": "string", "minLength": 1 },
+          "status": { "type": "string", "enum": ["planned", "partial", "implemented"] },
+          "summary": { "type": "string", "minLength": 1 },
+          "trigger": { "type": "string", "minLength": 1 },
+          "actors": { "$ref": "#/$defs/idList" },
+          "steps": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "from", "to", "action", "summary", "data"],
+              "properties": {
+                "id": { "$ref": "#/$defs/id" },
+                "from": { "$ref": "#/$defs/id" },
+                "to": { "$ref": "#/$defs/id" },
+                "action": { "type": "string", "minLength": 1 },
+                "summary": { "type": "string", "minLength": 1 },
+                "data": { "$ref": "#/$defs/idList" }
+              }
+            }
+          },
+          "guarantees": { "$ref": "#/$defs/stringList" },
+          "failureBehavior": { "$ref": "#/$defs/stringList" },
+          "observability": { "$ref": "#/$defs/stringList" },
+          "verification": { "$ref": "#/$defs/stringList" },
+          "knownGaps": { "$ref": "#/$defs/stringList" }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "idList": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/id" }
+    },
+    "stringList": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    }
+  }
+}

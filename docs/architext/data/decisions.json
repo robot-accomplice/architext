@@ -1,0 +1,95 @@
+{
+  "decisions": [
+    {
+      "id": "adr-local-architecture-state",
+      "status": "accepted",
+      "title": "Keep architecture state in project-local JSON",
+      "context": "ClaimsDesk needs architecture documentation that both humans and LLMs can use without a hosted documentation system.",
+      "decision": "Store architecture state as strict JSON files under docs/architext/data and render a local read-only site from those files.",
+      "consequences": ["Architecture changes create reviewable diffs", "Validation becomes part of the development workflow"],
+      "relatedNodes": ["claims-api", "claims-adjuster"],
+      "relatedFlows": ["claim-submission"]
+    },
+    {
+      "id": "adr-spa-api-split",
+      "status": "accepted",
+      "title": "Split browser app from Claims API",
+      "context": "The product needs fast UI iteration while keeping sensitive persistence and authorization on the server.",
+      "decision": "Use a static React web app backed by a separately deployed Claims API.",
+      "consequences": ["Frontend can deploy independently", "API must enforce all authorization server-side"],
+      "relatedNodes": ["web-app", "claims-api"],
+      "relatedFlows": ["user-signup", "claim-submission"]
+    },
+    {
+      "id": "adr-async-fraud-review",
+      "status": "accepted",
+      "title": "Run fraud review asynchronously",
+      "context": "Fraud scoring can be slow and depends on an external vendor.",
+      "decision": "Publish fraud review jobs to a queue and process them with a worker.",
+      "consequences": ["Claim submission latency is protected", "The system must handle queued and manual review states"],
+      "relatedNodes": ["work-queue", "fraud-worker", "fraudscore-api"],
+      "relatedFlows": ["claim-submission", "fraud-review"]
+    },
+    {
+      "id": "adr-relational-claim-state",
+      "status": "accepted",
+      "title": "Store claim state relationally",
+      "context": "Claim state transitions need transactional guarantees and staff query support.",
+      "decision": "Use PostgreSQL for claim records, review state, and payout state.",
+      "consequences": ["Transactional state changes are straightforward", "Document blobs remain outside the relational database"],
+      "relatedNodes": ["claims-db", "claims-api"],
+      "relatedFlows": ["claim-submission", "approval-payout"]
+    },
+    {
+      "id": "adr-object-storage-documents",
+      "status": "accepted",
+      "title": "Store uploaded documents in object storage",
+      "context": "Claim evidence files can be large and should not pass through the API process.",
+      "decision": "Use private object storage with short-lived signed upload URLs.",
+      "consequences": ["API bandwidth is protected", "Signed URL leakage becomes a first-class risk"],
+      "relatedNodes": ["document-store", "claims-api"],
+      "relatedFlows": ["document-upload"]
+    },
+    {
+      "id": "adr-managed-identity",
+      "status": "accepted",
+      "title": "Use managed identity provider",
+      "context": "ClaimsDesk needs OIDC, role claims, and account recovery without owning credential storage.",
+      "decision": "Use Auth0 for authentication and token issuance.",
+      "consequences": ["Credential storage is delegated", "Auth0 outage affects login and token refresh"],
+      "relatedNodes": ["auth0", "web-app", "claims-api"],
+      "relatedFlows": ["user-signup"]
+    },
+    {
+      "id": "adr-audit-events",
+      "status": "accepted",
+      "title": "Record security-relevant events in append-only audit log",
+      "context": "Staff approvals and payout changes need compliance visibility.",
+      "decision": "Write approval and automated review events to an append-only audit log.",
+      "consequences": ["Compliance export has a single source", "Tamper evidence must be strengthened before regulated launch"],
+      "relatedNodes": ["audit-log", "claims-api", "fraud-worker"],
+      "relatedFlows": ["fraud-review", "approval-payout"]
+    },
+    {
+      "id": "adr-payment-provider",
+      "status": "planned",
+      "title": "Use external payment gateway for payouts",
+      "context": "ClaimsDesk should not directly integrate with banking rails in the first release.",
+      "decision": "Send approved payout instructions to a payment gateway.",
+      "consequences": ["Payment compliance scope is reduced", "Webhook authenticity and reconciliation become critical"],
+      "relatedNodes": ["payment-gateway", "claims-api"],
+      "relatedFlows": ["approval-payout"]
+    },
+    {
+      "id": "adr-analytics-deidentification",
+      "status": "accepted",
+      "title": "De-identify analytics data before warehouse load",
+      "context": "Analytics users need operational insight without broad access to claimant PII.",
+      "decision": "Strip direct identifiers before loading claims and audit metrics into the warehouse.",
+      "consequences": ["Analytics access is safer", "Re-identification risk still needs periodic review"],
+      "relatedNodes": ["analytics-warehouse", "claims-db", "audit-log"],
+      "relatedFlows": ["audit-export"]
+    }
+  ]
+}
+
