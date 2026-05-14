@@ -1,0 +1,62 @@
+{
+  "name": "architext",
+  "version": "0.1.4",
+  "description": "Local JSON-backed architecture and dataflow viewer for engineering teams and LLM-maintained architecture maps.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "architext": "tools/architext-adopt.mjs"
+  },
+  "files": [
+    "docs/architecture",
+    "docs/architext/AGENTS_APPENDIX.md",
+    "docs/architext/data",
+    "docs/architext/index.html",
+    "docs/architext/LLM_ARCHITEXT.md",
+    "docs/architext/package.json",
+    "docs/architext/package-lock.json",
+    "docs/architext/public",
+    "docs/architext/README.md",
+    "docs/architext/schema",
+    "docs/architext/src",
+    "docs/architext/tools",
+    "docs/architext/tsconfig.json",
+    "docs/architext/vite.config.ts",
+    "docs/assets/screenshots",
+    "tools",
+    "LICENSE",
+    "README.md"
+  ],
+  "scripts": {
+    "architext": "node docs/architext/tools/architext-project.mjs serve",
+    "architext:build": "node docs/architext/tools/architext-project.mjs build",
+    "architext:clean": "node docs/architext/tools/architext-project.mjs clean",
+    "architext:doctor": "node docs/architext/tools/architext-project.mjs doctor",
+    "architext:prompt": "node docs/architext/tools/architext-project.mjs prompt",
+    "architext:validate": "node docs/architext/tools/architext-project.mjs validate",
+    "build": "npm --prefix docs/architext run build",
+    "cli": "node tools/architext-adopt.mjs",
+    "doctor": "node tools/architext-adopt.mjs doctor --target .",
+    "validate": "npm --prefix docs/architext run validate"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robot-accomplice/architext.git"
+  },
+  "keywords": [
+    "architecture",
+    "c4",
+    "dataflow",
+    "documentation",
+    "llm",
+    "schema"
+  ],
+  "author": "Robot Accomplice",
+  "bugs": {
+    "url": "https://github.com/robot-accomplice/architext/issues"
+  },
+  "homepage": "https://github.com/robot-accomplice/architext#readme"
+}

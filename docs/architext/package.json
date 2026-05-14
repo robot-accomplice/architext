@@ -1,8 +1,11 @@
 {
   "name": "architext-template",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 4317",
     "build": "tsc && vite build",

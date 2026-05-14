@@ -32,6 +32,7 @@ Persist these project-owned files in git:
 - `docs/architext/AGENTS_APPENDIX.md`
 - `docs/architext/package.json`
 - `docs/architext/package-lock.json`
+- `docs/architext/.architext-install.json`
 - `docs/architext/index.html`
 - `docs/architext/src/**`
 - `docs/architext/public/**`

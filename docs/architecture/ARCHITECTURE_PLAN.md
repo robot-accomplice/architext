@@ -69,18 +69,30 @@ target operating systems.
 
 ## Adoption And Upgrade Workflow
 
-Architext needs a cross-platform Node adoption script because copying the
-template by hand is both error-prone and difficult to upgrade consistently.
+Architext needs a cross-platform Node CLI because copying the template by hand
+is both error-prone and difficult to upgrade consistently. The path-based
+adoption script remains supported for local development, but the intended
+interface is the `architext` command.
 
-The script should support two explicit operations:
+The CLI should support lifecycle commands:
 
+- **Sync:** install when absent, upgrade when stale, and no-op when current.
 - **Install:** copy the Architext template into a target repository at
-  `docs/architext`. This includes the demo JSON data so developers can run a
-  working site immediately and then ask an LLM to replace the example with the
-  target project's architecture.
+  `docs/architext`, then write neutral starter data so adopted projects never
+  render the bundled ClaimsDesk demo by accident.
 - **Upgrade:** refresh Architext viewer code, schemas, validation tooling,
   package files, and local documentation in a target repository that already
   has `docs/architext`.
+- **Doctor/status:** inspect installation health, version, validation, ignore
+  rules, instruction appendix presence, and accidentally tracked generated
+  artifacts without writing files.
+- **Serve/validate/build:** run the project-local viewer commands from the
+  repository root.
+- **Prompt:** print LLM-ready instructions for initial build-out, architecture
+  changes, or validation repair.
+- **Clean:** remove generated local artifacts such as `dist/`, with an explicit
+  flag required before deleting dependencies.
+- **Explain:** summarize schema files and data contracts for humans or LLMs.
 
 Upgrade must preserve target-owned architecture data by default:
 
@@ -99,6 +111,18 @@ The script should maintain deterministic ignore rules for generated local
 artifacts. `docs/architext/node_modules/` and `docs/architext/dist/` should be
 ignored, while data, schemas, viewer source, package files, tools, and public
 assets remain project-owned files that can be committed.
+
+When a target project has a root `package.json`, the install workflow should
+offer to add convenience scripts such as `architext`, `architext:validate`,
+`architext:build`, `architext:doctor`, and `architext:prompt`. These scripts
+keep daily usage at the repository root and avoid requiring users to remember
+`docs/architext` paths.
+
+Each install should also write an Architext-owned metadata file at
+`docs/architext/.architext-install.json`. This file records the template
+version, install/update time, operation, whether instruction files and
+`.gitignore` were managed, and the last successful validation. The metadata is
+not the architecture source of truth; it is lifecycle state for automation.
 
 The workflow must avoid POSIX-only shell behavior. Use Node filesystem APIs for
 copying, directory creation, path handling, and file updates so the same command
@@ -146,7 +170,9 @@ docs/
           risks.json
           glossary.json
     tools/
+      architext-project.mjs
       validate-architext.mjs
+    .architext-install.json
 ```
 
 ## Data Model

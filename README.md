@@ -1,5 +1,14 @@
 # Architext
 
+[![License: MIT](https://img.shields.io/badge/license-MIT-2ff801)](LICENSE)
+![Node 20+](https://img.shields.io/badge/node-%3E%3D20-00dbe9)
+![Local First](https://img.shields.io/badge/local--first-yes-00dbe9)
+![Runtime CDN](https://img.shields.io/badge/runtime%20CDN-none-2ff801)
+![JSON Schema](https://img.shields.io/badge/schema-JSON%20Schema-fed639)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.x-00dbe9)
+![React](https://img.shields.io/badge/React-19-00dbe9)
+![Vite](https://img.shields.io/badge/Vite-6-00dbe9)
+
 Architext is a local, project-owned architecture and dataflow site generated
 from strict JSON files.
 
@@ -98,6 +107,22 @@ expected end state after a target project has real Architext JSON.
 
 ## Install Or Upgrade In A Project
 
+The simplest interface is the `architext` CLI.
+
+From a local Architext clone during development:
+
+```sh
+npm install -g /path/to/architext
+```
+
+After that, from any target project repository:
+
+```sh
+architext sync
+```
+
+You can also run the CLI directly without installing it globally:
+
 From a target project repository, invoke the Architext adoption script by path:
 
 ```sh
@@ -127,6 +152,22 @@ npm run validate
 Those commands run inside `docs/architext`. Use `--skip-install` or
 `--skip-validate` when you explicitly need to defer those steps.
 
+When the target repository has a root `package.json`, the CLI can add
+convenience scripts:
+
+```sh
+npm run architext
+npm run architext:validate
+npm run architext:build
+npm run architext:doctor
+npm run architext:prompt
+npm run architext:clean
+```
+
+Those root scripts call the copied project-local helper at
+`docs/architext/tools/architext-project.mjs`, so daily usage does not require a
+global CLI after installation.
+
 Install explicitly:
 
 ```sh
@@ -142,7 +183,7 @@ node /path/to/architext/tools/architext-adopt.mjs upgrade
 Run non-interactively:
 
 ```sh
-node /path/to/architext/tools/architext-adopt.mjs sync --yes --branch current --append-agents
+architext sync --yes --branch current --append-agents --root-scripts
 ```
 
 Useful options:
@@ -154,6 +195,8 @@ Useful options:
 - `--append-agents` creates or appends both `AGENTS.md` and `CLAUDE.md` with the
   Architext instructions.
 - `--no-agents` skips `AGENTS.md` and `CLAUDE.md` prompts.
+- `--root-scripts` adds root `package.json` convenience scripts.
+- `--no-root-scripts` skips root `package.json` script prompts.
 - `--update-gitignore` adds Architext generated artifact ignores without
   prompting.
 - `--no-gitignore` skips `.gitignore` prompts.
@@ -172,13 +215,59 @@ By default, the script also prompts to keep `docs/architext/node_modules/` and
 should not be committed; the JSON data, schema, viewer source, package files,
 tools, and public assets should be committed.
 
+The CLI also writes lifecycle metadata to:
+
+```text
+docs/architext/.architext-install.json
+```
+
+This file records the installed template version, update time, operation,
+managed instruction files, gitignore/root-script handling, and last validation
+state. It is automation state, not the architecture model.
+
+## Management Commands
+
+Once the CLI is available, these commands work from the target project root:
+
+```sh
+architext doctor
+architext status
+architext status --json
+architext serve
+architext validate
+architext build
+architext prompt
+architext clean
+architext explain flows
+```
+
+Use `doctor` when something looks wrong. It reports the installed version,
+whether an upgrade is needed, validation status, missing ignore rules, missing
+AGENTS/CLAUDE appendix sections, root script status, and accidentally tracked
+generated artifacts.
+
+Use `prompt` to print LLM-ready instructions:
+
+```sh
+architext prompt --mode initial-buildout
+architext prompt --mode architecture-change
+architext prompt --mode repair-validation
+```
+
+Use `clean` to remove generated local build output. It removes
+`docs/architext/dist/` by default. Pass `--node-modules` only when you also want
+to remove local dependencies:
+
+```sh
+architext clean --node-modules
+```
+
 ## Local Usage
 
 From a project that has adopted Architext:
 
 ```sh
-cd docs/architext
-npm run dev
+architext serve
 ```
 
 Then open:
@@ -196,8 +285,8 @@ from remote URLs.
 For static usage after a build:
 
 ```sh
-npm run build
-cd dist
+architext build
+cd docs/architext/dist
 python3 -m http.server 4317
 ```
 
@@ -246,6 +335,7 @@ Persist in git:
 - docs/architext/AGENTS_APPENDIX.md
 - docs/architext/package.json
 - docs/architext/package-lock.json
+- docs/architext/.architext-install.json
 - docs/architext/index.html
 - docs/architext/src/**
 - docs/architext/public/**
@@ -305,6 +395,7 @@ docs/
       risks.json
       glossary.json
     tools/
+      architext-project.mjs
       validate-architext.mjs
 ```
 

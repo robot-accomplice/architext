@@ -1005,6 +1005,18 @@ function SystemMap({
     return Math.hypot(dx, dy);
   };
 
+  const routeCollidesWithNode = (samples: Point[], fromId: Id, toId: Id, padding = 8) => {
+    const blockers = Array.from(visibleNodeIds)
+      .filter((nodeId) => nodeId !== fromId && nodeId !== toId)
+      .map(rectFor);
+    return samples.some((point) => blockers.some((rect) =>
+      point.x >= rect.x - padding &&
+      point.x <= rect.x + rect.width + padding &&
+      point.y >= rect.y - padding &&
+      point.y <= rect.y + rect.height + padding
+    ));
+  };
+
   const routeCost = (
     start: Point,
     controlA: Point,
@@ -1020,9 +1032,12 @@ function SystemMap({
       .map(rectFor);
     let cost = Math.hypot(end.x - start.x, end.y - start.y);
     const samples: Point[] = [];
+    let previous = start;
     for (let step = 1; step < 48; step += 1) {
       const point = cubicPoint(start, controlA, controlB, end, step / 48);
       samples.push(point);
+      cost += Math.hypot(point.x - previous.x, point.y - previous.y) * 1.4;
+      previous = point;
       if (point.y < 28 || point.x < 12 || point.x > canvasWidth - 12 || point.y > canvasHeight - 12) {
         cost += 12000;
       }
@@ -1043,8 +1058,8 @@ function SystemMap({
         for (let usedIndex = 0; usedIndex < usedRoute.length; usedIndex += 3) {
           const used = usedRoute[usedIndex];
           const distance = Math.hypot(point.x - used.x, point.y - used.y);
-          if (distance < 22) cost += 1400;
-          if (distance < 10) cost += 6000;
+          if (distance < 22) cost += 350;
+          if (distance < 10) cost += 1400;
         }
       }
     }
@@ -1079,6 +1094,16 @@ function SystemMap({
     const start = anchorFor(rectFor(fromId), startSide);
     const end = anchorFor(rectFor(toId), endSide);
     const scored = routeCost(start, controlA, controlB, end, label, fromId, toId, usedRoutes);
+    const startDirection = sideVector(startSide);
+    const endDirection = sideVector(endSide);
+    const targetVector = { x: end.x - start.x, y: end.y - start.y };
+    const incomingVector = { x: start.x - end.x, y: start.y - end.y };
+    if (startDirection.x * targetVector.x + startDirection.y * targetVector.y < 0) {
+      scored.cost += 60000;
+    }
+    if (endDirection.x * incomingVector.x + endDirection.y * incomingVector.y < 0) {
+      scored.cost += 60000;
+    }
     const labelPoint = nearestSample(scored.samples, label);
     return {
       d: `M ${start.x} ${start.y} C ${controlA.x} ${controlA.y}, ${controlB.x} ${controlB.y}, ${end.x} ${end.y}`,
@@ -1094,6 +1119,13 @@ function SystemMap({
     if (side === "right") return { x: bend, y: 0 };
     if (side === "top") return { x: 0, y: -bend };
     return { x: 0, y: bend };
+  };
+
+  const sideVector = (side: Side): Point => {
+    if (side === "left") return { x: -1, y: 0 };
+    if (side === "right") return { x: 1, y: 0 };
+    if (side === "top") return { x: 0, y: -1 };
+    return { x: 0, y: 1 };
   };
 
   const lineSamples = (points: Point[]): Point[] => {
@@ -1139,8 +1171,8 @@ function SystemMap({
         for (let usedIndex = 0; usedIndex < usedRoute.length; usedIndex += 2) {
           const used = usedRoute[usedIndex];
           const distance = Math.hypot(point.x - used.x, point.y - used.y);
-          if (distance < 26) cost += 1800;
-          if (distance < 12) cost += 7000;
+          if (distance < 26) cost += 450;
+          if (distance < 12) cost += 1600;
         }
       }
     }
@@ -1229,6 +1261,33 @@ function SystemMap({
       toRect.y + nodeHeight,
       ...spanBlockers.map((rect) => rect.y + rect.height)
     ) + 42 + routeOffset;
+
+    const directStartSide: Side = Math.abs(toCenter.x - fromCenter.x) >= Math.abs(toCenter.y - fromCenter.y)
+      ? toCenter.x >= fromCenter.x ? "right" : "left"
+      : toCenter.y >= fromCenter.y ? "bottom" : "top";
+    const directEndSide: Side = directStartSide === "right"
+      ? "left"
+      : directStartSide === "left"
+        ? "right"
+        : directStartSide === "bottom"
+          ? "top"
+          : "bottom";
+    const directStart = anchorFor(fromRect, directStartSide);
+    const directEnd = anchorFor(toRect, directEndSide);
+    const directRoute = cubicRoute(
+      fromId,
+      toId,
+      directStartSide,
+      directEndSide,
+      { x: (directStart.x + directEnd.x) / 2, y: directStart.y },
+      { x: (directStart.x + directEnd.x) / 2, y: directEnd.y },
+      mid,
+      usedRoutes
+    );
+    if (!routeCollidesWithNode(directRoute.samples, fromId, toId, 8)) {
+      directRoute.cost -= 90000;
+    }
+    candidates.push(directRoute);
 
     const rowDelta = (rowIndexByNode.get(toId) ?? 0) - (rowIndexByNode.get(fromId) ?? 0);
     if (Math.abs(rowDelta) > 1) {

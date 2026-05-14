@@ -5,6 +5,27 @@ JSON architecture model in `data/` as a local read-only engineering site.
 
 ## Commands
 
+From the target project root, prefer the Architext CLI when available:
+
+```sh
+architext serve
+architext validate
+architext build
+architext doctor
+architext prompt
+```
+
+If the CLI is not installed globally, use the root package scripts created by
+the adoption workflow:
+
+```sh
+npm run architext
+npm run architext:validate
+npm run architext:doctor
+```
+
+If you are working directly inside this directory, use the local npm scripts:
+
 Install local dependencies:
 
 ```sh
@@ -41,7 +62,13 @@ Linux, and macOS.
 ## Upgrades
 
 This directory is intended to be managed by the Architext adoption script from
-the source repository. From the target project root:
+the source repository. From the target project root, use the package CLI:
+
+```sh
+architext sync
+```
+
+During local development, direct path invocation remains supported:
 
 ```sh
 node /path/to/architext/tools/architext-adopt.mjs
@@ -59,6 +86,26 @@ The script can also maintain the target repository `.gitignore`. Generated
 local artifacts, especially `docs/architext/node_modules/` and
 `docs/architext/dist/`, should be ignored. Architecture JSON, schemas, viewer
 source, package files, tools, and public assets should be committed.
+
+The CLI writes lifecycle metadata to `.architext-install.json`. Keep that file
+with the project so automation can report installed version, update time,
+managed instruction files, and last validation state.
+
+## Management
+
+Useful project-root commands:
+
+```sh
+architext doctor
+architext status --json
+architext prompt --mode architecture-change
+architext clean
+architext clean --node-modules
+architext explain nodes
+```
+
+`doctor` is read-only and should be the first command when an install looks
+stale or broken.
 
 ## Data Entry Point
 
