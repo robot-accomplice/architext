@@ -3,8 +3,8 @@
 Architext JSON files are the machine-readable architecture source of truth for
 this project.
 
-When architecture changes, update the relevant files under `data/` before
-claiming the implementation is complete.
+When architecture changes, update the relevant files under
+`docs/architext/data/` before claiming the implementation is complete.
 
 ## Required Behavior
 
@@ -18,31 +18,22 @@ claiming the implementation is complete.
   complexity.
 - Prefer source-path-backed claims.
 - Mark uncertainty explicitly instead of inventing details.
-- Run `npm run validate` after changing data.
+- Run `architext validate [path]` after changing data.
 - Do not claim Architext is current if validation failed or was skipped.
+- Do not edit copied viewer, schema, package, Vite, or local tool files in a
+  target repository. Those files are package-owned in Architext 1.0+.
 
 ## Persistence Rules
 
 Persist these project-owned files in git:
 
 - `docs/architext/data/*.json`
-- `docs/architext/schema/*.schema.json`
-- `docs/architext/LLM_ARCHITEXT.md`
-- `docs/architext/README.md`
-- `docs/architext/AGENTS_APPENDIX.md`
-- `docs/architext/package.json`
-- `docs/architext/package-lock.json`
-- `docs/architext/.architext-install.json`
-- `docs/architext/index.html`
-- `docs/architext/src/**`
-- `docs/architext/public/**`
-- `docs/architext/tools/**`
-- `docs/architext/tsconfig.json`
-- `docs/architext/vite.config.ts`
+- `docs/architext/.architext.json`
+- repository-level `AGENTS.md` or `CLAUDE.md` Architext instructions, when
+  present
 
 Do not persist generated or local runtime artifacts:
 
-- `docs/architext/node_modules/`
 - `docs/architext/dist/`
 - `.DS_Store`
 - editor/OS temp files
@@ -50,8 +41,9 @@ Do not persist generated or local runtime artifacts:
 - screenshots created only for debugging unless intentionally added to project
   documentation
 
-If the target project does not already ignore those generated artifacts, update
-its `.gitignore` when installing or maintaining Architext.
+If the target project does not already ignore generated artifacts, use
+`architext sync [path]` to update lifecycle metadata, instructions, and ignore
+rules.
 
 ## Update Triggers
 

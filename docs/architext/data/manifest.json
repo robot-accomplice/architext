@@ -1,11 +1,11 @@
 {
-  "schemaVersion": "0.1.0",
+  "schemaVersion": "1.0.0",
   "project": {
-    "id": "claimsdesk",
-    "name": "ClaimsDesk",
-    "summary": "Fictitious claims-processing SaaS used as the reference Architext project."
+    "id": "architext",
+    "name": "Architext",
+    "summary": "Global CLI and local architecture viewer for data-only repository architecture maps."
   },
-  "generatedAt": "2026-05-13T00:00:00Z",
+  "generatedAt": "2026-05-14T00:00:00.000Z",
   "defaultViewId": "system-map",
   "files": {
     "nodes": "nodes.json",
@@ -17,8 +17,7 @@
     "glossary": "glossary.json"
   },
   "notes": [
-    "ClaimsDesk is fictitious and intentionally broad enough to exercise auth, PII, queues, documents, external integrations, audit, analytics, and deployment views.",
-    "The JSON files are maintained as LLM-owned architecture state."
+    "This self-hosted model describes Architext itself after the 1.0 global CLI migration.",
+    "Target repositories own architecture data only; viewer, schemas, validation, and starter templates are package-owned."
   ]
 }
-

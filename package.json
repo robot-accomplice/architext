@@ -1,6 +1,6 @@
 {
-  "name": "architext",
-  "version": "0.1.4",
+  "name": "@robotaccomplice/architext",
+  "version": "1.0.0",
   "description": "Local JSON-backed architecture and dataflow viewer for engineering teams and LLM-maintained architecture maps.",
   "type": "module",
   "engines": {
@@ -11,9 +11,11 @@
   },
   "files": [
     "docs/architecture",
-    "docs/architext/AGENTS_APPENDIX.md",
+    "docs/assets/screenshots",
     "docs/architext/data",
+    "docs/architext/dist",
     "docs/architext/index.html",
+    "docs/architext/AGENTS_APPENDIX.md",
     "docs/architext/LLM_ARCHITEXT.md",
     "docs/architext/package.json",
     "docs/architext/package-lock.json",
@@ -24,22 +26,39 @@
     "docs/architext/tools",
     "docs/architext/tsconfig.json",
     "docs/architext/vite.config.ts",
-    "docs/assets/screenshots",
     "tools",
     "LICENSE",
     "README.md"
   ],
   "scripts": {
-    "architext": "node docs/architext/tools/architext-project.mjs serve",
-    "architext:build": "node docs/architext/tools/architext-project.mjs build",
-    "architext:clean": "node docs/architext/tools/architext-project.mjs clean",
-    "architext:doctor": "node docs/architext/tools/architext-project.mjs doctor",
-    "architext:prompt": "node docs/architext/tools/architext-project.mjs prompt",
-    "architext:validate": "node docs/architext/tools/architext-project.mjs validate",
+    "architext": "node tools/architext-adopt.mjs serve .",
+    "architext:build": "node tools/architext-adopt.mjs build .",
+    "architext:clean": "node tools/architext-adopt.mjs clean .",
+    "architext:doctor": "node tools/architext-adopt.mjs doctor .",
+    "architext:prompt": "node tools/architext-adopt.mjs prompt .",
+    "architext:validate": "node tools/architext-adopt.mjs validate .",
     "build": "npm --prefix docs/architext run build",
     "cli": "node tools/architext-adopt.mjs",
     "doctor": "node tools/architext-adopt.mjs doctor --target .",
-    "validate": "npm --prefix docs/architext run validate"
+    "prepack": "npm run build",
+    "test": "node --test",
+    "validate": "node docs/architext/tools/validate-architext.mjs"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
   },
   "license": "MIT",
   "repository": {

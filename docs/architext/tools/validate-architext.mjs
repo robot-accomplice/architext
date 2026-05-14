@@ -5,8 +5,30 @@ import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const dataDir = path.join(root, "data");
-const schemaDir = path.join(root, "schema");
+
+function parseArgs(argv) {
+  const options = {
+    dataDir: path.join(root, "data"),
+    schemaDir: path.join(root, "schema")
+  };
+
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === "--data-dir") {
+      options.dataDir = path.resolve(argv[++index] ?? "");
+    } else if (arg === "--schema-dir") {
+      options.schemaDir = path.resolve(argv[++index] ?? "");
+    } else {
+      throw new Error(`Unknown argument: ${arg}`);
+    }
+  }
+
+  return options;
+}
+
+const options = parseArgs(process.argv.slice(2));
+const dataDir = options.dataDir;
+const schemaDir = options.schemaDir;
 
 const schemaFiles = {
   manifest: "manifest.schema.json",

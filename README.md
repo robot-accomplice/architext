@@ -1,7 +1,12 @@
 # Architext
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-2ff801)](LICENSE)
+[![CI](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/%40robotaccomplice%2Farchitext?color=00dbe9)](https://www.npmjs.com/package/@robotaccomplice/architext)
+![Version](https://img.shields.io/badge/semver-1.0.0%20major-fed639)
 ![Node 20+](https://img.shields.io/badge/node-%3E%3D20-00dbe9)
+![Global CLI](https://img.shields.io/badge/global%20CLI-yes-2ff801)
+![Target Repos](https://img.shields.io/badge/target%20repos-data--only-2ff801)
 ![Local First](https://img.shields.io/badge/local--first-yes-00dbe9)
 ![Runtime CDN](https://img.shields.io/badge/runtime%20CDN-none-2ff801)
 ![JSON Schema](https://img.shields.io/badge/schema-JSON%20Schema-fed639)
@@ -16,8 +21,9 @@ It is meant for teams using LLMs to build and maintain software. The rendered
 site gives humans a navigable view of the system. The JSON gives future LLMs a
 stable architecture map they can read before changing code.
 
-Architext is not a hosted documentation platform. It is a template copied into a
-project repository, versioned alongside the code, and served locally.
+Architext is not a hosted documentation platform. It is a global CLI that reads
+project-owned JSON from a repository and serves a local viewer from the
+installed package.
 
 ## Why This Exists
 
@@ -33,7 +39,8 @@ the source of truth, and the human site is a projection of that model.
 The visual direction was inspired by [Dave J's x.com post about interactive
 architecture and flow visualization](https://x.com/davej/status/2053867258653339746?s=46&t=e_qP9a_xUWuOJ6eKxFpaAQ).
 Architext turns that kind of engineer-friendly architecture map into a local,
-JSON-backed template that can live inside any project repository.
+JSON-backed workflow that can live inside any project repository without
+vendoring viewer code into that repository.
 
 The JSON is intentionally not optimized for hand editing. LLMs are expected to
 maintain it as architecture changes. Humans review the rendered site and the
@@ -92,24 +99,31 @@ The viewer will use a dense engineering layout:
 The UI should be functional before it is pretty. Diagram space, legibility, and
 fast inspection matter more than branding.
 
-## Current Demo Screens
+## Current Demo
 
-The repository demo uses the fictitious `ClaimsDesk` project to show the
-expected end state after a target project has real Architext JSON.
+The repository demo now documents Architext itself: global CLI lifecycle,
+package-owned viewer runtime, data-only target repositories, migrations,
+validation, and release packaging.
 
-![Architext flows mode](docs/assets/screenshots/architext-flows.png)
+![Architext system map showing the global CLI, package-owned runtime, and data-only target repository](docs/assets/screenshots/architext-flows.png)
 
-![Architext sequence mode](docs/assets/screenshots/architext-sequence.png)
+![Architext sequence view showing lifecycle command flow](docs/assets/screenshots/architext-sequence.png)
 
-![Architext C4 drilldown mode](docs/assets/screenshots/architext-c4.png)
+![Architext C4 view showing package and target repository boundaries](docs/assets/screenshots/architext-c4.png)
 
-![Architext data and risks mode](docs/assets/screenshots/architext-data-risks.png)
+![Architext data and risks view showing migration and release risks](docs/assets/screenshots/architext-data-risks.png)
 
 ## Install Or Upgrade In A Project
 
 The simplest interface is the `architext` CLI.
 
-From a local Architext clone during development:
+Install it globally:
+
+```sh
+npm install -g @robotaccomplice/architext
+```
+
+From a local Architext clone during development, install the current checkout:
 
 ```sh
 npm install -g /path/to/architext
@@ -121,36 +135,26 @@ After that, from any target project repository:
 architext sync
 ```
 
-You can also run the CLI directly without installing it globally:
-
-From a target project repository, invoke the Architext adoption script by path:
+You can also pass a target repository explicitly:
 
 ```sh
-cd /path/to/your-project
-node /path/to/architext/tools/architext-adopt.mjs
+architext sync /path/to/your-project
 ```
 
 The default `sync` behavior detects the current state:
 
-- if `docs/architext` is absent, it installs Architext
-- if `docs/architext/package.json` has an older/different template version, it
-  upgrades Architext
-- if the installed template version is current, it leaves template files alone
-  unless `--force` is passed
+- if `docs/architext/data` is absent, it installs neutral starter data
+- if an old copied-template install is present, it migrates the repository to
+  the data-only layout
+- if the repository is current, it validates and reports the next action
 
 The script prompts before writing changes. In a git repository, it also asks
 whether to use the current branch or create a new branch first.
 
-After writing Architext artifacts, the script runs the project-local setup and
-validation steps for you:
-
-```sh
-npm install
-npm run validate
-```
-
-Those commands run inside `docs/architext`. Use `--skip-install` or
-`--skip-validate` when you explicitly need to defer those steps.
+Architext no longer installs dependencies inside target repositories. Viewer
+code, schemas, validation, and starter templates are package-owned. Target
+repositories commit architecture data, lifecycle metadata, and optional
+repository-level agent instructions.
 
 When the target repository has a root `package.json`, the CLI can add
 convenience scripts:
@@ -164,31 +168,30 @@ npm run architext:prompt
 npm run architext:clean
 ```
 
-Those root scripts call the copied project-local helper at
-`docs/architext/tools/architext-project.mjs`, so daily usage does not require a
-global CLI after installation.
+Those root scripts call the global `architext` CLI with `.` as the target path.
 
 Install explicitly:
 
 ```sh
-node /path/to/architext/tools/architext-adopt.mjs install
+architext sync
 ```
 
 Upgrade explicitly:
 
 ```sh
-node /path/to/architext/tools/architext-adopt.mjs upgrade
+architext sync
 ```
 
 Run non-interactively:
 
 ```sh
-architext sync --yes --branch current --append-agents --root-scripts
+architext sync . --yes --branch current --append-agents --root-scripts
 ```
 
 Useful options:
 
-- `--target <repo>` operates on a repository other than the current directory.
+- pass `[path]` after the command to operate on a repository other than the
+  current directory.
 - `--dry-run` shows intended changes without writing files.
 - `--branch new --branch-name <name>` creates a branch before writing.
 - `--branch current` writes to the current branch.
@@ -200,44 +203,91 @@ Useful options:
 - `--update-gitignore` adds Architext generated artifact ignores without
   prompting.
 - `--no-gitignore` skips `.gitignore` prompts.
-- `--skip-install` skips dependency installation after writing artifacts.
 - `--skip-validate` skips architecture JSON validation after writing artifacts.
-- `--force` refreshes template-owned files even when the installed version is
+- `--force` reruns lifecycle management even when the repository appears
   current.
 
-Upgrade preserves `docs/architext/data/*.json` by default because those files
-belong to the target project. It refreshes the viewer, schemas, validation
-tooling, package files, and Architext docs. Use `--overwrite-data` only when
-intentionally resetting the target architecture data to neutral starter data.
+Migration preserves `docs/architext/data/*.json` by default because those files
+belong to the target project. It removes copied viewer/schema/tool files from
+old installs, rewrites Architext lifecycle metadata, and corrects old agent
+instructions so agents use the global CLI and edit only target-owned data. Use
+`--overwrite-data` only when intentionally resetting the target architecture
+data to neutral starter data.
 
-By default, the script also prompts to keep `docs/architext/node_modules/` and
-`docs/architext/dist/` ignored. Those directories are generated locally and
-should not be committed; the JSON data, schema, viewer source, package files,
-tools, and public assets should be committed.
+By default, the script also prompts to keep `docs/architext/dist/` ignored.
+That directory is generated by `architext build` and should not be committed.
+
+## Legacy Copied-Template Upgrades
+
+Architext 1.0.0 is a breaking upgrade for repositories that previously copied
+the full template into `docs/architext`. Those installs usually contain files
+such as:
+
+```text
+docs/architext/src/
+docs/architext/schema/
+docs/architext/tools/
+docs/architext/public/
+docs/architext/package.json
+docs/architext/package-lock.json
+docs/architext/vite.config.ts
+docs/architext/tsconfig.json
+```
+
+Those files are package-owned in 1.0.0 and should be removed from target
+repositories during migration. The project-owned files are preserved:
+
+```text
+docs/architext/data/*.json
+docs/architext/.architext.json
+AGENTS.md and/or CLAUDE.md Architext section, when present
+```
+
+Preview a legacy migration first:
+
+```sh
+architext sync /path/to/project --dry-run
+```
+
+The dry-run reports copied package-owned files that would be removed, confirms
+that `docs/architext/data/*.json` is preserved, reports agent instruction
+updates, and runs validation against the preserved data when possible.
+
+Run the migration:
+
+```sh
+architext sync /path/to/project --yes --branch current
+```
+
+During migration, Architext replaces the managed `## Architext Architecture
+Documentation` section in `AGENTS.md` and `CLAUDE.md` with global-CLI guidance.
+Unrelated project instructions outside that section are preserved. After
+migration, agents should update only `docs/architext/data/*.json`, run
+`architext validate [path]`, and use `architext serve [path]` for visual review.
 
 The CLI also writes lifecycle metadata to:
 
 ```text
-docs/architext/.architext-install.json
+docs/architext/.architext.json
 ```
 
-This file records the installed template version, update time, operation,
-managed instruction files, gitignore/root-script handling, and last validation
-state. It is automation state, not the architecture model.
+This file records the CLI version, update time, operation, migrated install
+state, managed instruction files, gitignore/root-script handling, and last
+validation state. It is automation state, not the architecture model.
 
 ## Management Commands
 
 Once the CLI is available, these commands work from the target project root:
 
 ```sh
-architext doctor
-architext status
-architext status --json
-architext serve
-architext validate
-architext build
-architext prompt
-architext clean
+architext doctor [path]
+architext status [path]
+architext status [path] --json
+architext serve [path]
+architext validate [path]
+architext build [path]
+architext prompt [path]
+architext clean [path]
 architext explain flows
 ```
 
@@ -303,14 +353,11 @@ You are working in this repository. Build out Architext for this project.
 
 First read:
 - AGENTS.md and/or CLAUDE.md if present
-- docs/architext/LLM_ARCHITEXT.md
-- docs/architext/README.md
-- docs/architext/schema/*.schema.json
 - docs/architext/data/*.json
 
 Then inspect the codebase and replace the neutral starter data with this
 project's real architecture data. Update only docs/architext/data/*.json unless
-the schema or Architext template itself is clearly wrong.
+the Architext package itself is being changed.
 
 Required output:
 - nodes.json: real actors, systems, services, clients, modules, workers,
@@ -329,22 +376,9 @@ Required output:
 
 Persist in git:
 - docs/architext/data/*.json
-- docs/architext/schema/*.schema.json
-- docs/architext/LLM_ARCHITEXT.md
-- docs/architext/README.md
-- docs/architext/AGENTS_APPENDIX.md
-- docs/architext/package.json
-- docs/architext/package-lock.json
-- docs/architext/.architext-install.json
-- docs/architext/index.html
-- docs/architext/src/**
-- docs/architext/public/**
-- docs/architext/tools/**
-- docs/architext/tsconfig.json
-- docs/architext/vite.config.ts
+- docs/architext/.architext.json
 
 Ensure these generated/local artifacts are ignored:
-- docs/architext/node_modules/
 - docs/architext/dist/
 - .DS_Store
 - editor/OS temp files
@@ -359,7 +393,9 @@ Rules:
 - Do not invent certainty. Mark unknowns and known gaps explicitly.
 - Prefer source-path-backed claims.
 - Do not edit application code for this task.
-- Run `cd docs/architext && npm run validate` before claiming completion.
+- Do not edit copied viewer, schema, package, Vite, or local tool files in the
+  target repository.
+- Run `architext validate` before claiming completion.
 - If validation fails, fix the JSON and rerun it.
 
 When finished, summarize what files changed, what architecture areas are well
@@ -371,20 +407,6 @@ covered, what remains uncertain, and the validation result.
 ```text
 docs/
   architext/
-    index.html
-    package.json
-    src/
-    README.md
-    LLM_ARCHITEXT.md
-    AGENTS_APPENDIX.md
-    schema/
-      manifest.schema.json
-      nodes.schema.json
-      flows.schema.json
-      views.schema.json
-      data-classification.schema.json
-      decisions.schema.json
-      risks.schema.json
     data/
       manifest.json
       nodes.json
@@ -394,9 +416,7 @@ docs/
       decisions.json
       risks.json
       glossary.json
-    tools/
-      architext-project.mjs
-      validate-architext.mjs
+    .architext.json
 ```
 
 The exact files may evolve, but the split is intentional: nodes, flows, views,
@@ -442,18 +462,24 @@ humans and LLMs false confidence.
 
 ## Example Project
 
-Architext will include a fictitious example called `ClaimsDesk`: a
-claims-processing SaaS with a web app, claims API, document store, queue,
-worker, fraud scoring integration, audit log, notification service, and
-analytics warehouse.
+Architext includes a self-hosted example based on Architext itself. The example
+documents the global CLI, package-owned viewer, validation flow, data-only
+target repository layout, migration behavior, and release/package lifecycle.
 
-The example exists to show what a finished Architext site should feel like
-before a real project adopts the template.
+## Distribution
+
+Architext is intended to be installed as a global npm CLI:
+
+```sh
+npm install -g @robotaccomplice/architext
+architext sync
+architext serve
+```
 
 ## Repository Status
 
 This repository now includes the working local viewer, schemas, validation
-tooling, adoption script, and the ClaimsDesk demo model.
+tooling, global CLI lifecycle script, and the self-hosted Architext demo model.
 
 Core documents:
 

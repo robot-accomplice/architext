@@ -2,8 +2,9 @@
 
 ## Context
 
-Architext is a reusable, project-local architecture viewer backed by strict JSON
-data files. The JSON files serve two audiences:
+Architext is a reusable global CLI and local architecture viewer backed by
+strict JSON data files in each target repository. The JSON files serve two
+audiences:
 
 - humans reading the rendered local site
 - LLMs maintaining an explicit map of the project's architecture, dataflows,
@@ -20,7 +21,7 @@ tiny local static server so the browser can load JSON files with normal
   update mechanically.
 - **Human readability:** engineers should be able to inspect architecture,
   flows, data movement, and risks quickly.
-- **Project locality:** each target project owns its Architext files under
+- **Project locality:** each target project owns its Architext data under
   version control.
 - **Low operational burden:** no hosted backend, database, or remote build
   service.
@@ -42,16 +43,14 @@ tiny local static server so the browser can load JSON files with normal
 
 ## Local Serving Model
 
-Architext requires a local server. The default development command should be:
+Architext requires a local server. The default user command should be:
 
 ```sh
-cd docs/architext
-npm install
-npm run dev
+architext serve [path]
 ```
 
-The viewer loads data from `/data/manifest.json`, then follows the file list in
-the manifest to load the remaining JSON files.
+The package-owned viewer loads target data from `/data/manifest.json`, then
+follows the file list in the manifest to load the remaining JSON files.
 
 This avoids browser lock-in. A direct `file://` page with sibling JSON files is
 not a sound baseline because browser security rules differ.
@@ -60,8 +59,8 @@ The viewer may use a frontend framework internally. Dependencies must be
 installed locally and bundled or served from local project files. The running
 site must not pull code, styles, fonts, schemas, or assets from remote URLs.
 
-The build output must remain static so a copied project can also serve `dist/`
-with a tiny local static server.
+The build output must remain static so a target project can serve a generated
+`docs/architext/dist/` with a tiny local static server when needed.
 
 NPM scripts should call Node/Vite entrypoints directly and avoid shell command
 chains, environment-variable syntax, or utilities that are not available on all
@@ -69,37 +68,39 @@ target operating systems.
 
 ## Adoption And Upgrade Workflow
 
-Architext needs a cross-platform Node CLI because copying the template by hand
-is both error-prone and difficult to upgrade consistently. The path-based
-adoption script remains supported for local development, but the intended
-interface is the `architext` command.
+Architext needs a cross-platform Node CLI because copied templates are
+error-prone and difficult to upgrade consistently. The intended interface is
+the globally installed `architext` command. This is a breaking distribution
+change and starts the `1.0.0` line.
 
 The CLI should support lifecycle commands:
 
 - **Sync:** install when absent, upgrade when stale, and no-op when current.
-- **Install:** copy the Architext template into a target repository at
-  `docs/architext`, then write neutral starter data so adopted projects never
-  render the bundled ClaimsDesk demo by accident.
-- **Upgrade:** refresh Architext viewer code, schemas, validation tooling,
-  package files, and local documentation in a target repository that already
-  has `docs/architext`.
+- **Install:** write neutral starter data and metadata into
+  `docs/architext`, plus optional repository-level agent instructions.
+- **Migrate/upgrade:** preserve target data, remove copied viewer/schema/tool
+  files from old installs, update metadata and agent instructions, and validate
+  with package-owned schemas.
 - **Doctor/status:** inspect installation health, version, validation, ignore
   rules, instruction appendix presence, and accidentally tracked generated
   artifacts without writing files.
-- **Serve/validate/build:** run the project-local viewer commands from the
-  repository root.
+- **Serve/validate/build:** run package-owned commands against an optional
+  target path. The path defaults to the current directory.
 - **Prompt:** print LLM-ready instructions for initial build-out, architecture
   changes, or validation repair.
 - **Clean:** remove generated local artifacts such as `dist/`, with an explicit
   flag required before deleting dependencies.
 - **Explain:** summarize schema files and data contracts for humans or LLMs.
 
-Upgrade must preserve target-owned architecture data by default:
+Upgrade and migration must preserve target-owned architecture data by default:
 
 - do not overwrite `docs/architext/data/*.json`
-- do overwrite template-owned implementation files such as `src/`, `schema/`,
-  `tools/`, `public/`, `index.html`, `package.json`, and `package-lock.json`
-- allow an explicit data overwrite flag only for demo resets or controlled
+- remove copied implementation files such as `src/`, `schema/`, `tools/`,
+  `public/`, `index.html`, `package.json`, `package-lock.json`, `tsconfig.json`,
+  and `vite.config.ts`
+- update old Architext sections in `AGENTS.md` and `CLAUDE.md` so agents know
+  to edit only project-owned data and use the global CLI
+- allow explicit data overwrite only for starter resets or controlled
   migrations
 
 The script should also be able to append the Architext agent mandate to a
@@ -108,9 +109,8 @@ duplicate appendix insertion by checking for the Architext heading before
 appending.
 
 The script should maintain deterministic ignore rules for generated local
-artifacts. `docs/architext/node_modules/` and `docs/architext/dist/` should be
-ignored, while data, schemas, viewer source, package files, tools, and public
-assets remain project-owned files that can be committed.
+artifacts. `docs/architext/dist/` should be ignored. Target repositories no
+longer commit copied Architext dependencies or viewer implementation files.
 
 When a target project has a root `package.json`, the install workflow should
 offer to add convenience scripts such as `architext`, `architext:validate`,
@@ -118,11 +118,12 @@ offer to add convenience scripts such as `architext`, `architext:validate`,
 keep daily usage at the repository root and avoid requiring users to remember
 `docs/architext` paths.
 
-Each install should also write an Architext-owned metadata file at
-`docs/architext/.architext-install.json`. This file records the template
-version, install/update time, operation, whether instruction files and
-`.gitignore` were managed, and the last successful validation. The metadata is
-not the architecture source of truth; it is lifecycle state for automation.
+Each install should also write Architext-owned metadata at
+`docs/architext/.architext.json`. This file records the CLI version,
+install/update time, operation, migrated copied install state, whether
+instruction files and `.gitignore` were managed, and the last successful
+validation. The metadata is not the architecture source of truth; it is
+lifecycle state for automation.
 
 The workflow must avoid POSIX-only shell behavior. Use Node filesystem APIs for
 copying, directory creation, path handling, and file updates so the same command
@@ -135,20 +136,6 @@ In a consuming project, the intended structure is:
 ```text
 docs/
   architext/
-    index.html
-    package.json
-    src/
-    README.md
-    LLM_ARCHITEXT.md
-    AGENTS_APPENDIX.md
-    schema/
-      manifest.schema.json
-      nodes.schema.json
-      flows.schema.json
-      views.schema.json
-      data-classification.schema.json
-      decisions.schema.json
-      risks.schema.json
     data/
       manifest.json
       nodes.json
@@ -158,21 +145,7 @@ docs/
       decisions.json
       risks.json
       glossary.json
-    examples/
-      claimsdesk/
-        data/
-          manifest.json
-          nodes.json
-          flows.json
-          views.json
-          data-classification.json
-          decisions.json
-          risks.json
-          glossary.json
-    tools/
-      architext-project.mjs
-      validate-architext.mjs
-    .architext-install.json
+    .architext.json
 ```
 
 ## Data Model
@@ -505,39 +478,39 @@ Against the original brief:
 - **Engineer-first UX:** partially aligned. Search/details exist, but visual
   flow lines and C4 views are missing.
 - **Right-hand details panel:** aligned, but it also needs collapse behavior.
-- **Fictitious example project:** aligned with ClaimsDesk.
-- **AGENTS/CLAUDE mandate:** aligned as appendix text, but adoption scripting is
-  still pending.
+- **Self-hosted example project:** aligned. The bundled example describes
+  Architext itself instead of a fictitious product.
+- **AGENTS/CLAUDE mandate:** aligned. Migration must replace old copied-template
+  instructions with global-CLI/data-only instructions.
 
-## Fictitious Example Project
+## Self-Hosted Example Project
 
-The bundled example should be `ClaimsDesk`, a fictitious claims-processing SaaS.
+The bundled example should describe Architext itself.
 
 It should include:
 
-- web app
-- auth provider
-- claims API
-- worker service
-- document store
-- queue
-- fraud scoring external API
-- audit log
-- notification service
-- analytics warehouse
+- global CLI
+- package-owned viewer runtime
+- package-owned schemas and validator
+- target repository data files
+- lifecycle metadata
+- copied-install migration
+- agent instruction management
+- static export
+- release/package workflow
 
 Example flows:
 
-- user signup
-- claim submission
-- document upload
-- fraud review
-- approval payout
-- audit export
-- admin role change
+- fresh data-only install
+- copied install migration
+- architecture data maintenance
+- local viewer review
+- static export
+- release packaging
 
-This example is broad enough to exercise auth, PII, files, queues, external
-services, trust boundaries, deployment views, risks, and data classification.
+This example is broad enough to exercise package-owned runtime boundaries,
+target-owned data, migrations, generated artifacts, agent instructions,
+deployment views, risks, and data classification.
 
 ## Open Questions
 

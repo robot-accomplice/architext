@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install package dependencies
+        run: npm install
+
+      - name: Install viewer workspace dependencies
+        run: npm install --prefix docs/architext
+
+      - name: Run CLI tests
+        run: npm test
+
+      - name: Validate Architext data
+        run: npm run validate
+
+      - name: Build package-owned viewer
+        run: npm run build
+
+      - name: Check package contents
+        run: npm pack --dry-run

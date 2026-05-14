@@ -4,186 +4,87 @@
       "id": "system-map",
       "name": "System Map",
       "type": "system-map",
-      "summary": "All ClaimsDesk components grouped by architectural lane.",
+      "summary": "Architext global CLI and data-only repository architecture.",
       "lanes": [
-        {
-          "id": "actors",
-          "name": "Actors",
-          "nodeIds": ["claimant", "claims-adjuster"]
-        },
-        {
-          "id": "clients",
-          "name": "Client Surfaces",
-          "nodeIds": ["web-app"]
-        },
-        {
-          "id": "services",
-          "name": "Services",
-          "nodeIds": ["claims-api", "fraud-worker"]
-        },
-        {
-          "id": "state",
-          "name": "State",
-          "nodeIds": ["claims-db", "document-store", "work-queue", "audit-log", "analytics-warehouse"]
-        },
-        {
-          "id": "external",
-          "name": "External Services",
-          "nodeIds": ["auth0", "fraudscore-api", "payment-gateway"]
-        }
+        { "id": "users", "name": "Users", "nodeIds": ["maintainer", "llm-agent"] },
+        { "id": "cli", "name": "CLI", "nodeIds": ["architext-cli", "schema-validator"] },
+        { "id": "package", "name": "Package", "nodeIds": ["viewer-runtime", "package-schemas", "package-artifacts"] },
+        { "id": "target", "name": "Target Repository", "nodeIds": ["target-repository", "target-data-files", "static-dist"] }
       ]
     },
     {
       "id": "dataflow",
       "name": "Dataflow",
       "type": "dataflow",
-      "summary": "Sensitive data movement across ClaimsDesk flows.",
+      "summary": "Project-owned data moving through package-owned validation and viewer runtime.",
       "lanes": [
-        {
-          "id": "entry",
-          "name": "Entry",
-          "nodeIds": ["claimant", "claims-adjuster", "web-app"]
-        },
-        {
-          "id": "control",
-          "name": "Control Plane",
-          "nodeIds": ["auth0", "claims-api", "fraud-worker"]
-        },
-        {
-          "id": "persistence",
-          "name": "Persistence",
-          "nodeIds": ["claims-db", "document-store", "audit-log", "analytics-warehouse"]
-        },
-        {
-          "id": "external-risk",
-          "name": "External Risk",
-          "nodeIds": ["fraudscore-api", "payment-gateway"]
-        }
+        { "id": "actors", "name": "Actors", "nodeIds": ["maintainer", "llm-agent"] },
+        { "id": "package-owned", "name": "Package-Owned Runtime", "nodeIds": ["architext-cli", "viewer-runtime", "schema-validator", "package-schemas"] },
+        { "id": "repo-owned", "name": "Repo-Owned Data", "nodeIds": ["target-repository", "target-data-files", "static-dist"] }
       ]
     },
     {
       "id": "sequence",
       "name": "Sequence",
       "type": "sequence",
-      "summary": "Ordered message sequence for the selected ClaimsDesk flow.",
+      "summary": "Ordered lifecycle command interactions for the selected Architext flow.",
       "lanes": [
-        {
-          "id": "participants",
-          "name": "Participants",
-          "nodeIds": ["claimant", "claims-adjuster", "web-app", "auth0", "claims-api", "claims-db", "document-store", "work-queue", "fraud-worker", "fraudscore-api", "audit-log", "payment-gateway", "analytics-warehouse"]
-        }
+        { "id": "participants", "name": "Participants", "nodeIds": ["maintainer", "llm-agent", "architext-cli", "schema-validator", "viewer-runtime", "target-repository", "target-data-files", "static-dist"] }
       ]
     },
     {
       "id": "deployment",
       "name": "Deployment",
       "type": "deployment",
-      "summary": "Runtime placement for ClaimsDesk components.",
+      "summary": "Runtime placement for global package code and target repository data.",
       "lanes": [
-        {
-          "id": "browser",
-          "name": "Browser",
-          "nodeIds": ["claimant", "claims-adjuster", "web-app"]
-        },
-        {
-          "id": "kubernetes",
-          "name": "Kubernetes",
-          "nodeIds": ["claims-api", "fraud-worker"]
-        },
-        {
-          "id": "managed-state",
-          "name": "Managed State",
-          "nodeIds": ["claims-db", "document-store", "work-queue", "audit-log", "analytics-warehouse"]
-        },
-        {
-          "id": "vendors",
-          "name": "Vendors",
-          "nodeIds": ["auth0", "fraudscore-api", "payment-gateway"]
-        }
+        { "id": "terminal", "name": "Terminal", "nodeIds": ["maintainer", "llm-agent", "architext-cli", "schema-validator"] },
+        { "id": "package-files", "name": "Installed Package", "nodeIds": ["viewer-runtime", "package-schemas", "package-artifacts"] },
+        { "id": "repository", "name": "Repository", "nodeIds": ["target-repository", "target-data-files", "static-dist"] }
       ]
     },
     {
       "id": "c4-context",
       "name": "C4 Context",
       "type": "c4-context",
-      "summary": "ClaimsDesk as a system with actors and external systems around it.",
+      "summary": "Architext as a system used by maintainers and LLM agents.",
       "lanes": [
-        {
-          "id": "people",
-          "name": "People",
-          "nodeIds": ["claimant", "claims-adjuster"]
-        },
-        {
-          "id": "system",
-          "name": "ClaimsDesk System",
-          "nodeIds": ["claimsdesk-system"]
-        },
-        {
-          "id": "external-systems",
-          "name": "External Systems",
-          "nodeIds": ["auth0", "fraudscore-api", "payment-gateway"]
-        }
+        { "id": "people", "name": "People", "nodeIds": ["maintainer", "llm-agent"] },
+        { "id": "system", "name": "Architext System", "nodeIds": ["architext-cli"] },
+        { "id": "external-context", "name": "Repository Context", "nodeIds": ["target-repository"] }
       ]
     },
     {
       "id": "c4-container",
       "name": "C4 Container",
       "type": "c4-container",
-      "summary": "Deployable ClaimsDesk containers and the stores/services they communicate with.",
+      "summary": "Package-owned containers and target-owned data boundaries.",
       "lanes": [
-        {
-          "id": "users",
-          "name": "Users",
-          "nodeIds": ["claimant", "claims-adjuster"]
-        },
-        {
-          "id": "containers",
-          "name": "Containers",
-          "nodeIds": ["web-app", "claims-api", "fraud-worker"]
-        },
-        {
-          "id": "stateful-services",
-          "name": "Stateful Services",
-          "nodeIds": ["claims-db", "document-store", "work-queue", "audit-log", "analytics-warehouse"]
-        },
-        {
-          "id": "external-services",
-          "name": "External Services",
-          "nodeIds": ["auth0", "fraudscore-api", "payment-gateway"]
-        }
+        { "id": "actors", "name": "Actors", "nodeIds": ["maintainer", "llm-agent"] },
+        { "id": "containers", "name": "Architext Package", "nodeIds": ["architext-cli", "viewer-runtime", "schema-validator", "package-schemas"] },
+        { "id": "data", "name": "Target Data", "nodeIds": ["target-data-files", "static-dist"] }
       ]
     },
     {
       "id": "c4-component",
       "name": "C4 Component",
       "type": "c4-component",
-      "summary": "Claims API-adjacent components and dependencies used by the selected flows.",
+      "summary": "CLI-adjacent components that enforce the data-only repository contract.",
       "lanes": [
-        {
-          "id": "client",
-          "name": "Client",
-          "nodeIds": ["web-app"]
-        },
-        {
-          "id": "api-boundary",
-          "name": "Claims API Boundary",
-          "nodeIds": ["claims-api"]
-        },
-        {
-          "id": "async-processing",
-          "name": "Async Processing",
-          "nodeIds": ["work-queue", "fraud-worker"]
-        },
-        {
-          "id": "persistence",
-          "name": "Persistence",
-          "nodeIds": ["claims-db", "document-store", "audit-log"]
-        },
-        {
-          "id": "vendors",
-          "name": "Vendors",
-          "nodeIds": ["auth0", "fraudscore-api", "payment-gateway"]
-        }
+        { "id": "entrypoint", "name": "Entrypoint", "nodeIds": ["architext-cli"] },
+        { "id": "runtime", "name": "Runtime Components", "nodeIds": ["viewer-runtime", "schema-validator"] },
+        { "id": "contracts", "name": "Contracts", "nodeIds": ["package-schemas", "target-data-files", "package-artifacts"] }
+      ]
+    },
+    {
+      "id": "risk-overlay",
+      "name": "Data/Risks",
+      "type": "risk-overlay",
+      "summary": "Upgrade, migration, and package/runtime risks for Architext itself.",
+      "lanes": [
+        { "id": "operators", "name": "Operators", "nodeIds": ["maintainer", "llm-agent"] },
+        { "id": "managed-runtime", "name": "Managed Runtime", "nodeIds": ["architext-cli", "schema-validator", "viewer-runtime"] },
+        { "id": "owned-data", "name": "Owned Data", "nodeIds": ["target-repository", "target-data-files", "static-dist"] }
       ]
     }
   ]

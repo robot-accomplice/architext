@@ -1,11 +1,13 @@
 # Architext Template
 
-This directory is the project-local Architext implementation. It renders the
-JSON architecture model in `data/` as a local read-only engineering site.
+This directory is the package-owned Architext viewer, schema, and starter data.
+Target repositories should not copy or edit this implementation. They own only
+their `docs/architext/data/*.json` files, lifecycle metadata, and optional
+repository-level agent instructions.
 
 ## Commands
 
-From the target project root, prefer the Architext CLI when available:
+From a target project root, use the global Architext CLI:
 
 ```sh
 architext serve
@@ -15,16 +17,14 @@ architext doctor
 architext prompt
 ```
 
-If the CLI is not installed globally, use the root package scripts created by
-the adoption workflow:
+Each command also accepts an optional target path:
 
 ```sh
-npm run architext
-npm run architext:validate
-npm run architext:doctor
+architext serve /path/to/project
+architext validate /path/to/project
 ```
 
-If you are working directly inside this directory, use the local npm scripts:
+If you are developing Architext itself, use the local npm scripts:
 
 Install local dependencies:
 
@@ -61,35 +61,25 @@ Linux, and macOS.
 
 ## Upgrades
 
-This directory is intended to be managed by the Architext adoption script from
-the source repository. From the target project root, use the package CLI:
+Target repositories are data-only in Architext 1.0+. From the target project
+root, use the package CLI:
 
 ```sh
 architext sync
 ```
 
-During local development, direct path invocation remains supported:
-
-```sh
-node /path/to/architext/tools/architext-adopt.mjs
-```
-
-The script detects whether Architext is absent, current, or needs an upgrade.
-It prompts before writing files and can create a git branch before making
-changes. After writing artifacts, it runs `npm install` and `npm run validate`
-inside `docs/architext` unless `--skip-install` or `--skip-validate` is passed.
-Upgrade preserves `docs/architext/data/*.json` by default. Those files are the
-project-owned architecture record and should not be overwritten by template
-updates unless a maintainer explicitly passes `--overwrite-data`.
+The script detects whether Architext data is absent, current, or from an older
+copied-template install. It prompts before writing files and can create a git
+branch before making changes. Migration preserves `docs/architext/data/*.json`
+by default, removes copied implementation files, updates lifecycle metadata,
+and corrects Architext sections in `AGENTS.md` and `CLAUDE.md`.
 
 The script can also maintain the target repository `.gitignore`. Generated
-local artifacts, especially `docs/architext/node_modules/` and
-`docs/architext/dist/`, should be ignored. Architecture JSON, schemas, viewer
-source, package files, tools, and public assets should be committed.
+local artifacts, especially `docs/architext/dist/`, should be ignored.
 
-The CLI writes lifecycle metadata to `.architext-install.json`. Keep that file
-with the project so automation can report installed version, update time,
-managed instruction files, and last validation state.
+The CLI writes lifecycle metadata to `.architext.json`. Keep that file with the
+project so automation can report CLI version, update time, managed instruction
+files, copied-install migration state, and last validation state.
 
 ## Management
 

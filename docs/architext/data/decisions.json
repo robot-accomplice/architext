@@ -1,95 +1,54 @@
 {
   "decisions": [
     {
-      "id": "adr-local-architecture-state",
+      "id": "global-cli-data-only",
       "status": "accepted",
-      "title": "Keep architecture state in project-local JSON",
-      "context": "ClaimsDesk needs architecture documentation that both humans and LLMs can use without a hosted documentation system.",
-      "decision": "Store architecture state as strict JSON files under docs/architext/data and render a local read-only site from those files.",
-      "consequences": ["Architecture changes create reviewable diffs", "Validation becomes part of the development workflow"],
-      "relatedNodes": ["claims-api", "claims-adjuster"],
-      "relatedFlows": ["claim-submission"]
+      "title": "Use a global CLI with data-only target repositories",
+      "context": "Copied templates made every target repository carry viewer code, schemas, local tools, package files, and dependencies.",
+      "decision": "Architext 1.0 serves viewer assets, schemas, validation, and starter templates from the installed package. Target repositories commit only data, metadata, and optional instructions.",
+      "consequences": ["Per-repository upgrades become smaller", "Global CLI availability becomes the primary operating assumption", "Old copied installs require migration"],
+      "relatedNodes": ["architext-cli", "viewer-runtime", "target-repository", "target-data-files"],
+      "relatedFlows": ["fresh-install", "copied-install-migration", "local-review"]
     },
     {
-      "id": "adr-spa-api-split",
+      "id": "safe-migration",
       "status": "accepted",
-      "title": "Split browser app from Claims API",
-      "context": "The product needs fast UI iteration while keeping sensitive persistence and authorization on the server.",
-      "decision": "Use a static React web app backed by a separately deployed Claims API.",
-      "consequences": ["Frontend can deploy independently", "API must enforce all authorization server-side"],
-      "relatedNodes": ["web-app", "claims-api"],
-      "relatedFlows": ["user-signup", "claim-submission"]
+      "title": "Preserve architecture facts during migration",
+      "context": "Old installs may contain valuable project-owned data mixed with copied package-owned implementation files.",
+      "decision": "Migration preserves docs/architext/data/*.json, removes copied package-owned files, updates metadata, and corrects managed agent instruction sections.",
+      "consequences": ["Architecture facts are not rewritten silently", "Dry-run output must show destructive removals", "Instruction updates are part of migration correctness"],
+      "relatedNodes": ["architext-cli", "target-repository", "target-data-files"],
+      "relatedFlows": ["copied-install-migration"]
     },
     {
-      "id": "adr-async-fraud-review",
+      "id": "managed-agent-section",
       "status": "accepted",
-      "title": "Run fraud review asynchronously",
-      "context": "Fraud scoring can be slow and depends on an external vendor.",
-      "decision": "Publish fraud review jobs to a queue and process them with a worker.",
-      "consequences": ["Claim submission latency is protected", "The system must handle queued and manual review states"],
-      "relatedNodes": ["work-queue", "fraud-worker", "fraudscore-api"],
-      "relatedFlows": ["claim-submission", "fraud-review"]
+      "title": "Manage one Architext instruction section",
+      "context": "Agents need current rules, but project-specific instructions outside Architext must remain authoritative.",
+      "decision": "The CLI replaces or appends a single section headed 'Architext Architecture Documentation' in AGENTS.md and CLAUDE.md.",
+      "consequences": ["Old copied-template instructions can be corrected automatically", "Unrelated project instructions are preserved", "Highly unusual Markdown layouts may need manual review"],
+      "relatedNodes": ["architext-cli", "llm-agent", "target-repository"],
+      "relatedFlows": ["copied-install-migration", "architecture-maintenance"]
     },
     {
-      "id": "adr-relational-claim-state",
+      "id": "package-owned-schemas",
       "status": "accepted",
-      "title": "Store claim state relationally",
-      "context": "Claim state transitions need transactional guarantees and staff query support.",
-      "decision": "Use PostgreSQL for claim records, review state, and payout state.",
-      "consequences": ["Transactional state changes are straightforward", "Document blobs remain outside the relational database"],
-      "relatedNodes": ["claims-db", "claims-api"],
-      "relatedFlows": ["claim-submission", "approval-payout"]
+      "title": "Validate with package-owned schemas",
+      "context": "Committing schemas into every target repository made schema upgrades a repo-by-repo file-copy problem.",
+      "decision": "Schemas ship with the Architext package and are used by architext validate [path].",
+      "consequences": ["Validation behavior tracks the installed CLI version", "Schema migrations must be explicit when data shape changes", "Target repos no longer review schema diffs unless Architext itself changes"],
+      "relatedNodes": ["schema-validator", "package-schemas", "target-data-files"],
+      "relatedFlows": ["architecture-maintenance", "copied-install-migration"]
     },
     {
-      "id": "adr-object-storage-documents",
+      "id": "major-version-release",
       "status": "accepted",
-      "title": "Store uploaded documents in object storage",
-      "context": "Claim evidence files can be large and should not pass through the API process.",
-      "decision": "Use private object storage with short-lived signed upload URLs.",
-      "consequences": ["API bandwidth is protected", "Signed URL leakage becomes a first-class risk"],
-      "relatedNodes": ["document-store", "claims-api"],
-      "relatedFlows": ["document-upload"]
-    },
-    {
-      "id": "adr-managed-identity",
-      "status": "accepted",
-      "title": "Use managed identity provider",
-      "context": "ClaimsDesk needs OIDC, role claims, and account recovery without owning credential storage.",
-      "decision": "Use Auth0 for authentication and token issuance.",
-      "consequences": ["Credential storage is delegated", "Auth0 outage affects login and token refresh"],
-      "relatedNodes": ["auth0", "web-app", "claims-api"],
-      "relatedFlows": ["user-signup"]
-    },
-    {
-      "id": "adr-audit-events",
-      "status": "accepted",
-      "title": "Record security-relevant events in append-only audit log",
-      "context": "Staff approvals and payout changes need compliance visibility.",
-      "decision": "Write approval and automated review events to an append-only audit log.",
-      "consequences": ["Compliance export has a single source", "Tamper evidence must be strengthened before regulated launch"],
-      "relatedNodes": ["audit-log", "claims-api", "fraud-worker"],
-      "relatedFlows": ["fraud-review", "approval-payout"]
-    },
-    {
-      "id": "adr-payment-provider",
-      "status": "planned",
-      "title": "Use external payment gateway for payouts",
-      "context": "ClaimsDesk should not directly integrate with banking rails in the first release.",
-      "decision": "Send approved payout instructions to a payment gateway.",
-      "consequences": ["Payment compliance scope is reduced", "Webhook authenticity and reconciliation become critical"],
-      "relatedNodes": ["payment-gateway", "claims-api"],
-      "relatedFlows": ["approval-payout"]
-    },
-    {
-      "id": "adr-analytics-deidentification",
-      "status": "accepted",
-      "title": "De-identify analytics data before warehouse load",
-      "context": "Analytics users need operational insight without broad access to claimant PII.",
-      "decision": "Strip direct identifiers before loading claims and audit metrics into the warehouse.",
-      "consequences": ["Analytics access is safer", "Re-identification risk still needs periodic review"],
-      "relatedNodes": ["analytics-warehouse", "claims-db", "audit-log"],
-      "relatedFlows": ["audit-export"]
+      "title": "Ship the distribution change as a major version",
+      "context": "The target repository footprint and upgrade behavior are incompatible with the pre-1.0 copied-template model.",
+      "decision": "Release the global CLI/data-only model as Architext 1.0.0.",
+      "consequences": ["Users receive a clear breaking-change boundary", "Existing copied installs are migration inputs", "Documentation can stop describing copied templates as the normal path"],
+      "relatedNodes": ["package-artifacts", "architext-cli"],
+      "relatedFlows": ["release-packaging", "copied-install-migration"]
     }
   ]
 }
-
