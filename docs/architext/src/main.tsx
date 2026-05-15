@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
+import { planDiagram } from "./routing/planDiagram.js";
 import "./styles.css";
 
 type Id = string;
@@ -142,6 +143,7 @@ type Selection =
   | { kind: "relationship"; from: Id; to: Id; label: string; relationshipType: "flow" | "structural"; stepId?: Id; flowId?: Id };
 
 type Mode = "flows" | "sequence" | "c4" | "deployment" | "data-risks";
+type RoutingStyle = "orthogonal" | "curved";
 type DiagramTransform = {
   zoom: number;
   focused: boolean;
@@ -162,6 +164,8 @@ type Relationship = {
   stepId?: Id;
   flowId?: Id;
 };
+
+const ROUTING_LOADING_DELAY_MS = 1000;
 
 const modeLabels: Record<Mode, string> = {
   flows: "Flows",
@@ -206,6 +210,14 @@ function relationshipLabel(from: ArchNode | undefined, to: ArchNode | undefined)
   if (to.type === "external-service") return "uses";
   if (from.type === "actor") return "uses";
   return "depends on";
+}
+
+function initialRoutingStyle(): RoutingStyle {
+  return localStorage.getItem("architext-routing-style") === "curved" ? "curved" : "orthogonal";
+}
+
+function initialDebugRouting(): boolean {
+  return new URLSearchParams(window.location.search).get("debugRouting") === "1";
 }
 
 async function fetchJson<T>(path: string): Promise<T> {
@@ -309,6 +321,170 @@ function useElementSize<T extends HTMLElement>() {
   return [ref, size] as const;
 }
 
+function planInputKey(input: any): string {
+  return JSON.stringify({
+    view: {
+      id: input.view.id,
+      type: input.view.type,
+      lanes: input.view.lanes.map((lane: any) => [lane.id, lane.nodeIds])
+    },
+    relationships: input.relationships.map((relationship: Relationship) => ({
+      id: relationship.id,
+      from: relationship.from,
+      to: relationship.to,
+      label: relationship.label,
+      relationshipType: relationship.relationshipType,
+      stepId: relationship.stepId,
+      flowId: relationship.flowId
+    })),
+    visibleNodeIds: Array.from(input.visibleNodeIds).sort(),
+    nodeWidth: input.nodeWidth,
+    nodeHeight: input.nodeHeight,
+    laneWidth: input.laneWidth,
+    rowGap: input.rowGap,
+    marginX: input.marginX,
+    marginY: input.marginY,
+    minCanvasWidth: input.minCanvasWidth,
+    minCanvasHeight: input.minCanvasHeight,
+    canvasExtraWidth: input.canvasExtraWidth,
+    canvasExtraHeight: input.canvasExtraHeight,
+    style: input.style
+  });
+}
+
+function attachPlanHelpers(plan: any) {
+  return {
+    ...plan,
+    positionFor: (nodeId: Id) => {
+      const rect = plan.nodeRects.get(nodeId);
+      return {
+        x: rect?.x ?? 0,
+        y: rect?.y ?? 0
+      };
+    }
+  };
+}
+
+function usePlannedDiagram(input: any) {
+  const key = planInputKey(input);
+  const [state, setState] = useState<{
+    key: string;
+    plan: any | null;
+    planning: boolean;
+    error: string | null;
+  }>({
+    key: "",
+    plan: null,
+    planning: false,
+    error: null
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    let worker: Worker | null = null;
+
+    setState((previous) => ({
+      key,
+      plan: previous.key === key ? previous.plan : null,
+      planning: false,
+      error: null
+    }));
+
+    const slowTimer = window.setTimeout(() => {
+      if (cancelled) return;
+      setState((previous) => previous.key === key ? { ...previous, planning: true } : previous);
+    }, ROUTING_LOADING_DELAY_MS);
+
+    const finishWithPlan = (plan: any) => {
+      if (cancelled) return;
+      window.clearTimeout(slowTimer);
+      setState({
+        key,
+        plan: attachPlanHelpers(plan),
+        planning: false,
+        error: null
+      });
+    };
+
+    const finishWithError = (message: string) => {
+      if (cancelled) return;
+      window.clearTimeout(slowTimer);
+      setState({
+        key,
+        plan: null,
+        planning: false,
+        error: message
+      });
+    };
+
+    if (typeof Worker === "undefined") {
+      const timer = window.setTimeout(() => {
+        try {
+          const plan = planDiagram(input);
+          const { positionFor, ...cloneablePlan } = plan;
+          finishWithPlan(cloneablePlan);
+        } catch (error) {
+          finishWithError(error instanceof Error ? error.message : String(error));
+        }
+      }, 0);
+      return () => {
+        cancelled = true;
+        window.clearTimeout(timer);
+        window.clearTimeout(slowTimer);
+      };
+    }
+
+    worker = new Worker(new URL("./routing/planningWorker.js", import.meta.url), { type: "module" });
+    worker.onmessage = (event) => {
+      if (event.data.key !== key) return;
+      if (event.data.error) {
+        finishWithError(event.data.error);
+        return;
+      }
+      finishWithPlan(event.data.plan);
+    };
+    worker.onerror = (event) => {
+      finishWithError(event.message || "Route planning failed.");
+    };
+    worker.postMessage({ key, input });
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(slowTimer);
+      worker?.terminate();
+    };
+  }, [key]);
+
+  return state;
+}
+
+function plannedCanvasFallback(input: any) {
+  const maxRows = Math.max(...input.view.lanes.map((lane: any) => lane.nodeIds.filter((nodeId: Id) => input.visibleNodeIds.has(nodeId)).length), 1);
+  return {
+    width: Math.max(input.minCanvasWidth, input.marginX * 2 + input.view.lanes.length * input.laneWidth + input.canvasExtraWidth),
+    height: Math.max(input.minCanvasHeight, input.marginY + maxRows * input.rowGap + input.canvasExtraHeight)
+  };
+}
+
+function RoutingLoadingOverlay({ active }: { active: boolean }) {
+  if (!active) return null;
+  return (
+    <div className="routing-loading-overlay" role="status" aria-live="polite">
+      <span className="routing-spinner" aria-hidden="true" />
+      <span>Planning routes</span>
+    </div>
+  );
+}
+
+function RoutingPlanningError({ message }: { message: string }) {
+  return (
+    <div className="routing-planning-error" role="alert">
+      <strong>Route planning failed</strong>
+      <span>{message}</span>
+    </div>
+  );
+}
+
 function sectionId(title: string): string {
   const normalized = title.toLowerCase();
   if (normalized.includes("runtime")) return "runtime";
@@ -351,6 +527,8 @@ function App() {
   const [activeFlowId, setActiveFlowId] = useState<Id>("");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [diagramTransform, setDiagramTransform] = useState<DiagramTransform>({ zoom: 1, focused: false });
+  const [routingStyle, setRoutingStyle] = useState<RoutingStyle>(initialRoutingStyle);
+  const [debugRouting] = useState(initialDebugRouting);
   const [riskFilter, setRiskFilter] = useState("all");
   const [stepsCollapsed, setStepsCollapsed] = useState(false);
   const [diagramViewportRef, diagramViewportSize] = useElementSize<HTMLElement>();
@@ -376,6 +554,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem("architext-right-collapsed", String(rightCollapsed));
   }, [rightCollapsed]);
+
+  useEffect(() => {
+    localStorage.setItem("architext-routing-style", routingStyle);
+  }, [routingStyle]);
 
   useEffect(() => {
     const narrowWidth = window.matchMedia("(max-width: 760px)");
@@ -590,6 +772,8 @@ function App() {
           </div>
           <DiagramControls
             transform={diagramTransform}
+            routingStyle={routingStyle}
+            onRoutingStyleChange={setRoutingStyle}
             onZoomIn={() => setDiagramTransform((value) => ({ ...value, zoom: Math.min(1.6, Number((value.zoom + 0.1).toFixed(2))) }))}
             onZoomOut={() => setDiagramTransform((value) => ({ ...value, zoom: Math.max(0.7, Number((value.zoom - 0.1).toFixed(2))) }))}
             onFit={() => setDiagramTransform((value) => ({ ...value, zoom: fitZoomFor(activeMode, activeView, activeFlow) }))}
@@ -627,6 +811,8 @@ function App() {
               selectedNodeId={selectedNodeId}
               selectedRelationship={selection?.kind === "relationship" ? selection : null}
               transform={diagramTransform}
+              routingStyle={routingStyle}
+              debugRouting={debugRouting}
               onSelectNode={(id) => setSelection({ kind: "node", id })}
               onSelectRelationship={selectRelationship}
             />
@@ -640,6 +826,8 @@ function App() {
               selectedRelationship={selection?.kind === "relationship" ? selection : null}
               selectedNodeId={selectedNodeId}
               transform={diagramTransform}
+              routingStyle={routingStyle}
+              debugRouting={debugRouting}
               onSelectNode={(id) => setSelection({ kind: "node", id })}
               onSelectRelationship={selectRelationship}
             />
@@ -891,6 +1079,8 @@ function LeftPanel({
 
 function DiagramControls({
   transform,
+  routingStyle,
+  onRoutingStyleChange,
   onZoomIn,
   onZoomOut,
   onFit,
@@ -898,6 +1088,8 @@ function DiagramControls({
   onToggleFocus
 }: {
   transform: DiagramTransform;
+  routingStyle: RoutingStyle;
+  onRoutingStyleChange: (style: RoutingStyle) => void;
   onZoomIn: () => void;
   onZoomOut: () => void;
   onFit: () => void;
@@ -906,6 +1098,19 @@ function DiagramControls({
 }) {
   return (
     <div className="diagram-controls" aria-label="Diagram controls">
+      <div className="routing-style-control" role="group" aria-label="Route style">
+        {(["orthogonal", "curved"] as RoutingStyle[]).map((style) => (
+          <button
+            key={style}
+            type="button"
+            className={routingStyle === style ? "active" : ""}
+            aria-pressed={routingStyle === style}
+            onClick={() => onRoutingStyleChange(style)}
+          >
+            {style === "orthogonal" ? "Orthogonal" : "Curved"}
+          </button>
+        ))}
+      </div>
       <button type="button" onClick={onZoomOut} aria-label="Zoom out">-</button>
       <span>{Math.round(transform.zoom * 100)}%</span>
       <button type="button" onClick={onZoomIn} aria-label="Zoom in">+</button>
@@ -925,6 +1130,8 @@ function SystemMap({
   selectedRelationship,
   selectedNodeId,
   transform,
+  routingStyle,
+  debugRouting,
   onSelectRelationship,
   onSelectNode
 }: {
@@ -936,6 +1143,8 @@ function SystemMap({
   selectedRelationship: Extract<Selection, { kind: "relationship" }> | null;
   selectedNodeId: Id | null;
   transform: DiagramTransform;
+  routingStyle: RoutingStyle;
+  debugRouting: boolean;
   onSelectRelationship: (relationship: Relationship) => void;
   onSelectNode: (id: Id) => void;
 }) {
@@ -944,494 +1153,10 @@ function SystemMap({
   const nodeWidth = 136;
   const nodeHeight = 54;
   const laneWidth = 210;
-  const rowGap = 84;
-  const routeGutter = 96;
+  const rowGap = 102;
+  const routeGutter = 132;
   const marginX = routeGutter + 48;
   const marginY = 76;
-  const laneIndexByNode = new Map<Id, number>();
-  const rowIndexByNode = new Map<Id, number>();
-
-  view.lanes.forEach((lane, laneIndex) => {
-    lane.nodeIds.forEach((nodeId, rowIndex) => {
-      laneIndexByNode.set(nodeId, laneIndex);
-      rowIndexByNode.set(nodeId, rowIndex);
-    });
-  });
-
-  const laneHeight = Math.max(...view.lanes.map((lane) => lane.nodeIds.length), 1) * rowGap + marginY + 24;
-  const canvasWidth = marginX * 2 + view.lanes.length * laneWidth + 40;
-  const canvasHeight = Math.max(340, laneHeight + 64);
-  const nodePosition = (nodeId: Id) => {
-    const laneIndex = laneIndexByNode.get(nodeId) ?? 0;
-    const rowIndex = rowIndexByNode.get(nodeId) ?? 0;
-    return {
-      x: marginX + laneIndex * laneWidth,
-      y: marginY + rowIndex * rowGap
-    };
-  };
-
-  type Side = "left" | "right" | "top" | "bottom";
-  type Point = { x: number; y: number };
-  type Route = { d: string; labelX: number; labelY: number; cost: number; samples: Point[] };
-
-  const rectFor = (nodeId: Id) => {
-    const position = nodePosition(nodeId);
-    return {
-      x: position.x,
-      y: position.y,
-      width: nodeWidth,
-      height: nodeHeight
-    };
-  };
-
-  const anchorFor = (rect: ReturnType<typeof rectFor>, side: Side): Point => {
-    if (side === "left") return { x: rect.x, y: rect.y + rect.height / 2 };
-    if (side === "right") return { x: rect.x + rect.width, y: rect.y + rect.height / 2 };
-    if (side === "top") return { x: rect.x + rect.width / 2, y: rect.y };
-    return { x: rect.x + rect.width / 2, y: rect.y + rect.height };
-  };
-
-  const cubicPoint = (start: Point, controlA: Point, controlB: Point, end: Point, t: number): Point => {
-    const i = 1 - t;
-    return {
-      x: i ** 3 * start.x + 3 * i ** 2 * t * controlA.x + 3 * i * t ** 2 * controlB.x + t ** 3 * end.x,
-      y: i ** 3 * start.y + 3 * i ** 2 * t * controlA.y + 3 * i * t ** 2 * controlB.y + t ** 3 * end.y
-    };
-  };
-
-  const distanceToRect = (point: Point, rect: ReturnType<typeof rectFor>) => {
-    const dx = Math.max(rect.x - point.x, 0, point.x - (rect.x + rect.width));
-    const dy = Math.max(rect.y - point.y, 0, point.y - (rect.y + rect.height));
-    return Math.hypot(dx, dy);
-  };
-
-  const routeCollidesWithNode = (samples: Point[], fromId: Id, toId: Id, padding = 8) => {
-    const blockers = Array.from(visibleNodeIds)
-      .filter((nodeId) => nodeId !== fromId && nodeId !== toId)
-      .map(rectFor);
-    return samples.some((point) => blockers.some((rect) =>
-      point.x >= rect.x - padding &&
-      point.x <= rect.x + rect.width + padding &&
-      point.y >= rect.y - padding &&
-      point.y <= rect.y + rect.height + padding
-    ));
-  };
-
-  const routeCost = (
-    start: Point,
-    controlA: Point,
-    controlB: Point,
-    end: Point,
-    label: Point,
-    fromId: Id,
-    toId: Id,
-    usedRoutes: Point[][]
-  ) => {
-    const blockers = Array.from(visibleNodeIds)
-      .filter((nodeId) => nodeId !== fromId && nodeId !== toId)
-      .map(rectFor);
-    let cost = Math.hypot(end.x - start.x, end.y - start.y);
-    const samples: Point[] = [];
-    let previous = start;
-    for (let step = 1; step < 48; step += 1) {
-      const point = cubicPoint(start, controlA, controlB, end, step / 48);
-      samples.push(point);
-      cost += Math.hypot(point.x - previous.x, point.y - previous.y) * 1.4;
-      previous = point;
-      if (point.y < 28 || point.x < 12 || point.x > canvasWidth - 12 || point.y > canvasHeight - 12) {
-        cost += 12000;
-      }
-      for (const rect of blockers) {
-        const padding = 16;
-        const inside =
-          point.x >= rect.x - padding &&
-          point.x <= rect.x + rect.width + padding &&
-          point.y >= rect.y - padding &&
-          point.y <= rect.y + rect.height + padding;
-        if (inside) cost += 8000;
-
-        const distance = distanceToRect(point, rect);
-        if (distance < 34) cost += (34 - distance) * 90;
-      }
-
-      for (const usedRoute of usedRoutes) {
-        for (let usedIndex = 0; usedIndex < usedRoute.length; usedIndex += 3) {
-          const used = usedRoute[usedIndex];
-          const distance = Math.hypot(point.x - used.x, point.y - used.y);
-          if (distance < 22) cost += 350;
-          if (distance < 10) cost += 1400;
-        }
-      }
-    }
-
-    for (const rect of blockers) {
-      if (distanceToRect(label, rect) < 32) {
-        cost += 20000;
-      }
-    }
-
-    return { cost, samples };
-  };
-
-  const nearestSample = (samples: Point[], target: Point): Point => {
-    return samples.reduce((nearest, sample) => {
-      const nearestDistance = Math.hypot(nearest.x - target.x, nearest.y - target.y);
-      const sampleDistance = Math.hypot(sample.x - target.x, sample.y - target.y);
-      return sampleDistance < nearestDistance ? sample : nearest;
-    }, samples[0] ?? target);
-  };
-
-  const cubicRoute = (
-    fromId: Id,
-    toId: Id,
-    startSide: Side,
-    endSide: Side,
-    controlA: Point,
-    controlB: Point,
-    label: Point,
-    usedRoutes: Point[][]
-  ): Route => {
-    const start = anchorFor(rectFor(fromId), startSide);
-    const end = anchorFor(rectFor(toId), endSide);
-    const scored = routeCost(start, controlA, controlB, end, label, fromId, toId, usedRoutes);
-    const startDirection = sideVector(startSide);
-    const endDirection = sideVector(endSide);
-    const targetVector = { x: end.x - start.x, y: end.y - start.y };
-    const incomingVector = { x: start.x - end.x, y: start.y - end.y };
-    if (startDirection.x * targetVector.x + startDirection.y * targetVector.y < 0) {
-      scored.cost += 60000;
-    }
-    if (endDirection.x * incomingVector.x + endDirection.y * incomingVector.y < 0) {
-      scored.cost += 60000;
-    }
-    const labelPoint = nearestSample(scored.samples, label);
-    return {
-      d: `M ${start.x} ${start.y} C ${controlA.x} ${controlA.y}, ${controlB.x} ${controlB.y}, ${end.x} ${end.y}`,
-      labelX: labelPoint.x,
-      labelY: labelPoint.y,
-      cost: scored.cost,
-      samples: scored.samples
-    };
-  };
-
-  const tangentFor = (side: Side, bend: number): Point => {
-    if (side === "left") return { x: -bend, y: 0 };
-    if (side === "right") return { x: bend, y: 0 };
-    if (side === "top") return { x: 0, y: -bend };
-    return { x: 0, y: bend };
-  };
-
-  const sideVector = (side: Side): Point => {
-    if (side === "left") return { x: -1, y: 0 };
-    if (side === "right") return { x: 1, y: 0 };
-    if (side === "top") return { x: 0, y: -1 };
-    return { x: 0, y: 1 };
-  };
-
-  const lineSamples = (points: Point[]): Point[] => {
-    const samples: Point[] = [];
-    for (let index = 0; index < points.length - 1; index += 1) {
-      const start = points[index];
-      const end = points[index + 1];
-      for (let step = 1; step <= 10; step += 1) {
-        const t = step / 10;
-        samples.push({
-          x: start.x + (end.x - start.x) * t,
-          y: start.y + (end.y - start.y) * t
-        });
-      }
-    }
-    return samples;
-  };
-
-  const routeCostFromSamples = (
-    samples: Point[],
-    label: Point,
-    fromId: Id,
-    toId: Id,
-    usedRoutes: Point[][]
-  ) => {
-    const blockers = Array.from(visibleNodeIds)
-      .filter((nodeId) => nodeId !== fromId && nodeId !== toId)
-      .map(rectFor);
-    let cost = 0;
-    for (let index = 0; index < samples.length - 1; index += 1) {
-      cost += Math.hypot(samples[index + 1].x - samples[index].x, samples[index + 1].y - samples[index].y);
-    }
-    for (const point of samples) {
-      if (point.y < 30 || point.x < 16 || point.x > canvasWidth - 16 || point.y > canvasHeight - 16) {
-        cost += 14000;
-      }
-      for (const rect of blockers) {
-        const distance = distanceToRect(point, rect);
-        if (distance < 14) cost += 12000;
-        if (distance < 30) cost += (30 - distance) * 120;
-      }
-      for (const usedRoute of usedRoutes) {
-        for (let usedIndex = 0; usedIndex < usedRoute.length; usedIndex += 2) {
-          const used = usedRoute[usedIndex];
-          const distance = Math.hypot(point.x - used.x, point.y - used.y);
-          if (distance < 26) cost += 450;
-          if (distance < 12) cost += 1600;
-        }
-      }
-    }
-    for (const rect of blockers) {
-      if (distanceToRect(label, rect) < 34) cost += 24000;
-    }
-    return cost;
-  };
-
-  const outerGutterRoute = (fromId: Id, toId: Id, bottomCorridor: number, routeOffset: number): Route => {
-    const fromRectLocal = rectFor(fromId);
-    const toRectLocal = rectFor(toId);
-    const fromCenterLocal = { x: fromRectLocal.x + fromRectLocal.width / 2, y: fromRectLocal.y + fromRectLocal.height / 2 };
-    const toCenterLocal = { x: toRectLocal.x + toRectLocal.width / 2, y: toRectLocal.y + toRectLocal.height / 2 };
-    const routeOnRight = fromCenterLocal.x >= toCenterLocal.x;
-    const start = anchorFor(fromRectLocal, routeOnRight ? "right" : "left");
-    const end = anchorFor(toRectLocal, "bottom");
-    const requestedGutterX = routeOnRight
-      ? Math.max(fromRectLocal.x + fromRectLocal.width, toRectLocal.x + toRectLocal.width) + 54 + routeOffset
-      : Math.min(fromRectLocal.x, toRectLocal.x) - 54 - routeOffset;
-    const gutterX = Math.min(Math.max(requestedGutterX, 28), canvasWidth - 28);
-    const points = [
-      start,
-      { x: gutterX, y: start.y },
-      { x: gutterX, y: bottomCorridor },
-      { x: end.x, y: bottomCorridor },
-      end
-    ];
-    const samples = lineSamples(points);
-    return {
-      d: `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y} L ${points[2].x} ${points[2].y} L ${points[3].x} ${points[3].y} L ${points[4].x} ${points[4].y}`,
-      labelX: (gutterX + end.x) / 2,
-      labelY: bottomCorridor - 8,
-      cost: routeCostFromSamples(samples, { x: (gutterX + end.x) / 2, y: bottomCorridor - 8 }, fromId, toId, []),
-      samples
-    };
-  };
-
-  const sideGutterRoute = (fromId: Id, toId: Id, routeOffset: number): Route => {
-    const fromRectLocal = rectFor(fromId);
-    const toRectLocal = rectFor(toId);
-    const start = anchorFor(fromRectLocal, "left");
-    const end = anchorFor(toRectLocal, "left");
-    const requestedGutterX = Math.min(fromRectLocal.x, toRectLocal.x) - 54 - routeOffset;
-    const gutterX = Math.max(28, requestedGutterX);
-    const points = [
-      start,
-      { x: gutterX, y: start.y },
-      { x: gutterX, y: end.y },
-      end
-    ];
-    const samples = lineSamples(points);
-    return {
-      d: `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y} L ${points[2].x} ${points[2].y} L ${points[3].x} ${points[3].y}`,
-      labelX: gutterX,
-      labelY: (start.y + end.y) / 2,
-      cost: routeCostFromSamples(samples, { x: gutterX, y: (start.y + end.y) / 2 }, fromId, toId, []),
-      samples
-    };
-  };
-
-  const edgePath = (fromId: Id, toId: Id, index: number, pairIndex: number, usedRoutes: Point[][]) => {
-    const from = nodePosition(fromId);
-    const to = nodePosition(toId);
-    const fromLane = laneIndexByNode.get(fromId) ?? 0;
-    const toLane = laneIndexByNode.get(toId) ?? 0;
-    const fromRect = rectFor(fromId);
-    const toRect = rectFor(toId);
-    const fromCenter = { x: from.x + nodeWidth / 2, y: from.y + nodeHeight / 2 };
-    const toCenter = { x: to.x + nodeWidth / 2, y: to.y + nodeHeight / 2 };
-    const mid = { x: (fromCenter.x + toCenter.x) / 2, y: (fromCenter.y + toCenter.y) / 2 };
-    const candidates: Route[] = [];
-    const routeOffset = pairIndex * 40 + (index % 2) * 10;
-    const spanMinX = Math.min(fromCenter.x, toCenter.x);
-    const spanMaxX = Math.max(fromCenter.x, toCenter.x);
-    const spanBlockers = Array.from(visibleNodeIds)
-      .filter((nodeId) => nodeId !== fromId && nodeId !== toId)
-      .map(rectFor)
-      .filter((rect) => rect.x < spanMaxX && rect.x + rect.width > spanMinX);
-    const topCorridor = Math.max(
-      marginY - 16,
-      Math.min(fromRect.y, toRect.y, ...spanBlockers.map((rect) => rect.y)) - 42 - routeOffset
-    );
-    const bottomCorridor = Math.max(
-      fromRect.y + nodeHeight,
-      toRect.y + nodeHeight,
-      ...spanBlockers.map((rect) => rect.y + rect.height)
-    ) + 42 + routeOffset;
-
-    const directStartSide: Side = Math.abs(toCenter.x - fromCenter.x) >= Math.abs(toCenter.y - fromCenter.y)
-      ? toCenter.x >= fromCenter.x ? "right" : "left"
-      : toCenter.y >= fromCenter.y ? "bottom" : "top";
-    const directEndSide: Side = directStartSide === "right"
-      ? "left"
-      : directStartSide === "left"
-        ? "right"
-        : directStartSide === "bottom"
-          ? "top"
-          : "bottom";
-    const directStart = anchorFor(fromRect, directStartSide);
-    const directEnd = anchorFor(toRect, directEndSide);
-    const directRoute = cubicRoute(
-      fromId,
-      toId,
-      directStartSide,
-      directEndSide,
-      { x: (directStart.x + directEnd.x) / 2, y: directStart.y },
-      { x: (directStart.x + directEnd.x) / 2, y: directEnd.y },
-      mid,
-      usedRoutes
-    );
-    if (!routeCollidesWithNode(directRoute.samples, fromId, toId, 8)) {
-      directRoute.cost -= 90000;
-    }
-    candidates.push(directRoute);
-
-    const rowDelta = (rowIndexByNode.get(toId) ?? 0) - (rowIndexByNode.get(fromId) ?? 0);
-    if (Math.abs(rowDelta) > 1) {
-      candidates.push(cubicRoute(
-        fromId,
-        toId,
-        rowDelta < 0 ? "top" : "bottom",
-        rowDelta < 0 ? "top" : "bottom",
-        { x: fromCenter.x, y: rowDelta < 0 ? topCorridor : bottomCorridor },
-        { x: toCenter.x, y: rowDelta < 0 ? topCorridor : bottomCorridor },
-        { x: mid.x, y: rowDelta < 0 ? topCorridor : bottomCorridor },
-        usedRoutes
-      ));
-    }
-
-    if (Math.abs(toLane - fromLane) > 1) {
-      candidates.push(cubicRoute(
-        fromId,
-        toId,
-        "top",
-        "top",
-        { x: fromCenter.x, y: topCorridor },
-        { x: toCenter.x, y: topCorridor },
-        { x: mid.x, y: topCorridor },
-        usedRoutes
-      ));
-    }
-
-    (["left", "right", "top", "bottom"] as Side[]).forEach((startSide) => {
-      (["left", "right", "top", "bottom"] as Side[]).forEach((endSide) => {
-        const start = anchorFor(fromRect, startSide);
-        const end = anchorFor(toRect, endSide);
-        const bend = Math.min(180, Math.max(42, Math.hypot(end.x - start.x, end.y - start.y) * 0.28 + routeOffset));
-        const startTangent = tangentFor(startSide, bend);
-        const endTangent = tangentFor(endSide, bend);
-        candidates.push(cubicRoute(
-          fromId,
-          toId,
-          startSide,
-          endSide,
-          { x: start.x + startTangent.x, y: start.y + startTangent.y },
-          { x: end.x + endTangent.x, y: end.y + endTangent.y },
-          mid,
-          usedRoutes
-        ));
-      });
-    });
-
-    if (fromLane === toLane) {
-      const leftGutter = Math.min(fromRect.x, toRect.x) - 36 - routeOffset;
-      const rightGutter = Math.max(fromRect.x + nodeWidth, toRect.x + nodeWidth) + 36 + routeOffset;
-      candidates.push(
-        cubicRoute(
-          fromId,
-          toId,
-          "left",
-          "left",
-          { x: leftGutter, y: fromCenter.y },
-          { x: leftGutter, y: toCenter.y },
-          { x: leftGutter, y: mid.y },
-          usedRoutes
-        ),
-        cubicRoute(
-          fromId,
-          toId,
-          "right",
-          "right",
-          { x: rightGutter, y: fromCenter.y },
-          { x: rightGutter, y: toCenter.y },
-          { x: rightGutter, y: mid.y },
-          usedRoutes
-        )
-      );
-    }
-
-    if (toLane > fromLane) {
-      const bend = Math.max(48, Math.abs(to.x - (from.x + nodeWidth)) * 0.42 + routeOffset);
-      candidates.push(cubicRoute(
-        fromId,
-        toId,
-        "right",
-        "left",
-        { x: from.x + nodeWidth + bend, y: fromCenter.y },
-        { x: to.x - bend, y: toCenter.y },
-        mid,
-        usedRoutes
-      ));
-    }
-
-    if (toLane < fromLane) {
-      const bend = Math.max(48, Math.abs(from.x - (to.x + nodeWidth)) * 0.42 + routeOffset);
-      candidates.push(cubicRoute(
-        fromId,
-        toId,
-        "left",
-        "right",
-        { x: from.x - bend, y: fromCenter.y },
-        { x: to.x + nodeWidth + bend, y: toCenter.y },
-        mid,
-        usedRoutes
-      ));
-    }
-
-    candidates.push(
-      cubicRoute(
-        fromId,
-        toId,
-        "top",
-        "top",
-        { x: fromCenter.x, y: topCorridor },
-        { x: toCenter.x, y: topCorridor },
-        { x: mid.x, y: topCorridor },
-        usedRoutes
-      ),
-      cubicRoute(
-        fromId,
-        toId,
-        "bottom",
-        "bottom",
-        { x: fromCenter.x, y: bottomCorridor },
-        { x: toCenter.x, y: bottomCorridor },
-        { x: mid.x, y: bottomCorridor },
-        usedRoutes
-      )
-    );
-
-    const topLimit = Math.min(fromRect.y, toRect.y);
-    const bottomLimit = Math.max(fromRect.y + nodeHeight, toRect.y + nodeHeight);
-    candidates.forEach((candidate) => {
-      const travelsTop = candidate.samples.some((point) => point.y < topLimit - 4);
-      const travelsBottom = candidate.samples.some((point) => point.y > bottomLimit + 4);
-      if (pairIndex % 2 === 1 && travelsTop) {
-        candidate.cost += 25000;
-      }
-      if (pairIndex % 2 === 1 && !travelsBottom) {
-        candidate.cost += 4000;
-      }
-      if (pairIndex % 2 === 0 && travelsBottom) {
-        candidate.cost += 600;
-      }
-    });
-
-    return candidates.sort((a, b) => a.cost - b.cost)[0];
-  };
 
   const structuralRelationships = Array.from(visibleNodeIds).flatMap((nodeId) => {
     const node = nodesById.get(nodeId);
@@ -1462,37 +1187,77 @@ function SystemMap({
       summary: step.summary,
       relationshipType: "flow" as const,
       stepId: step.id,
-      flowId: activeFlow.id
+      flowId: activeFlow.id,
+      displayIndex: index + 1
     };
   }) ?? [];
 
-  const planRoutes = (relationships: Relationship[]) => {
-    const usedRoutes: Point[][] = [];
-    const pairCounts = new Map<string, number>();
-    const routes = new Map<Id, Route>();
-
-    relationships.forEach((relationship, index) => {
-      if (!laneIndexByNode.has(relationship.from) || !laneIndexByNode.has(relationship.to)) {
-        return;
-      }
-
-      const pairKey = [relationship.from, relationship.to].sort().join("<->");
-      const pairIndex = pairCounts.get(pairKey) ?? 0;
-      pairCounts.set(pairKey, pairIndex + 1);
-
-      const route = edgePath(relationship.from, relationship.to, index, pairIndex, usedRoutes);
-      routes.set(relationship.id, route);
-      usedRoutes.push(route.samples);
-    });
-
-    return routes;
+  const planInput = {
+    view,
+    relationships: showStructuralConnections ? structuralRelationships : flowRelationships,
+    visibleNodeIds,
+    nodeWidth,
+    nodeHeight,
+    laneWidth,
+    rowGap,
+    marginX,
+    marginY,
+    minCanvasWidth: 0,
+    minCanvasHeight: 340,
+    canvasExtraWidth: routeGutter,
+    canvasExtraHeight: 88,
+    style: routingStyle
   };
+  const planningState = usePlannedDiagram(planInput);
+  const fallbackCanvas = plannedCanvasFallback(planInput);
+  const plan = planningState.plan;
 
-  const structuralRoutes = planRoutes(structuralRelationships);
-  const flowRoutes = planRoutes(flowRelationships);
+  if (planningState.error) {
+    return (
+      <section className="map-shell">
+        <div
+          className="diagram-canvas"
+          style={{ width: fallbackCanvas.width, height: fallbackCanvas.height, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
+        >
+          <RoutingPlanningError message={planningState.error} />
+        </div>
+      </section>
+    );
+  }
+
+  if (!plan) {
+    return (
+      <section className="map-shell" aria-busy={planningState.planning ? "true" : "false"}>
+        <div
+          className="diagram-canvas"
+          style={{ width: fallbackCanvas.width, height: fallbackCanvas.height, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
+        >
+          <RoutingLoadingOverlay active={planningState.planning} />
+        </div>
+      </section>
+    );
+  }
+
+  const canvasWidth = plan.canvasWidth;
+  const canvasHeight = plan.canvasHeight;
+  const structuralRoutes = showStructuralConnections ? plan.routes : new Map();
+  const flowRoutes = showStructuralConnections ? new Map() : plan.routes;
+  const nodePosition = plan.positionFor;
+  const isStructuralSelected = (relationship: Relationship) => (
+    selectedRelationship?.from === relationship.from && selectedRelationship.to === relationship.to
+  );
+  const isFlowSelected = (relationship: Relationship) => (
+    selectedStepId === relationship.stepId || (
+      selectedRelationship?.from === relationship.from &&
+      selectedRelationship.to === relationship.to &&
+      selectedRelationship.stepId === relationship.stepId
+    )
+  );
+  const orderedStructuralRelationships = [...structuralRelationships].sort((a, b) => Number(isStructuralSelected(a)) - Number(isStructuralSelected(b)));
+  const orderedFlowRelationships = [...flowRelationships].sort((a, b) => Number(isFlowSelected(a)) - Number(isFlowSelected(b)));
 
   return (
-    <section className="map-shell">
+    <section className="map-shell" aria-busy={planningState.planning ? "true" : "false"}>
       <div
         className="diagram-canvas"
         style={{ width: canvasWidth, height: canvasHeight, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
@@ -1506,10 +1271,10 @@ function SystemMap({
               <path d="M 0 0 L 8 4 L 0 8 z" />
             </marker>
           </defs>
-          {showStructuralConnections && structuralRelationships.map((connection, index) => {
+          {showStructuralConnections && orderedStructuralRelationships.map((connection, index) => {
             const route = structuralRoutes.get(connection.id);
             if (!route) return null;
-            const selected = selectedRelationship?.from === connection.from && selectedRelationship.to === connection.to;
+            const selected = isStructuralSelected(connection);
             return (
               <g
                 key={`${connection.from}-${connection.to}`}
@@ -1531,17 +1296,13 @@ function SystemMap({
               </g>
             );
           })}
-          {!showStructuralConnections && flowRelationships.map((relationship, index) => {
-            if (!laneIndexByNode.has(relationship.from) || !laneIndexByNode.has(relationship.to)) {
+          {!showStructuralConnections && orderedFlowRelationships.map((relationship, index) => {
+            if (!plan.laneIndexByNode.has(relationship.from) || !plan.laneIndexByNode.has(relationship.to)) {
               return null;
             }
             const route = flowRoutes.get(relationship.id);
             if (!route) return null;
-            const isSelected = selectedStepId === relationship.stepId || (
-              selectedRelationship?.from === relationship.from &&
-              selectedRelationship.to === relationship.to &&
-              selectedRelationship.stepId === relationship.stepId
-            );
+            const isSelected = isFlowSelected(relationship);
             return (
               <g
                 key={relationship.id}
@@ -1560,10 +1321,11 @@ function SystemMap({
                   markerEnd={isSelected ? "url(#arrowhead-selected)" : "url(#arrowhead)"}
                 />
                 <rect className="flow-step-dot" x={route.labelX - 10} y={route.labelY - 10} width="20" height="20" />
-                <text className="flow-step-label" x={route.labelX} y={route.labelY + 4}>{index + 1}</text>
+                <text className="flow-step-label" x={route.labelX} y={route.labelY + 4}>{relationship.displayIndex}</text>
               </g>
             );
           })}
+          {debugRouting ? <RoutingDebugGeometry plan={plan} relationships={showStructuralConnections ? structuralRelationships : flowRelationships} /> : null}
         </svg>
         {view.lanes.map((lane, laneIndex) => (
           <div
@@ -1593,6 +1355,7 @@ function SystemMap({
             </button>
           );
         })}
+        <RoutingLoadingOverlay active={planningState.planning} />
       </div>
       {activeFlow ? (
         <div className="edge-strip">
@@ -1614,7 +1377,108 @@ function SystemMap({
           <span className="edge-count">Structural connections only</span>
         </div>
       )}
+      {debugRouting ? (
+        <RoutingDebugPanel
+          plan={plan}
+          relationships={showStructuralConnections ? structuralRelationships : flowRelationships}
+        />
+      ) : null}
     </section>
+  );
+}
+
+function topQualityCosts(route: any) {
+  return Object.entries(route.qualityCosts ?? {})
+    .filter(([, value]) => typeof value === "number" && value !== 0)
+    .sort(([, left], [, right]) => Math.abs(right as number) - Math.abs(left as number))
+    .slice(0, 5);
+}
+
+function RoutingDebugPanel({ plan, relationships }: { plan: any; relationships: Relationship[] }) {
+  const warnings = plan.warnings ?? [];
+  return (
+    <div className="routing-debug-panel" aria-label="Routing debug data">
+      <div className="routing-debug-summary">
+        <strong>Routing debug</strong>
+        <span>{plan.routes.size} routes</span>
+        <span>{warnings.length} warnings</span>
+      </div>
+      {warnings.length > 0 ? (
+        <div className="routing-debug-warnings">
+          {warnings.slice(0, 8).map((warning: any, index: number) => (
+            <span key={`${warning.relationshipId}-${warning.code}-${index}`}>
+              {warning.relationshipId}: {warning.code}
+            </span>
+          ))}
+        </div>
+      ) : null}
+      <div className="routing-debug-routes">
+        {relationships.map((relationship) => {
+          const route = plan.routes.get(relationship.id);
+          if (!route) return null;
+          return (
+            <details key={relationship.id}>
+              <summary>
+                <span>{relationship.id}</span>
+                <span>{Math.round(route.cost)}</span>
+              </summary>
+              <dl>
+                {topQualityCosts(route).map(([name, value]) => (
+                  <React.Fragment key={name}>
+                    <dt>{name}</dt>
+                    <dd>{Math.round(value as number)}</dd>
+                  </React.Fragment>
+                ))}
+              </dl>
+            </details>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function RoutingDebugGeometry({ plan, relationships }: { plan: any; relationships: Relationship[] }) {
+  return (
+    <g className="routing-debug-geometry" aria-hidden="true">
+      {[...plan.nodeRects.entries()].map(([nodeId, rect]: [string, any]) => (
+        <rect
+          key={`node-${nodeId}`}
+          className="routing-debug-node"
+          x={rect.x}
+          y={rect.y}
+          width={rect.width}
+          height={rect.height}
+        />
+      ))}
+      {relationships.map((relationship) => {
+        const route = plan.routes.get(relationship.id);
+        const labelBox = plan.labelBoxes.get(relationship.id);
+        if (!route) return null;
+        return (
+          <g key={`debug-${relationship.id}`} className={route.warnings?.length ? "routing-debug-route warned" : "routing-debug-route"}>
+            {labelBox ? (
+              <rect
+                className="routing-debug-label"
+                x={labelBox.x}
+                y={labelBox.y}
+                width={labelBox.width}
+                height={labelBox.height}
+              />
+            ) : null}
+            {route.points?.map((point: any, index: number) => (
+              <circle
+                key={`point-${relationship.id}-${index}`}
+                className="routing-debug-point"
+                cx={point.x}
+                cy={point.y}
+                r={index === 0 || index === route.points.length - 1 ? 4 : 2.5}
+              />
+            ))}
+          </g>
+        );
+      })}
+    </g>
   );
 }
 
@@ -1624,6 +1488,8 @@ function C4Diagram({
   selectedNodeId,
   selectedRelationship,
   transform,
+  routingStyle,
+  debugRouting,
   onSelectNode,
   onSelectRelationship
 }: {
@@ -1632,31 +1498,19 @@ function C4Diagram({
   selectedNodeId: Id | null;
   selectedRelationship: Extract<Selection, { kind: "relationship" }> | null;
   transform: DiagramTransform;
+  routingStyle: RoutingStyle;
+  debugRouting: boolean;
   onSelectNode: (id: Id) => void;
   onSelectRelationship: (relationship: Relationship) => void;
 }) {
   const nodeWidth = 156;
-  const nodeHeight = 62;
+  const nodeHeight = 92;
   const laneWidth = 210;
   const marginX = 56;
   const marginY = 76;
-  const rowGap = 86;
+  const rowGap = 116;
   const allNodeIds = view.lanes.flatMap((lane) => lane.nodeIds);
   const visibleNodeIds = new Set(allNodeIds);
-  const canvasWidth = Math.max(760, marginX * 2 + view.lanes.length * laneWidth + 40);
-  const canvasHeight = Math.max(440, marginY + Math.max(...view.lanes.map((lane) => lane.nodeIds.length), 1) * rowGap + 88);
-  const positionFor = (nodeId: Id) => {
-    const laneIndex = view.lanes.findIndex((lane) => lane.nodeIds.includes(nodeId));
-    const rowIndex = view.lanes[Math.max(laneIndex, 0)]?.nodeIds.indexOf(nodeId) ?? 0;
-    return {
-      x: marginX + Math.max(laneIndex, 0) * laneWidth,
-      y: marginY + Math.max(rowIndex, 0) * rowGap
-    };
-  };
-  const centerFor = (nodeId: Id) => {
-    const position = positionFor(nodeId);
-    return { x: position.x + nodeWidth / 2, y: position.y + nodeHeight / 2 };
-  };
   const relationships = allNodeIds.flatMap((nodeId) => {
     const node = nodesById.get(nodeId);
     return (node?.dependencies ?? [])
@@ -1674,26 +1528,62 @@ function C4Diagram({
         };
       });
   });
-
-  const pathFor = (relationship: Relationship, index: number) => {
-    const from = centerFor(relationship.from);
-    const to = centerFor(relationship.to);
-    const direction = to.x >= from.x ? 1 : -1;
-    const offset = (index % 3 - 1) * 18;
-    const startX = from.x + direction * (nodeWidth / 2);
-    const endX = to.x - direction * (nodeWidth / 2);
-    const startY = from.y + offset;
-    const endY = to.y + offset;
-    const midX = (startX + endX) / 2;
-    return {
-      d: `M ${startX} ${startY} C ${midX} ${startY}, ${midX} ${endY}, ${endX} ${endY}`,
-      labelX: midX,
-      labelY: Math.min(startY, endY) - 10
-    };
+  const planInput = {
+    view,
+    relationships,
+    visibleNodeIds,
+    nodeWidth,
+    nodeHeight,
+    laneWidth,
+    rowGap,
+    marginX,
+    marginY,
+    minCanvasWidth: 760,
+    minCanvasHeight: 440,
+    canvasExtraWidth: 40,
+    canvasExtraHeight: 88,
+    style: routingStyle
   };
+  const planningState = usePlannedDiagram(planInput);
+  const fallbackCanvas = plannedCanvasFallback(planInput);
+  const plan = planningState.plan;
+
+  if (planningState.error) {
+    return (
+      <section className="map-shell c4-shell">
+        <div
+          className={`c4-canvas ${view.type}`}
+          style={{ width: fallbackCanvas.width, height: fallbackCanvas.height, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
+        >
+          <RoutingPlanningError message={planningState.error} />
+        </div>
+      </section>
+    );
+  }
+
+  if (!plan) {
+    return (
+      <section className="map-shell c4-shell" aria-busy={planningState.planning ? "true" : "false"}>
+        <div
+          className={`c4-canvas ${view.type}`}
+          style={{ width: fallbackCanvas.width, height: fallbackCanvas.height, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
+        >
+          <RoutingLoadingOverlay active={planningState.planning} />
+        </div>
+      </section>
+    );
+  }
+
+  const canvasWidth = plan.canvasWidth;
+  const canvasHeight = plan.canvasHeight;
+  const positionFor = plan.positionFor;
+  const isC4RelationshipSelected = (relationship: Relationship) => (
+    selectedRelationship?.from === relationship.from && selectedRelationship.to === relationship.to
+  );
+  const orderedRelationships = [...relationships].sort((a, b) => Number(isC4RelationshipSelected(a)) - Number(isC4RelationshipSelected(b)));
 
   return (
-    <section className="map-shell c4-shell">
+    <section className="map-shell c4-shell" aria-busy={planningState.planning ? "true" : "false"}>
       <div
         className={`c4-canvas ${view.type}`}
         style={{ width: canvasWidth, height: canvasHeight, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
@@ -1707,9 +1597,10 @@ function C4Diagram({
               <path d="M 0 0 L 8 4 L 0 8 z" />
             </marker>
           </defs>
-          {relationships.map((relationship, index) => {
-            const route = pathFor(relationship, index);
-            const selected = selectedRelationship?.from === relationship.from && selectedRelationship.to === relationship.to;
+          {orderedRelationships.map((relationship) => {
+            const route = plan.routes.get(relationship.id);
+            if (!route) return null;
+            const selected = isC4RelationshipSelected(relationship);
             return (
               <g
                 key={relationship.id}
@@ -1731,6 +1622,7 @@ function C4Diagram({
               </g>
             );
           })}
+          {debugRouting ? <RoutingDebugGeometry plan={plan} relationships={relationships} /> : null}
         </svg>
         <div className="c4-boundary">
           <span>{view.type === "c4-context" ? "System boundary" : view.type === "c4-container" ? "Container boundary" : "Component scope"}</span>
@@ -1753,7 +1645,7 @@ function C4Diagram({
               key={node.id}
               type="button"
               className={`c4-node ${node.type} ${selectedNodeId === node.id ? "selected" : ""}`}
-              style={{ left: position.x, top: position.y, width: nodeWidth, minHeight: nodeHeight }}
+              style={{ left: position.x, top: position.y, width: nodeWidth, height: nodeHeight }}
               onClick={() => onSelectNode(node.id)}
               aria-label={`${node.name}, ${node.type}. ${node.summary}`}
             >
@@ -1763,10 +1655,12 @@ function C4Diagram({
             </button>
           );
         })}
+        <RoutingLoadingOverlay active={planningState.planning} />
       </div>
       <div className="edge-strip">
         <span className="edge-count">{relationships.length} labeled structural relationships</span>
       </div>
+      {debugRouting ? <RoutingDebugPanel plan={plan} relationships={relationships} /> : null}
     </section>
   );
 }

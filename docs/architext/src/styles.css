@@ -467,6 +467,27 @@ input:focus {
   gap: 6px;
 }
 
+.routing-style-control {
+  display: inline-flex;
+  overflow: hidden;
+  border: 1px solid var(--line);
+}
+
+.routing-style-control button {
+  border: 0;
+  border-right: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.routing-style-control button:last-child {
+  border-right: 0;
+}
+
+.routing-style-control button.active {
+  background: var(--blue);
+  color: #fff;
+}
+
 .diagram-controls button {
   min-height: 28px;
   padding: 4px 7px;
@@ -552,6 +573,58 @@ input:focus {
   position: relative;
   min-width: 100%;
   min-height: 100%;
+}
+
+.routing-loading-overlay,
+.routing-planning-error {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 20;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(360px, calc(100% - 32px));
+  padding: 10px 12px;
+  color: var(--ink);
+  background: rgba(17, 19, 22, 0.92);
+  border: 1px solid rgba(0, 219, 233, 0.42);
+  border-radius: 8px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.24);
+  transform: translate(-50%, -50%);
+  font-size: 13px;
+  font-weight: 800;
+  pointer-events: none;
+}
+
+.routing-spinner {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  border: 2px solid rgba(185, 202, 203, 0.32);
+  border-top-color: var(--blue);
+  border-radius: 50%;
+  animation: routing-spin 800ms linear infinite;
+}
+
+.routing-planning-error {
+  flex-direction: column;
+  align-items: flex-start;
+  min-width: min(360px, calc(100% - 32px));
+  border-color: rgba(255, 180, 171, 0.56);
+  color: var(--red);
+  pointer-events: auto;
+}
+
+.routing-planning-error span {
+  color: var(--ink);
+  font-weight: 500;
+}
+
+@keyframes routing-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .flow-lines {
@@ -919,6 +992,7 @@ input:focus {
   border-color: var(--line-strong);
   border-left-width: 3px;
   background: var(--panel-2);
+  overflow: hidden;
 }
 
 .c4-node.selected {
@@ -927,9 +1001,13 @@ input:focus {
 }
 
 .c4-node small {
+  display: -webkit-box;
+  overflow: hidden;
   color: var(--muted);
   font-size: 10px;
   line-height: 1.25;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
 }
 
 .c4-relationship {
@@ -957,12 +1035,13 @@ input:focus {
   left: 0;
   bottom: 0;
   display: flex;
+  flex-wrap: wrap;
   gap: 6px;
   align-items: center;
   padding: 6px 8px;
   border-top: 1px solid var(--line);
   background: rgba(12, 14, 17, 0.95);
-  overflow: auto;
+  overflow: visible;
 }
 
 .edge-chip,
@@ -985,6 +1064,106 @@ input:focus {
   color: #002022;
   background: var(--blue);
   border-color: var(--blue);
+}
+
+.routing-debug-panel {
+  position: sticky;
+  left: 0;
+  bottom: 0;
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  padding: 8px;
+  border-top: 1px solid var(--line-strong);
+  background: rgba(9, 11, 14, 0.97);
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+.routing-debug-geometry {
+  pointer-events: none;
+}
+
+.routing-debug-node {
+  fill: none;
+  stroke: rgba(250, 204, 21, 0.5);
+  stroke-dasharray: 3 3;
+  stroke-width: 1;
+}
+
+.routing-debug-label {
+  fill: rgba(34, 211, 238, 0.12);
+  stroke: rgba(34, 211, 238, 0.8);
+  stroke-width: 1;
+}
+
+.routing-debug-point {
+  fill: var(--orange);
+  stroke: #111827;
+  stroke-width: 1;
+}
+
+.routing-debug-route.warned .routing-debug-point {
+  fill: #f87171;
+}
+
+.routing-debug-summary,
+.routing-debug-warnings,
+.routing-debug-routes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.routing-debug-summary strong,
+.routing-debug-summary span,
+.routing-debug-warnings span,
+.routing-debug-routes details {
+  border: 1px solid var(--line);
+  padding: 3px 6px;
+  background: rgba(18, 24, 28, 0.8);
+}
+
+.routing-debug-summary strong {
+  color: var(--cyan);
+}
+
+.routing-debug-warnings span {
+  color: var(--orange);
+}
+
+.routing-debug-routes details {
+  min-width: 190px;
+}
+
+.routing-debug-routes summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.routing-debug-routes dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 3px 8px;
+  margin: 6px 0 0 0;
+}
+
+.routing-debug-routes dt,
+.routing-debug-routes dd {
+  margin: 0;
+}
+
+.routing-debug-routes dt {
+  color: var(--muted);
+}
+
+.routing-debug-routes dd {
+  color: var(--ink);
+  text-align: right;
 }
 
 .steps {

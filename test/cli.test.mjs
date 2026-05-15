@@ -84,7 +84,7 @@ test("status --json is machine-readable for explicit target paths", () => {
     const status = JSON.parse(run(["status", target, "--json"]));
 
     assert.equal(status.target, target);
-    assert.equal(status.cliVersion, "1.0.0");
+    assert.equal(status.cliVersion, "1.1.0");
     assert.equal(status.installed, true);
     assert.equal(status.copiedInstallDetected, false);
     assert.equal(status.rootScripts.architext.recommended, false);

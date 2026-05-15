@@ -36,8 +36,8 @@ Architecture documentation usually fails in one of two ways:
 Architext takes a different position: the machine-readable architecture model is
 the source of truth, and the human site is a projection of that model.
 
-The visual direction was inspired by [Dave J's x.com post about interactive
-architecture and flow visualization](https://x.com/davej/status/2053867258653339746?s=46&t=e_qP9a_xUWuOJ6eKxFpaAQ).
+The original project idea for Architext was inspired by [Dave J's x.com post
+about interactive architecture and flow visualization](https://x.com/davej/status/2053867258653339746?s=46&t=e_qP9a_xUWuOJ6eKxFpaAQ).
 Architext turns that kind of engineer-friendly architecture map into a local,
 JSON-backed workflow that can live inside any project repository without
 vendoring viewer code into that repository.
@@ -93,6 +93,7 @@ The viewer will use a dense engineering layout:
 - selected-node and selected-step details on the right
 - search and filters
 - pan, zoom, fit, and maximize controls
+- per-view orthogonal or curved route rendering
 - highlighted ordered paths through flows
 - scrollable detail sections for architecture, security, data, risks, and tests
 
@@ -484,13 +485,22 @@ tooling, global CLI lifecycle script, and the self-hosted Architext demo model.
 Core documents:
 
 - [Architecture Plan](docs/architecture/ARCHITECTURE_PLAN.md)
+- [Routing Correctness Plan](docs/architecture/ROUTING_PLAN.md)
+- [Routing Framework Comparison](docs/architecture/ROUTING_FRAMEWORK_COMPARISON.md)
 - [LLM Architext Contract](docs/architecture/LLM_ARCHITEXT.md)
 - [Agent Instructions Appendix](docs/architecture/AGENTS_APPENDIX.md)
 
 ## Attribution
 
-Architext was inspired by [Dave J's x.com post about interactive architecture
-and flow visualization](https://x.com/davej/status/2053867258653339746?s=46&t=e_qP9a_xUWuOJ6eKxFpaAQ).
+The original project idea for Architext was inspired by [Dave J's x.com post
+about interactive architecture and flow visualization](https://x.com/davej/status/2053867258653339746?s=46&t=e_qP9a_xUWuOJ6eKxFpaAQ).
+
+Routing work also studies established diagramming and layout systems as
+algorithm references. Architext's router is custom project code; it does not
+copy source code from those projects. See
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) and the
+[Routing Framework Comparison](docs/architecture/ROUTING_FRAMEWORK_COMPARISON.md)
+for license posture and attribution.
 
 ## License
 
