@@ -94,6 +94,23 @@
       "knownGaps": ["Static export can become stale after data edits."]
     },
     {
+      "id": "pdf-export",
+      "name": "PDF export",
+      "status": "planned",
+      "summary": "A maintainer exports selected Architext views as a portable PDF for review, archival, or offline sharing.",
+      "trigger": "Maintainer requests a PDF export from the CLI or viewer.",
+      "actors": ["maintainer"],
+      "steps": [
+        { "id": "select-export-scope", "from": "maintainer", "to": "architext-cli", "action": "selectPdfScope", "summary": "Maintainer chooses whether to export the active view, all views, or a report bundle.", "data": ["architecture-model"] },
+        { "id": "render-pdf", "from": "architext-cli", "to": "pdf-export", "action": "renderPdfExport", "summary": "CLI renders package-owned viewer output or a print-specific document into a PDF artifact.", "data": ["architecture-model", "package-assets"] }
+      ],
+      "guarantees": ["PDF output should not require copied viewer files in the target repository."],
+      "failureBehavior": ["Missing fonts, oversized diagrams, or route warnings should fail loudly or appear in export diagnostics."],
+      "observability": ["CLI output", "PDF file metadata"],
+      "verification": ["planned"],
+      "knownGaps": ["Export approach is undecided: headless browser print, print-specific renderer, or both."]
+    },
+    {
       "id": "release-packaging",
       "name": "Release packaging",
       "status": "implemented",

@@ -93,7 +93,7 @@ function assertC4RouteFitness(dataDir, fixtureName) {
     const visibleNodeIds = new Set(view.lanes.flatMap((lane) => lane.nodeIds));
     const relationships = structuralRelationships(view, nodeMap);
 
-    for (const style of ["orthogonal", "curved"]) {
+    for (const style of ["orthogonal", "spline"]) {
       const plan = planDiagram({
         view,
         relationships,

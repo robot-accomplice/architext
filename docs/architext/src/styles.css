@@ -11,6 +11,7 @@
   --line: #3b494b;
   --line-strong: #849495;
   --blue: #00dbe9;
+  --flow-selected: var(--yellow);
   --green: #2ff801;
   --yellow: #fed639;
   --red: #ffb4ab;
@@ -153,12 +154,26 @@ input:focus {
   gap: 10px;
 }
 
-.project-title-line p,
-.diagram-title-line p {
+.project-title-line p {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.diagram-title-line {
+  max-width: 100%;
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.diagram-title-line h2,
+.diagram-title-line p {
+  min-width: 0;
+}
+
+.diagram-title-line p {
+  flex: 1 1 320px;
 }
 
 .topbar p,
@@ -193,13 +208,13 @@ input:focus {
 
 .mode-tabs {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 2px;
   justify-content: flex-end;
 }
 
 .mode-tabs button {
-  min-width: 74px;
+  min-width: 0;
   padding: 7px 9px;
   border-color: transparent;
   border-bottom-color: var(--line);
@@ -208,6 +223,7 @@ input:focus {
   font-family: var(--font-mono);
   font-size: 12px;
   letter-spacing: 0.05em;
+  white-space: nowrap;
 }
 
 .mode-tabs button.active {
@@ -250,6 +266,10 @@ input:focus {
 .left-nav {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+}
+
+.app.left-collapsed .left-nav {
+  display: block;
 }
 
 .panel-rail {
@@ -440,20 +460,28 @@ input:focus {
 
 .diagram-area {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr) auto;
+  min-width: 0;
   overflow: hidden;
 }
 
 .diagram-header,
 .steps {
+  grid-column: 1;
+  min-width: 0;
   padding: 8px 10px;
 }
 
 .diagram-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) max-content max-content;
+  align-items: flex-start;
   gap: 10px;
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
@@ -471,29 +499,35 @@ input:focus {
 .diagram-controls {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: nowrap;
   align-items: center;
+  justify-content: flex-end;
   gap: 6px;
 }
 
 .routing-style-control {
   display: inline-flex;
-  overflow: hidden;
+  align-items: center;
+  gap: 6px;
+}
+
+.routing-style-control span {
+  min-width: auto;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.routing-style-control select {
+  min-height: 28px;
   border: 1px solid var(--line);
-}
-
-.routing-style-control button {
-  border: 0;
-  border-right: 1px solid var(--line);
   background: var(--panel);
-}
-
-.routing-style-control button:last-child {
-  border-right: 0;
-}
-
-.routing-style-control button.active {
-  background: var(--blue);
-  color: #fff;
+  color: var(--ink);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .diagram-controls button {
@@ -559,13 +593,17 @@ input:focus {
 }
 
 .diagram-viewport {
+  grid-column: 1;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
+  contain: layout paint;
+  isolation: isolate;
 }
 
 .map-shell {
   position: relative;
+  contain: layout paint;
   width: 100%;
   height: 100%;
   min-width: 0;
@@ -648,6 +686,14 @@ input:focus {
   pointer-events: all;
 }
 
+.flow-edge {
+  --route-step-stroke: var(--blue);
+}
+
+.flow-edge.selected {
+  --route-step-stroke: var(--flow-selected);
+}
+
 .flow-edge:focus,
 .relationship-edge:focus {
   outline: none;
@@ -692,27 +738,29 @@ input:focus {
   fill: var(--blue);
 }
 
-#arrowhead-selected path,
-#sequence-arrowhead-selected path {
+#arrowhead-selected path {
   fill: var(--blue);
+}
+
+#flow-arrowhead-selected path,
+#sequence-arrowhead-selected path {
+  fill: var(--flow-selected);
 }
 
 .flow-edge.selected .flow-line {
-  stroke: var(--blue);
+  stroke: var(--flow-selected);
+  stroke-width: 3;
+  opacity: 1;
 }
 
-.flow-edge.selected .flow-step-dot {
-  fill: var(--blue);
+.route-step-marker {
+  fill: rgba(12, 14, 17, 0.96);
+  stroke: var(--route-step-stroke, var(--blue));
+  stroke-width: 2.4;
 }
 
-.flow-step-dot {
-  fill: var(--blue);
-  stroke: #002022;
-  stroke-width: 1;
-}
-
-.flow-step-label {
-  fill: #002022;
+.route-step-label {
+  fill: var(--ink);
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 900;
@@ -720,11 +768,25 @@ input:focus {
   pointer-events: none;
 }
 
+.flow-edge.selected .flow-step-dot {
+  fill: rgba(254, 214, 57, 0.18);
+}
+
+.sequence-message.selected .sequence-step-dot {
+  fill: rgba(254, 214, 57, 0.18);
+}
+
 .sequence-shell {
   background:
     radial-gradient(circle, rgba(59, 73, 75, 0.5) 1px, transparent 1px),
     var(--bg);
   background-size: 32px 32px;
+}
+
+.scaled-canvas-extent {
+  position: relative;
+  min-width: 100%;
+  min-height: 100%;
 }
 
 .sequence-participant-rail {
@@ -797,11 +859,13 @@ input:focus {
 }
 
 .sequence-message {
+  --sequence-stroke: var(--blue);
+  --route-step-stroke: var(--sequence-stroke);
   cursor: pointer;
 }
 
 .sequence-line {
-  stroke: var(--blue);
+  stroke: var(--sequence-stroke);
   stroke-width: 1.8;
   stroke-linecap: round;
 }
@@ -810,12 +874,12 @@ input:focus {
   stroke-dasharray: 7 5;
 }
 
-.sequence-message.persistence .sequence-line {
-  stroke: var(--green);
+.sequence-message.persistence {
+  --sequence-stroke: var(--green);
 }
 
-.sequence-message.response .sequence-line {
-  stroke: var(--cyan);
+.sequence-message.response {
+  --sequence-stroke: var(--cyan);
 }
 
 .sequence-canvas marker path {
@@ -831,21 +895,7 @@ input:focus {
 }
 
 #sequence-arrowhead-selected path {
-  fill: var(--blue);
-}
-
-.sequence-step-dot {
-  fill: var(--blue);
-  stroke: #002022;
-  stroke-width: 1;
-}
-
-.sequence-step-label {
-  fill: #002022;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 900;
-  text-anchor: middle;
+  fill: var(--flow-selected);
 }
 
 .sequence-action {
@@ -859,12 +909,13 @@ input:focus {
   stroke-width: 3px;
 }
 
-.sequence-message.selected .sequence-line {
-  stroke: var(--blue);
+.sequence-message.selected {
+  --sequence-stroke: var(--flow-selected);
 }
 
-.sequence-message.selected .sequence-step-dot {
-  fill: var(--blue);
+.sequence-message.selected .sequence-line {
+  stroke-width: 3;
+  opacity: 1;
 }
 
 .lane-column {
@@ -1146,9 +1197,9 @@ input:focus {
 }
 
 .edge-chip.active {
-  color: #002022;
-  background: var(--blue);
-  border-color: var(--blue);
+  color: #221d00;
+  background: var(--flow-selected);
+  border-color: var(--flow-selected);
 }
 
 .routing-debug-panel {
@@ -1327,8 +1378,9 @@ input:focus {
 }
 
 .step-card.active {
-  border-color: var(--blue);
-  background: #102024;
+  border-color: var(--flow-selected);
+  background: rgba(254, 214, 57, 0.12);
+  box-shadow: inset 0 0 0 1px rgba(254, 214, 57, 0.18);
 }
 
 .step-number {
@@ -1347,6 +1399,11 @@ input:focus {
 .step-card .step-number {
   color: #001719;
   background: #7df4ff;
+}
+
+.step-card.active .step-number {
+  color: #221d00;
+  background: var(--flow-selected);
 }
 
 .details {
@@ -1692,6 +1749,15 @@ input:focus {
   .diagram-header {
     flex-direction: column;
     align-items: stretch;
+  }
+
+  .diagram-header {
+    grid-template-columns: 1fr;
+  }
+
+  .diagram-controls {
+    flex-wrap: wrap;
+    justify-content: flex-start;
   }
 
   .mode-tabs,

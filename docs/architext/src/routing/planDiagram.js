@@ -5,14 +5,21 @@ function estimatedLabelBox(route, relationship) {
 }
 
 function labelBoxAt(x, y, relationship) {
+  if (relationship.relationshipType === "flow" || relationship.stepId) {
+    return {
+      x: x - 14,
+      y: y - 12,
+      width: 28,
+      height: 24
+    };
+  }
   const text = relationship.label ?? relationship.id ?? "";
   const width = Math.max(24, Math.min(180, text.length * 6 + 12));
-  const height = relationship.relationshipType === "flow" || relationship.stepId ? 24 : 18;
   return {
     x: x - width / 2,
-    y: y - height / 2,
+    y: y - 9,
     width,
-    height
+    height: 18
   };
 }
 
@@ -37,13 +44,43 @@ function labelPlacementCandidates(route) {
     .map(([x, y]) => ({ x: route.labelX + x, y: route.labelY + y }));
 }
 
+function flowMarkerPlacementCandidates(route) {
+  const samples = route.samples?.length ? route.samples : [{ x: route.labelX, y: route.labelY }];
+  const candidates = [];
+  const add = (sample, searchOrderCost) => {
+    if (!sample) return;
+    candidates.push({ x: sample.x, y: sample.y, searchOrderCost });
+  };
+  const preferred = samples.reduce((nearest, sample) => (
+    Math.hypot(sample.x - route.labelX, sample.y - route.labelY) < Math.hypot(nearest.x - route.labelX, nearest.y - route.labelY)
+      ? sample
+      : nearest
+  ), samples[0]);
+  add(preferred, 0);
+  for (const fraction of [0.5, 0.42, 0.58, 0.34, 0.66, 0.26, 0.74]) {
+    add(samples[Math.max(0, Math.min(samples.length - 1, Math.round((samples.length - 1) * fraction)))], candidates.length * 4);
+  }
+  for (let index = 0; index < samples.length; index += Math.max(1, Math.floor(samples.length / 10))) {
+    add(samples[index], candidates.length * 4);
+  }
+  const seen = new Set();
+  return candidates.filter((candidate) => {
+    const key = `${Math.round(candidate.x)},${Math.round(candidate.y)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 function placeLabel(route, relationship, nodeRects, placedLabels, canvasWidth, canvasHeight) {
-  const candidates = labelPlacementCandidates(route);
+  const candidates = relationship.relationshipType === "flow" || relationship.stepId
+    ? flowMarkerPlacementCandidates(route)
+    : labelPlacementCandidates(route);
   const scored = candidates.map((candidate, index) => {
     const box = labelBoxAt(candidate.x, candidate.y, relationship);
     const qualityCosts = {
       labelMovementCost: Math.hypot(candidate.x - route.labelX, candidate.y - route.labelY),
-      labelSearchOrderCost: index * 4,
+      labelSearchOrderCost: candidate.searchOrderCost ?? index * 4,
       labelBoundaryCost: 0,
       labelNodeConflictCost: 0,
       labelConflictCost: 0
@@ -51,8 +88,7 @@ function placeLabel(route, relationship, nodeRects, placedLabels, canvasWidth, c
     if (box.x < 8 || box.y < 8 || box.x + box.width > canvasWidth - 8 || box.y + box.height > canvasHeight - 8) {
       qualityCosts.labelBoundaryCost += 100000;
     }
-    for (const [nodeId, rect] of nodeRects) {
-      if (nodeId === relationship.from || nodeId === relationship.to) continue;
+    for (const [, rect] of nodeRects) {
       if (rectsOverlap(box, rect, 4)) qualityCosts.labelNodeConflictCost += 80000;
     }
     for (const placed of placedLabels) {
@@ -115,6 +151,7 @@ export function planDiagram(input) {
     canvasWidth,
     canvasHeight,
     marginY,
+    scoreEdgeProximity: input.scoreEdgeProximity,
     style: input.style,
     stats: input.stats
   });
@@ -158,9 +195,7 @@ export function planDiagram(input) {
     }
   }
   for (const [relationshipId, labelBox] of labelBoxes) {
-    const relationship = relationshipsById.get(relationshipId);
     for (const [nodeId, rect] of nodeRects) {
-      if (nodeId === relationship?.from || nodeId === relationship?.to) continue;
       if (rectsOverlap(labelBox, rect, 4)) {
         warnings.push({
           code: "label-over-node",

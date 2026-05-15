@@ -84,6 +84,36 @@ function segmentLeavesRectPerpendicularly(anchor, next, rect) {
   return false;
 }
 
+function rectsOverlap(a, b, padding = 0) {
+  return (
+    a.x < b.x + b.width + padding &&
+    a.x + a.width > b.x - padding &&
+    a.y < b.y + b.height + padding &&
+    a.y + a.height > b.y - padding
+  );
+}
+
+function dot(a, b) {
+  return a.x * b.x + a.y * b.y;
+}
+
+function unit(from, to) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  const length = Math.hypot(dx, dy);
+  return { x: dx / length, y: dy / length };
+}
+
+function pointLineDistance(point, start, end) {
+  const numerator = Math.abs((end.y - start.y) * point.x - (end.x - start.x) * point.y + end.x * start.y - end.y * start.x);
+  const denominator = Math.hypot(end.y - start.y, end.x - start.x);
+  return denominator === 0 ? 0 : numerator / denominator;
+}
+
+function distanceToNearestSample(point, samples) {
+  return samples.reduce((nearest, sample) => Math.min(nearest, Math.hypot(point.x - sample.x, point.y - sample.y)), Infinity);
+}
+
 test("routeEdges produces deterministic finite routes", () => {
   const input = baseInput();
   const first = routeEdges(input).get("source-target");
@@ -95,13 +125,40 @@ test("routeEdges produces deterministic finite routes", () => {
 
 test("routeEdges renders a whole route set with the selected visual style", () => {
   const orthogonal = routeEdges(baseInput({ style: "orthogonal" })).get("source-target");
-  const curved = routeEdges(baseInput({ style: "curved" })).get("source-target");
+  const spline = routeEdges(baseInput({ style: "spline" })).get("source-target");
+  const straight = routeEdges(baseInput({ style: "straight" })).get("source-target");
 
   assertFiniteRoute(orthogonal, "orthogonal");
-  assertFiniteRoute(curved, "curved");
+  assertFiniteRoute(spline, "spline");
+  assertFiniteRoute(straight, "straight");
   assert.doesNotMatch(orthogonal.d, /\b[QC]\b/);
-  assert.match(curved.d, /\bQ\b/);
-  assert.notDeepEqual(curved.samples, orthogonal.samples);
+  assert.match(spline.d, /\bC\b/);
+  assert.doesNotMatch(spline.d, /\bL\b/);
+  assert.match(straight.d, /^M [^L]+ L /);
+  assert.doesNotMatch(straight.d, /\b[QC]\b/);
+  assert.notDeepEqual(spline.samples, orthogonal.samples);
+});
+
+test("routeEdges aligns spline arrowheads with the curve tangent", () => {
+  const route = routeEdges(baseInput({ style: "spline" })).get("source-target");
+  const start = route.points[0];
+  const end = route.points.at(-1);
+  const [, controlB] = route.controls;
+  const chord = unit(start, end);
+  const endTangent = unit(controlB, end);
+
+  assert.equal(route.style, "spline");
+  assert.ok(dot(chord, endTangent) > 0.72, `spline endpoint tangent should generally follow curve direction: ${JSON.stringify({ chord, endTangent })}`);
+});
+
+test("routeEdges gives spline routes visible curvature", () => {
+  const route = routeEdges(baseInput({ style: "spline" })).get("source-target");
+  const start = route.points[0];
+  const end = route.points.at(-1);
+  const maxDistance = Math.max(...route.samples.map((point) => pointLineDistance(point, start, end)));
+
+  assert.equal(route.style, "spline");
+  assert.ok(maxDistance >= 12, `spline route should not collapse to a straight line: ${maxDistance}`);
 });
 
 test("routeEdges keeps unobstructed connections straight", () => {
@@ -165,6 +222,80 @@ test("routeEdges moves labels away from short straight connectors", () => {
 
   assertFiniteRoute(route);
   assert.notEqual(route.labelX, route.points[0].x);
+});
+
+test("planDiagram keeps flow step markers clear of endpoint nodes", () => {
+  const view = {
+    id: "endpoint-marker-clearance",
+    name: "Endpoint Marker Clearance",
+    type: "system-map",
+    lanes: [
+      { id: "actors", name: "Actors", nodeIds: ["maintainer"] },
+      { id: "runtime", name: "Runtime", nodeIds: ["cli", "validator"] },
+      { id: "data", name: "Data", nodeIds: ["repo", "data-files"] }
+    ]
+  };
+  const relationships = [
+    {
+      id: "maintainer-cli",
+      from: "maintainer",
+      to: "cli",
+      label: "resolveTargetPath",
+      relationshipType: "flow",
+      stepId: "step-1",
+      displayIndex: 1
+    },
+    {
+      id: "cli-repo",
+      from: "cli",
+      to: "repo",
+      label: "writeLifecycleMetadata",
+      relationshipType: "flow",
+      stepId: "step-2",
+      displayIndex: 2
+    },
+    {
+      id: "cli-validator",
+      from: "cli",
+      to: "validator",
+      label: "validateStarterModel",
+      relationshipType: "flow",
+      stepId: "step-3",
+      displayIndex: 3
+    }
+  ];
+  const plan = planDiagram({
+    view,
+    relationships,
+    visibleNodeIds: new Set(view.lanes.flatMap((lane) => lane.nodeIds)),
+    nodeWidth: 176,
+    nodeHeight: 70,
+    laneWidth: 272,
+    rowGap: 132,
+    marginX: 236,
+    marginY: 146,
+    minCanvasWidth: 1120,
+    minCanvasHeight: 570,
+    canvasExtraWidth: 120,
+    canvasExtraHeight: 120,
+    style: "orthogonal"
+  });
+
+  for (const relationship of relationships) {
+    const labelBox = plan.labelBoxes.get(relationship.id);
+    const route = plan.routes.get(relationship.id);
+    assert.ok(labelBox, `missing label box for ${relationship.id}`);
+    assert.ok(route, `missing route for ${relationship.id}`);
+    assert.equal(labelBox.width, 28);
+    assert.ok(
+      distanceToNearestSample({ x: route.labelX, y: route.labelY }, route.samples) < 1,
+      `${relationship.id} marker must stay attached to the route`
+    );
+    for (const [nodeId, rect] of plan.nodeRects) {
+      assert.equal(rectsOverlap(labelBox, rect, 0), false, `${relationship.id} marker overlaps ${nodeId}`);
+    }
+  }
+  assert.equal(plan.warnings.filter((warning) => warning.code === "label-over-node").length, 0);
 });
 
 test("routeEdges avoids non-endpoint node bodies when a blocker is between endpoints", () => {

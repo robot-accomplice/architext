@@ -44,7 +44,7 @@ test("Roboticus non-C4 diagram routes avoid non-endpoint node bodies", { skip: h
         label: `${index + 1}. ${step.action}`
       })));
 
-    for (const style of ["orthogonal", "curved"]) {
+    for (const style of ["orthogonal", "spline"]) {
       for (const [kind, relationships] of [["structural", structuralRelationships], ["flow", flowRelationships]]) {
         const plan = planDiagram({
           view,

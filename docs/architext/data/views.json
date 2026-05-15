@@ -7,8 +7,8 @@
       "summary": "Architext global CLI and data-only repository architecture.",
       "lanes": [
         { "id": "users", "name": "Users", "nodeIds": ["maintainer", "llm-agent"] },
-        { "id": "cli", "name": "CLI", "nodeIds": ["architext-cli", "schema-validator"] },
-        { "id": "package", "name": "Package", "nodeIds": ["viewer-runtime", "package-schemas", "package-artifacts"] },
+        { "id": "cli", "name": "CLI", "nodeIds": ["architext-cli", "cli-adapters", "lifecycle-domain", "architecture-model-domain", "schema-validator"] },
+        { "id": "package", "name": "Package", "nodeIds": ["viewer-runtime", "viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine", "package-schemas", "package-artifacts"] },
         { "id": "target", "name": "Target Repository", "nodeIds": ["target-repository", "target-data-files", "static-dist"] }
       ]
     },
@@ -19,7 +19,7 @@
       "summary": "Project-owned data moving through package-owned validation and viewer runtime.",
       "lanes": [
         { "id": "actors", "name": "Actors", "nodeIds": ["maintainer", "llm-agent"] },
-        { "id": "package-owned", "name": "Package-Owned Runtime", "nodeIds": ["architext-cli", "viewer-runtime", "schema-validator", "package-schemas"] },
+        { "id": "package-owned", "name": "Package-Owned Runtime", "nodeIds": ["architext-cli", "cli-adapters", "lifecycle-domain", "architecture-model-domain", "viewer-runtime", "viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine", "schema-validator", "package-schemas"] },
         { "id": "repo-owned", "name": "Repo-Owned Data", "nodeIds": ["target-repository", "target-data-files", "static-dist"] }
       ]
     },
@@ -38,8 +38,8 @@
       "type": "deployment",
       "summary": "Runtime placement for global package code and target repository data.",
       "lanes": [
-        { "id": "terminal", "name": "Terminal", "nodeIds": ["maintainer", "llm-agent", "architext-cli", "schema-validator"] },
-        { "id": "package-files", "name": "Installed Package", "nodeIds": ["viewer-runtime", "package-schemas", "package-artifacts"] },
+        { "id": "terminal", "name": "Terminal", "nodeIds": ["architext-cli"] },
+        { "id": "package-files", "name": "Installed Package", "nodeIds": ["viewer-runtime", "schema-validator", "package-schemas", "package-artifacts"] },
         { "id": "repository", "name": "Repository", "nodeIds": ["target-repository", "target-data-files", "static-dist"] }
       ]
     },
@@ -71,9 +71,10 @@
       "type": "c4-component",
       "summary": "CLI-adjacent components that enforce the data-only repository contract.",
       "lanes": [
-        { "id": "entrypoint", "name": "Entrypoint", "nodeIds": ["architext-cli"] },
-        { "id": "runtime", "name": "Runtime Components", "nodeIds": ["schema-validator"] },
-        { "id": "contracts", "name": "Contracts", "nodeIds": ["package-schemas", "target-data-files"] }
+        { "id": "entrypoint", "name": "Entrypoint", "nodeIds": ["architext-cli", "cli-adapters"] },
+        { "id": "domain", "name": "Domain Policy", "nodeIds": ["lifecycle-domain", "architecture-model-domain"] },
+        { "id": "viewer", "name": "Viewer Components", "nodeIds": ["viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine"] },
+        { "id": "contracts", "name": "Contracts", "nodeIds": ["schema-validator", "package-schemas", "target-data-files"] }
       ]
     },
     {
@@ -83,7 +84,7 @@
       "summary": "Upgrade, migration, and package/runtime risks for Architext itself.",
       "lanes": [
         { "id": "operators", "name": "Operators", "nodeIds": ["maintainer", "llm-agent"] },
-        { "id": "managed-runtime", "name": "Managed Runtime", "nodeIds": ["architext-cli", "schema-validator", "viewer-runtime"] },
+        { "id": "managed-runtime", "name": "Managed Runtime", "nodeIds": ["architext-cli", "cli-adapters", "lifecycle-domain", "architecture-model-domain", "schema-validator", "viewer-runtime", "viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine"] },
         { "id": "owned-data", "name": "Owned Data", "nodeIds": ["target-repository", "target-data-files", "static-dist"] }
       ]
     }

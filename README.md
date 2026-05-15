@@ -93,7 +93,7 @@ The viewer will use a dense engineering layout:
 - selected-node and selected-step details on the right
 - search and filters
 - pan, zoom, fit, and maximize controls
-- per-view orthogonal or curved route rendering
+- per-view orthogonal, spline, or straight route rendering
 - highlighted ordered paths through flows
 - scrollable detail sections for architecture, security, data, risks, and tests
 

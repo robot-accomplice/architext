@@ -7,6 +7,11 @@ import { createInterface } from "node:readline/promises";
 import path from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
+import { createCommandHandlers, routeCommand } from "../src/adapters/cli/command-router.mjs";
+import { parseArgs, usage } from "../src/adapters/cli/command-line.mjs";
+import { printStatus } from "../src/adapters/cli/terminal-presenter.mjs";
+import { c4IssuesForView, repairC4Views } from "../src/domain/architecture-model/c4-quality.mjs";
+import { doctorRepairCategories, doctorRepairsForStatus } from "../src/domain/lifecycle/doctor-repairs.mjs";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const viewerDir = path.join(packageRoot, "docs", "architext");
@@ -42,126 +47,6 @@ const rootScripts = {
   "architext:prompt": "architext prompt .",
   "architext:validate": "architext validate ."
 };
-
-function usage() {
-  return `Usage:
-  architext <command> [path] [options]
-
-Path:
-  [path] is optional and defaults to the current directory.
-  Use it to manage another repository, for example:
-    architext serve /path/to/repo
-
-Commands:
-  sync | install | upgrade   Install data-only Architext or migrate old copied installs.
-  migrate                    Alias for sync, intended for old copied installs.
-  doctor                     Diagnose installation health and optionally repair drift.
-  status                     Print installation status. Use --json for machine output.
-  serve                      Run the package-owned local viewer for a target repo.
-  validate                   Validate target Architext JSON with package-owned schemas.
-  build                      Build a static viewer into docs/architext/dist by default.
-  prompt                     Print an LLM maintenance prompt.
-  clean                      Remove generated local artifacts.
-  explain [topic]            Explain schemas and data contracts.
-  version                    Print the Architext package version.
-
-Options:
-  --target <repo>            Target repository. Positional [path] is preferred.
-  --yes, -y                  Accept default prompts.
-  --json                     Machine-readable status/doctor output.
-  --dry-run                  Show intended changes without writing files.
-  --force                    Rerun lifecycle management even when current.
-  --overwrite-data           Replace docs/architext/data/*.json with neutral starter data.
-  --append-agents            Append or replace Architext sections in AGENTS.md and CLAUDE.md.
-  --no-agents                Do not manage AGENTS.md or CLAUDE.md.
-  --root-scripts             Add root package.json Architext convenience scripts.
-  --no-root-scripts          Do not manage root package.json scripts.
-  --update-gitignore         Add generated artifact ignores without prompting.
-  --no-gitignore             Do not manage .gitignore.
-  --mode <name>              Prompt mode: initial-buildout, architecture-change, repair-validation.
-  --out <path>               Build output path. Defaults to docs/architext/dist.
-  --skip-validate            Do not run validation after sync/migration.
-  --branch current|new|none  Branch handling for mutating sync.
-  --branch-name <name>       Branch name to use with --branch new.
-  --version, -v              Print the Architext package version.
-
-Examples:
-  architext sync
-  architext serve
-  architext --version
-  architext validate .
-  architext doctor .
-  architext status . --json
-  architext sync . --dry-run
-  architext sync . --yes --branch current
-  architext build . --out docs/architext/dist
-  architext prompt . --mode architecture-change
-
-Target repository ownership:
-  Target repos should commit docs/architext/data/*.json,
-  docs/architext/.architext.json, and optional AGENTS.md or CLAUDE.md guidance.
-  Do not copy or edit package-owned viewer, schema, tool, package, or Vite files
-  inside target repositories.`;
-}
-
-function parseArgs(argv) {
-  const knownCommands = new Set(["install", "upgrade", "sync", "migrate", "doctor", "status", "serve", "validate", "build", "prompt", "clean", "explain", "help", "version"]);
-  const first = argv[0];
-  const hasCommand = first && !first.startsWith("--") && knownCommands.has(first);
-  const command = hasCommand ? first : "sync";
-  const rest = hasCommand ? argv.slice(1) : argv;
-  const options = {
-    command,
-    target: "",
-    topic: "",
-    yes: false,
-    json: false,
-    dryRun: false,
-    force: false,
-    overwriteData: false,
-    appendAgents: false,
-    noAgents: false,
-    rootScripts: false,
-    noRootScripts: false,
-    updateGitignore: false,
-    noGitignore: false,
-    mode: "initial-buildout",
-    out: "",
-    skipValidate: false,
-    nodeModules: false,
-    branch: "",
-    branchName: ""
-  };
-
-  for (let index = 0; index < rest.length; index += 1) {
-    const arg = rest[index];
-    if (arg === "--target") options.target = rest[++index] ?? "";
-    else if (arg === "--yes" || arg === "-y") options.yes = true;
-    else if (arg === "--json") options.json = true;
-    else if (arg === "--dry-run") options.dryRun = true;
-    else if (arg === "--force") options.force = true;
-    else if (arg === "--overwrite-data") options.overwriteData = true;
-    else if (arg === "--append-agents") options.appendAgents = true;
-    else if (arg === "--no-agents") options.noAgents = true;
-    else if (arg === "--root-scripts") options.rootScripts = true;
-    else if (arg === "--no-root-scripts") options.noRootScripts = true;
-    else if (arg === "--update-gitignore") options.updateGitignore = true;
-    else if (arg === "--no-gitignore") options.noGitignore = true;
-    else if (arg === "--mode") options.mode = rest[++index] ?? "";
-    else if (arg === "--out") options.out = rest[++index] ?? "";
-    else if (arg === "--skip-validate") options.skipValidate = true;
-    else if (arg === "--node-modules") options.nodeModules = true;
-    else if (arg === "--branch") options.branch = rest[++index] ?? "";
-    else if (arg === "--branch-name") options.branchName = rest[++index] ?? "";
-    else if (arg === "--help" || arg === "-h") options.command = "help";
-    else if (arg === "--version" || arg === "-v") options.command = "version";
-    else if (options.command === "explain" && !options.topic) options.topic = arg;
-    else if (!options.target) options.target = arg;
-    else throw new Error(`Unknown argument: ${arg}`);
-  }
-
-  return options;
-}
 
 function run(command, args, cwd, extraEnv = {}) {
   console.log(`Running: ${command} ${args.join(" ")}`);
@@ -260,174 +145,6 @@ async function validateTarget(target) {
     return { ok: false, output: `Architext data is not installed at ${dataDir(target)}` };
   }
   return tryRun(process.execPath, [validatorPath, "--data-dir", dataDir(target), "--schema-dir", schemaDir], packageRoot);
-}
-
-const c4TypeExpectations = {
-  "c4-context": new Set(["actor", "client", "service", "deployment-unit", "external-service", "software-system", "trust-boundary"]),
-  "c4-container": new Set(["actor", "client", "service", "worker", "data-store", "queue", "deployment-unit", "external-service", "software-system"]),
-  "c4-component": new Set(["actor", "client", "service", "module", "worker", "data-store", "queue", "external-service"])
-};
-
-const c4DensityBudgets = {
-  "c4-context": { nodes: 14, relationships: 18 },
-  "c4-container": { nodes: 14, relationships: 24 },
-  "c4-component": { nodes: 14, relationships: 28 }
-};
-
-function viewNodeIds(view) {
-  return view.lanes.flatMap((lane) => lane.nodeIds);
-}
-
-function uniqueId(base, usedIds) {
-  let candidate = base;
-  let index = 2;
-  while (usedIds.has(candidate)) {
-    candidate = `${base}-${index}`;
-    index += 1;
-  }
-  usedIds.add(candidate);
-  return candidate;
-}
-
-function structuralRelationshipCount(view, nodeMap) {
-  const visible = new Set(viewNodeIds(view));
-  let count = 0;
-  for (const nodeId of visible) {
-    const node = nodeMap.get(nodeId);
-    for (const dependencyId of node?.dependencies ?? []) {
-      if (visible.has(dependencyId)) count += 1;
-    }
-  }
-  return count;
-}
-
-function duplicateViewNodes(view) {
-  const counts = new Map();
-  for (const nodeId of viewNodeIds(view)) counts.set(nodeId, (counts.get(nodeId) ?? 0) + 1);
-  return [...counts].filter(([, count]) => count > 1).map(([nodeId]) => nodeId);
-}
-
-function dedupeC4View(view) {
-  const seen = new Set();
-  let removed = 0;
-  const lanes = view.lanes.map((lane) => {
-    const nodeIds = [];
-    for (const nodeId of lane.nodeIds) {
-      if (seen.has(nodeId)) {
-        removed += 1;
-        continue;
-      }
-      seen.add(nodeId);
-      nodeIds.push(nodeId);
-    }
-    return { ...lane, nodeIds };
-  });
-  return { view: { ...view, lanes }, removed };
-}
-
-function connectedToFocus(nodeId, focusIds, nodeMap) {
-  const node = nodeMap.get(nodeId);
-  if ([...(node?.dependencies ?? [])].some((dependencyId) => focusIds.has(dependencyId))) return true;
-  for (const focusId of focusIds) {
-    if ((nodeMap.get(focusId)?.dependencies ?? []).includes(nodeId)) return true;
-  }
-  return false;
-}
-
-function viewWithIds(view, nodeIds) {
-  const selected = new Set(nodeIds);
-  return {
-    ...view,
-    lanes: view.lanes
-      .map((lane) => ({ ...lane, nodeIds: lane.nodeIds.filter((nodeId) => selected.has(nodeId)) }))
-      .filter((lane) => lane.nodeIds.length > 0)
-  };
-}
-
-function splitDenseC4View(view, nodeMap, usedViewIds) {
-  const budget = c4DensityBudgets[view.type];
-  if (!budget || view.lanes.length < 2) return [];
-
-  const splits = [];
-  for (const focusLane of view.lanes) {
-    if (!focusLane.nodeIds.length) continue;
-    const selected = new Set(focusLane.nodeIds.slice(0, budget.nodes));
-    const focusIds = new Set(selected);
-    const candidates = view.lanes
-      .filter((lane) => lane.id !== focusLane.id)
-      .flatMap((lane) => lane.nodeIds)
-      .filter((nodeId) => connectedToFocus(nodeId, focusIds, nodeMap));
-
-    for (const candidate of candidates) {
-      if (selected.has(candidate) || selected.size >= budget.nodes) continue;
-      const trial = viewWithIds(view, [...selected, candidate]);
-      if (structuralRelationshipCount(trial, nodeMap) <= budget.relationships) selected.add(candidate);
-    }
-
-    const id = uniqueId(`${view.id}-${focusLane.id}`, usedViewIds);
-    splits.push({
-      ...viewWithIds(view, selected),
-      id,
-      name: `${view.name}: ${focusLane.name}`,
-      summary: `${view.summary} Focused on ${focusLane.name}; generated by architext sync without changing architecture facts.`
-    });
-  }
-
-  return splits.length > 1 ? splits : [];
-}
-
-function c4IssuesForView(view, nodeMap) {
-  const issues = [];
-  const allowedTypes = c4TypeExpectations[view.type];
-  const budget = c4DensityBudgets[view.type];
-  const duplicates = duplicateViewNodes(view);
-  if (duplicates.length) issues.push(`${view.id}: duplicate node membership: ${duplicates.join(", ")}`);
-  if (!allowedTypes) issues.push(`${view.id}: unsupported C4 view type ${view.type}`);
-  for (const nodeId of viewNodeIds(view)) {
-    const node = nodeMap.get(nodeId);
-    if (!node) issues.push(`${view.id}: missing node ${nodeId}`);
-    else if (allowedTypes && !allowedTypes.has(node.type)) issues.push(`${view.id}: ${nodeId} has ${node.type}, which does not belong in ${view.type}`);
-  }
-  if (budget) {
-    const nodeCount = new Set(viewNodeIds(view)).size;
-    const relationshipCount = structuralRelationshipCount(view, nodeMap);
-    if (nodeCount > budget.nodes) issues.push(`${view.id}: ${nodeCount} nodes exceeds ${budget.nodes}; split the view`);
-    if (relationshipCount > budget.relationships) issues.push(`${view.id}: ${relationshipCount} relationships exceeds ${budget.relationships}; split the view`);
-  }
-  return issues;
-}
-
-function repairC4Views(views, nodeMap) {
-  const usedViewIds = new Set(views.map((view) => view.id));
-  const nextViews = [];
-  const changes = [];
-
-  for (const view of views) {
-    if (!view.type?.startsWith("c4-")) {
-      nextViews.push(view);
-      continue;
-    }
-
-    const beforeDuplicates = duplicateViewNodes(view);
-    const deduped = dedupeC4View(view);
-    if (deduped.removed) changes.push(`${view.id}: remove ${deduped.removed} duplicate node membership entr${deduped.removed === 1 ? "y" : "ies"} (${beforeDuplicates.join(", ")})`);
-
-    const budget = c4DensityBudgets[deduped.view.type];
-    const nodeCount = new Set(viewNodeIds(deduped.view)).size;
-    const relationshipCount = structuralRelationshipCount(deduped.view, nodeMap);
-    if (budget && (nodeCount > budget.nodes || relationshipCount > budget.relationships)) {
-      const splits = splitDenseC4View(deduped.view, nodeMap, usedViewIds);
-      if (splits.length) {
-        changes.push(`${view.id}: split dense ${deduped.view.type} view into ${splits.length} scoped views`);
-        nextViews.push(...splits);
-        continue;
-      }
-    }
-
-    nextViews.push(deduped.view);
-  }
-
-  return { views: nextViews, changes };
 }
 
 async function collectC4Status(target) {
@@ -745,46 +462,6 @@ async function collectStatus(target, version, { runValidation = false } = {}) {
   return status;
 }
 
-function printStatus(status, { verbose = false } = {}) {
-  console.log(`Target: ${status.target}`);
-  console.log(`Architext data: ${status.installed ? "installed" : "missing"}`);
-  console.log(`CLI: ${status.cliVersion}`);
-  console.log(`Copied install: ${status.copiedInstallDetected ? "detected" : "no"}`);
-  console.log(`Gitignore: ${status.gitignoreMissing.length ? `missing ${status.gitignoreMissing.join(", ")}` : "ok"}`);
-  console.log(`Generated artifacts tracked: ${status.trackedGenerated.length ? status.trackedGenerated.length : "none"}`);
-  if (status.c4) {
-    console.log(`C4 documents: ${status.c4.issues.length ? `${status.c4.issues.length} issue${status.c4.issues.length === 1 ? "" : "s"}` : "ok"}`);
-  }
-  console.log(`Doctor repairs: ${status.doctorRepairs.length ? status.doctorRepairs.length : "none"}`);
-  if (status.doctorRepairs.length && verbose) {
-    console.log("Doctor repairs available:");
-    status.doctorRepairs.forEach((repair) => console.log(`- ${repair.summary}`));
-  }
-  if (status.validation) {
-    console.log(`Validation: ${status.validation.ok ? "passed" : "failed"}`);
-    if (!status.validation.ok || verbose) console.log(status.validation.output);
-  }
-  if (verbose) {
-    if (status.c4?.issues.length) {
-      console.log("C4 issues:");
-      status.c4.issues.forEach((issue) => console.log(`- ${issue}`));
-    }
-    if (status.c4?.remainingIssues.length) {
-      console.log("C4 issues requiring manual architecture judgment:");
-      status.c4.remainingIssues.forEach((issue) => console.log(`- ${issue}`));
-    }
-    console.log("Instruction files:");
-    for (const [fileName, fileStatus] of Object.entries(status.instructionStatus)) {
-      const state = fileStatus.hasArchitextSection ? fileStatus.mentionsCopiedTemplate ? "outdated Architext section" : "current Architext section" : fileStatus.exists ? "missing Architext section" : "missing";
-      console.log(`- ${fileName}: ${state}`);
-    }
-    console.log("Root scripts:");
-    for (const [name, script] of Object.entries(status.rootScripts)) {
-      console.log(`- ${name}: ${script.present ? script.recommended ? "ok" : "custom" : "missing"}`);
-    }
-  }
-}
-
 async function promptYesNo(rl, question, defaultValue) {
   const suffix = defaultValue ? "Y/n" : "y/N";
   const answer = (await rl.question(`${question} [${suffix}] `)).trim().toLowerCase();
@@ -843,22 +520,9 @@ async function removeCopiedInstallFiles(target, dryRun) {
   return removed;
 }
 
-function doctorRepairsForStatus(status) {
-  const repairs = [];
-  for (const change of status.c4?.repairChanges ?? []) {
-    repairs.push({
-      id: `c4:${change}`,
-      category: "c4",
-      file: "docs/architext/data/views.json",
-      summary: change
-    });
-  }
-  return repairs;
-}
-
 async function applyDoctorRepairs(target, status, dryRun) {
   const applied = [];
-  const categories = [...new Set(status.doctorRepairs.map((repair) => repair.category))];
+  const categories = doctorRepairCategories(status.doctorRepairs);
   for (const category of categories) {
     const handler = doctorRepairHandlers[category];
     if (!handler) continue;
@@ -1157,6 +821,33 @@ async function serveTarget(target) {
   console.log("Open http://127.0.0.1:4317");
 }
 
+function commandHandlers(version) {
+  return createCommandHandlers({
+    sync: (target, options) => syncTarget(target, options, version),
+    serve: (target) => serveTarget(target),
+    validate: async (target) => {
+      const validation = await validateTarget(target);
+      console.log(validation.output);
+      if (!validation.ok) process.exit(1);
+    },
+    build: (target, options) => buildStatic(target, options),
+    prompt: (target, options) => printPrompt(target, options.mode),
+    clean: (target, options) => cleanGenerated(target, options),
+    explain: (_target, options) => explainTopic(options.topic),
+    status: async (target, options) => {
+      const status = await collectStatus(target, version);
+      if (options.json) console.log(JSON.stringify(status, null, 2));
+      else {
+        printStatus(status);
+        if (!status.installed || status.needsMigration) console.log("Next: architext sync");
+        else if (status.doctorRepairs.length) console.log("Next: architext doctor");
+        else console.log("Next: architext serve");
+      }
+    },
+    doctor: (target, options) => runDoctor(target, options, version)
+  });
+}
+
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   if (options.command === "help") {
@@ -1173,31 +864,7 @@ async function main() {
   const target = path.resolve(options.target || process.cwd());
   if (options.command !== "explain") await assertTarget(target);
 
-  if (["install", "upgrade", "sync", "migrate"].includes(options.command)) return syncTarget(target, options, version);
-  if (options.command === "serve") return serveTarget(target);
-  if (options.command === "validate") {
-    const validation = await validateTarget(target);
-    console.log(validation.output);
-    if (!validation.ok) process.exit(1);
-    return;
-  }
-  if (options.command === "build") return buildStatic(target, options);
-  if (options.command === "prompt") return printPrompt(target, options.mode);
-  if (options.command === "clean") return cleanGenerated(target, options);
-  if (options.command === "explain") return explainTopic(options.topic);
-  if (options.command === "status") {
-    const status = await collectStatus(target, version);
-    if (options.json) console.log(JSON.stringify(status, null, 2));
-    else {
-      printStatus(status);
-      if (!status.installed || status.needsMigration) console.log("Next: architext sync");
-      else if (status.doctorRepairs.length) console.log("Next: architext doctor");
-      else console.log("Next: architext serve");
-    }
-    return;
-  }
-  if (options.command === "doctor") return runDoctor(target, options, version);
-  throw new Error(`Unknown command: ${options.command}`);
+  return routeCommand({ options, target, handlers: commandHandlers(version) });
 }
 
 main().catch((error) => {

@@ -2,181 +2,35 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
 import { c4LayoutFor } from "./routing/c4Layout.js";
-import { planDiagram } from "./routing/planDiagram.js";
 import { relationshipLabel } from "./routing/relationshipLabels.js";
+import { plannedCanvasFallback, usePlannedDiagram } from "./routing/usePlannedDiagram.js";
+import { loadArchitectureModel } from "./adapters/fetchArchitectureData.js";
+import { isSelectedStep, orderSelectedLast, selectedFlowIdForSelection, selectedStepIdForSelection } from "./presentation/stepSelection.js";
+import { modeShowsOrderedFlow, modeUsesStructuralRelationships } from "./presentation/viewModes.js";
+import { defaultViewForMode, modeForView, modeLabels, viewBelongsToMode } from "./presentation/viewSelection.js";
+import { readBooleanPreference, readDebugRouting, readRoutingStylePreference, writeBooleanPreference, writeRoutingStylePreference } from "./adapters/browserPreferences.js";
+import type {
+  ArchNode,
+  DataClass,
+  Decision,
+  DiagramTransform,
+  Flow,
+  FlowStep,
+  Id,
+  Mode,
+  Model,
+  NodeType,
+  Relationship,
+  Risk,
+  RoutingStyle,
+  Selection,
+  View,
+  ViewportSize
+} from "./domain/architectureTypes.js";
 import "./styles.css";
 
-type Id = string;
-
-type Manifest = {
-  schemaVersion: string;
-  project: {
-    id: Id;
-    name: string;
-    summary: string;
-  };
-  generatedAt: string;
-  defaultViewId: Id;
-  files: {
-    nodes: string;
-    flows: string;
-    views: string;
-    dataClassification: string;
-    decisions: string;
-    risks: string;
-    glossary: string;
-  };
-  notes: string[];
-};
-
-type NodeType =
-  | "actor"
-  | "software-system"
-  | "client"
-  | "service"
-  | "module"
-  | "worker"
-  | "queue"
-  | "data-store"
-  | "external-service"
-  | "deployment-unit"
-  | "trust-boundary";
-
-type ArchNode = {
-  id: Id;
-  type: NodeType;
-  name: string;
-  summary: string;
-  responsibilities: string[];
-  owner: string;
-  sourcePaths: string[];
-  runtime: string;
-  interfaces: string[];
-  dependencies: Id[];
-  dataHandled: Id[];
-  security: string[];
-  observability: string[];
-  relatedFlows: Id[];
-  relatedDecisions: Id[];
-  knownRisks: Id[];
-  verification: string[];
-};
-
-type FlowStep = {
-  id: Id;
-  from: Id;
-  to: Id;
-  action: Id;
-  summary: string;
-  data: Id[];
-};
-
-type Flow = {
-  id: Id;
-  name: string;
-  status: "planned" | "partial" | "implemented";
-  summary: string;
-  trigger: string;
-  actors: Id[];
-  steps: FlowStep[];
-  guarantees: string[];
-  failureBehavior: string[];
-  observability: string[];
-  verification: string[];
-  knownGaps: string[];
-};
-
-type View = {
-  id: Id;
-  name: string;
-  type: string;
-  summary: string;
-  lanes: Array<{
-    id: Id;
-    name: string;
-    nodeIds: Id[];
-  }>;
-};
-
-type DataClass = {
-  id: Id;
-  name: string;
-  sensitivity: "low" | "medium" | "high" | "critical";
-  handling: string;
-};
-
-type Decision = {
-  id: Id;
-  status: string;
-  title: string;
-  context: string;
-  decision: string;
-  consequences: string[];
-  relatedNodes: Id[];
-  relatedFlows: Id[];
-};
-
-type Risk = {
-  id: Id;
-  title: string;
-  category: string;
-  severity: "low" | "medium" | "high" | "critical";
-  status: string;
-  summary: string;
-  mitigations: string[];
-  relatedNodes: Id[];
-  relatedFlows: Id[];
-};
-
-type Model = {
-  manifest: Manifest;
-  nodes: ArchNode[];
-  flows: Flow[];
-  views: View[];
-  dataClasses: DataClass[];
-  decisions: Decision[];
-  risks: Risk[];
-};
-
-type Selection =
-  | { kind: "node"; id: Id }
-  | { kind: "flow"; id: Id }
-  | { kind: "step"; flowId: Id; stepId: Id }
-  | { kind: "relationship"; from: Id; to: Id; label: string; relationshipType: "flow" | "structural"; stepId?: Id; flowId?: Id };
-
-type Mode = "flows" | "sequence" | "c4" | "deployment" | "data-risks";
-type RoutingStyle = "orthogonal" | "curved";
-type DiagramTransform = {
-  zoom: number;
-  focused: boolean;
-};
-
-type ViewportSize = {
-  width: number;
-  height: number;
-};
-
-type Relationship = {
-  id: Id;
-  from: Id;
-  to: Id;
-  label: string;
-  summary: string;
-  relationshipType: "flow" | "structural";
-  toType?: NodeType;
-  stepId?: Id;
-  flowId?: Id;
-};
-
-const ROUTING_LOADING_DELAY_MS = 1000;
-
-const modeLabels: Record<Mode, string> = {
-  flows: "Flows",
-  sequence: "Sequence",
-  c4: "C4",
-  deployment: "Deployment",
-  "data-risks": "Data/Risks"
-};
+const MIN_DESKTOP_FIT_ZOOM = 0.85;
+const MIN_COMPACT_FIT_ZOOM = 0.7;
 
 const statusLabels: Record<Flow["status"], string> = {
   implemented: "Implemented",
@@ -184,111 +38,11 @@ const statusLabels: Record<Flow["status"], string> = {
   planned: "Planned"
 };
 
-const modeViewTypes: Record<Mode, string[]> = {
-  flows: ["system-map", "flow-explorer", "dataflow"],
-  sequence: ["sequence"],
-  c4: ["c4-context", "c4-container", "c4-component"],
-  deployment: ["deployment"],
-  "data-risks": ["risk-overlay", "dataflow"]
+const routingStyleLabels: Record<RoutingStyle, string> = {
+  orthogonal: "Orthogonal",
+  spline: "Spline",
+  straight: "Straight"
 };
-
-function modeForView(view: View | undefined): Mode {
-  if (!view) return "flows";
-  if (view.type === "sequence") return "sequence";
-  if (view.type.startsWith("c4-")) return "c4";
-  if (view.type === "deployment") return "deployment";
-  if (view.type === "risk-overlay") return "data-risks";
-  return "flows";
-}
-
-function defaultViewForMode(mode: Mode, views: View[], fallback: View): View {
-  const types = modeViewTypes[mode];
-  return views.find((view) => types.includes(view.type)) ?? fallback;
-}
-
-function initialRoutingStyle(): RoutingStyle {
-  return localStorage.getItem("architext-routing-style") === "curved" ? "curved" : "orthogonal";
-}
-
-function initialDebugRouting(): boolean {
-  return new URLSearchParams(window.location.search).get("debugRouting") === "1";
-}
-
-async function fetchJson<T>(path: string): Promise<T> {
-  const response = await fetch(path);
-  if (!response.ok) {
-    throw new Error(`Failed to load ${path}: ${response.status} ${response.statusText}`);
-  }
-  return response.json() as Promise<T>;
-}
-
-function validateModel(model: Model): string[] {
-  const errors: string[] = [];
-  const nodeIds = new Set(model.nodes.map((node) => node.id));
-  const flowIds = new Set(model.flows.map((flow) => flow.id));
-  const dataIds = new Set(model.dataClasses.map((item) => item.id));
-  const decisionIds = new Set(model.decisions.map((item) => item.id));
-  const riskIds = new Set(model.risks.map((item) => item.id));
-  const viewIds = new Set(model.views.map((item) => item.id));
-
-  const requireKnown = (id: Id, known: Set<Id>, context: string) => {
-    if (!known.has(id)) errors.push(`${context} references unknown id "${id}"`);
-  };
-
-  requireKnown(model.manifest.defaultViewId, viewIds, "manifest.defaultViewId");
-
-  for (const node of model.nodes) {
-    for (const id of node.dependencies) requireKnown(id, nodeIds, `node ${node.id}.dependencies`);
-    for (const id of node.dataHandled) requireKnown(id, dataIds, `node ${node.id}.dataHandled`);
-    for (const id of node.relatedFlows) requireKnown(id, flowIds, `node ${node.id}.relatedFlows`);
-    for (const id of node.relatedDecisions) requireKnown(id, decisionIds, `node ${node.id}.relatedDecisions`);
-    for (const id of node.knownRisks) requireKnown(id, riskIds, `node ${node.id}.knownRisks`);
-  }
-
-  for (const flow of model.flows) {
-    for (const id of flow.actors) requireKnown(id, nodeIds, `flow ${flow.id}.actors`);
-    for (const step of flow.steps) {
-      requireKnown(step.from, nodeIds, `flow ${flow.id} step ${step.id}.from`);
-      requireKnown(step.to, nodeIds, `flow ${flow.id} step ${step.id}.to`);
-      for (const id of step.data) requireKnown(id, dataIds, `flow ${flow.id} step ${step.id}.data`);
-    }
-  }
-
-  for (const view of model.views) {
-    for (const lane of view.lanes) {
-      for (const id of lane.nodeIds) requireKnown(id, nodeIds, `view ${view.id} lane ${lane.id}`);
-    }
-  }
-
-  return errors;
-}
-
-async function loadModel(): Promise<Model> {
-  const manifest = await fetchJson<Manifest>("/data/manifest.json");
-  const base = "/data/";
-  const [nodes, flows, views, dataClassification, decisions, risks] = await Promise.all([
-    fetchJson<{ nodes: ArchNode[] }>(base + manifest.files.nodes),
-    fetchJson<{ flows: Flow[] }>(base + manifest.files.flows),
-    fetchJson<{ views: View[] }>(base + manifest.files.views),
-    fetchJson<{ classes: DataClass[] }>(base + manifest.files.dataClassification),
-    fetchJson<{ decisions: Decision[] }>(base + manifest.files.decisions),
-    fetchJson<{ risks: Risk[] }>(base + manifest.files.risks)
-  ]);
-  const model = {
-    manifest,
-    nodes: nodes.nodes,
-    flows: flows.flows,
-    views: views.views,
-    dataClasses: dataClassification.classes,
-    decisions: decisions.decisions,
-    risks: risks.risks
-  };
-  const errors = validateModel(model);
-  if (errors.length > 0) {
-    throw new Error(`Architext data failed viewer validation:\n${errors.join("\n")}`);
-  }
-  return model;
-}
 
 function byId<T extends { id: Id }>(items: T[]): Map<Id, T> {
   return new Map(items.map((item) => [item.id, item]));
@@ -296,6 +50,42 @@ function byId<T extends { id: Id }>(items: T[]): Map<Id, T> {
 
 function Badge({ children, tone }: { children: React.ReactNode; tone?: string }) {
   return <span className={`badge ${tone ?? ""}`}>{children}</span>;
+}
+
+function scaledCanvasStyle(width: number, height: number, transform: DiagramTransform) {
+  return {
+    width: width * transform.zoom,
+    height: height * transform.zoom
+  };
+}
+
+function canvasTransformStyle(width: number, height: number, transform: DiagramTransform) {
+  return {
+    width,
+    height,
+    minWidth: width,
+    minHeight: height,
+    transform: `scale(${transform.zoom})`,
+    transformOrigin: "0 0"
+  };
+}
+
+function ScaledCanvasExtent({
+  width,
+  height,
+  transform,
+  children
+}: {
+  width: number;
+  height: number;
+  transform: DiagramTransform;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="scaled-canvas-extent" style={scaledCanvasStyle(width, height, transform)}>
+      {children}
+    </div>
+  );
 }
 
 function useElementSize<T extends HTMLElement>() {
@@ -313,151 +103,6 @@ function useElementSize<T extends HTMLElement>() {
   }, []);
 
   return [ref, size] as const;
-}
-
-function planInputKey(input: any): string {
-  return JSON.stringify({
-    view: {
-      id: input.view.id,
-      type: input.view.type,
-      lanes: input.view.lanes.map((lane: any) => [lane.id, lane.nodeIds])
-    },
-    relationships: input.relationships.map((relationship: Relationship) => ({
-      id: relationship.id,
-      from: relationship.from,
-      to: relationship.to,
-      label: relationship.label,
-      relationshipType: relationship.relationshipType,
-      stepId: relationship.stepId,
-      flowId: relationship.flowId
-    })),
-    visibleNodeIds: Array.from(input.visibleNodeIds).sort(),
-    nodeWidth: input.nodeWidth,
-    nodeHeight: input.nodeHeight,
-    laneWidth: input.laneWidth,
-    rowGap: input.rowGap,
-    marginX: input.marginX,
-    marginY: input.marginY,
-    minCanvasWidth: input.minCanvasWidth,
-    minCanvasHeight: input.minCanvasHeight,
-    canvasExtraWidth: input.canvasExtraWidth,
-    canvasExtraHeight: input.canvasExtraHeight,
-    style: input.style
-  });
-}
-
-function attachPlanHelpers(plan: any) {
-  return {
-    ...plan,
-    positionFor: (nodeId: Id) => {
-      const rect = plan.nodeRects.get(nodeId);
-      return {
-        x: rect?.x ?? 0,
-        y: rect?.y ?? 0
-      };
-    }
-  };
-}
-
-function usePlannedDiagram(input: any) {
-  const key = planInputKey(input);
-  const [state, setState] = useState<{
-    key: string;
-    plan: any | null;
-    planning: boolean;
-    error: string | null;
-  }>({
-    key: "",
-    plan: null,
-    planning: false,
-    error: null
-  });
-
-  useEffect(() => {
-    let cancelled = false;
-    let worker: Worker | null = null;
-
-    setState((previous) => ({
-      key,
-      plan: previous.key === key ? previous.plan : null,
-      planning: false,
-      error: null
-    }));
-
-    const slowTimer = window.setTimeout(() => {
-      if (cancelled) return;
-      setState((previous) => previous.key === key ? { ...previous, planning: true } : previous);
-    }, ROUTING_LOADING_DELAY_MS);
-
-    const finishWithPlan = (plan: any) => {
-      if (cancelled) return;
-      window.clearTimeout(slowTimer);
-      setState({
-        key,
-        plan: attachPlanHelpers(plan),
-        planning: false,
-        error: null
-      });
-    };
-
-    const finishWithError = (message: string) => {
-      if (cancelled) return;
-      window.clearTimeout(slowTimer);
-      setState({
-        key,
-        plan: null,
-        planning: false,
-        error: message
-      });
-    };
-
-    if (typeof Worker === "undefined") {
-      const timer = window.setTimeout(() => {
-        try {
-          const plan = planDiagram(input);
-          const { positionFor, ...cloneablePlan } = plan;
-          finishWithPlan(cloneablePlan);
-        } catch (error) {
-          finishWithError(error instanceof Error ? error.message : String(error));
-        }
-      }, 0);
-      return () => {
-        cancelled = true;
-        window.clearTimeout(timer);
-        window.clearTimeout(slowTimer);
-      };
-    }
-
-    worker = new Worker(new URL("./routing/planningWorker.js", import.meta.url), { type: "module" });
-    worker.onmessage = (event) => {
-      if (event.data.key !== key) return;
-      if (event.data.error) {
-        finishWithError(event.data.error);
-        return;
-      }
-      finishWithPlan(event.data.plan);
-    };
-    worker.onerror = (event) => {
-      finishWithError(event.message || "Route planning failed.");
-    };
-    worker.postMessage({ key, input });
-
-    return () => {
-      cancelled = true;
-      window.clearTimeout(slowTimer);
-      worker?.terminate();
-    };
-  }, [key]);
-
-  return state;
-}
-
-function plannedCanvasFallback(input: any) {
-  const maxRows = Math.max(...input.view.lanes.map((lane: any) => lane.nodeIds.filter((nodeId: Id) => input.visibleNodeIds.has(nodeId)).length), 1);
-  return {
-    width: Math.max(input.minCanvasWidth, input.marginX * 2 + input.view.lanes.length * input.laneWidth + input.canvasExtraWidth),
-    height: Math.max(input.minCanvasHeight, input.marginY + maxRows * input.rowGap + input.canvasExtraHeight)
-  };
 }
 
 function RoutingLoadingOverlay({ active }: { active: boolean }) {
@@ -513,23 +158,23 @@ function FieldList({ title, items }: { title: string; items: string[] }) {
 function App() {
   const [model, setModel] = useState<Model | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [navCollapsed, setNavCollapsed] = useState(() => localStorage.getItem("architext-left-collapsed") === "true");
-  const [rightCollapsed, setRightCollapsed] = useState(() => localStorage.getItem("architext-right-collapsed") === "true");
+  const [navCollapsed, setNavCollapsed] = useState(() => readBooleanPreference(localStorage, "architext-left-collapsed"));
+  const [rightCollapsed, setRightCollapsed] = useState(() => readBooleanPreference(localStorage, "architext-right-collapsed"));
   const [query, setQuery] = useState("");
   const [activeMode, setActiveMode] = useState<Mode>("flows");
   const [activeViewId, setActiveViewId] = useState<Id>("");
   const [activeFlowId, setActiveFlowId] = useState<Id>("");
   const [selection, setSelection] = useState<Selection | null>(null);
   const [diagramTransform, setDiagramTransform] = useState<DiagramTransform>({ zoom: 1, focused: false });
-  const [routingStyle, setRoutingStyle] = useState<RoutingStyle>(initialRoutingStyle);
-  const [debugRouting] = useState(initialDebugRouting);
+  const [routingStyle, setRoutingStyle] = useState<RoutingStyle>(() => readRoutingStylePreference(localStorage) as RoutingStyle);
+  const [debugRouting] = useState(() => readDebugRouting(window.location.search));
   const [riskFilter, setRiskFilter] = useState("all");
   const [stepsCollapsed, setStepsCollapsed] = useState(false);
   const [diagramViewportRef, diagramViewportSize] = useElementSize<HTMLElement>();
 
   useEffect(() => {
-    loadModel()
-      .then((loaded) => {
+    loadArchitectureModel()
+      .then((loaded: Model) => {
         setModel(loaded);
         setActiveViewId(loaded.manifest.defaultViewId);
         setActiveMode(modeForView(loaded.views.find((view) => view.id === loaded.manifest.defaultViewId)));
@@ -542,15 +187,15 @@ function App() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem("architext-left-collapsed", String(navCollapsed));
+    writeBooleanPreference(localStorage, "architext-left-collapsed", navCollapsed);
   }, [navCollapsed]);
 
   useEffect(() => {
-    localStorage.setItem("architext-right-collapsed", String(rightCollapsed));
+    writeBooleanPreference(localStorage, "architext-right-collapsed", rightCollapsed);
   }, [rightCollapsed]);
 
   useEffect(() => {
-    localStorage.setItem("architext-routing-style", routingStyle);
+    writeRoutingStylePreference(localStorage, routingStyle);
   }, [routingStyle]);
 
   useEffect(() => {
@@ -600,24 +245,20 @@ function App() {
   const activeFlow = flowsById.get(activeFlowId) ?? model.flows[0];
   const fallbackView = model.views[0];
   const selectedView = viewsById.get(activeViewId);
-  const activeView = selectedView && modeViewTypes[activeMode].includes(selectedView.type)
+  const activeView = viewBelongsToMode(selectedView, activeMode)
     ? selectedView
     : defaultViewForMode(activeMode, model.views, fallbackView);
   const isC4View = activeMode === "c4";
   const isSequenceView = activeMode === "sequence";
-  const showStepSummary = activeMode === "flows" || activeMode === "sequence" || activeMode === "deployment";
+  const showOrderedFlow = modeShowsOrderedFlow(activeMode);
+  const showStructuralConnections = modeUsesStructuralRelationships(activeMode);
+  const showStepSummary = showOrderedFlow;
   const flowNodeIds = new Set(activeFlow.steps.flatMap((step) => [step.from, step.to]));
   const selectedNodeId = selection?.kind === "node" ? selection.id : null;
-  const selectedStepId = selection?.kind === "step"
-    ? selection.stepId
-    : selection?.kind === "relationship"
-      ? selection.stepId ?? null
-      : null;
-  const selectedFlowForStep = selection?.kind === "step"
-    ? flowsById.get(selection.flowId)
-    : selection?.kind === "relationship" && selection.flowId
-      ? flowsById.get(selection.flowId)
-      : null;
+  const selectedStepId = selectedStepIdForSelection(selection);
+  const selectedFlowId = selectedFlowIdForSelection(selection);
+  const selectedActiveStepId = activeFlow.steps.some((step) => isSelectedStep(selection, activeFlow.id, step.id)) ? selectedStepId : null;
+  const selectedFlowForStep = selectedFlowId ? flowsById.get(selectedFlowId) : null;
   const selectedStep = selectedStepId
     ? selectedFlowForStep?.steps.find((step) => step.id === selectedStepId) ?? null
     : null;
@@ -654,21 +295,18 @@ function App() {
     const availableWidth = Math.max(diagramViewportSize.width - 24, 1);
     const availableHeight = Math.max(diagramViewportSize.height - 24, 1);
     const nextZoom = Math.min(availableWidth / estimate.width, availableHeight / estimate.height);
-    return Math.min(1, Math.max(0.6, Number(nextZoom.toFixed(2))));
+    const readableMinimum = window.innerWidth < 900 ? MIN_COMPACT_FIT_ZOOM : MIN_DESKTOP_FIT_ZOOM;
+    return Math.min(1, Math.max(readableMinimum, Number(nextZoom.toFixed(2))));
   };
 
   const switchMode = (mode: Mode) => {
     const nextView = defaultViewForMode(mode, model.views, fallbackView);
     setActiveMode(mode);
     setActiveViewId(nextView.id);
+    setSelection(null);
     if (diagramViewportSize.width && diagramViewportSize.height) {
       const nextZoom = fitZoomFor(mode, nextView, activeFlow);
       setDiagramTransform((value) => ({ ...value, zoom: Math.min(value.zoom, nextZoom) }));
-    }
-    if (mode === "c4") {
-      setSelection({ kind: "node", id: nextView.lanes.flatMap((lane) => lane.nodeIds)[0] ?? model.nodes[0]?.id ?? "" });
-    } else if (mode === "data-risks") {
-      setSelection({ kind: "flow", id: activeFlow.id });
     }
   };
 
@@ -732,7 +370,7 @@ function App() {
           {navCollapsed ? "›" : "‹"}
         </button>
         {navCollapsed ? (
-          <div className="panel-rail">{modeLabels[activeMode]}</div>
+          <div className="panel-rail">Browse</div>
         ) : (
           <LeftPanel
             mode={activeMode}
@@ -761,8 +399,8 @@ function App() {
       <main className="diagram-area">
         <section className="diagram-header">
           <div className="diagram-title-line">
-            <h2>{activeView.name}</h2>
-            <p>{activeView.summary}</p>
+            <h2 title={activeView.name}>{activeView.name}</h2>
+            <p title={activeView.summary}>{activeView.summary}</p>
           </div>
           <DiagramControls
             transform={diagramTransform}
@@ -793,7 +431,7 @@ function App() {
               activeFlow={activeFlow}
               nodesById={nodesById}
               dataById={dataById}
-              selectedStepId={selectedStepId}
+              selectedStepId={selectedActiveStepId}
               transform={diagramTransform}
               onSelectStep={(stepId) => setSelection({ kind: "step", flowId: activeFlow.id, stepId })}
               onSelectRelationship={selectRelationship}
@@ -814,9 +452,9 @@ function App() {
             <SystemMap
               view={activeView}
               nodesById={nodesById}
-              activeFlow={isC4View ? null : activeFlow}
-              showStructuralConnections={isC4View}
-              selectedStepId={selectedStepId}
+              activeFlow={showOrderedFlow ? activeFlow : null}
+              showStructuralConnections={showStructuralConnections}
+              selectedStepId={selectedActiveStepId}
               selectedRelationship={selection?.kind === "relationship" ? selection : null}
               selectedNodeId={selectedNodeId}
               transform={diagramTransform}
@@ -849,7 +487,7 @@ function App() {
                     <button
                       key={step.id}
                       type="button"
-                      className={`step-card ${selectedStepId === step.id ? "active" : ""}`}
+                      className={`step-card ${isSelectedStep(selection, activeFlow.id, step.id) ? "active" : ""}`}
                       onClick={() => setSelection({ kind: "step", flowId: activeFlow.id, stepId: step.id })}
                     >
                       <span className="step-number">{index + 1}</span>
@@ -1092,19 +730,18 @@ function DiagramControls({
 }) {
   return (
     <div className="diagram-controls" aria-label="Diagram controls">
-      <div className="routing-style-control" role="group" aria-label="Route style">
-        {(["orthogonal", "curved"] as RoutingStyle[]).map((style) => (
-          <button
-            key={style}
-            type="button"
-            className={routingStyle === style ? "active" : ""}
-            aria-pressed={routingStyle === style}
-            onClick={() => onRoutingStyleChange(style)}
-          >
-            {style === "orthogonal" ? "Orthogonal" : "Curved"}
-          </button>
-        ))}
-      </div>
+      <label className="routing-style-control">
+        <span>Line Style</span>
+        <select
+          value={routingStyle}
+          aria-label="Line Style"
+          onChange={(event) => onRoutingStyleChange(event.target.value as RoutingStyle)}
+        >
+          {(Object.keys(routingStyleLabels) as RoutingStyle[]).map((style) => (
+            <option key={style} value={style}>{routingStyleLabels[style]}</option>
+          ))}
+        </select>
+      </label>
       <button type="button" onClick={onZoomOut} aria-label="Zoom out">-</button>
       <span>{Math.round(transform.zoom * 100)}%</span>
       <button type="button" onClick={onZoomIn} aria-label="Zoom in">+</button>
@@ -1210,12 +847,14 @@ function SystemMap({
   if (planningState.error) {
     return (
       <section className="map-shell">
-        <div
-          className="diagram-canvas"
-          style={{ width: fallbackCanvas.width, height: fallbackCanvas.height, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
-        >
-          <RoutingPlanningError message={planningState.error} />
-        </div>
+        <ScaledCanvasExtent width={fallbackCanvas.width} height={fallbackCanvas.height} transform={transform}>
+          <div
+            className="diagram-canvas"
+            style={canvasTransformStyle(fallbackCanvas.width, fallbackCanvas.height, transform)}
+          >
+            <RoutingPlanningError message={planningState.error} />
+          </div>
+        </ScaledCanvasExtent>
       </section>
     );
   }
@@ -1223,12 +862,14 @@ function SystemMap({
   if (!plan) {
     return (
       <section className="map-shell" aria-busy={planningState.planning ? "true" : "false"}>
-        <div
-          className="diagram-canvas"
-          style={{ width: fallbackCanvas.width, height: fallbackCanvas.height, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
-        >
-          <RoutingLoadingOverlay active={planningState.planning} />
-        </div>
+        <ScaledCanvasExtent width={fallbackCanvas.width} height={fallbackCanvas.height} transform={transform}>
+          <div
+            className="diagram-canvas"
+            style={canvasTransformStyle(fallbackCanvas.width, fallbackCanvas.height, transform)}
+          >
+            <RoutingLoadingOverlay active={planningState.planning} />
+          </div>
+        </ScaledCanvasExtent>
       </section>
     );
   }
@@ -1253,16 +894,20 @@ function SystemMap({
 
   return (
     <section className="map-shell" aria-busy={planningState.planning ? "true" : "false"}>
-      <div
-        className="diagram-canvas"
-        style={{ width: canvasWidth, height: canvasHeight, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
-      >
-        <svg className="flow-lines" width={canvasWidth} height={canvasHeight} aria-hidden="false" role="group" aria-label={`${view.name} relationships`}>
+      <ScaledCanvasExtent width={canvasWidth} height={canvasHeight} transform={transform}>
+        <div
+          className="diagram-canvas"
+          style={canvasTransformStyle(canvasWidth, canvasHeight, transform)}
+        >
+          <svg className="flow-lines" width={canvasWidth} height={canvasHeight} aria-hidden="false" role="group" aria-label={`${view.name} relationships`}>
           <defs>
             <marker id="arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
               <path d="M 0 0 L 8 4 L 0 8 z" />
             </marker>
             <marker id="arrowhead-selected" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M 0 0 L 8 4 L 0 8 z" />
+            </marker>
+            <marker id="flow-arrowhead-selected" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
               <path d="M 0 0 L 8 4 L 0 8 z" />
             </marker>
           </defs>
@@ -1313,65 +958,51 @@ function SystemMap({
                 <path
                   className="flow-line"
                   d={route.d}
-                  markerEnd={isSelected ? "url(#arrowhead-selected)" : "url(#arrowhead)"}
+                  markerEnd={isSelected ? "url(#flow-arrowhead-selected)" : "url(#arrowhead)"}
                 />
-                <rect className="flow-step-dot" x={route.labelX - 10} y={route.labelY - 10} width="20" height="20" />
-                <text className="flow-step-label" x={route.labelX} y={route.labelY + 4}>{relationship.displayIndex}</text>
+                <rect className="route-step-marker flow-step-dot" x={route.labelX - 12} y={route.labelY - 10} width="24" height="20" rx="10" />
+                <text className="route-step-label flow-step-label" x={route.labelX} y={route.labelY + 4}>{relationship.displayIndex}</text>
               </g>
             );
           })}
           {debugRouting ? <RoutingDebugGeometry plan={plan} relationships={showStructuralConnections ? structuralRelationships : flowRelationships} /> : null}
-        </svg>
-        {view.lanes.map((lane, laneIndex) => (
-          <div
-            className="lane-column"
-            key={lane.id}
-            style={{ left: marginX + laneIndex * laneWidth, width: nodeWidth, height: canvasHeight - 20 }}
-          >
-            <h3>{lane.name}</h3>
-          </div>
-        ))}
-        {view.lanes.flatMap((lane) => lane.nodeIds).map((nodeId) => {
-          const node = nodesById.get(nodeId);
-          if (!node) return null;
-          const isActive = flowNodeIds.has(node.id);
-          const isSelected = selectedNodeId === node.id;
-          const position = nodePosition(node.id);
-          return (
-            <button
-              key={node.id}
-              type="button"
-              className={`node-card ${node.type} ${isActive ? "in-flow" : ""} ${isSelected ? "selected" : ""}`}
-              style={{ left: position.x, top: position.y, width: nodeWidth, height: nodeHeight }}
-              onClick={() => onSelectNode(node.id)}
+          </svg>
+          {view.lanes.map((lane, laneIndex) => (
+            <div
+              className="lane-column"
+              key={lane.id}
+              style={{ left: marginX + laneIndex * laneWidth, width: nodeWidth, height: canvasHeight - 20 }}
             >
-              <strong>{node.name}</strong>
-              <span>{node.type}</span>
-            </button>
-          );
-        })}
-        <RoutingLoadingOverlay active={planningState.planning} />
-      </div>
-      {activeFlow ? (
-        <div className="edge-strip">
-          {flowRelationships.map((relationship, index) => (
-            <button
-              type="button"
-              className={`edge-chip ${selectedStepId === relationship.stepId ? "active" : ""}`}
-              key={relationship.id}
-              title={relationship.summary}
-              onClick={() => onSelectRelationship(relationship)}
-            >
-              {index + 1}. {relationship.from} {"→"} {relationship.to}
-            </button>
+              <h3>{lane.name}</h3>
+            </div>
           ))}
-          <span className="edge-count">{activeFlow.steps.length} ordered transitions</span>
+          {view.lanes.flatMap((lane) => lane.nodeIds).map((nodeId) => {
+            const node = nodesById.get(nodeId);
+            if (!node) return null;
+            const isActive = flowNodeIds.has(node.id);
+            const isSelected = selectedNodeId === node.id;
+            const position = nodePosition(node.id);
+            return (
+              <button
+                key={node.id}
+                type="button"
+                className={`node-card ${node.type} ${isActive ? "in-flow" : ""} ${isSelected ? "selected" : ""}`}
+                style={{ left: position.x, top: position.y, width: nodeWidth, height: nodeHeight }}
+                onClick={() => onSelectNode(node.id)}
+              >
+                <strong>{node.name}</strong>
+                <span>{node.type}</span>
+              </button>
+            );
+          })}
+          <RoutingLoadingOverlay active={planningState.planning} />
         </div>
-      ) : (
+      </ScaledCanvasExtent>
+      {!activeFlow ? (
         <div className="edge-strip">
           <span className="edge-count">Structural connections only</span>
         </div>
-      )}
+      ) : null}
       {debugRouting ? (
         <RoutingDebugPanel
           plan={plan}
@@ -1565,12 +1196,14 @@ function C4Diagram({
   if (planningState.error) {
     return (
       <section className="map-shell c4-shell">
-        <div
-          className={`c4-canvas ${view.type}`}
-          style={{ width: fallbackCanvas.width, height: fallbackCanvas.height, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
-        >
-          <RoutingPlanningError message={planningState.error} />
-        </div>
+        <ScaledCanvasExtent width={fallbackCanvas.width} height={fallbackCanvas.height} transform={transform}>
+          <div
+            className={`c4-canvas ${view.type}`}
+            style={canvasTransformStyle(fallbackCanvas.width, fallbackCanvas.height, transform)}
+          >
+            <RoutingPlanningError message={planningState.error} />
+          </div>
+        </ScaledCanvasExtent>
       </section>
     );
   }
@@ -1578,12 +1211,14 @@ function C4Diagram({
   if (!plan) {
     return (
       <section className="map-shell c4-shell" aria-busy={planningState.planning ? "true" : "false"}>
-        <div
-          className={`c4-canvas ${view.type}`}
-          style={{ width: fallbackCanvas.width, height: fallbackCanvas.height, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
-        >
-          <RoutingLoadingOverlay active={planningState.planning} />
-        </div>
+        <ScaledCanvasExtent width={fallbackCanvas.width} height={fallbackCanvas.height} transform={transform}>
+          <div
+            className={`c4-canvas ${view.type}`}
+            style={canvasTransformStyle(fallbackCanvas.width, fallbackCanvas.height, transform)}
+          >
+            <RoutingLoadingOverlay active={planningState.planning} />
+          </div>
+        </ScaledCanvasExtent>
       </section>
     );
   }
@@ -1599,11 +1234,12 @@ function C4Diagram({
 
   return (
     <section className="map-shell c4-shell" aria-busy={planningState.planning ? "true" : "false"}>
-      <div
-        className={`c4-canvas ${view.type}`}
-        style={{ width: canvasWidth, height: canvasHeight, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
-      >
-        <svg className="flow-lines c4-lines" width={canvasWidth} height={canvasHeight} role="group" aria-label={`${view.name} structural relationships`}>
+      <ScaledCanvasExtent width={canvasWidth} height={canvasHeight} transform={transform}>
+        <div
+          className={`c4-canvas ${view.type}`}
+          style={canvasTransformStyle(canvasWidth, canvasHeight, transform)}
+        >
+          <svg className="flow-lines c4-lines" width={canvasWidth} height={canvasHeight} role="group" aria-label={`${view.name} structural relationships`}>
           <defs>
             <marker id="c4-arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
               <path d="M 0 0 L 8 4 L 0 8 z" />
@@ -1638,40 +1274,41 @@ function C4Diagram({
             );
           })}
           {debugRouting ? <RoutingDebugGeometry plan={plan} relationships={relationships} /> : null}
-        </svg>
-        <div className={`c4-boundary ${view.type}`}>
-          <span>{boundaryLabel}</span>
-        </div>
-        {view.lanes.map((lane, laneIndex) => (
-          <div
-            className="c4-lane-label"
-            key={lane.id}
-            style={{ left: marginX + laneIndex * laneWidth, top: 34, width: nodeWidth }}
-          >
-            {lane.name}
+          </svg>
+          <div className={`c4-boundary ${view.type}`}>
+            <span>{boundaryLabel}</span>
           </div>
-        ))}
-        {allNodeIds.map((nodeId) => {
-          const node = nodesById.get(nodeId);
-          if (!node) return null;
-          const position = positionFor(nodeId);
-          return (
-            <button
-              key={node.id}
-              type="button"
-              className={`c4-node ${node.type} ${selectedNodeId === node.id ? "selected" : ""}`}
-              style={{ left: position.x, top: position.y, width: nodeWidth, height: nodeHeight }}
-              onClick={() => onSelectNode(node.id)}
-              aria-label={`${node.name}, ${node.type}. ${node.summary}`}
+          {view.lanes.map((lane, laneIndex) => (
+            <div
+              className="c4-lane-label"
+              key={lane.id}
+              style={{ left: marginX + laneIndex * laneWidth, top: 34, width: nodeWidth }}
             >
-              <strong>{node.name}</strong>
-              <span>{node.type}</span>
-              <small>{node.summary}</small>
-            </button>
-          );
-        })}
-        <RoutingLoadingOverlay active={planningState.planning} />
-      </div>
+              {lane.name}
+            </div>
+          ))}
+          {allNodeIds.map((nodeId) => {
+            const node = nodesById.get(nodeId);
+            if (!node) return null;
+            const position = positionFor(nodeId);
+            return (
+              <button
+                key={node.id}
+                type="button"
+                className={`c4-node ${node.type} ${selectedNodeId === node.id ? "selected" : ""}`}
+                style={{ left: position.x, top: position.y, width: nodeWidth, height: nodeHeight }}
+                onClick={() => onSelectNode(node.id)}
+                aria-label={`${node.name}, ${node.type}. ${node.summary}`}
+              >
+                <strong>{node.name}</strong>
+                <span>{node.type}</span>
+                <small>{node.summary}</small>
+              </button>
+            );
+          })}
+          <RoutingLoadingOverlay active={planningState.planning} />
+        </div>
+      </ScaledCanvasExtent>
       <div className="edge-strip">
         <span className="edge-count">{relationships.length} labeled structural relationships</span>
       </div>
@@ -1706,119 +1343,125 @@ function SequenceDiagram({
   const width = marginX * 2 + participantIds.length * participantWidth;
   const height = messageStartY + activeFlow.steps.length * rowHeight + 38;
   const xFor = (id: Id) => marginX + participantIds.indexOf(id) * participantWidth + participantWidth / 2;
+  const orderedStepMessages: { step: FlowStep; index: number }[] = orderSelectedLast(
+    activeFlow.steps.map((step, index) => ({ step, index })),
+    ({ step }: { step: FlowStep }) => selectedStepId === step.id
+  );
 
   return (
     <section className="map-shell sequence-shell">
-      <div
-        className="sequence-participant-rail"
-        style={{ width, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
-      >
-        {participantIds.map((id) => {
-          const node = nodesById.get(id);
-          const x = xFor(id);
-          return (
-            <button
-              key={id}
-              type="button"
-              className={`sequence-participant-card ${node?.type ?? ""}`}
-              style={{ left: x - 58, width: 116 }}
-              aria-label={`${node?.name ?? id} participant`}
-            >
-              <strong>{node?.name ?? id}</strong>
-              <span>{node?.type ?? "node"}</span>
-            </button>
-          );
-        })}
-      </div>
-      <svg
-        className="sequence-canvas"
-        width={width}
-        height={height}
-        role="img"
-        aria-label={`${activeFlow.name} sequence diagram`}
-        style={{ transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
-      >
-        <defs>
-          <marker id="sequence-arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-            <path d="M 0 0 L 8 4 L 0 8 z" />
-          </marker>
-          <marker id="sequence-arrowhead-response" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-            <path d="M 0 0 L 8 4 L 0 8 z" />
-          </marker>
-          <marker id="sequence-arrowhead-persistence" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-            <path d="M 0 0 L 8 4 L 0 8 z" />
-          </marker>
-          <marker id="sequence-arrowhead-selected" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-            <path d="M 0 0 L 8 4 L 0 8 z" />
-          </marker>
-        </defs>
-        {participantIds.map((id) => {
-          const node = nodesById.get(id);
-          const x = xFor(id);
-          return (
-            <g key={id}>
-              <line className="lifeline" x1={x} y1={headerY + 48} x2={x} y2={height - 22} />
-            </g>
-          );
-        })}
-        {activeFlow.steps.map((step, index) => {
-          const fromX = xFor(step.from);
-          const toX = xFor(step.to);
-          const y = messageStartY + index * rowHeight;
-          const midX = (fromX + toX) / 2;
-          const dataLabel = step.data.map((id) => dataById.get(id)?.name ?? id).join(", ");
-          const messageKind = step.to.includes("queue") ? "async" : step.to.includes("db") || step.to.includes("store") ? "persistence" : toX < fromX ? "response" : "request";
-          const markerId = selectedStepId === step.id
-            ? "sequence-arrowhead-selected"
-            : messageKind === "response"
-              ? "sequence-arrowhead-response"
-              : messageKind === "persistence"
-                ? "sequence-arrowhead-persistence"
-                : "sequence-arrowhead";
-          const relationship = {
-            id: step.id,
-            from: step.from,
-            to: step.to,
-            label: step.action,
-            summary: step.summary,
-            relationshipType: "flow" as const,
-            stepId: step.id,
-            flowId: activeFlow.id
-          };
-          return (
-            <g
-              key={step.id}
-              className={`sequence-message ${messageKind} ${selectedStepId === step.id ? "selected" : ""}`}
-              role="button"
-              tabIndex={0}
-              aria-label={`${step.action}: ${step.summary}`}
-              onClick={() => {
-                onSelectStep(step.id);
-                onSelectRelationship(relationship);
-              }}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" || event.key === " ") {
+      <ScaledCanvasExtent width={width} height={height} transform={transform}>
+        <div
+          className="sequence-participant-rail"
+          style={{ width, transform: `scale(${transform.zoom})`, transformOrigin: "0 0" }}
+        >
+          {participantIds.map((id) => {
+            const node = nodesById.get(id);
+            const x = xFor(id);
+            return (
+              <button
+                key={id}
+                type="button"
+                className={`sequence-participant-card ${node?.type ?? ""}`}
+                style={{ left: x - 58, width: 116 }}
+                aria-label={`${node?.name ?? id} participant`}
+              >
+                <strong>{node?.name ?? id}</strong>
+                <span>{node?.type ?? "node"}</span>
+              </button>
+            );
+          })}
+        </div>
+        <svg
+          className="sequence-canvas"
+          width={width}
+          height={height}
+          role="img"
+          aria-label={`${activeFlow.name} sequence diagram`}
+          style={canvasTransformStyle(width, height, transform)}
+        >
+          <defs>
+            <marker id="sequence-arrowhead" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M 0 0 L 8 4 L 0 8 z" />
+            </marker>
+            <marker id="sequence-arrowhead-response" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M 0 0 L 8 4 L 0 8 z" />
+            </marker>
+            <marker id="sequence-arrowhead-persistence" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M 0 0 L 8 4 L 0 8 z" />
+            </marker>
+            <marker id="sequence-arrowhead-selected" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+              <path d="M 0 0 L 8 4 L 0 8 z" />
+            </marker>
+          </defs>
+          {participantIds.map((id) => {
+            const node = nodesById.get(id);
+            const x = xFor(id);
+            return (
+              <g key={id}>
+                <line className="lifeline" x1={x} y1={headerY + 48} x2={x} y2={height - 22} />
+              </g>
+            );
+          })}
+          {orderedStepMessages.map(({ step, index }) => {
+            const fromX = xFor(step.from);
+            const toX = xFor(step.to);
+            const y = messageStartY + index * rowHeight;
+            const midX = (fromX + toX) / 2;
+            const dataLabel = step.data.map((id) => dataById.get(id)?.name ?? id).join(", ");
+            const messageKind = step.to.includes("queue") ? "async" : step.to.includes("db") || step.to.includes("store") ? "persistence" : toX < fromX ? "response" : "request";
+            const markerId = selectedStepId === step.id
+              ? "sequence-arrowhead-selected"
+              : messageKind === "response"
+                ? "sequence-arrowhead-response"
+                : messageKind === "persistence"
+                  ? "sequence-arrowhead-persistence"
+                  : "sequence-arrowhead";
+            const relationship = {
+              id: step.id,
+              from: step.from,
+              to: step.to,
+              label: step.action,
+              summary: step.summary,
+              relationshipType: "flow" as const,
+              stepId: step.id,
+              flowId: activeFlow.id
+            };
+            return (
+              <g
+                key={step.id}
+                className={`sequence-message ${messageKind} ${selectedStepId === step.id ? "selected" : ""}`}
+                role="button"
+                tabIndex={0}
+                aria-label={`${step.action}: ${step.summary}`}
+                onClick={() => {
                   onSelectStep(step.id);
                   onSelectRelationship(relationship);
-                }
-              }}
-            >
-              <line
-                className="sequence-line"
-                x1={fromX}
-                y1={y}
-                x2={toX}
-                y2={y}
-                markerEnd={`url(#${markerId})`}
-              />
-              <rect className="sequence-step-dot" x={midX - 10} y={y - 10} width="20" height="20" />
-              <text className="sequence-step-label" x={midX} y={y + 4}>{index + 1}</text>
-              <text className="sequence-action" x={midX} y={y - 17}>{step.action.length > 26 ? `${step.action.slice(0, 23)}...` : step.action}</text>
-              <text className="sequence-data" x={midX} y={y + 30}>{dataLabel}</text>
-            </g>
-          );
-        })}
-      </svg>
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    onSelectStep(step.id);
+                    onSelectRelationship(relationship);
+                  }
+                }}
+              >
+                <line
+                  className="sequence-line"
+                  x1={fromX}
+                  y1={y}
+                  x2={toX}
+                  y2={y}
+                  markerEnd={`url(#${markerId})`}
+                />
+                <rect className="route-step-marker sequence-step-dot" x={midX - 12} y={y - 10} width="24" height="20" rx="10" />
+                <text className="route-step-label sequence-step-label" x={midX} y={y + 4}>{index + 1}</text>
+                <text className="sequence-action" x={midX} y={y - 17}>{step.action.length > 26 ? `${step.action.slice(0, 23)}...` : step.action}</text>
+                <text className="sequence-data" x={midX} y={y + 30}>{dataLabel}</text>
+              </g>
+            );
+          })}
+        </svg>
+      </ScaledCanvasExtent>
     </section>
   );
 }

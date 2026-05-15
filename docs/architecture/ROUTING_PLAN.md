@@ -11,7 +11,8 @@ as geometry, not tuned only by looking at screenshots.
 - Keep route output stable for identical model data.
 - Keep selected routes visually traceable.
 - Allow users to choose a single route rendering style per view: orthogonal or
-  curved.
+  spline. Spline mode means curved edges derived from accepted route geometry;
+  it must not be only orthogonal routing with rounded corners.
 - Prefer automatic routing. Data-level hints should only influence scoring when
   the automatic result is not good enough.
 
@@ -84,7 +85,9 @@ routeEdges(input: RoutingInput): Map<string, RoutedEdge>
 The routing test suite should encode these invariants:
 
 - Every routed edge has finite numeric coordinates.
-- A rendered view must not mix orthogonal and curved route styles.
+- A rendered view must not mix orthogonal and spline route styles. Orthogonal
+  mode renders axis-aligned connector segments with hop-overs; spline mode
+  renders spline paths consistently.
 - Every route has a stable path for stable input.
 - Source and target anchors are outside or on the boundary of their nodes.
 - The first and final route segments meet source and target node boundaries at a
@@ -109,6 +112,10 @@ The routing test suite should encode these invariants:
 - Labels and step badges must not obscure the beginning or end of short
   connectors. For short straight connectors, place the badge beside the line
   rather than centered on it.
+- Flow step badges are part of the route, not free-floating labels. They may
+  move along sampled route geometry to avoid collisions, but they must stay
+  attached to the line. Structural relationship text may use freer label
+  placement when needed.
 - Port spacing must not introduce a dogleg into a clean direct route. Prefer a
   centered direct connector over an offset connector when there is no overlap to
   resolve.
@@ -242,7 +249,7 @@ should assert the same invariants that define acceptable output:
 - Priority-queue Dijkstra did not materially improve the Roboticus benchmark;
   it remains useful as bounded algorithmic cleanup for hard grid-route cases.
   The dominant repeated work was route planning the same geometry for orthogonal
-  and curved render styles. Raw route geometry is now cached independently of
+  and spline render styles. Raw route geometry is now cached independently of
   style so a style change only re-renders the path shape. Roboticus benchmark
   after raw-route caching: 15.4 seconds on May 14, 2026.
 - Subsequent local Roboticus benchmark runs after adding worker-backed viewer
@@ -293,6 +300,8 @@ Remaining ratchets:
 - Keep `complex-fan-out` at zero perimeter fallback routes.
 - Keep `complex-fan-in` at zero perimeter fallback routes.
 - Keep `complex-c4-component` at zero perimeter fallback routes.
+- Keep Architext self Deployment structural routes and Data/Risks active-flow
+  routes from sharing visible orthogonal route segments.
 - Keep `endpointStackCost`, `doglegCost`, `monotonicBacktrackCost`,
   `labelConflictCost`, and `labelNodeConflictCost` at zero for complex fixtures
   unless the fixture is explicitly modeling an unavoidable warning.
@@ -357,9 +366,9 @@ All routes have finite geometry. `first-party-surfaces` (`c4-container`) and
 separate drawing logic.
 
 The benchmark is now covered by a conditional local test that runs when
-`../roboticus` exists next to Architext. It exercises both orthogonal and curved
-route rendering modes against the same obstacle-aware geometry. Curved-mode
-collision checks use samples from the rendered curved path, not only the
+`../roboticus` exists next to Architext. It exercises both orthogonal and spline
+route rendering modes against the same obstacle-aware geometry. Spline-mode
+collision checks use samples from the rendered spline path, not only the
 pre-smoothed polyline. The next correctness target is to bring C4 routing under
 the same pure routing API and then add label-box collision checks.
 
@@ -398,26 +407,29 @@ the same pure routing API and then add label-box collision checks.
 7. Add optional schema-supported routing hints only after automatic routing has
    measurable coverage.
 
-## Curved Routing Track
+## Spline Routing Track
 
-Curved routing must not mean "draw arbitrary Bézier edges and hope they look
+Spline routing must not mean "draw arbitrary Bézier edges and hope they look
 better." It needs the same geometry discipline as orthogonal routing: fixed
 inputs, sampled paths, collision checks, label scoring, and deterministic
 output.
 
 Near-term approach:
 
-- Route first, curve second. Compute an obstacle-aware polyline or orthogonal
-  route, then transform it into a smooth path as a rendering stage.
-- Use cubic Bézier or quadratic spline smoothing over accepted route points.
-  This is the practical yFiles/yEd-style post-processing model and matches
-  Architext's current lane/row constraints.
+- Plan splines with spline-specific geometry. Orthogonal route waypoints are not
+  valid spline waypoints; smoothing them produces warped orthogonal output.
+- Choose source/target ports and Bézier control points as first-class spline
+  candidates, then sample and score those curves against node rectangles,
+  labels, other routes, and boundaries.
+- Spline mode should produce visible curved paths. A straight cubic command is
+  not the intended spline presentation; straight-line presentation would be a
+  separate future style, not the current spline option.
 - Keep the route samples tied to the rendered curve, not only the pre-smoothed
-  polyline, before claiming collision correctness for curved mode. This is now
-  covered for the rounded-curve rendering path.
+  polyline, before claiming collision correctness for spline mode. This is now
+  covered for the spline rendering path.
 - Score curve candidates by node clearance, label clearance, bend smoothness,
   edge-edge proximity, and route length.
-- Preserve style purity: a view rendered in curved mode uses curved edges
+- Preserve style purity: a view rendered in spline mode uses spline edges
   consistently; a view rendered in orthogonal mode uses orthogonal edges
   consistently.
 

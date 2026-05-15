@@ -49,6 +49,16 @@
       "consequences": ["Users receive a clear breaking-change boundary", "Existing copied installs are migration inputs", "Documentation can stop describing copied templates as the normal path"],
       "relatedNodes": ["package-artifacts", "architext-cli"],
       "relatedFlows": ["release-packaging", "copied-install-migration"]
+    },
+    {
+      "id": "clean-architecture-boundaries",
+      "status": "accepted",
+      "title": "Separate domain policy from CLI, browser, and rendering adapters",
+      "context": "The global CLI and viewer had working behavior concentrated in large driver files, making routing, lifecycle, validation, and presentation changes harder to reason about.",
+      "decision": "Move command parsing/presentation, doctor repair derivation, architecture reference validation, C4 quality policy, viewer preference/data adapters, view selection policy, diagram planning state, and routing primitives into focused modules.",
+      "consequences": ["Routing fixes can target geometry, ports, route indexing, and rendering separately", "CLI lifecycle changes can share doctor/sync policy", "React remains responsible for rendering instead of owning architecture facts"],
+      "relatedNodes": ["cli-adapters", "lifecycle-domain", "architecture-model-domain", "viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine"],
+      "relatedFlows": ["architecture-maintenance", "local-review"]
     }
   ]
 }

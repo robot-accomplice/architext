@@ -1,7 +1,14 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { planDiagram } from "../docs/architext/src/routing/planDiagram.js";
+import { relationshipLabel } from "../docs/architext/src/routing/relationshipLabels.js";
 import { pathToSvgWithHops, routeIntersectsRect } from "../docs/architext/src/routing/routeEdges.js";
+
+const architextNodes = JSON.parse(readFileSync(new URL("../docs/architext/data/nodes.json", import.meta.url), "utf8")).nodes;
+const architextFlows = JSON.parse(readFileSync(new URL("../docs/architext/data/flows.json", import.meta.url), "utf8")).flows;
+const architextViews = JSON.parse(readFileSync(new URL("../docs/architext/data/views.json", import.meta.url), "utf8")).views;
+const architextNodesById = new Map(architextNodes.map((node) => [node.id, node]));
 
 function planFixture(view, relationships, overrides = {}) {
   const visibleNodeIds = new Set(view.lanes.flatMap((lane) => lane.nodeIds));
@@ -59,7 +66,6 @@ function assertNoNodeBodyCollisions(route, plan, relationship) {
 function assertLabelAvoidsNodes(labelBox, plan, relationship) {
   assert.ok(labelBox, `missing label box for ${relationship.id}`);
   for (const [nodeId, rect] of plan.nodeRects) {
-    if (nodeId === relationship.from || nodeId === relationship.to) continue;
     assert.equal(rectsOverlap(labelBox, rect, 0), false, `${relationship.id} label overlaps ${nodeId}`);
   }
 }
@@ -160,6 +166,84 @@ function assertMetricBudget(name, metrics, budget) {
   for (const [key, max] of Object.entries(budget)) {
     assert.ok(metrics[key] <= max, `${name} ${key}=${metrics[key]} exceeds ${max}; metrics=${JSON.stringify(metrics)}`);
   }
+}
+
+function structuralRelationshipsForView(view) {
+  const visibleNodeIds = new Set(view.lanes.flatMap((lane) => lane.nodeIds));
+  return [...visibleNodeIds].flatMap((nodeId) => {
+    const node = architextNodesById.get(nodeId);
+    return (node?.dependencies ?? [])
+      .filter((dependencyId) => visibleNodeIds.has(dependencyId))
+      .map((dependencyId) => ({
+        id: `${nodeId}->${dependencyId}`,
+        from: nodeId,
+        to: dependencyId,
+        label: relationshipLabel(node, architextNodesById.get(dependencyId))
+      }));
+  });
+}
+
+function axisAlignedSegments(route) {
+  const segments = [];
+  for (let index = 0; index < route.points.length - 1; index += 1) {
+    const start = route.points[index];
+    const end = route.points[index + 1];
+    if (start.x === end.x) {
+      segments.push({
+        orientation: "vertical",
+        x: start.x,
+        min: Math.min(start.y, end.y),
+        max: Math.max(start.y, end.y)
+      });
+    } else if (start.y === end.y) {
+      segments.push({
+        orientation: "horizontal",
+        y: start.y,
+        min: Math.min(start.x, end.x),
+        max: Math.max(start.x, end.x)
+      });
+    }
+  }
+  return segments;
+}
+
+function sharedSegmentLength(left, right) {
+  if (left.orientation !== right.orientation) return 0;
+  if (left.orientation === "horizontal" && left.y !== right.y) return 0;
+  if (left.orientation === "vertical" && left.x !== right.x) return 0;
+  return Math.max(0, Math.min(left.max, right.max) - Math.max(left.min, right.min));
+}
+
+function sharedOrthogonalSegmentCount(plan) {
+  const routes = [...plan.routes.entries()];
+  let sharedSegments = 0;
+  for (let leftIndex = 0; leftIndex < routes.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < routes.length; rightIndex += 1) {
+      for (const leftSegment of axisAlignedSegments(routes[leftIndex][1])) {
+        for (const rightSegment of axisAlignedSegments(routes[rightIndex][1])) {
+          if (sharedSegmentLength(leftSegment, rightSegment) > 1) {
+            sharedSegments += 1;
+          }
+        }
+      }
+    }
+  }
+  return sharedSegments;
+}
+
+function flowRelationshipsForView(flow, view) {
+  const visibleNodeIds = new Set(view.lanes.flatMap((lane) => lane.nodeIds));
+  return flow.steps
+    .map((step, index) => ({
+      id: step.id,
+      from: step.from,
+      to: step.to,
+      label: `${index + 1}. ${step.action}`,
+      relationshipType: "flow",
+      stepId: step.id,
+      displayIndex: index + 1
+    }))
+    .filter((relationship) => visibleNodeIds.has(relationship.from) && visibleNodeIds.has(relationship.to));
 }
 
 test("fitness: complex fan-out keeps routes readable around blockers", () => {
@@ -268,6 +352,61 @@ test("fitness: C4-style component lanes use the shared planner", () => {
     labelNodeConflictCost: 0,
     perimeterFallbackRoutes: 0
   });
+});
+
+test("fitness: Architext deployment avoids shared structural route segments", () => {
+  const view = architextViews.find((candidate) => candidate.id === "deployment");
+  assert.ok(view, "missing Architext deployment view");
+  const relationships = structuralRelationshipsForView(view);
+  const plan = planDiagram({
+    view,
+    relationships,
+    visibleNodeIds: new Set(view.lanes.flatMap((lane) => lane.nodeIds)),
+    nodeWidth: 176,
+    nodeHeight: 70,
+    laneWidth: 272,
+    rowGap: 132,
+    marginX: 236,
+    marginY: 146,
+    minCanvasWidth: 1120,
+    minCanvasHeight: 570,
+    canvasExtraWidth: 120,
+    canvasExtraHeight: 120,
+    style: "orthogonal"
+  });
+
+  assertPlanFitness(plan, relationships, { maxBends: 10 });
+  assert.equal(sharedOrthogonalSegmentCount(plan), 0, "deployment routes share visible segments");
+});
+
+test("fitness: Architext Data/Risks active flows avoid shared route segments", () => {
+  for (const viewId of ["dataflow", "risk-overlay"]) {
+    const view = architextViews.find((candidate) => candidate.id === viewId);
+    assert.ok(view, `missing Architext ${viewId} view`);
+    for (const flow of architextFlows) {
+      const relationships = flowRelationshipsForView(flow, view);
+      if (relationships.length < 2) continue;
+    const plan = planDiagram({
+      view,
+      relationships,
+      visibleNodeIds: new Set(view.lanes.flatMap((lane) => lane.nodeIds)),
+      nodeWidth: 136,
+      nodeHeight: 54,
+      laneWidth: 210,
+      rowGap: 102,
+      marginX: 180,
+      marginY: 76,
+      minCanvasWidth: 0,
+      minCanvasHeight: 340,
+      canvasExtraWidth: 132,
+      canvasExtraHeight: 88,
+      style: "orthogonal"
+    });
+
+      assertPlanFitness(plan, relationships, { maxBends: 10 });
+      assert.equal(sharedOrthogonalSegmentCount(plan), 0, `${viewId}:${flow.id} routes share visible segments`);
+    }
+  }
 });
 
 test("fitness: complex crossing hops render every accepted perpendicular crossing", () => {

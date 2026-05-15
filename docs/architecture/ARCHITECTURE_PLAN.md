@@ -83,7 +83,8 @@ The CLI should support lifecycle commands:
   with package-owned schemas.
 - **Doctor/status:** inspect installation health, version, validation, ignore
   rules, instruction appendix presence, and accidentally tracked generated
-  artifacts without writing files.
+  artifacts. Doctor may apply deterministic, user-approved repairs; status is
+  the read-only machine-readable health view.
 - **Serve/validate/build:** run package-owned commands against an optional
   target path. The path defaults to the current directory.
 - **Prompt:** print LLM-ready instructions for initial build-out, architecture
@@ -152,6 +153,47 @@ docs/
 
 The data model is split by responsibility instead of stored as one large file.
 `manifest.json` is the entrypoint.
+
+## Current Implementation Boundaries
+
+The current implementation is being moved toward explicit clean-architecture
+boundaries. The important rule is that Architext policy should live in pure
+domain/application modules, while CLI, filesystem, HTTP, browser, React, and
+SVG details stay at the edges.
+
+Implemented boundaries:
+
+- `src/domain/architecture-model/` owns shared architecture reference
+  validation and C4 quality diagnosis/repair policy.
+- `src/domain/lifecycle/` owns doctor repair derivation so `doctor` and `sync`
+  can share the same repair categories.
+- `src/adapters/cli/` owns argument parsing, command routing, and terminal
+  presentation.
+- `docs/architext/src/adapters/` owns browser data loading and preference
+  storage.
+- `docs/architext/src/domain/` owns viewer-side architecture DTO types.
+- `docs/architext/src/presentation/` owns mode, view, and step selection
+  policy.
+- `docs/architext/src/routing/` now separates diagram planning state,
+  geometry, ports, port-pair enumeration, corridor discovery, labels, route
+  candidate construction, route strategy assembly, route indexing, route
+  rendering, route scoring and warnings, route style normalization, route
+  caching, and the priority queue used by grid search.
+
+Remaining architectural pressure:
+
+- `tools/architext-adopt.mjs` is still too responsible for lifecycle execution,
+  filesystem operations, validation process orchestration, HTTP serving, and
+  build commands.
+- `docs/architext/src/main.tsx` still combines many React components and detail
+  presenters in one entrypoint.
+- The routing strategy module is still internally organized by conditional
+  branches for orthogonal, spline, and straight routing. Future work can split
+  those into separate strategy files if the branch bodies continue to grow.
+
+The next routing correctness work should be implemented against these named
+boundaries. For example, Deployment and Data/Risks line-overlap fixes belong in
+route indexing, candidate generation, and scoring rather than in React or CSS.
 
 ### `manifest.json`
 
@@ -320,12 +362,11 @@ Required interactions:
 Collapse behavior should follow the pattern used in Palm Command Center: a
 small polished control lives on the controlled panel edge, the panel shrinks to
 a narrow rail instead of disappearing entirely, and the expanded/collapsed
-affordance is clear from the icon orientation. Architext needs this on both
-sides because the diagram canvas is the primary work area.
-
-The first demo currently falls short here: it only collapses the left panel from
-the top toolbar, has no right-panel collapse, and hides the left panel entirely
-instead of retaining a useful rail.
+affordance is clear from the icon orientation. Collapsed rails should identify
+the panel purpose, not repeat the current mode or selection; the left rail is
+for browsing architecture objects, and the right rail is for details.
+Architext needs this on both sides because the diagram canvas is the primary
+work area.
 
 The right panel should be scrollable and sectioned:
 
@@ -358,21 +399,57 @@ short labels and secondary metadata; large dashboard cards waste diagram space.
 Architext should prefer compact node boxes, lane headers, and scrollable/pannable
 canvas behavior over large fixed cards.
 
+Canvas scaling must be handled as a renderer-wide invariant. CSS transforms do
+not change scroll dimensions, so every zoomed diagram should use the same
+scaled extent wrapper around an unscaled coordinate plane. Sequence, workflow,
+deployment, and C4 canvases should not each invent localized scroll handling.
+
+Fit behavior should preserve readability before exhaustive visibility. On
+desktop-sized viewports, Fit should not shrink architecture diagrams below a
+readable working zoom just to include empty canvas or every offscreen gutter;
+horizontal/vertical scrolling is acceptable when the alternative is a tiny,
+unreadable diagram.
+
 Vertical space should be allocated the same way: non-diagram sections should
 auto-size to their content, while the diagram canvas takes the remaining height.
 Headers, filters, legends, and selected-flow step summaries are supporting
-controls, not primary layout regions.
+controls, not primary layout regions. Diagram header titles and summaries should
+wrap within available space instead of truncating. Header controls must never
+require horizontal scrolling; when width is constrained, the control group wraps
+inside the header as a group before any control is clipped. Canvas headers
+should reserve intrinsic space for controls and legend first, then let the title
+and summary region compress or wrap within the actual diagram column as side
+panels open and close. Header content must not escape underneath adjacent side
+panels; diagram grid columns must be explicitly shrinkable so child max-content
+width cannot enlarge the canvas column. The canvas viewport is its own contained
+layout and scroll region; zoomed canvas extents, panning, and diagram overflow
+must not influence header, steps, or side-panel sizing. Top-level mode tabs
+should remain a single grouped row at desktop widths; orphaned one-tab rows read
+as broken navigation. If a viewport or future clamp forces truncation, the full
+title or summary must remain available through a tooltip.
 
 Flows must be visible as lines between boxes, not only as a textual list of
 steps. A selected flow should draw directional edges between involved nodes,
 with numbered step markers or labels where legible. The textual ordered step
 list remains useful, but it is not a substitute for visual relationships.
+Numbered route markers should read as labels attached to the line, not as
+separate filled blocks. Equivalent route marker treatments should share a common
+visual system across workflow and sequence views.
+Selected flow steps should use one shared standout selection color across the
+route line, arrowhead, route marker, and bottom step card so a stage selection
+reads as one highlighted path. A rendered flow should expose one primary
+selectable step surface; duplicated step strips reduce canvas real estate
+without adding architectural information.
 
 Flow routing must optimize readability over geometric cleverness. The original
 visual target uses compact boxes and readable highlighted paths; Architext
 should preserve that. Lines should not take surprising paths, pass behind
-related boxes, or hide numbered markers. Prefer simple direct or gently curved
-paths through clear gutters, with step markers placed on readable line segments.
+related boxes, or hide numbered markers. The Line Style control should expose
+distinct orthogonal, spline, and straight presentations without mixing routing
+styles in a single rendered view. Its text label should remain visually separate
+from the interactive dropdown so it does not read as another selectable box.
+Prefer simple direct or gently curved paths through clear gutters, with step
+markers placed on readable line segments.
 If a clean route cannot be drawn in a dense canvas, the renderer should choose a
 simpler layout or require explicit layout hints.
 
@@ -501,6 +578,7 @@ It should include:
 - copied-install migration
 - agent instruction management
 - static export
+- PDF export
 - release/package workflow
 
 Example flows:
@@ -510,6 +588,7 @@ Example flows:
 - architecture data maintenance
 - local viewer review
 - static export
+- PDF export
 - release packaging
 
 This example is broad enough to exercise package-owned runtime boundaries,
@@ -545,3 +624,5 @@ publication operations.
 - Should diagram layout be hand-hinted in JSON or computed deterministically?
 - Should future source-code extraction be plugin-based by language/ecosystem?
 - Should schema version migrations be supported from the first release?
+- Should PDF export render the interactive viewer through a headless browser,
+  generate a print-specific static document, or support both modes?

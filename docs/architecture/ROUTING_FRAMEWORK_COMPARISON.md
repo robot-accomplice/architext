@@ -19,7 +19,7 @@ Primary drivers:
 
 - avoid non-endpoint node bodies
 - keep route output stable for stable data
-- support per-view orthogonal or curved rendering without mixing styles
+- support per-view orthogonal, spline, or straight rendering without mixing styles
 - preserve Architext's lane/row architecture layout language
 - keep target repositories data-only
 - keep package installation simple
