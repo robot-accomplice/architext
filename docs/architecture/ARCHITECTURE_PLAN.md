@@ -516,6 +516,29 @@ This example is broad enough to exercise package-owned runtime boundaries,
 target-owned data, migrations, generated artifacts, agent instructions,
 deployment views, risks, and data classification.
 
+## CI And Release Gates
+
+CI must verify the same lifecycle that maintainers rely on locally. The formal
+pipeline should be self-contained and must not depend on sibling repositories
+such as Roboticus or Aegis. Those repositories are useful local litmus fixtures
+only.
+
+Required CI gates:
+
+- install root package dependencies with the lockfile
+- install viewer workspace dependencies with the lockfile
+- run the self-contained CLI and routing test suite
+- run C4/routing fitness checks
+- validate bundled Architext data with package-owned schemas
+- build the package-owned viewer
+- inspect package contents with `npm pack`
+- install the packed tarball into a clean prefix and smoke-test the global
+  `architext` binary against a temporary target repository
+
+Publishing remains a human-controlled release operation. CI proves that the
+commit is releasable; it must not embed public README instructions for npm
+publication operations.
+
 ## Open Questions
 
 - Should the validator be pure browser JavaScript, Node-based, or both?
