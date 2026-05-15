@@ -1,7 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
+import { c4LayoutFor } from "./routing/c4Layout.js";
 import { planDiagram } from "./routing/planDiagram.js";
+import { relationshipLabel } from "./routing/relationshipLabels.js";
 import "./styles.css";
 
 type Id = string;
@@ -161,6 +163,7 @@ type Relationship = {
   label: string;
   summary: string;
   relationshipType: "flow" | "structural";
+  toType?: NodeType;
   stepId?: Id;
   flowId?: Id;
 };
@@ -201,15 +204,6 @@ function modeForView(view: View | undefined): Mode {
 function defaultViewForMode(mode: Mode, views: View[], fallback: View): View {
   const types = modeViewTypes[mode];
   return views.find((view) => types.includes(view.type)) ?? fallback;
-}
-
-function relationshipLabel(from: ArchNode | undefined, to: ArchNode | undefined): string {
-  if (!from || !to) return "relates to";
-  if (to.type === "data-store") return "reads/writes";
-  if (to.type === "queue") return "publishes";
-  if (to.type === "external-service") return "uses";
-  if (from.type === "actor") return "uses";
-  return "depends on";
 }
 
 function initialRoutingStyle(): RoutingStyle {
@@ -1171,7 +1165,8 @@ function SystemMap({
           to: dependencyId,
           label,
           summary: `${node?.name ?? nodeId} ${label} ${to?.name ?? dependencyId}`,
-          relationshipType: "structural" as const
+          relationshipType: "structural" as const,
+          toType: to?.type
         };
       });
   });
@@ -1406,8 +1401,8 @@ function RoutingDebugPanel({ plan, relationships }: { plan: any; relationships: 
       {warnings.length > 0 ? (
         <div className="routing-debug-warnings">
           {warnings.slice(0, 8).map((warning: any, index: number) => (
-            <span key={`${warning.relationshipId}-${warning.code}-${index}`}>
-              {warning.relationshipId}: {warning.code}
+            <span key={`${warning.relationshipId ?? warning.nodeId ?? warning.viewId ?? "diagram"}-${warning.code}-${index}`}>
+              {warning.relationshipId ?? warning.nodeId ?? warning.viewId ?? "diagram"}: {warning.code}
             </span>
           ))}
         </div>
@@ -1503,13 +1498,31 @@ function C4Diagram({
   onSelectNode: (id: Id) => void;
   onSelectRelationship: (relationship: Relationship) => void;
 }) {
-  const nodeWidth = 156;
-  const nodeHeight = 92;
-  const laneWidth = 210;
-  const marginX = 56;
-  const marginY = 76;
-  const rowGap = 116;
-  const allNodeIds = view.lanes.flatMap((lane) => lane.nodeIds);
+  const layout = c4LayoutFor(view.type);
+  const {
+    nodeWidth,
+    nodeHeight,
+    laneWidth,
+    rowGap,
+    marginX,
+    marginY,
+    minCanvasWidth,
+    minCanvasHeight,
+    canvasExtraWidth,
+    canvasExtraHeight,
+    boundaryLabel
+  } = layout;
+  const rawNodeIds = view.lanes.flatMap((lane) => lane.nodeIds);
+  const allNodeIds = Array.from(new Set(rawNodeIds));
+  const duplicateNodeIds = Array.from(
+    rawNodeIds.reduce((counts, nodeId) => counts.set(nodeId, (counts.get(nodeId) ?? 0) + 1), new Map<Id, number>())
+  ).filter(([, count]) => count > 1).map(([nodeId]) => nodeId);
+  const documentWarnings = duplicateNodeIds.map((nodeId) => ({
+    code: "duplicate-c4-node",
+    nodeId,
+    viewId: view.id,
+    message: `${nodeId} appears more than once in ${view.name}; rendered once.`
+  }));
   const visibleNodeIds = new Set(allNodeIds);
   const relationships = allNodeIds.flatMap((nodeId) => {
     const node = nodesById.get(nodeId);
@@ -1524,7 +1537,8 @@ function C4Diagram({
           to: dependencyId,
           label,
           summary: `${node?.name ?? nodeId} ${label} ${to?.name ?? dependencyId}`,
-          relationshipType: "structural" as const
+          relationshipType: "structural" as const,
+          toType: to?.type
         };
       });
   });
@@ -1538,10 +1552,10 @@ function C4Diagram({
     rowGap,
     marginX,
     marginY,
-    minCanvasWidth: 760,
-    minCanvasHeight: 440,
-    canvasExtraWidth: 40,
-    canvasExtraHeight: 88,
+    minCanvasWidth,
+    minCanvasHeight,
+    canvasExtraWidth,
+    canvasExtraHeight,
     style: routingStyle
   };
   const planningState = usePlannedDiagram(planInput);
@@ -1576,6 +1590,7 @@ function C4Diagram({
 
   const canvasWidth = plan.canvasWidth;
   const canvasHeight = plan.canvasHeight;
+  const debugPlan = documentWarnings.length ? { ...plan, warnings: [...documentWarnings, ...(plan.warnings ?? [])] } : plan;
   const positionFor = plan.positionFor;
   const isC4RelationshipSelected = (relationship: Relationship) => (
     selectedRelationship?.from === relationship.from && selectedRelationship.to === relationship.to
@@ -1614,7 +1629,7 @@ function C4Diagram({
                 }}
               >
                 <path
-                  className="c4-relationship"
+                  className={`c4-relationship target-${relationship.toType ?? "unknown"}`}
                   d={route.d}
                   markerEnd={selected ? "url(#c4-arrowhead-selected)" : "url(#c4-arrowhead)"}
                 />
@@ -1624,8 +1639,8 @@ function C4Diagram({
           })}
           {debugRouting ? <RoutingDebugGeometry plan={plan} relationships={relationships} /> : null}
         </svg>
-        <div className="c4-boundary">
-          <span>{view.type === "c4-context" ? "System boundary" : view.type === "c4-container" ? "Container boundary" : "Component scope"}</span>
+        <div className={`c4-boundary ${view.type}`}>
+          <span>{boundaryLabel}</span>
         </div>
         {view.lanes.map((lane, laneIndex) => (
           <div
@@ -1660,7 +1675,7 @@ function C4Diagram({
       <div className="edge-strip">
         <span className="edge-count">{relationships.length} labeled structural relationships</span>
       </div>
-      {debugRouting ? <RoutingDebugPanel plan={plan} relationships={relationships} /> : null}
+      {debugRouting ? <RoutingDebugPanel plan={debugPlan} relationships={relationships} /> : null}
     </section>
   );
 }

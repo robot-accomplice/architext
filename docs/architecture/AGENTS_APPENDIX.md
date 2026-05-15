@@ -14,6 +14,11 @@ boundaries, deployment topology, observability paths, or major module
 responsibilities, update the relevant Architext JSON files before completing the
 task.
 
+For C4 views, keep Context, Container, and Component diagrams at their proper
+abstraction level. Prefer splitting dense views over forcing tangled routing,
+keep relationship labels visible, and treat duplicate node membership in one
+C4 view as a documentation defect to repair in `docs/architext/data/views.json`.
+
 Run the Architext validator after edits:
 
 ```sh
@@ -32,8 +37,11 @@ Those are owned by the globally installed `architext` package. Edit project
 architecture data under `docs/architext/data/*.json`; use `architext sync
 [path]` to install or migrate lifecycle metadata and instructions.
 
-Use `architext doctor [path]` to inspect installation health and `architext
-prompt [path]` to print the current LLM build-out or maintenance instructions.
+Use `architext doctor [path]` to inspect installation health, including C4
+document quality issues, and `architext doctor [path] --yes` to apply
+deterministic repairs. `architext sync [path]` runs the same doctor diagnostics
+before converging lifecycle state. Use `architext prompt [path]` to print the
+current LLM build-out or maintenance instructions.
 Do not claim the architecture documentation is current if validation fails or
 was skipped.
 ```

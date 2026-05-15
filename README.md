@@ -290,12 +290,22 @@ architext build [path]
 architext prompt [path]
 architext clean [path]
 architext explain flows
+architext version
+architext --version
 ```
 
 Use `doctor` when something looks wrong. It reports the installed version,
 whether an upgrade is needed, validation status, missing ignore rules, missing
-AGENTS/CLAUDE appendix sections, root script status, and accidentally tracked
-generated artifacts.
+AGENTS/CLAUDE appendix sections, root script status, accidentally tracked
+generated artifacts, and deterministic repairs. Run `doctor --yes` to apply
+available repairs.
+
+Use `version` or `--version` when scripts need the installed package version
+without inspecting `package.json`.
+
+`sync` runs the same doctor diagnostics by default before converging lifecycle
+state. Deterministic repairs preserve existing nodes, dependencies, and
+architecture facts.
 
 Use `prompt` to print LLM-ready instructions:
 

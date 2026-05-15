@@ -1,6 +1,6 @@
 {
   "name": "@robotaccomplice/architext",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Local JSON-backed architecture and dataflow viewer for engineering teams and LLM-maintained architecture maps.",
   "type": "module",
   "engines": {
@@ -42,9 +42,9 @@
     "cli": "node tools/architext-adopt.mjs",
     "doctor": "node tools/architext-adopt.mjs doctor --target .",
     "prepack": "npm run build",
-    "test": "node --test --test-skip-pattern Roboticus",
-    "test:all": "node --test",
-    "test:benchmark": "node --test test/roboticus-routing.test.mjs",
+    "test": "node --test test/cli.test.mjs test/c4-documents.test.mjs test/routing-fitness.test.mjs test/routing.test.mjs",
+    "test:all": "npm test",
+    "test:benchmark": "node --test test/c4-documents.test.mjs test/routing-fitness.test.mjs",
     "validate": "node docs/architext/tools/validate-architext.mjs",
     "verify": "npm test && npm run validate && npm run build",
     "release:check": "npm run verify && npm pack --dry-run"

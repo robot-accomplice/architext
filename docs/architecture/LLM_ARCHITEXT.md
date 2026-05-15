@@ -24,6 +24,14 @@ complete.
   complexity.
 - Prefer source-path-backed claims.
 - Mark uncertainty explicitly instead of inventing details.
+- Keep C4 Context, Container, and Component views at their proper abstraction
+  level; split dense C4 views instead of hiding labels or relying on tangled
+  routing.
+- Repair duplicate node membership in a single C4 view by updating
+  `docs/architext/data/views.json`.
+- Prefer `architext doctor [path]` or `architext sync [path] --dry-run` before
+  manual C4 view repair. Use `architext doctor [path] --yes` or `architext sync
+  [path] --yes` when deterministic repairs are sufficient.
 - Run `architext validate [path]` after changing data.
 - Do not claim Architext is current if validation failed or was skipped.
 - Do not edit copied viewer, schema, package, Vite, or local tool files in a
@@ -66,8 +74,6 @@ docs/architext/
     decisions.json
     risks.json
     glossary.json
-  schema/
-    *.schema.json
 ```
 
 ## Update Triggers

@@ -61,8 +61,8 @@
       "summary": "Package-owned containers and target-owned data boundaries.",
       "lanes": [
         { "id": "actors", "name": "Actors", "nodeIds": ["maintainer", "llm-agent"] },
-        { "id": "containers", "name": "Architext Package", "nodeIds": ["architext-cli", "viewer-runtime", "schema-validator", "package-schemas"] },
-        { "id": "data", "name": "Target Data", "nodeIds": ["target-data-files", "static-dist"] }
+        { "id": "containers", "name": "Architext Package", "nodeIds": ["architext-cli", "viewer-runtime", "package-artifacts"] },
+        { "id": "data", "name": "Target Repository", "nodeIds": ["target-repository", "target-data-files", "static-dist"] }
       ]
     },
     {
@@ -72,8 +72,8 @@
       "summary": "CLI-adjacent components that enforce the data-only repository contract.",
       "lanes": [
         { "id": "entrypoint", "name": "Entrypoint", "nodeIds": ["architext-cli"] },
-        { "id": "runtime", "name": "Runtime Components", "nodeIds": ["viewer-runtime", "schema-validator"] },
-        { "id": "contracts", "name": "Contracts", "nodeIds": ["package-schemas", "target-data-files", "package-artifacts"] }
+        { "id": "runtime", "name": "Runtime Components", "nodeIds": ["schema-validator"] },
+        { "id": "contracts", "name": "Contracts", "nodeIds": ["package-schemas", "target-data-files"] }
       ]
     },
     {

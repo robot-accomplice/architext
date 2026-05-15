@@ -3,6 +3,7 @@ import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { planDiagram } from "../docs/architext/src/routing/planDiagram.js";
+import { relationshipLabel } from "../docs/architext/src/routing/relationshipLabels.js";
 import { routeIntersectsRect } from "../docs/architext/src/routing/routeEdges.js";
 
 const dataDir = path.resolve(import.meta.dirname, "../../roboticus/docs/architext/data");
@@ -10,15 +11,6 @@ const hasRoboticus = existsSync(path.join(dataDir, "manifest.json"));
 
 function readJson(name) {
   return JSON.parse(readFileSync(path.join(dataDir, name), "utf8"));
-}
-
-function relationshipLabel(from, to) {
-  if (!from || !to) return "relates to";
-  if (to.type === "data-store") return "reads/writes";
-  if (to.type === "queue") return "publishes";
-  if (to.type === "external-service") return "uses";
-  if (from.type === "actor") return "uses";
-  return "depends on";
 }
 
 test("Roboticus non-C4 diagram routes avoid non-endpoint node bodies", { skip: hasRoboticus ? false : "Roboticus repo is not checked out next to Architext" }, () => {

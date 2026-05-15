@@ -408,6 +408,10 @@ groupings:
 - **Component:** major components inside a selected container, with dependencies
   and source paths.
 
+The quality bar for these diagrams is captured in
+[`C4_DOCUMENTATION_RUBRIC.md`](C4_DOCUMENTATION_RUBRIC.md). That rubric is the
+acceptance standard for C4 renderer work and for target-repository C4 data.
+
 Each view should be generated from the same JSON model. C4 views are projections
 over nodes, flows, and relationships, not separate hand-maintained diagrams.
 

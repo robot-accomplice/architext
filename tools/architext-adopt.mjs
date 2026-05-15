@@ -50,12 +50,12 @@ function usage() {
 Path:
   [path] is optional and defaults to the current directory.
   Use it to manage another repository, for example:
-    architext serve ../roboticus
+    architext serve /path/to/repo
 
 Commands:
   sync | install | upgrade   Install data-only Architext or migrate old copied installs.
   migrate                    Alias for sync, intended for old copied installs.
-  doctor                     Print installation health and next actions.
+  doctor                     Diagnose installation health and optionally repair drift.
   status                     Print installation status. Use --json for machine output.
   serve                      Run the package-owned local viewer for a target repo.
   validate                   Validate target Architext JSON with package-owned schemas.
@@ -63,6 +63,7 @@ Commands:
   prompt                     Print an LLM maintenance prompt.
   clean                      Remove generated local artifacts.
   explain [topic]            Explain schemas and data contracts.
+  version                    Print the Architext package version.
 
 Options:
   --target <repo>            Target repository. Positional [path] is preferred.
@@ -82,15 +83,17 @@ Options:
   --skip-validate            Do not run validation after sync/migration.
   --branch current|new|none  Branch handling for mutating sync.
   --branch-name <name>       Branch name to use with --branch new.
+  --version, -v              Print the Architext package version.
 
 Examples:
   architext sync
   architext serve
+  architext --version
   architext validate .
-  architext doctor ../roboticus
-  architext status ../roboticus --json
-  architext sync ../roboticus --dry-run
-  architext sync ../roboticus --yes --branch current
+  architext doctor .
+  architext status . --json
+  architext sync . --dry-run
+  architext sync . --yes --branch current
   architext build . --out docs/architext/dist
   architext prompt . --mode architecture-change
 
@@ -102,7 +105,7 @@ Target repository ownership:
 }
 
 function parseArgs(argv) {
-  const knownCommands = new Set(["install", "upgrade", "sync", "migrate", "doctor", "status", "serve", "validate", "build", "prompt", "clean", "explain", "help"]);
+  const knownCommands = new Set(["install", "upgrade", "sync", "migrate", "doctor", "status", "serve", "validate", "build", "prompt", "clean", "explain", "help", "version"]);
   const first = argv[0];
   const hasCommand = first && !first.startsWith("--") && knownCommands.has(first);
   const command = hasCommand ? first : "sync";
@@ -151,6 +154,7 @@ function parseArgs(argv) {
     else if (arg === "--branch") options.branch = rest[++index] ?? "";
     else if (arg === "--branch-name") options.branchName = rest[++index] ?? "";
     else if (arg === "--help" || arg === "-h") options.command = "help";
+    else if (arg === "--version" || arg === "-v") options.command = "version";
     else if (options.command === "explain" && !options.topic) options.topic = arg;
     else if (!options.target) options.target = arg;
     else throw new Error(`Unknown argument: ${arg}`);
@@ -258,6 +262,205 @@ async function validateTarget(target) {
   return tryRun(process.execPath, [validatorPath, "--data-dir", dataDir(target), "--schema-dir", schemaDir], packageRoot);
 }
 
+const c4TypeExpectations = {
+  "c4-context": new Set(["actor", "client", "service", "deployment-unit", "external-service", "software-system", "trust-boundary"]),
+  "c4-container": new Set(["actor", "client", "service", "worker", "data-store", "queue", "deployment-unit", "external-service", "software-system"]),
+  "c4-component": new Set(["actor", "client", "service", "module", "worker", "data-store", "queue", "external-service"])
+};
+
+const c4DensityBudgets = {
+  "c4-context": { nodes: 14, relationships: 18 },
+  "c4-container": { nodes: 14, relationships: 24 },
+  "c4-component": { nodes: 14, relationships: 28 }
+};
+
+function viewNodeIds(view) {
+  return view.lanes.flatMap((lane) => lane.nodeIds);
+}
+
+function uniqueId(base, usedIds) {
+  let candidate = base;
+  let index = 2;
+  while (usedIds.has(candidate)) {
+    candidate = `${base}-${index}`;
+    index += 1;
+  }
+  usedIds.add(candidate);
+  return candidate;
+}
+
+function structuralRelationshipCount(view, nodeMap) {
+  const visible = new Set(viewNodeIds(view));
+  let count = 0;
+  for (const nodeId of visible) {
+    const node = nodeMap.get(nodeId);
+    for (const dependencyId of node?.dependencies ?? []) {
+      if (visible.has(dependencyId)) count += 1;
+    }
+  }
+  return count;
+}
+
+function duplicateViewNodes(view) {
+  const counts = new Map();
+  for (const nodeId of viewNodeIds(view)) counts.set(nodeId, (counts.get(nodeId) ?? 0) + 1);
+  return [...counts].filter(([, count]) => count > 1).map(([nodeId]) => nodeId);
+}
+
+function dedupeC4View(view) {
+  const seen = new Set();
+  let removed = 0;
+  const lanes = view.lanes.map((lane) => {
+    const nodeIds = [];
+    for (const nodeId of lane.nodeIds) {
+      if (seen.has(nodeId)) {
+        removed += 1;
+        continue;
+      }
+      seen.add(nodeId);
+      nodeIds.push(nodeId);
+    }
+    return { ...lane, nodeIds };
+  });
+  return { view: { ...view, lanes }, removed };
+}
+
+function connectedToFocus(nodeId, focusIds, nodeMap) {
+  const node = nodeMap.get(nodeId);
+  if ([...(node?.dependencies ?? [])].some((dependencyId) => focusIds.has(dependencyId))) return true;
+  for (const focusId of focusIds) {
+    if ((nodeMap.get(focusId)?.dependencies ?? []).includes(nodeId)) return true;
+  }
+  return false;
+}
+
+function viewWithIds(view, nodeIds) {
+  const selected = new Set(nodeIds);
+  return {
+    ...view,
+    lanes: view.lanes
+      .map((lane) => ({ ...lane, nodeIds: lane.nodeIds.filter((nodeId) => selected.has(nodeId)) }))
+      .filter((lane) => lane.nodeIds.length > 0)
+  };
+}
+
+function splitDenseC4View(view, nodeMap, usedViewIds) {
+  const budget = c4DensityBudgets[view.type];
+  if (!budget || view.lanes.length < 2) return [];
+
+  const splits = [];
+  for (const focusLane of view.lanes) {
+    if (!focusLane.nodeIds.length) continue;
+    const selected = new Set(focusLane.nodeIds.slice(0, budget.nodes));
+    const focusIds = new Set(selected);
+    const candidates = view.lanes
+      .filter((lane) => lane.id !== focusLane.id)
+      .flatMap((lane) => lane.nodeIds)
+      .filter((nodeId) => connectedToFocus(nodeId, focusIds, nodeMap));
+
+    for (const candidate of candidates) {
+      if (selected.has(candidate) || selected.size >= budget.nodes) continue;
+      const trial = viewWithIds(view, [...selected, candidate]);
+      if (structuralRelationshipCount(trial, nodeMap) <= budget.relationships) selected.add(candidate);
+    }
+
+    const id = uniqueId(`${view.id}-${focusLane.id}`, usedViewIds);
+    splits.push({
+      ...viewWithIds(view, selected),
+      id,
+      name: `${view.name}: ${focusLane.name}`,
+      summary: `${view.summary} Focused on ${focusLane.name}; generated by architext sync without changing architecture facts.`
+    });
+  }
+
+  return splits.length > 1 ? splits : [];
+}
+
+function c4IssuesForView(view, nodeMap) {
+  const issues = [];
+  const allowedTypes = c4TypeExpectations[view.type];
+  const budget = c4DensityBudgets[view.type];
+  const duplicates = duplicateViewNodes(view);
+  if (duplicates.length) issues.push(`${view.id}: duplicate node membership: ${duplicates.join(", ")}`);
+  if (!allowedTypes) issues.push(`${view.id}: unsupported C4 view type ${view.type}`);
+  for (const nodeId of viewNodeIds(view)) {
+    const node = nodeMap.get(nodeId);
+    if (!node) issues.push(`${view.id}: missing node ${nodeId}`);
+    else if (allowedTypes && !allowedTypes.has(node.type)) issues.push(`${view.id}: ${nodeId} has ${node.type}, which does not belong in ${view.type}`);
+  }
+  if (budget) {
+    const nodeCount = new Set(viewNodeIds(view)).size;
+    const relationshipCount = structuralRelationshipCount(view, nodeMap);
+    if (nodeCount > budget.nodes) issues.push(`${view.id}: ${nodeCount} nodes exceeds ${budget.nodes}; split the view`);
+    if (relationshipCount > budget.relationships) issues.push(`${view.id}: ${relationshipCount} relationships exceeds ${budget.relationships}; split the view`);
+  }
+  return issues;
+}
+
+function repairC4Views(views, nodeMap) {
+  const usedViewIds = new Set(views.map((view) => view.id));
+  const nextViews = [];
+  const changes = [];
+
+  for (const view of views) {
+    if (!view.type?.startsWith("c4-")) {
+      nextViews.push(view);
+      continue;
+    }
+
+    const beforeDuplicates = duplicateViewNodes(view);
+    const deduped = dedupeC4View(view);
+    if (deduped.removed) changes.push(`${view.id}: remove ${deduped.removed} duplicate node membership entr${deduped.removed === 1 ? "y" : "ies"} (${beforeDuplicates.join(", ")})`);
+
+    const budget = c4DensityBudgets[deduped.view.type];
+    const nodeCount = new Set(viewNodeIds(deduped.view)).size;
+    const relationshipCount = structuralRelationshipCount(deduped.view, nodeMap);
+    if (budget && (nodeCount > budget.nodes || relationshipCount > budget.relationships)) {
+      const splits = splitDenseC4View(deduped.view, nodeMap, usedViewIds);
+      if (splits.length) {
+        changes.push(`${view.id}: split dense ${deduped.view.type} view into ${splits.length} scoped views`);
+        nextViews.push(...splits);
+        continue;
+      }
+    }
+
+    nextViews.push(deduped.view);
+  }
+
+  return { views: nextViews, changes };
+}
+
+async function collectC4Status(target) {
+  const targetDataDir = dataDir(target);
+  const viewsPath = path.join(targetDataDir, "views.json");
+  const nodesPath = path.join(targetDataDir, "nodes.json");
+  if (!existsSync(viewsPath) || !existsSync(nodesPath)) {
+    return { available: false, issues: [], repairChanges: [], remainingIssues: [] };
+  }
+
+  const viewsDocument = await readJson(viewsPath);
+  const nodeMap = new Map((await readJson(nodesPath)).nodes.map((node) => [node.id, node]));
+  const issues = viewsDocument.views.flatMap((view) => view.type?.startsWith("c4-") ? c4IssuesForView(view, nodeMap) : []);
+  const repaired = repairC4Views(viewsDocument.views, nodeMap);
+  const remainingIssues = repaired.views.flatMap((view) => view.type?.startsWith("c4-") ? c4IssuesForView(view, nodeMap) : []);
+  return { available: true, issues, repairChanges: repaired.changes, remainingIssues };
+}
+
+async function repairC4Data(target, dryRun) {
+  const viewsPath = path.join(dataDir(target), "views.json");
+  const nodesPath = path.join(dataDir(target), "nodes.json");
+  if (!existsSync(viewsPath) || !existsSync(nodesPath)) return { repairChanges: [] };
+  const viewsDocument = await readJson(viewsPath);
+  const nodeMap = new Map((await readJson(nodesPath)).nodes.map((node) => [node.id, node]));
+  const repaired = repairC4Views(viewsDocument.views, nodeMap);
+  if (repaired.changes.length && !dryRun) await writeJson(viewsPath, { ...viewsDocument, views: repaired.views });
+  return { repairChanges: repaired.changes };
+}
+
+const doctorRepairHandlers = {
+  c4: repairC4Data
+};
+
 function slugify(value) {
   const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return slug || "target-project";
@@ -268,6 +471,7 @@ async function writeStarterData(target, version) {
   const projectName = path.basename(target);
   const projectId = slugify(projectName);
   const systemId = `${projectId}-system`;
+  const componentId = `${projectId}-component`;
   const actorId = "project-team";
   const dataId = "architecture-knowledge";
   const flowId = "architecture-buildout";
@@ -335,6 +539,25 @@ async function writeStarterData(target, version) {
         relatedDecisions: ["architext-buildout-required"],
         knownRisks: ["architext-starter-data"],
         verification: ["architext validate"]
+      },
+      {
+        id: componentId,
+        type: "module",
+        name: `${projectName} component placeholder`,
+        summary: "Placeholder component. Replace with real components inside a selected container during architecture build-out.",
+        responsibilities: ["Pending component discovery"],
+        owner: "Project maintainers",
+        sourcePaths: [],
+        runtime: "Unknown until architecture build-out is complete",
+        interfaces: ["Unknown until architecture build-out is complete"],
+        dependencies: [],
+        dataHandled: [dataId],
+        security: ["Unknown until architecture build-out is complete"],
+        observability: ["Unknown until architecture build-out is complete"],
+        relatedFlows: [flowId],
+        relatedDecisions: ["architext-buildout-required"],
+        knownRisks: ["architext-starter-data"],
+        verification: ["architext validate"]
       }
     ]
   });
@@ -375,7 +598,7 @@ async function writeStarterData(target, version) {
       { id: "deployment", name: "Deployment", type: "deployment", summary: "Starter deployment view. Replace with real runtime placement.", lanes: [{ id: "unknown", name: "Unknown", nodeIds: [systemId] }] },
       { id: "c4-context", name: "C4 Context", type: "c4-context", summary: "Starter C4 context. Replace with real actors, system boundary, and external systems.", lanes: [{ id: "people", name: "People", nodeIds: [actorId] }, { id: "system", name: "System", nodeIds: [systemId] }] },
       { id: "c4-container", name: "C4 Container", type: "c4-container", summary: "Starter C4 container view. Replace with deployable units and dependencies.", lanes: [{ id: "containers", name: "Containers", nodeIds: [systemId] }] },
-      { id: "c4-component", name: "C4 Component", type: "c4-component", summary: "Starter C4 component view. Replace with components inside a selected container.", lanes: [{ id: "components", name: "Components", nodeIds: [systemId] }] }
+      { id: "c4-component", name: "C4 Component", type: "c4-component", summary: "Starter C4 component view. Replace with components inside a selected container.", lanes: [{ id: "components", name: "Components", nodeIds: [componentId] }] }
     ]
   });
 
@@ -478,6 +701,7 @@ async function collectStatus(target, version, { runValidation = false } = {}) {
   const metadata = await readMetadata(target);
   const installed = existsSync(manifestPath);
   const validation = runValidation ? await validateTarget(target) : null;
+  const c4 = installed ? await collectC4Status(target) : null;
   const gitignoreText = existsSync(path.join(target, ".gitignore")) ? await readFile(path.join(target, ".gitignore"), "utf8") : "";
   const gitignoreMissing = generatedIgnores.filter((entry) => !gitignoreText.split(/\r?\n/).includes(entry));
   const instructionStatus = {};
@@ -500,7 +724,7 @@ async function collectStatus(target, version, { runValidation = false } = {}) {
     ? tryRun("git", ["ls-files", "docs/architext/dist"], target).output.split(/\r?\n/).filter(Boolean)
     : [];
 
-  return {
+  const status = {
     target,
     cliVersion: version,
     installed,
@@ -514,8 +738,11 @@ async function collectStatus(target, version, { runValidation = false } = {}) {
     rootPackageExists: packageInfo.exists,
     rootScripts: rootScriptStatus,
     trackedGenerated,
+    c4,
     validation
   };
+  status.doctorRepairs = doctorRepairsForStatus(status);
+  return status;
 }
 
 function printStatus(status, { verbose = false } = {}) {
@@ -525,11 +752,27 @@ function printStatus(status, { verbose = false } = {}) {
   console.log(`Copied install: ${status.copiedInstallDetected ? "detected" : "no"}`);
   console.log(`Gitignore: ${status.gitignoreMissing.length ? `missing ${status.gitignoreMissing.join(", ")}` : "ok"}`);
   console.log(`Generated artifacts tracked: ${status.trackedGenerated.length ? status.trackedGenerated.length : "none"}`);
+  if (status.c4) {
+    console.log(`C4 documents: ${status.c4.issues.length ? `${status.c4.issues.length} issue${status.c4.issues.length === 1 ? "" : "s"}` : "ok"}`);
+  }
+  console.log(`Doctor repairs: ${status.doctorRepairs.length ? status.doctorRepairs.length : "none"}`);
+  if (status.doctorRepairs.length && verbose) {
+    console.log("Doctor repairs available:");
+    status.doctorRepairs.forEach((repair) => console.log(`- ${repair.summary}`));
+  }
   if (status.validation) {
     console.log(`Validation: ${status.validation.ok ? "passed" : "failed"}`);
     if (!status.validation.ok || verbose) console.log(status.validation.output);
   }
   if (verbose) {
+    if (status.c4?.issues.length) {
+      console.log("C4 issues:");
+      status.c4.issues.forEach((issue) => console.log(`- ${issue}`));
+    }
+    if (status.c4?.remainingIssues.length) {
+      console.log("C4 issues requiring manual architecture judgment:");
+      status.c4.remainingIssues.forEach((issue) => console.log(`- ${issue}`));
+    }
     console.log("Instruction files:");
     for (const [fileName, fileStatus] of Object.entries(status.instructionStatus)) {
       const state = fileStatus.hasArchitextSection ? fileStatus.mentionsCopiedTemplate ? "outdated Architext section" : "current Architext section" : fileStatus.exists ? "missing Architext section" : "missing";
@@ -600,14 +843,91 @@ async function removeCopiedInstallFiles(target, dryRun) {
   return removed;
 }
 
+function doctorRepairsForStatus(status) {
+  const repairs = [];
+  for (const change of status.c4?.repairChanges ?? []) {
+    repairs.push({
+      id: `c4:${change}`,
+      category: "c4",
+      file: "docs/architext/data/views.json",
+      summary: change
+    });
+  }
+  return repairs;
+}
+
+async function applyDoctorRepairs(target, status, dryRun) {
+  const applied = [];
+  const categories = [...new Set(status.doctorRepairs.map((repair) => repair.category))];
+  for (const category of categories) {
+    const handler = doctorRepairHandlers[category];
+    if (!handler) continue;
+    const result = await handler(target, dryRun);
+    for (const change of result.repairChanges ?? []) {
+      applied.push({
+        category,
+        file: path.join(dataDir(target), "views.json"),
+        summary: change
+      });
+    }
+  }
+  return applied;
+}
+
+async function runDoctor(target, options, version) {
+  const status = await collectStatus(target, version, { runValidation: true });
+  if (options.json) {
+    console.log(JSON.stringify(status, null, 2));
+    return;
+  }
+
+  printStatus(status, { verbose: true });
+  if (!status.installed || status.needsMigration) {
+    console.log("Next: architext sync");
+    return;
+  }
+  if (status.validation && !status.validation.ok) {
+    console.log("Next: architext prompt --mode repair-validation");
+    return;
+  }
+  if (!status.doctorRepairs.length) {
+    console.log("Next: architext serve");
+    return;
+  }
+
+  if (options.dryRun) {
+    console.log("Dry run: no doctor repairs applied.");
+    return;
+  }
+
+  const rl = createInterface({ input, output });
+  try {
+    const apply = options.yes || await promptYesNo(rl, "Apply deterministic doctor repairs?", true);
+    if (!apply) {
+      console.log("No doctor repairs applied.");
+      return;
+    }
+    const repairs = await applyDoctorRepairs(target, status, false);
+    console.log("Applied doctor repairs:");
+    repairs.forEach((repair) => console.log(`- ${repair.file}: ${repair.summary}`));
+    const validation = options.skipValidate ? { ok: true, output: "Validation skipped." } : await validateTarget(target);
+    console.log(validation.output);
+    if (!validation.ok) process.exit(1);
+  } finally {
+    rl.close();
+  }
+}
+
 async function syncTarget(target, options, version) {
-  const status = await collectStatus(target, version);
+  const status = await collectStatus(target, version, { runValidation: !options.skipValidate });
   const installing = !status.installed || options.overwriteData;
   const migrating = status.needsMigration;
-  const shouldWrite = installing || migrating || options.force || options.appendAgents || options.rootScripts || options.updateGitignore;
+  const doctorRepairAvailable = Boolean(status.doctorRepairs.length);
+  const shouldWrite = installing || migrating || doctorRepairAvailable || options.force || options.appendAgents || options.rootScripts || options.updateGitignore;
 
   console.log(`Target: ${target}`);
   console.log(`Architext CLI: ${version}`);
+  printStatus(status, { verbose: true });
   console.log(`Operation: ${installing ? "install" : migrating ? "migrate" : "sync"}${shouldWrite ? "" : " (current)"}`);
   if (migrating) {
     console.log(`Copied install detected: ${status.copiedInstallPaths.length} package-owned paths`);
@@ -644,6 +964,12 @@ async function syncTarget(target, options, version) {
     if (removed.length) {
       console.log(`${options.dryRun ? "Would remove" : "Removed"} copied package-owned files:`);
       removed.forEach((item) => console.log(`- ${item}`));
+    }
+
+    if (!installing && doctorRepairAvailable) {
+      const repairs = await applyDoctorRepairs(target, status, options.dryRun);
+      console.log(`${options.dryRun ? "Would apply" : "Applied"} doctor repairs:`);
+      repairs.forEach((repair) => console.log(`- ${repair.file}: ${repair.summary}`));
     }
 
     const managedInstructions = [];
@@ -839,6 +1165,11 @@ async function main() {
   }
 
   const version = await packageVersion();
+  if (options.command === "version") {
+    console.log(version);
+    return;
+  }
+
   const target = path.resolve(options.target || process.cwd());
   if (options.command !== "explain") await assertTarget(target);
 
@@ -854,17 +1185,18 @@ async function main() {
   if (options.command === "prompt") return printPrompt(target, options.mode);
   if (options.command === "clean") return cleanGenerated(target, options);
   if (options.command === "explain") return explainTopic(options.topic);
-  if (options.command === "status" || options.command === "doctor") {
-    const status = await collectStatus(target, version, { runValidation: options.command === "doctor" });
+  if (options.command === "status") {
+    const status = await collectStatus(target, version);
     if (options.json) console.log(JSON.stringify(status, null, 2));
     else {
-      printStatus(status, { verbose: options.command === "doctor" });
+      printStatus(status);
       if (!status.installed || status.needsMigration) console.log("Next: architext sync");
-      else if (status.validation && !status.validation.ok) console.log("Next: architext prompt --mode repair-validation");
+      else if (status.doctorRepairs.length) console.log("Next: architext doctor");
       else console.log("Next: architext serve");
     }
     return;
   }
+  if (options.command === "doctor") return runDoctor(target, options, version);
   throw new Error(`Unknown command: ${options.command}`);
 }
 
