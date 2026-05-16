@@ -598,9 +598,8 @@ deployment views, risks, and data classification.
 ## CI And Release Gates
 
 CI must verify the same lifecycle that maintainers rely on locally. The formal
-pipeline should be self-contained and must not depend on sibling repositories
-such as Roboticus or Aegis. Those repositories are useful local litmus fixtures
-only.
+pipeline should be self-contained and must depend only on this repository's
+fixtures, package scripts, and generated package contents.
 
 Required CI gates:
 

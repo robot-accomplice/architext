@@ -466,7 +466,13 @@ An LLM working in a project that uses Architext should:
 6. Update data classification when data movement changes.
 7. Update risks when adding persistence, external services, trust boundaries,
    sensitive data, async processing, or operational complexity.
-8. Run validation before claiming the task is complete.
+8. Update Release Truth under `docs/architext/data/releases/` when release
+   scope, blockers, milestones, evidence, dependencies, target dates, or
+   posture change.
+9. Keep Release Path labels concise and put rationale, blocker explanations,
+   dependencies, next actions, and evidence in the selected release item's
+   detail data.
+10. Run validation before claiming the task is complete.
 
 Broken architecture JSON is worse than missing JSON because it gives future
 humans and LLMs false confidence.

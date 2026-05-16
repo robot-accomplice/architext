@@ -8,6 +8,14 @@ export function doctorRepairsForStatus(status) {
       summary: change
     });
   }
+  for (const change of status.releaseTruth?.repairChanges ?? []) {
+    repairs.push({
+      id: `release-truth:${change}`,
+      category: "release-truth",
+      file: "docs/architext/data/releases/index.json",
+      summary: change
+    });
+  }
   return repairs;
 }
 

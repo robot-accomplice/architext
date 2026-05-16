@@ -158,6 +158,62 @@ test("doctor and sync apply deterministic repair categories", () => {
   }
 });
 
+test("sync diagnoses and seeds missing Release Truth data for existing installs", () => {
+  const target = tempRepo();
+  try {
+    run(["sync", target, "--yes", "--branch", "none"]);
+    const manifestPath = path.join(target, "docs", "architext", "data", "manifest.json");
+    const releaseDir = path.join(target, "docs", "architext", "data", "releases");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    delete manifest.files.releases;
+    writeJson(manifestPath, manifest);
+    rmSync(releaseDir, { recursive: true, force: true });
+
+    const dryRun = run(["sync", target, "--dry-run", "--yes", "--branch", "none"]);
+    assert.match(dryRun, /Release Truth: not configured/);
+    assert.match(dryRun, /Would apply doctor repairs/);
+    assert.match(dryRun, /add starter Release Truth data and manifest\.files\.releases/);
+    assert.equal(existsSync(path.join(releaseDir, "index.json")), false);
+
+    run(["sync", target, "--yes", "--branch", "none"]);
+    const repairedManifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    assert.equal(repairedManifest.files.releases, "releases/index.json");
+    assert.equal(existsSync(path.join(releaseDir, "index.json")), true);
+    assert.match(run(["validate", target]), /Architext validation passed/);
+  } finally {
+    cleanup(target);
+  }
+});
+
+test("prompt includes Release Truth maintenance rules for LLM agents", () => {
+  const output = run(["prompt", ".", "--mode", "architecture-change"]);
+
+  assert.match(output, /Keep Release Truth data current when release scope, blockers, milestones, evidence, target dates, dependencies, or posture changes/);
+  assert.match(output, /Treat Release Truth as reviewed release state, not a planning scratchpad/);
+  assert.match(output, /refresh the generated release index from those facts/);
+  assert.match(output, /Keep Release Path labels concise/);
+  assert.match(output, /rationale, blocker explanation, evidence, dependencies, and next actions in detail data/);
+});
+
+test("managed agent instructions include Release Truth source-of-truth rules", () => {
+  const target = tempRepo();
+  try {
+    run(["sync", target, "--yes", "--branch", "none", "--append-agents"]);
+
+    const agents = readFileSync(path.join(target, "AGENTS.md"), "utf8");
+    const claude = readFileSync(path.join(target, "CLAUDE.md"), "utf8");
+    for (const instructions of [agents, claude]) {
+      assert.match(instructions, /Release Truth is the reviewed release source of truth/);
+      assert.match(instructions, /completed work,\s+deferrals, reprioritization, blockers, dependencies, and next actions belong in\s+the release detail file/);
+      assert.match(instructions, /Keep Release Path labels concise/);
+      assert.match(instructions, /Release Planning is a later Architext 1\.3\.0 capability/);
+      assert.match(instructions, /Do not claim the architecture documentation is current if validation fails or\s+was skipped/);
+    }
+  } finally {
+    cleanup(target);
+  }
+});
+
 test("--help documents path defaults and common commands", () => {
   const output = run(["--help"]);
 

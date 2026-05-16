@@ -1,6 +1,6 @@
 {
   "name": "@robotaccomplice/architext",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Local JSON-backed architecture and dataflow viewer for engineering teams and LLM-maintained architecture maps.",
   "type": "module",
   "engines": {

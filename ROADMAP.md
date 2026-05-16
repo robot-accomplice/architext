@@ -81,8 +81,8 @@ Goal: make lifecycle behavior explicit use cases behind adapters.
 
 ### CI And Release Gates
 
-Goal: make releasability verifiable without depending on local sibling
-repositories.
+Goal: make releasability verifiable using only this repository's fixtures,
+package scripts, and generated package contents.
 
 - Run unit, CLI, C4, routing, and benchmark checks in CI.
 - Validate bundled Architext self-data with package-owned schemas.
@@ -115,6 +115,48 @@ Acceptance direction:
 - Visual fixtures should cover large and dense diagrams before the feature is
   considered release-ready.
 
+### Release Truth
+
+Target: Architext 1.2.0. Shipped.
+
+Goal: make release posture, scope, blockers, milestones, workstreams, and
+historical release trends first-class Architext data.
+
+Direction:
+
+- Add a release index plus one detail JSON file per release so the current
+  snapshot is cheap to load and historical releases remain navigable.
+- Render a native Release Truth mode inside the existing Architext interface
+  rather than copying one-off status page styling.
+- Show current target release, posture, progress, blockers, dependencies,
+  completed/in-progress/planned/stretch scope, milestones, next actions, and
+  last-updated metadata.
+- Add historical navigation with a compact trends chart: release date on the X
+  axis, counts on the Y axis, and separate lines for features and bug fixes.
+- Validate release dependencies, stale status, broken detail-file references,
+  and inconsistent summary counts through the normal `validate`/`doctor`
+  lifecycle.
+
+See `docs/architecture/RELEASE_TRUTH_PLAN.md`.
+
+### Release Planning
+
+Target: Architext 1.3.0.
+
+Goal: turn roadmap items and ad hoc release work into proposed release scope
+without creating a second release model.
+
+Direction:
+
+- Keep Release Truth as the reviewed source of truth; Release Planning should
+  author proposals that write into the same release JSON after user review.
+- Let maintainers compose a release from existing roadmap items, newly entered
+  ad hoc items, blockers, dependencies, milestones, and evidence requirements.
+- Surface LLM-made scope recommendations, ordering, priority, and deferral
+  rationale before those decisions become Release Truth.
+- Preserve a single path from planning to tracking: draft release plan,
+  reviewed Release Truth data, then visual tracking and history.
+
 ### Schema And Data Migrations
 
 Goal: make schema evolution safe for existing data-only repositories.
@@ -133,12 +175,6 @@ architecture facts are automatically authoritative.
   language/ecosystem.
 - Treat extraction as draft architecture evidence requiring review.
 - Keep validation deterministic and independent of LLM inference.
-
-## Local Litmus Repositories
-
-Roboticus and Aegis are useful local stress tests for complex diagrams, but
-they must not become formal lifecycle dependencies. CI and package release
-gates must remain self-contained.
 
 ## Not Roadmap Items
 

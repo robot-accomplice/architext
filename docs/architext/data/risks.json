@@ -62,7 +62,7 @@
       "severity": "high",
       "status": "mitigating",
       "summary": "Dense diagrams can expose overlapping routes, hidden failures, slow planning, or visual differences between orthogonal, spline, and straight line styles.",
-      "mitigations": ["Keep geometry, ports, route indexing, rendering, and candidate scoring separated", "Protect route behavior with fitness tests", "Use local Roboticus and Aegis only as informal litmus tests"],
+      "mitigations": ["Keep geometry, ports, route indexing, rendering, and candidate scoring separated", "Protect route behavior with fitness tests", "Represent broad manual routing lessons as committed synthetic fixtures"],
       "relatedNodes": ["diagram-planner", "routing-engine", "viewer-runtime"],
       "relatedFlows": ["local-review"]
     },

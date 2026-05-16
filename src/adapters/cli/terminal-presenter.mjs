@@ -11,6 +11,9 @@ export function statusLines(status, { verbose = false } = {}) {
   if (status.c4) {
     lines.push(`C4 documents: ${status.c4.issues.length ? `${status.c4.issues.length} issue${status.c4.issues.length === 1 ? "" : "s"}` : "ok"}`);
   }
+  if (status.releaseTruth) {
+    lines.push(`Release Truth: ${status.releaseTruth.configured && status.releaseTruth.indexExists ? "configured" : status.releaseTruth.configured ? "index missing" : "not configured"}`);
+  }
 
   lines.push(`Doctor repairs: ${status.doctorRepairs.length ? status.doctorRepairs.length : "none"}`);
 

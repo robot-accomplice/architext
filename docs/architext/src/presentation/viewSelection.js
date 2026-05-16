@@ -3,7 +3,8 @@ export const modeLabels = {
   sequence: "Sequence",
   c4: "C4",
   deployment: "Deployment",
-  "data-risks": "Data/Risks"
+  "data-risks": "Data/Risks",
+  "release-truth": "Release Truth"
 };
 
 const modeViewTypes = {
@@ -11,7 +12,8 @@ const modeViewTypes = {
   sequence: ["sequence"],
   c4: ["c4-context", "c4-container", "c4-component"],
   deployment: ["deployment"],
-  "data-risks": ["risk-overlay", "dataflow"]
+  "data-risks": ["risk-overlay", "dataflow"],
+  "release-truth": []
 };
 
 export function modeForView(view) {
@@ -24,10 +26,12 @@ export function modeForView(view) {
 }
 
 export function viewBelongsToMode(view, mode) {
+  if (mode === "release-truth") return true;
   return Boolean(view && modeViewTypes[mode]?.includes(view.type));
 }
 
 export function defaultViewForMode(mode, views, fallback) {
+  if (mode === "release-truth") return fallback;
   const types = modeViewTypes[mode] ?? [];
   return views.find((view) => types.includes(view.type)) ?? fallback;
 }

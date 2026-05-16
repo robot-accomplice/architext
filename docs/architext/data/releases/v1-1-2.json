@@ -1,0 +1,130 @@
+{
+  "id": "v1-1-2",
+  "version": "1.1.2",
+  "name": "Architext 1.1.2",
+  "status": "released",
+  "posture": "shipped",
+  "summary": "Patch release with dense spline routing and dense topology layout improvements.",
+  "targetDate": "2026-05-16",
+  "releasedAt": "2026-05-16T09:20:00.000Z",
+  "lastUpdated": "2026-05-16T09:20:00.000Z",
+  "updateSource": "Local release ceremony",
+  "scope": {
+    "required": [
+      {
+        "id": "routing-spline-corrections",
+        "title": "Correct spline routing behavior",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Spline style uses its own routing presentation instead of warped orthogonal paths.",
+        "owner": "maintainer",
+        "workstreamId": "routing",
+        "dependsOn": [],
+        "evidence": ["npm test", "browser smoke against dense diagrams"]
+      },
+      {
+        "id": "dense-topology-layout",
+        "title": "Improve dense topology readability",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Dense Deployment and Data/Risks diagrams receive better layout behavior before release.",
+        "owner": "maintainer",
+        "workstreamId": "layout",
+        "dependsOn": [],
+        "evidence": ["npm run build", "local dense visual review"]
+      },
+      {
+        "id": "release-package-publication",
+        "title": "Publish public npm package and GitHub release",
+        "kind": "chore",
+        "status": "complete",
+        "summary": "Package was published to npm and tagged in GitHub after local validation.",
+        "owner": "maintainer",
+        "workstreamId": "release",
+        "dependsOn": ["routing-spline-corrections", "dense-topology-layout"],
+        "evidence": ["npm publish", "GitHub release v1.1.2"]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "routing",
+      "name": "Routing correctness",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Spline and orthogonal route behavior were made distinct and dense routing improved.",
+      "progress": 100,
+      "itemIds": ["routing-spline-corrections"],
+      "evidence": ["dense diagram review"]
+    },
+    {
+      "id": "layout",
+      "name": "Dense diagram layout",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Dense topology views were improved enough for publication.",
+      "progress": 100,
+      "itemIds": ["dense-topology-layout"],
+      "evidence": ["browser smoke"]
+    },
+    {
+      "id": "release",
+      "name": "Release ceremony",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "The package and GitHub release were published after validation.",
+      "progress": 100,
+      "itemIds": ["release-package-publication"],
+      "evidence": ["npm package @robotaccomplice/architext@1.1.2"]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "local-validation",
+      "label": "Local validation",
+      "status": "complete",
+      "date": "2026-05-16",
+      "order": 1,
+      "itemIds": ["routing-spline-corrections", "dense-topology-layout"]
+    },
+    {
+      "id": "public-release",
+      "label": "Public release",
+      "status": "complete",
+      "date": "2026-05-16",
+      "order": 2,
+      "itemIds": ["release-package-publication"]
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "publish-after-validation",
+      "from": "release-package-publication",
+      "to": "routing-spline-corrections",
+      "summary": "Publication depended on successful route and layout validation."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "npm-package",
+      "label": "npm package @robotaccomplice/architext@1.1.2",
+      "kind": "release-note",
+      "status": "complete"
+    },
+    {
+      "id": "github-release",
+      "label": "GitHub release v1.1.2",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "https://github.com/robot-accomplice/architext/releases/tag/v1.1.2"
+    }
+  ]
+}

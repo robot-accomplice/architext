@@ -152,7 +152,7 @@ boundary is a package-owned Web Worker:
   silently leaving stale geometry on screen.
 
 This is a viewer-responsiveness rule, not a substitute for routing performance
-work. Roboticus and synthetic benchmarks should still ratchet planner runtime
+work. Self-contained synthetic benchmarks should still ratchet planner runtime
 downward, but any runtime above one second must be made explicit to users.
 
 ## Fixture Catalog
@@ -171,14 +171,14 @@ Initial fixtures:
 
 ## Fitness Tests
 
-Roboticus remains useful as a real-project sentinel, but it is too broad and too
-slow to be the primary routing litmus. Routing correctness should be protected
-by named synthetic fixtures that are dense enough to expose planner failures and
-small enough to run on every local test pass.
+Manual experiments outside the repository may inform future fixture design, but
+they are too broad and too variable to be the primary routing standard. Routing
+correctness should be protected by named synthetic fixtures that are dense
+enough to expose planner failures and small enough to run on every local test
+pass.
 
-Default local and CI tests should run the fixture suite. Real-project benchmark
-runs, including Roboticus, should be explicit so normal routing iteration stays
-fast and deterministic.
+Default local and CI tests should run the committed fixture suite so normal
+routing iteration stays fast and deterministic.
 
 Fitness tests should operate on planned geometry, not screenshots. Each fixture
 should assert the same invariants that define acceptable output:
@@ -227,7 +227,7 @@ should assert the same invariants that define acceptable output:
   loop. Until it is backed by a spatial index, correctness checks rely on
   collisions, crossings, repeated crossings, endpoint stacks, doglegs, and
   fallback warnings.
-- Roboticus benchmark after cheap-candidate short-circuiting, bounded corridors,
+- Dense benchmark after cheap-candidate short-circuiting, bounded corridors,
   grid side-pair pruning, and disabled pairwise edge-proximity scans: 69 seconds
   on May 14, 2026. Previous successful benchmark was 409 seconds; intermediate
   attempts that kept pairwise edge-proximity scans exceeded ten minutes.
@@ -235,27 +235,27 @@ should assert the same invariants that define acceptable output:
   spatial index. Candidate scoring should query only nearby prior route samples
   or segments instead of walking every previous route for every candidate.
 - Route crossing and endpoint-stack checks now use an incremental route index.
-  Roboticus benchmark after this change: 27.8 seconds on May 14, 2026, down from
-  69 seconds after the first optimization pass and 409 seconds before routing
+  dense benchmark after this change: 27.8 seconds on May 14, 2026, down from 69
+  seconds after the first optimization pass and 409 seconds before routing
   optimization.
 - Next optimization target: index node rectangles for route quality, label
   clearance, and collision checks. Candidate scoring should query nearby
   blockers by sample bounds instead of scanning every non-endpoint node for
   every sample.
 - Blocker rectangle indexing was tested after the route index and did not improve
-  the Roboticus benchmark enough to keep as the next retained optimization.
+  the dense benchmark enough to keep as the next retained optimization.
   The next retained target is the grid router's Dijkstra implementation: it
   should use a priority queue instead of repeatedly scanning every graph point.
-- Priority-queue Dijkstra did not materially improve the Roboticus benchmark;
+- Priority-queue Dijkstra did not materially improve the dense benchmark;
   it remains useful as bounded algorithmic cleanup for hard grid-route cases.
   The dominant repeated work was route planning the same geometry for orthogonal
   and spline render styles. Raw route geometry is now cached independently of
-  style so a style change only re-renders the path shape. Roboticus benchmark
-  after raw-route caching: 15.4 seconds on May 14, 2026.
-- Subsequent local Roboticus benchmark runs after adding worker-backed viewer
+  style so a style change only re-renders the path shape. Dense benchmark after
+  raw-route caching: 15.4 seconds on May 14, 2026.
+- Subsequent local dense benchmark runs after adding worker-backed viewer
   planning still passed but measured 20.5-29.5 seconds. The worker change
-  improves viewer responsiveness rather than pure planner speed; the real-project
-  sentinel remains too slow and variable to run by default.
+  improves viewer responsiveness rather than pure planner speed; broad manual
+  experiments remain too slow and variable to run by default.
 - CPU profiling shows the retained hot path is route-clearance scoring:
   `distanceToRect`, `routeQualityFromSamples`, grid-route segment checks, and
   test collision verification dominate runtime. The next retained optimization
@@ -265,35 +265,35 @@ should assert the same invariants that define acceptable output:
 - Retained clearance optimizations now cache blocker rectangles per endpoint
   pair, prefilter blockers by candidate sample bounds, avoid square-root
   distance work outside threshold ranges, and use exact segment/rectangle checks
-  for orthogonal collision counting. Roboticus benchmark after these changes:
-  5.6 seconds on May 14, 2026.
+  for orthogonal collision counting. Dense benchmark after these changes: 5.6
+  seconds on May 14, 2026.
 - A grid graph adjacency cache was tested and not retained. In the current
   route shape, cache-key and graph materialization overhead outweighed reuse and
-  regressed Roboticus from roughly 6.0 seconds to 7.2 seconds.
+  regressed the dense benchmark from roughly 6.0 seconds to 7.2 seconds.
 - The next retained grid-route candidate is scan-line blocker prefiltering:
   horizontal grid segments only need blockers whose padded vertical span contains
   that y value, and vertical grid segments only need blockers whose padded
   horizontal span contains that x value.
 - Scan-line blocker prefiltering was retained. It keeps grid topology unchanged
-  while reducing impossible segment/blocker checks. Roboticus benchmark after
-  this change: 5.5 seconds on May 14, 2026.
+  while reducing impossible segment/blocker checks. Dense benchmark after this
+  change: 5.5 seconds on May 14, 2026.
 - Array-indexed grid adjacency and visited flags replaced `Map`/`Set`
   bookkeeping inside Dijkstra. This keeps pathfinding behavior unchanged while
-  reducing inner-loop overhead. Roboticus benchmark after this cleanup:
-  5.25 seconds on May 14, 2026.
+  reducing inner-loop overhead. Dense benchmark after this cleanup: 5.25 seconds
+  on May 14, 2026.
 - The next optimization target is reducing grid-route invocation count, not
   further tuning grid internals. The router should measure how many edges reach
   grid routing, why cheap candidates were rejected, and whether bounded cheap
   candidates can be expanded before invoking Dijkstra.
-- Roboticus measurement showed 67 of 395 routed edges escalated to grid routing,
-  but those edges caused 9,188 grid-route calls. Most cheap-candidate rejections
-  were crossings, but accepting those blindly would violate the crossing
-  avoidance invariant. The safer optimization is reducing grid port fan-out while
-  leaving the broad cheap candidate set intact.
+- Dense benchmark measurement showed 67 of 395 routed edges escalated to grid
+  routing, but those edges caused 9,188 grid-route calls. Most cheap-candidate
+  rejections were crossings, but accepting those blindly would violate the
+  crossing avoidance invariant. The safer optimization is reducing grid port
+  fan-out while leaving the broad cheap candidate set intact.
 - Bounded grid port fan-out was retained. Cheap routing still evaluates the broad
   aligned port set, but grid routing now uses representative offsets only. This
-  reduced Roboticus grid-route calls from 9,188 to 4,324 and moved the benchmark
-  to 4.2 seconds on May 14, 2026.
+  reduced dense benchmark grid-route calls from 9,188 to 4,324 and moved the
+  benchmark to 4.2 seconds on May 14, 2026.
 
 Remaining ratchets:
 
@@ -305,7 +305,8 @@ Remaining ratchets:
 - Keep `endpointStackCost`, `doglegCost`, `monotonicBacktrackCost`,
   `labelConflictCost`, and `labelNodeConflictCost` at zero for complex fixtures
   unless the fixture is explicitly modeling an unavoidable warning.
-- Keep Roboticus as an explicit benchmark until routing behavior stabilizes.
+- Keep broad manual benchmarks outside formal lifecycle checks until their
+  failures are reduced to committed synthetic fixtures.
 
 Initial complex fixtures:
 
@@ -320,13 +321,12 @@ Initial complex fixtures:
 - `complex-too-close` covered: deliberately cramped nodes produce explicit warnings
   rather than hiding the failure behind a convoluted path.
 
-## Roboticus Baseline
+## Dense Benchmark Baseline
 
-Roboticus is the first real-project routing benchmark. On May 14, 2026, the
-data-only Roboticus install validated cleanly and reported no lifecycle
-migration issues. Initial extraction exposed route/node collisions in dense
-views. The first routing improvement made node-body collisions a dominant
-selection constraint and added obstacle-aware orthogonal candidates.
+Manual dense routing experiments during development exposed route/node
+collisions in dense views. Those lessons are now represented by committed
+synthetic fixtures. The first routing improvement made node-body collisions a
+dominant selection constraint and added obstacle-aware orthogonal candidates.
 
 Headless route checks covered non-C4, non-sequence views with both structural
 relationships and flow relationships.
@@ -365,12 +365,12 @@ All routes have finite geometry. `first-party-surfaces` (`c4-container`) and
 `release-gate-flow` (`sequence`) were skipped because those views still use
 separate drawing logic.
 
-The benchmark is now covered by a conditional local test that runs when
-`../roboticus` exists next to Architext. It exercises both orthogonal and spline
-route rendering modes against the same obstacle-aware geometry. Spline-mode
-collision checks use samples from the rendered spline path, not only the
-pre-smoothed polyline. The next correctness target is to bring C4 routing under
-the same pure routing API and then add label-box collision checks.
+The benchmark learnings are now covered by committed synthetic fixtures that
+exercise both orthogonal and spline route rendering modes against the same
+obstacle-aware geometry. Spline-mode collision checks use samples from the
+rendered spline path, not only the pre-smoothed polyline. The next correctness
+target is to bring C4 routing under the same pure routing API and then add
+label-box collision checks.
 
 ## Implementation Sequence
 

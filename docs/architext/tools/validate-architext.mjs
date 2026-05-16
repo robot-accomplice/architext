@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import Ajv2020 from "ajv/dist/2020.js";
 import addFormats from "ajv-formats";
+import { validateReleaseReferences } from "../../../src/domain/architecture-model/references.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -39,6 +40,11 @@ const schemaFiles = {
   decisions: "decisions.schema.json",
   risks: "risks.schema.json",
   glossary: "glossary.schema.json"
+};
+
+const releaseSchemaFiles = {
+  releaseIndex: "release-index.schema.json",
+  releaseDetail: "release-detail.schema.json"
 };
 
 function readJson(filePath) {
@@ -117,12 +123,16 @@ addFormats(ajv);
 const schemas = Object.fromEntries(
   Object.entries(schemaFiles).map(([key, file]) => [key, readJson(path.join(schemaDir, file))])
 );
+const releaseSchemas = Object.fromEntries(
+  Object.entries(releaseSchemaFiles).map(([key, file]) => [key, readJson(path.join(schemaDir, file))])
+);
 
-for (const schema of Object.values(schemas)) {
+for (const schema of [...Object.values(schemas), ...Object.values(releaseSchemas)]) {
   ajv.addSchema(schema);
 }
 
 const manifest = readJson(path.join(dataDir, "manifest.json"));
+const releases = manifest.files.releases ? readReleases(dataDir, manifest.files.releases) : null;
 const model = {
   manifest,
   nodes: readJson(path.join(dataDir, manifest.files.nodes)),
@@ -131,7 +141,8 @@ const model = {
   dataClassification: readJson(path.join(dataDir, manifest.files.dataClassification)),
   decisions: readJson(path.join(dataDir, manifest.files.decisions)),
   risks: readJson(path.join(dataDir, manifest.files.risks)),
-  glossary: readJson(path.join(dataDir, manifest.files.glossary))
+  glossary: readJson(path.join(dataDir, manifest.files.glossary)),
+  ...(releases ? { releases } : {})
 };
 
 const errors = [];
@@ -154,6 +165,10 @@ requireUnique(model.decisions.decisions, "decisions", errors);
 requireUnique(model.risks.risks, "risks", errors);
 validateReferences(model, errors);
 
+if (model.releases) {
+  validateReleaseData(model.releases, errors);
+}
+
 if (errors.length > 0) {
   console.error("Architext validation failed:");
   for (const error of errors) console.error(`- ${error}`);
@@ -161,3 +176,35 @@ if (errors.length > 0) {
 }
 
 console.log("Architext validation passed.");
+
+function readReleases(baseDir, indexFile) {
+  const indexPath = path.join(baseDir, indexFile);
+  const index = readJson(indexPath);
+  const detailBaseDir = path.dirname(indexPath);
+  return {
+    index,
+    details: index.releases.map((release) => readJson(path.join(detailBaseDir, release.file)))
+  };
+}
+
+function validateReleaseData(releases, errors) {
+  const releaseIndexSchema = ajv.getSchema(releaseSchemas.releaseIndex.$id);
+  if (!releaseIndexSchema(releases.index)) {
+    for (const error of releaseIndexSchema.errors ?? []) {
+      errors.push(`releaseIndex${error.instancePath}: ${error.message}`);
+    }
+  }
+
+  const releaseDetailSchema = ajv.getSchema(releaseSchemas.releaseDetail.$id);
+  for (const detail of releases.details) {
+    if (!releaseDetailSchema(detail)) {
+      for (const error of releaseDetailSchema.errors ?? []) {
+        errors.push(`release ${detail.id ?? "(unknown)"}${error.instancePath}: ${error.message}`);
+      }
+    }
+  }
+
+  requireUnique(releases.index.releases, "releases.index", errors);
+  requireUnique(releases.details, "releases.details", errors);
+  validateReleaseReferences(releases, errors);
+}

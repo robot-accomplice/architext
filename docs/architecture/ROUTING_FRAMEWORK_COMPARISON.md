@@ -216,8 +216,8 @@ Proceed in this order:
    - edge grouping and lane spacing for fan-out/fan-in
    - bridge/hop rendering for accepted perpendicular intersections
 5. Defer external engine adoption. Revisit only if the pure router cannot meet
-   measurable benchmarks on Architext and Roboticus after those concepts are
-   implemented.
+   measurable benchmarks on Architext's self fixtures and committed synthetic
+   dense fixtures after those concepts are implemented.
 
 ## Library-Derived Rules To Adopt
 

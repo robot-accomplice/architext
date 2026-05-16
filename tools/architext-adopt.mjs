@@ -11,6 +11,7 @@ import { createCommandHandlers, routeCommand } from "../src/adapters/cli/command
 import { parseArgs, usage } from "../src/adapters/cli/command-line.mjs";
 import { printStatus } from "../src/adapters/cli/terminal-presenter.mjs";
 import { c4IssuesForView, repairC4Views } from "../src/domain/architecture-model/c4-quality.mjs";
+import { generatedReleaseIndex, releaseIndexGenerationChanges } from "../src/domain/architecture-model/release-history.mjs";
 import { doctorRepairCategories, doctorRepairsForStatus } from "../src/domain/lifecycle/doctor-repairs.mjs";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
@@ -174,13 +175,177 @@ async function repairC4Data(target, dryRun) {
   return { repairChanges: repaired.changes };
 }
 
+async function collectReleaseTruthStatus(target) {
+  const manifestPath = path.join(dataDir(target), "manifest.json");
+  if (!existsSync(manifestPath)) return null;
+  const manifest = await readJson(manifestPath);
+  const configured = Boolean(manifest.files?.releases);
+  const indexPath = configured ? path.join(dataDir(target), manifest.files.releases) : path.join(dataDir(target), "releases", "index.json");
+  const indexExists = existsSync(indexPath);
+  const repairChanges = configured
+    ? await generatedReleaseHistoryChanges(indexPath, indexExists)
+    : ["add starter Release Truth data and manifest.files.releases"];
+  return { configured, indexPath, indexExists, repairChanges };
+}
+
+async function releaseDetailEntries(indexPath, index) {
+  const releaseDir = path.dirname(indexPath);
+  return Promise.all(index.releases.map(async (summary) => ({
+    file: summary.file,
+    detail: await readJson(path.join(releaseDir, summary.file))
+  })));
+}
+
+async function generatedReleaseHistoryChanges(indexPath, indexExists) {
+  if (!indexExists) return ["create missing Release Truth history index"];
+  const index = await readJson(indexPath);
+  const generated = generatedReleaseIndex(index, await releaseDetailEntries(indexPath, index));
+  return releaseIndexGenerationChanges(index, generated);
+}
+
+async function repairReleaseTruthData(target, dryRun) {
+  const targetDataDir = dataDir(target);
+  const manifestPath = path.join(targetDataDir, "manifest.json");
+  if (!existsSync(manifestPath)) return { repairChanges: [] };
+  const manifest = await readJson(manifestPath);
+  if (manifest.files?.releases) {
+    const indexPath = path.join(targetDataDir, manifest.files.releases);
+    if (!existsSync(indexPath)) return { repairChanges: [] };
+    const index = await readJson(indexPath);
+    const generated = generatedReleaseIndex(index, await releaseDetailEntries(indexPath, index));
+    const repairChanges = releaseIndexGenerationChanges(index, generated);
+    if (repairChanges.length && !dryRun) await writeJson(indexPath, generated);
+    return { repairChanges };
+  }
+  if (!dryRun) {
+    await writeJson(manifestPath, {
+      ...manifest,
+      files: {
+        ...manifest.files,
+        releases: "releases/index.json"
+      }
+    });
+    await writeStarterReleaseData(targetDataDir);
+  }
+  return { repairChanges: ["add starter Release Truth data and manifest.files.releases"] };
+}
+
 const doctorRepairHandlers = {
-  c4: repairC4Data
+  c4: repairC4Data,
+  "release-truth": repairReleaseTruthData
 };
 
 function slugify(value) {
   const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
   return slug || "target-project";
+}
+
+async function writeStarterReleaseData(targetDataDir) {
+  const releaseDir = path.join(targetDataDir, "releases");
+  const releaseId = "initial-architext-buildout";
+  const lastUpdated = new Date().toISOString();
+  await mkdir(releaseDir, { recursive: true });
+  await writeJson(path.join(releaseDir, "index.json"), {
+    currentReleaseId: releaseId,
+    releases: [
+      {
+        id: releaseId,
+        version: "0.1.0",
+        name: "Initial Architext build-out",
+        status: "planning",
+        posture: "at-risk",
+        targetWindow: "Before claiming architecture documentation is current",
+        lastUpdated,
+        summary: "Replace starter architecture and release data with project-specific facts.",
+        counts: {
+          features: 0,
+          bugFixes: 0,
+          workstreams: 1,
+          blockers: 1,
+          complete: 0,
+          inProgress: 0,
+          planned: 1,
+          stretch: 0
+        },
+        file: `${releaseId}.json`
+      }
+    ]
+  });
+  await writeJson(path.join(releaseDir, `${releaseId}.json`), {
+    id: releaseId,
+    version: "0.1.0",
+    name: "Initial Architext build-out",
+    status: "planning",
+    posture: "at-risk",
+    summary: "Replace starter architecture and release data with project-specific facts.",
+    targetWindow: "Before claiming architecture documentation is current",
+    lastUpdated,
+    updateSource: "architext sync starter data",
+    scope: {
+      required: [
+        {
+          id: "replace-starter-architecture-data",
+          title: "Replace starter architecture data",
+          kind: "documentation",
+          status: "planned",
+          summary: "Inspect the repository and replace starter Architext JSON with source-backed project facts.",
+          owner: "Project maintainers",
+          workstreamId: "architecture-buildout",
+          dependsOn: [],
+          evidence: ["architext validate"]
+        }
+      ],
+      planned: [],
+      stretch: [],
+      deferred: [],
+      outOfScope: []
+    },
+    workstreams: [
+      {
+        id: "architecture-buildout",
+        name: "Architecture build-out",
+        owner: "Project maintainers",
+        status: "planned",
+        posture: "at-risk",
+        summary: "Replace starter architecture facts, release facts, and validation evidence before relying on Architext.",
+        progress: 0,
+        itemIds: ["replace-starter-architecture-data"],
+        evidence: ["architext validate"]
+      }
+    ],
+    blockers: [
+      {
+        id: "starter-data-not-replaced",
+        title: "Starter data is not project truth",
+        severity: "high",
+        status: "blocked",
+        owner: "Project maintainers",
+        summary: "The project has validating starter data, but it has not yet been replaced with source-backed architecture and release facts.",
+        nextAction: "Run the LLM Architext build-out workflow and review the JSON diff.",
+        itemIds: ["replace-starter-architecture-data"],
+        evidenceNeeded: ["Source-backed JSON updates", "architext validate"]
+      }
+    ],
+    milestones: [
+      {
+        id: "starter-replaced",
+        label: "Starter data replaced",
+        status: "planned",
+        targetWindow: "Initial documentation pass",
+        order: 1,
+        itemIds: ["replace-starter-architecture-data"]
+      }
+    ],
+    dependencies: [],
+    evidence: [
+      {
+        id: "starter-validation",
+        label: "architext validate",
+        kind: "test",
+        status: "planned"
+      }
+    ]
+  });
 }
 
 async function writeStarterData(target, version) {
@@ -209,10 +374,11 @@ async function writeStarterData(target, version) {
       dataClassification: "data-classification.json",
       decisions: "decisions.json",
       risks: "risks.json",
-      glossary: "glossary.json"
+      glossary: "glossary.json",
+      releases: "releases/index.json"
     },
     notes: [
-      "Starter data only. Ask an LLM to inspect the codebase and build out docs/architext/data/*.json.",
+      "Starter data only. Ask an LLM to inspect the codebase and build out docs/architext/data/**/*.json.",
       "Do not treat this starter model as architecture documentation for the target project."
     ]
   });
@@ -331,6 +497,7 @@ async function writeStarterData(target, version) {
   await writeJson(path.join(targetDataDir, "glossary.json"), {
     terms: [{ term: "Architext starter data", definition: "A neutral validating placeholder installed into new projects before real architecture data is generated." }]
   });
+  await writeStarterReleaseData(targetDataDir);
 }
 
 async function appendixMarkdown() {
@@ -419,6 +586,7 @@ async function collectStatus(target, version, { runValidation = false } = {}) {
   const installed = existsSync(manifestPath);
   const validation = runValidation ? await validateTarget(target) : null;
   const c4 = installed ? await collectC4Status(target) : null;
+  const releaseTruth = installed ? await collectReleaseTruthStatus(target) : null;
   const gitignoreText = existsSync(path.join(target, ".gitignore")) ? await readFile(path.join(target, ".gitignore"), "utf8") : "";
   const gitignoreMissing = generatedIgnores.filter((entry) => !gitignoreText.split(/\r?\n/).includes(entry));
   const instructionStatus = {};
@@ -456,6 +624,7 @@ async function collectStatus(target, version, { runValidation = false } = {}) {
     rootScripts: rootScriptStatus,
     trackedGenerated,
     c4,
+    releaseTruth,
     validation
   };
   status.doctorRepairs = doctorRepairsForStatus(status);
@@ -527,10 +696,13 @@ async function applyDoctorRepairs(target, status, dryRun) {
     const handler = doctorRepairHandlers[category];
     if (!handler) continue;
     const result = await handler(target, dryRun);
+    const file = category === "c4"
+      ? path.join(dataDir(target), "views.json")
+      : path.join(dataDir(target), "releases", "index.json");
     for (const change of result.repairChanges ?? []) {
       applied.push({
         category,
-        file: path.join(dataDir(target), "views.json"),
+        file,
         summary: change
       });
     }
@@ -550,11 +722,11 @@ async function runDoctor(target, options, version) {
     console.log("Next: architext sync");
     return;
   }
-  if (status.validation && !status.validation.ok) {
-    console.log("Next: architext prompt --mode repair-validation");
-    return;
-  }
   if (!status.doctorRepairs.length) {
+    if (status.validation && !status.validation.ok) {
+      console.log("Next: architext prompt --mode repair-validation");
+      return;
+    }
     console.log("Next: architext serve");
     return;
   }
@@ -621,7 +793,7 @@ async function syncTarget(target, options, version) {
       console.log(`${options.dryRun ? "Would write" : "Writing"} starter data to ${dataDir(target)}`);
       if (!options.dryRun) await writeStarterData(target, version);
     } else {
-      console.log("Preserving target-owned docs/architext/data/*.json");
+      console.log("Preserving target-owned docs/architext/data/**/*.json");
     }
 
     const removed = migrating ? await removeCopiedInstallFiles(target, options.dryRun) : [];
@@ -695,11 +867,14 @@ async function printPrompt(target, mode) {
 
   console.log(`${lead}
 
-First read AGENTS.md/CLAUDE.md if present, then docs/architext/data/*.json.
+First read AGENTS.md/CLAUDE.md if present, then docs/architext/data/**/*.json.
 
 Rules:
-- Update only docs/architext/data/*.json unless the Architext package itself is being changed.
+- Update only docs/architext/data/**/*.json unless the Architext package itself is being changed.
 - Reuse stable IDs, create nodes before references, keep flows ordered, and prefer source-path-backed claims.
+- Keep Release Truth data current when release scope, blockers, milestones, evidence, target dates, dependencies, or posture changes.
+- Treat Release Truth as reviewed release state, not a planning scratchpad: update detail files for completed, deferred, blocked, reprioritized, or newly scoped work, then refresh the generated release index from those facts.
+- Keep Release Path labels concise; put rationale, blocker explanation, evidence, dependencies, and next actions in detail data for the selected release item.
 - Mark uncertainty and known gaps explicitly.
 - Do not edit copied viewer, schema, package, Vite, or local tool files in the target repository.
 - Run architext validate ${target} before claiming completion.
@@ -739,11 +914,13 @@ async function explainTopic(topic) {
     risk: "risks.schema.json",
     decisions: "decisions.schema.json",
     decision: "decisions.schema.json",
-    glossary: "glossary.schema.json"
+    glossary: "glossary.schema.json",
+    releases: "release-index.schema.json",
+    release: "release-detail.schema.json"
   };
   const schemaFile = schemaMap[normalized];
   if (!schemaFile) {
-    console.log("Architext data is split across manifest, nodes, flows, views, data classification, decisions, risks, and glossary JSON files.");
+    console.log("Architext data is split across manifest, nodes, flows, views, data classification, decisions, risks, glossary, and optional releases JSON files.");
     return;
   }
   const schema = await readJson(path.join(schemaDir, schemaFile));

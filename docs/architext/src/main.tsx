@@ -4,7 +4,7 @@ import type { Root } from "react-dom/client";
 import { c4LayoutFor } from "./routing/c4Layout.js";
 import { relationshipLabel } from "./routing/relationshipLabels.js";
 import { plannedCanvasFallback, usePlannedDiagram } from "./routing/usePlannedDiagram.js";
-import { loadArchitectureModel } from "./adapters/fetchArchitectureData.js";
+import { loadArchitectureModel, loadReleaseDetail } from "./adapters/fetchArchitectureData.js";
 import { isSelectedStep, orderSelectedLast, selectedFlowIdForSelection, selectedStepIdForSelection } from "./presentation/stepSelection.js";
 import { diagramLayoutFor } from "./presentation/diagramLayout.js";
 import { modeShowsOrderedFlow, modeUsesStructuralRelationships } from "./presentation/viewModes.js";
@@ -21,6 +21,12 @@ import type {
   Mode,
   Model,
   NodeType,
+  ReleaseBlocker,
+  ReleaseDetail,
+  ReleaseItem,
+  ReleaseItemStatus,
+  ReleaseModel,
+  ReleaseSummary,
   Relationship,
   Risk,
   RoutingStyle,
@@ -29,6 +35,8 @@ import type {
   ViewportSize
 } from "./domain/architectureTypes.js";
 import "./styles.css";
+
+declare const __ARCHITEXT_VERSION__: string;
 
 const MIN_DESKTOP_FIT_ZOOM = 0.85;
 const MIN_COMPACT_FIT_ZOOM = 0.7;
@@ -45,12 +53,80 @@ const routingStyleLabels: Record<RoutingStyle, string> = {
   straight: "Straight"
 };
 
+const releaseStatusLabels: Record<ReleaseItemStatus, string> = {
+  planned: "Planned",
+  "in-progress": "In Progress",
+  blocked: "Blocked",
+  complete: "Complete",
+  deferred: "Deferred",
+  stretch: "Stretch",
+  cut: "Cut"
+};
+
+function releaseTone(value?: string): string {
+  if (!value) return "neutral";
+  if (["complete", "released", "shipped", "on-track", "low"].includes(value)) return "healthy";
+  if (["planned", "planning", "active", "in-progress", "release-candidate", "stretch", "medium"].includes(value)) return "progressing";
+  if (["blocked", "at-risk", "critical", "high"].includes(value)) return "blocked";
+  if (["deferred", "cut"].includes(value)) return "inactive";
+  return "neutral";
+}
+
+function releaseBadgeTone(value?: string): string {
+  return `release-${releaseTone(value)}`;
+}
+
+function progressTone(value?: number): string {
+  const progress = value ?? 0;
+  if (progress <= 0) return "inactive";
+  if (progress < 100) return "progressing";
+  return "healthy";
+}
+
+function progressFill(value?: number): string {
+  const progress = Math.max(0, Math.min(100, value ?? 0));
+  if (progress <= 0) return "var(--line-strong)";
+  return `color-mix(in srgb, var(--green) ${progress}%, var(--yellow))`;
+}
+
+function progressBarStyle(value?: number): React.CSSProperties {
+  return { "--progress-fill": progressFill(value) } as React.CSSProperties;
+}
+
+function releaseLineState(status: ReleaseItemStatus, blocked = false): "Complete" | "Blocked" | "Deferred" | "Clear" {
+  if (status === "complete") return "Complete";
+  if (status === "deferred" || status === "cut") return "Deferred";
+  if (blocked || status === "blocked") return "Blocked";
+  return "Clear";
+}
+
+function releaseLineCheckClass(state: ReturnType<typeof releaseLineState>): string {
+  if (state === "Complete") return "checked";
+  return "";
+}
+
 function byId<T extends { id: Id }>(items: T[]): Map<Id, T> {
   return new Map(items.map((item) => [item.id, item]));
 }
 
-function Badge({ children, tone }: { children: React.ReactNode; tone?: string }) {
-  return <span className={`badge ${tone ?? ""}`}>{children}</span>;
+function Badge({ children, tone, title }: { children: React.ReactNode; tone?: string; title?: string }) {
+  return <span className={`badge ${tone ?? ""}`} title={title}>{children}</span>;
+}
+
+function ReleaseStateBadges({ status, posture }: { status: string; posture: string }) {
+  if (status === posture) {
+    return (
+      <Badge tone={releaseBadgeTone(status)} title={`Release status and posture are both ${status}`}>
+        {status}
+      </Badge>
+    );
+  }
+  return (
+    <>
+      <Badge tone={releaseBadgeTone(status)} title="Release lifecycle status">Status: {status}</Badge>
+      <Badge tone={releaseBadgeTone(posture)} title="Release readiness posture">Posture: {posture}</Badge>
+    </>
+  );
 }
 
 function scaledCanvasStyle(width: number, height: number, transform: DiagramTransform) {
@@ -156,6 +232,463 @@ function FieldList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
+function releaseItems(detail: ReleaseDetail | null): ReleaseItem[] {
+  if (!detail) return [];
+  return [
+    ...detail.scope.required,
+    ...detail.scope.planned,
+    ...detail.scope.stretch,
+    ...detail.scope.deferred,
+    ...detail.scope.outOfScope
+  ];
+}
+
+function releaseProgress(detail: ReleaseDetail | null): number {
+  const required = detail?.scope.required ?? [];
+  if (required.length === 0) return 0;
+  const complete = required.filter((item) => item.status === "complete").length;
+  return Math.round((complete / required.length) * 100);
+}
+
+function formatReleaseDate(value?: string) {
+  if (!value) return "";
+  return value.includes("T") ? value.slice(0, 10) : value;
+}
+
+function ReleaseTruthWorkspace({
+  releases,
+  activeReleaseSummary,
+  activeReleaseDetail,
+  selection,
+  onSelectCurrentRelease,
+  onSelectReleaseItem,
+  onSelectReleaseMilestone
+}: {
+  releases?: ReleaseModel;
+  activeReleaseSummary: ReleaseSummary | null;
+  activeReleaseDetail: ReleaseDetail | null;
+  selection: Selection | null;
+  onSelectCurrentRelease: () => void;
+  onSelectReleaseItem: (id: Id) => void;
+  onSelectReleaseMilestone: (id: Id) => void;
+}) {
+  if (!releases || !activeReleaseSummary) {
+    return (
+      <section className="release-truth-empty">
+        <h2>Release Truth</h2>
+        <p>Add release data to `docs/architext/data/releases` and reference it from `manifest.files.releases`.</p>
+      </section>
+    );
+  }
+
+  const progress = releaseProgress(activeReleaseDetail);
+  const items = releaseItems(activeReleaseDetail);
+  const requiredCount = activeReleaseDetail?.scope.required.length ?? 0;
+  const completeCount = items.filter((item) => item.status === "complete").length;
+  const inProgressCount = items.filter((item) => item.status === "in-progress").length;
+  const blockedCount = activeReleaseDetail?.blockers.length ?? activeReleaseSummary.counts.blockers;
+
+  return (
+    <section className="release-truth-workspace">
+      <header className="release-hero">
+        <div>
+          <p className="eyebrow">Release Truth</p>
+          <h2>{activeReleaseSummary.name}</h2>
+          <p>{activeReleaseSummary.summary}</p>
+        </div>
+        <div className="release-hero-meta">
+          <ReleaseStateBadges status={activeReleaseSummary.status} posture={activeReleaseSummary.posture} />
+          <span>Updated {formatReleaseDate(activeReleaseSummary.lastUpdated)}</span>
+          {releases.index.currentReleaseId !== activeReleaseSummary.id ? (
+            <button type="button" className="button-reset release-current-button" onClick={onSelectCurrentRelease}>
+              Current release
+            </button>
+          ) : null}
+        </div>
+      </header>
+
+      <section className="release-progress-panel">
+        <div className="release-progress-copy">
+          <strong>{progress}% required scope complete</strong>
+          <span>{requiredCount} required · {completeCount} complete · {inProgressCount} in progress · {blockedCount} blockers</span>
+        </div>
+        <div className={`release-progress-bar ${progressTone(progress)}`} style={progressBarStyle(progress)} aria-label={`${progress}% required scope complete`}>
+          <span style={{ width: `${progress}%` }} />
+        </div>
+      </section>
+
+      <div className="release-grid">
+        <section className="release-section release-section-wide">
+          <h3>Release Path</h3>
+          {activeReleaseDetail ? (
+            <ReleasePath
+              detail={activeReleaseDetail}
+              selection={selection}
+              onSelectItem={onSelectReleaseItem}
+              onSelectMilestone={onSelectReleaseMilestone}
+            />
+          ) : (
+            <p className="muted">Release detail is loading.</p>
+          )}
+        </section>
+
+        <section className="release-section release-section-wide release-history-section">
+          <h3>History</h3>
+          <ReleaseTrendChart releases={releases.index.releases} activeReleaseId={activeReleaseSummary.id} />
+        </section>
+      </div>
+    </section>
+  );
+}
+
+function ReleasePath({
+  detail,
+  selection,
+  onSelectItem,
+  onSelectMilestone
+}: {
+  detail: ReleaseDetail;
+  selection: Selection | null;
+  onSelectItem: (id: Id) => void;
+  onSelectMilestone: (id: Id) => void;
+}) {
+  const allItems = releaseItems(detail);
+  const itemsById = byId(allItems);
+  const workstreamsById = byId(detail.workstreams);
+  const blockersByItemId = blockersGroupedByItem(detail.blockers);
+  const linkedItemIds = new Set(detail.milestones.flatMap((milestone) => milestone.itemIds));
+  const unlinkedItems = allItems.filter((item) => !linkedItemIds.has(item.id));
+  const milestones = [
+    ...detail.milestones,
+    ...(unlinkedItems.length > 0 ? [{
+      id: "unlinked-release-scope",
+      label: "Other considered release scope",
+      status: "planned" as ReleaseItemStatus,
+      targetWindow: "Tracked outside explicit milestones",
+      order: Math.max(0, ...detail.milestones.map((milestone) => milestone.order)) + 1,
+      itemIds: unlinkedItems.map((item) => item.id)
+    }] : [])
+  ].sort((a, b) => a.order - b.order);
+  const scopeByItemId = releaseScopeByItemId(detail);
+
+  return (
+      <div className="release-path">
+      {milestones.map((milestone) => {
+        const milestoneItems = milestone.itemIds.map((itemId) => itemsById.get(itemId)).filter((item): item is ReleaseItem => Boolean(item));
+        const blockedItems = milestoneItems.filter((item) => item.status === "blocked" || (blockersByItemId.get(item.id)?.length ?? 0) > 0);
+        const pathNumber = milestone.status === "deferred" || milestone.status === "cut" ? 0 : milestone.order;
+        return (
+          <article className={`release-path-step ${releaseTone(milestone.status)}`} key={milestone.id}>
+            <div className="release-path-marker">
+              <span>{pathNumber}</span>
+            </div>
+            <div className="release-path-body">
+              <ReleasePathMilestoneLine
+                blockedItems={blockedItems}
+                itemCount={milestoneItems.length}
+                label={milestone.label}
+                onSelect={() => onSelectMilestone(milestone.id)}
+                selected={selection?.kind === "release-milestone" && selection.milestoneId === milestone.id}
+                status={milestone.status}
+                timing={milestone.date ?? milestone.targetWindow ?? "No date"}
+              />
+              <div className="release-path-subitems">
+                {milestoneItems.length ? milestoneItems.map((item) => {
+                  const workstream = item.workstreamId ? workstreamsById.get(item.workstreamId) : undefined;
+                  const blockers = blockersByItemId.get(item.id) ?? [];
+                  return (
+                    <ReleasePathItem
+                      blockers={blockers}
+                      item={item}
+                      key={item.id}
+                      onSelect={() => onSelectItem(item.id)}
+                      selected={selection?.kind === "release-item" && selection.itemId === item.id}
+                      scope={scopeByItemId.get(item.id) ?? "scope"}
+                      workstreamName={workstream?.name ?? "Unassigned"}
+                    />
+                  );
+                }) : (
+                  <p className="muted">No linked release items.</p>
+                )}
+              </div>
+            </div>
+          </article>
+        );
+      })}
+    </div>
+  );
+}
+
+function releaseScopeByItemId(detail: ReleaseDetail): Map<Id, string> {
+  return new Map([
+    ...detail.scope.required.map((item) => [item.id, "required"] as const),
+    ...detail.scope.planned.map((item) => [item.id, "planned"] as const),
+    ...detail.scope.stretch.map((item) => [item.id, "stretch"] as const),
+    ...detail.scope.deferred.map((item) => [item.id, "deferred"] as const),
+    ...detail.scope.outOfScope.map((item) => [item.id, "out of scope"] as const)
+  ]);
+}
+
+function ReleasePathMilestoneLine({
+  blockedItems,
+  itemCount,
+  label,
+  onSelect,
+  selected,
+  status,
+  timing
+}: {
+  blockedItems: ReleaseItem[];
+  itemCount: number;
+  label: string;
+  onSelect: () => void;
+  selected: boolean;
+  status: ReleaseItemStatus;
+  timing: string;
+}) {
+  const lineState = releaseLineState(status, blockedItems.length > 0);
+  const blockerText = blockedItems.map((item) => item.title).join(", ");
+  return (
+    <button type="button" className={`release-path-coarse-line ${selected ? "active" : ""}`} onClick={onSelect}>
+      <span className={`release-check ${releaseLineCheckClass(lineState)}`} aria-label={lineState} />
+      <Badge tone={releaseBadgeTone(lineState === "Blocked" ? "blocked" : status)}>{lineState}</Badge>
+      <strong>{label}</strong>
+      <span className="release-path-description">{releaseStatusLabels[status]} · {timing} · {itemCount} items</span>
+      {blockerText ? <span className="release-path-blockers">Blocked by: {blockerText}</span> : null}
+    </button>
+  );
+}
+
+function blockersGroupedByItem(blockers: ReleaseBlocker[]): Map<Id, ReleaseBlocker[]> {
+  const grouped = new Map<Id, ReleaseBlocker[]>();
+  for (const blocker of blockers) {
+    for (const itemId of blocker.itemIds) {
+      grouped.set(itemId, [...(grouped.get(itemId) ?? []), blocker]);
+    }
+  }
+  return grouped;
+}
+
+function ReleasePathItem({
+  item,
+  workstreamName,
+  blockers,
+  onSelect,
+  selected,
+  scope
+}: {
+  item: ReleaseItem;
+  workstreamName: string;
+  blockers: ReleaseBlocker[];
+  onSelect: () => void;
+  selected: boolean;
+  scope: string;
+}) {
+  const primaryBlocker = blockers[0];
+  const lineTone = primaryBlocker ? releaseTone(primaryBlocker.severity) : releaseTone(item.status);
+  const state = releaseLineState(item.status, Boolean(primaryBlocker));
+  return (
+    <button type="button" className={`release-path-line release-path-item ${lineTone} ${selected ? "active" : ""}`} onClick={onSelect}>
+      <span className={`release-check ${releaseLineCheckClass(state)}`} aria-label={state} />
+      <Badge tone={releaseBadgeTone(state === "Blocked" ? primaryBlocker?.severity ?? "blocked" : item.status)}>{state}</Badge>
+      <div className="release-path-line-main">
+        <strong>{item.title}</strong>
+        <small>{scope} · {workstreamName} · {releaseStatusLabels[item.status]} · {item.kind}{item.priority ? ` · ${item.priority} priority` : ""}{item.owner ? ` · ${item.owner}` : ""}</small>
+      </div>
+      {primaryBlocker ? <span className="release-path-blockers">Blocked by: {primaryBlocker.title}</span> : null}
+    </button>
+  );
+}
+
+function ReleaseTrendChart({
+  releases,
+  activeReleaseId
+}: {
+  releases: ReleaseSummary[];
+  activeReleaseId: Id;
+}) {
+  const [inspectedReleaseId, setInspectedReleaseId] = useState<Id | null>(null);
+  const sorted = [...releases].sort((a, b) => (a.releasedAt ?? a.targetDate ?? a.targetWindow ?? "").localeCompare(b.releasedAt ?? b.targetDate ?? b.targetWindow ?? ""));
+  const width = 1200;
+  const height = 160;
+  const padTop = 22;
+  const padRight = 8;
+  const padBottom = 46;
+  const padLeft = 30;
+  const baseline = height - padBottom;
+  const maxCount = Math.max(1, ...sorted.flatMap((release) => [release.counts.features, release.counts.bugFixes]));
+  const markerReleaseId = inspectedReleaseId ?? activeReleaseId;
+  const markerIndex = Math.max(0, sorted.findIndex((release) => release.id === markerReleaseId));
+  const xFor = (index: number) => sorted.length === 1 ? width / 2 : padLeft + (index * (width - padLeft - padRight)) / (sorted.length - 1);
+  const yFor = (count: number) => baseline - (count * (baseline - padTop)) / maxCount;
+  const pathFor = (key: "features" | "bugFixes") => sorted
+    .map((release, index) => `${index === 0 ? "M" : "L"} ${xFor(index)} ${yFor(release.counts[key])}`)
+    .join(" ");
+  const areaFor = (key: "features" | "bugFixes") => {
+    const line = sorted
+      .map((release, index) => `${index === 0 ? "M" : "L"} ${xFor(index)} ${yFor(release.counts[key])}`)
+      .join(" ");
+    return `${line} L ${xFor(sorted.length - 1)} ${baseline} L ${xFor(0)} ${baseline} Z`;
+  };
+  const yTicks = Array.from(new Set([0, Math.ceil(maxCount / 2), maxCount]));
+
+  return (
+    <div className="release-history">
+      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Release feature and bug-fix count trend">
+        <path className="release-chart-axis" d={`M ${padLeft} ${padTop} V ${baseline} H ${width - padRight}`} />
+        {yTicks.map((tick) => (
+          <g key={tick}>
+            <path className="release-chart-tick" d={`M ${padLeft - 3} ${yFor(tick)} H ${width - padRight}`} />
+            <text className="release-chart-y-label" x={padLeft - 7} y={yFor(tick) + 3} textAnchor="end">{tick}</text>
+          </g>
+        ))}
+        <path className="release-chart-area feature" d={areaFor("features")} />
+        <path className="release-chart-area fix" d={areaFor("bugFixes")} />
+        <path className="release-chart-line feature" d={pathFor("features")} />
+        <path className="release-chart-line fix" d={pathFor("bugFixes")} />
+        <path className="release-chart-active-line" d={`M ${xFor(markerIndex)} ${padTop} V ${baseline}`} />
+        {sorted.map((release, index) => (
+          <g
+            key={release.id}
+            role="listitem"
+            tabIndex={0}
+            aria-label={`${release.name}, released ${formatReleaseDate(release.releasedAt ?? release.targetDate)}, ${release.counts.features} features, ${release.counts.bugFixes} bug fixes. Select it from the release list to inspect details.`}
+            onClick={() => setInspectedReleaseId(release.id)}
+            onFocus={() => setInspectedReleaseId(release.id)}
+          >
+            <title>{`${release.name} · ${formatReleaseDate(release.releasedAt ?? release.targetDate)} · ${release.counts.features} features · ${release.counts.bugFixes} bug fixes · select from the release list`}</title>
+            <circle className={`${release.id === activeReleaseId ? "active" : ""} ${releaseTone(release.posture)}`} cx={xFor(index)} cy={yFor(release.counts.features)} r="3.5" />
+            <text className="release-chart-x-label" x={xFor(index)} y={height - 8} textAnchor="end" transform={`rotate(-65 ${xFor(index)} ${height - 8})`}>{release.version}</text>
+          </g>
+        ))}
+      </svg>
+      <div className="release-chart-legend">
+        <span><i className="feature" />Features</span>
+        <span><i className="fix" />Bug fixes</span>
+      </div>
+    </div>
+  );
+}
+
+function ReleaseTruthDetails({
+  releaseSummary,
+  releaseDetail,
+  selection
+}: {
+  releaseSummary: ReleaseSummary | null;
+  releaseDetail: ReleaseDetail | null;
+  selection: Selection | null;
+}) {
+  if (!releaseSummary) {
+    return (
+      <div className="detail-content">
+        <p className="eyebrow">Release Truth</p>
+        <h2>No release selected</h2>
+      </div>
+    );
+  }
+
+  const items = releaseItems(releaseDetail);
+  const planned = items.filter((item) => item.status === "planned");
+  const stretch = items.filter((item) => item.status === "stretch");
+  const active = items.filter((item) => item.status === "in-progress" || item.status === "blocked");
+  const detailSelection = releasePathDetailSelection(releaseDetail, selection);
+
+  if (detailSelection?.kind === "item") {
+    const { item, blockers, dependencies, evidence, scope, workstream } = detailSelection;
+    return (
+      <DetailShell eyebrow="Release item" title={item.title} summary={item.summary}>
+        <div className="badge-row">
+          <Badge tone={releaseBadgeTone(item.status)}>{releaseStatusLabels[item.status]}</Badge>
+          <Badge>{scope}</Badge>
+          <Badge>{item.kind}</Badge>
+          {item.priority ? <Badge tone={releaseBadgeTone(item.priority)}>{item.priority} priority</Badge> : null}
+          {item.owner ? <Badge>{item.owner}</Badge> : null}
+        </div>
+        <FieldList title="Workstream" items={[workstream?.name ?? "Unassigned"]} />
+        <FieldList title="Decision" items={[item.rationale, item.decisionSource].filter(Boolean) as string[]} />
+        <FieldList title="Blockers" items={blockers.map((blocker) => `${blocker.title}: ${blocker.summary}`)} />
+        <FieldList title="Next Actions" items={blockers.map((blocker) => blocker.nextAction)} />
+        <FieldList title="Dependencies" items={dependencies.map((dependency) => dependency.summary)} />
+        <FieldList title="Evidence" items={evidence.map((item) => item.href ? `${item.label} (${item.href})` : item.label)} />
+      </DetailShell>
+    );
+  }
+
+  if (detailSelection?.kind === "milestone") {
+    const { milestone, items: milestoneItems, blockers } = detailSelection;
+    const timing = milestone.date ?? milestone.targetWindow ?? "No date";
+    return (
+      <DetailShell eyebrow="Release milestone" title={milestone.label} summary={`${releaseStatusLabels[milestone.status]} · ${timing}`}>
+        <div className="badge-row">
+          <Badge tone={releaseBadgeTone(milestone.status)}>{releaseStatusLabels[milestone.status]}</Badge>
+          <Badge>{milestoneItems.length} items</Badge>
+          {blockers.length > 0 ? <Badge tone={releaseBadgeTone("blocked")}>{blockers.length} blockers</Badge> : null}
+        </div>
+        <FieldList title="Scope" items={milestoneItems.map((item) => `${item.title}: ${releaseStatusLabels[item.status]}`)} />
+        <FieldList title="Blockers" items={blockers.map((item) => item.title)} />
+      </DetailShell>
+    );
+  }
+
+  return (
+    <div className="detail-content">
+      <p className="eyebrow">Release Truth</p>
+      <h2>{releaseSummary.name}</h2>
+      <p>{releaseSummary.summary}</p>
+      <div className="detail-badges">
+        <ReleaseStateBadges status={releaseSummary.status} posture={releaseSummary.posture} />
+      </div>
+      <FieldList title="Active Work" items={active.map((item) => `${item.title}: ${item.summary}`)} />
+      <FieldList title="Planned Scope" items={planned.map((item) => `${item.title}: ${item.summary}`)} />
+      <FieldList title="Stretch Scope" items={stretch.map((item) => `${item.title}: ${item.summary}`)} />
+      <FieldList title="Evidence" items={(releaseDetail?.evidence ?? []).map((item) => item.href ? `${item.label} (${item.href})` : item.label)} />
+    </div>
+  );
+}
+
+function releasePathDetailSelection(detail: ReleaseDetail | null, selection: Selection | null) {
+  if (!detail || !selection) return null;
+  const items = releaseItems(detail);
+  const itemsById = byId(items);
+  const blockersByItemId = blockersGroupedByItem(detail.blockers);
+  const workstreamsById = byId(detail.workstreams);
+  const scopeByItemId = releaseScopeByItemId(detail);
+
+  if (selection.kind === "release-item") {
+    const item = itemsById.get(selection.itemId);
+    if (!item) return null;
+    const blockers = blockersByItemId.get(item.id) ?? [];
+    const dependencyIds = new Set([...(item.dependsOn ?? []), ...detail.dependencies.filter((dependency) => dependency.from === item.id).map((dependency) => dependency.to)]);
+    const dependencies = detail.dependencies.filter((dependency) => dependency.from === item.id || dependencyIds.has(dependency.id) || dependencyIds.has(dependency.to));
+    const evidenceIds = new Set(item.evidence ?? []);
+    const evidence = detail.evidence.filter((entry) => evidenceIds.has(entry.id));
+    return {
+      kind: "item" as const,
+      item,
+      blockers,
+      dependencies,
+      evidence,
+      scope: scopeByItemId.get(item.id) ?? "scope",
+      workstream: item.workstreamId ? workstreamsById.get(item.workstreamId) : undefined
+    };
+  }
+
+  if (selection.kind === "release-milestone") {
+    const milestone = detail.milestones.find((candidate) => candidate.id === selection.milestoneId);
+    if (!milestone) return null;
+    const milestoneItems = milestone.itemIds.map((itemId) => itemsById.get(itemId)).filter((item): item is ReleaseItem => Boolean(item));
+    return {
+      kind: "milestone" as const,
+      milestone,
+      items: milestoneItems,
+      blockers: milestoneItems.filter((item) => item.status === "blocked" || (blockersByItemId.get(item.id)?.length ?? 0) > 0)
+    };
+  }
+
+  return null;
+}
+
 function App() {
   const [model, setModel] = useState<Model | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -165,6 +698,8 @@ function App() {
   const [activeMode, setActiveMode] = useState<Mode>("flows");
   const [activeViewId, setActiveViewId] = useState<Id>("");
   const [activeFlowId, setActiveFlowId] = useState<Id>("");
+  const [activeReleaseId, setActiveReleaseId] = useState<Id>("");
+  const [releaseDetailsById, setReleaseDetailsById] = useState<Map<Id, ReleaseDetail>>(new Map());
   const [selection, setSelection] = useState<Selection | null>(null);
   const [diagramTransform, setDiagramTransform] = useState<DiagramTransform>({ zoom: 1, focused: false });
   const [routingStyle, setRoutingStyle] = useState<RoutingStyle>(() => readRoutingStylePreference(localStorage) as RoutingStyle);
@@ -180,6 +715,8 @@ function App() {
         setActiveViewId(loaded.manifest.defaultViewId);
         setActiveMode(modeForView(loaded.views.find((view) => view.id === loaded.manifest.defaultViewId)));
         setActiveFlowId(loaded.flows[0]?.id ?? "");
+        setActiveReleaseId(loaded.releases?.index.currentReleaseId ?? "");
+        setReleaseDetailsById(new Map((loaded.releases?.details ?? []).map((detail) => [detail.id, detail])));
         setSelection({ kind: "flow", id: loaded.flows[0]?.id ?? "" });
       })
       .catch((loadError: unknown) => {
@@ -251,6 +788,7 @@ function App() {
     : defaultViewForMode(activeMode, model.views, fallbackView);
   const isC4View = activeMode === "c4";
   const isSequenceView = activeMode === "sequence";
+  const isReleaseTruthView = activeMode === "release-truth";
   const showOrderedFlow = modeShowsOrderedFlow(activeMode);
   const showStructuralConnections = modeUsesStructuralRelationships(activeMode);
   const showStepSummary = showOrderedFlow;
@@ -263,6 +801,10 @@ function App() {
   const selectedStep = selectedStepId
     ? selectedFlowForStep?.steps.find((step) => step.id === selectedStepId) ?? null
     : null;
+  const activeReleaseSummary = model.releases?.index.releases.find((release) => release.id === activeReleaseId)
+    ?? model.releases?.index.releases.find((release) => release.id === model.releases?.index.currentReleaseId)
+    ?? null;
+  const activeReleaseDetail = activeReleaseSummary ? releaseDetailsById.get(activeReleaseSummary.id) ?? null : null;
 
   const filteredFlows = model.flows.filter((flow) => {
     const text = [flow.name, flow.summary, flow.status, flow.trigger, ...flow.knownGaps].join(" ").toLowerCase();
@@ -305,10 +847,26 @@ function App() {
     setActiveMode(mode);
     setActiveViewId(nextView.id);
     setSelection(null);
+    if (mode === "release-truth" && !activeReleaseId && model.releases?.index.currentReleaseId) {
+      setActiveReleaseId(model.releases.index.currentReleaseId);
+    }
     if (diagramViewportSize.width && diagramViewportSize.height) {
       const nextZoom = fitZoomFor(mode, nextView, activeFlow);
       setDiagramTransform((value) => ({ ...value, zoom: Math.min(value.zoom, nextZoom) }));
     }
+  };
+
+  const selectRelease = async (releaseId: Id) => {
+    setActiveReleaseId(releaseId);
+    setSelection(null);
+    if (!model.releases || releaseDetailsById.has(releaseId)) return;
+    const detail = await loadReleaseDetail(fetch, model.releases, releaseId);
+    setReleaseDetailsById((current) => new Map(current).set(detail.id, detail));
+  };
+
+  const selectCurrentRelease = () => {
+    const currentReleaseId = model.releases?.index.currentReleaseId;
+    if (currentReleaseId) void selectRelease(currentReleaseId);
   };
 
   const setC4View = (viewId: Id) => {
@@ -335,7 +893,7 @@ function App() {
     <div className={`app ${navCollapsed ? "left-collapsed" : ""} ${rightCollapsed ? "right-collapsed" : ""} ${diagramTransform.focused ? "diagram-focused" : ""}`}>
       <header className="topbar">
         <div>
-          <p className="eyebrow">Architext / {model.manifest.schemaVersion}</p>
+          <p className="eyebrow">Architext / {__ARCHITEXT_VERSION__} · Data / {model.manifest.schemaVersion}</p>
           <div className="project-title-line">
             <h1>{model.manifest.project.name}</h1>
             <p>{model.manifest.project.summary}</p>
@@ -371,7 +929,9 @@ function App() {
           {navCollapsed ? "›" : "‹"}
         </button>
         {navCollapsed ? (
-          <div className="panel-rail">Browse</div>
+          <button type="button" className="panel-rail" onClick={() => setNavCollapsed(false)}>
+            Browse
+          </button>
         ) : (
           <LeftPanel
             mode={activeMode}
@@ -385,6 +945,8 @@ function App() {
             nodes={model.nodes}
             dataClasses={model.dataClasses}
             risks={model.risks}
+            releases={model.releases}
+            activeReleaseId={activeReleaseSummary?.id ?? ""}
             riskFilter={riskFilter}
             onRiskFilterChange={setRiskFilter}
             onSelectFlow={(flowId) => {
@@ -393,81 +955,102 @@ function App() {
             }}
             onSelectView={setC4View}
             onSelectNode={(id) => setSelection({ kind: "node", id })}
+            onSelectRelease={selectRelease}
           />
         )}
       </aside>
 
       <main className="diagram-area">
-        <section className="diagram-header">
-          <div className="diagram-title-line">
-            <h2 title={activeView.name}>{activeView.name}</h2>
-            <p title={activeView.summary}>{activeView.summary}</p>
-          </div>
-          <DiagramControls
-            transform={diagramTransform}
-            routingStyle={routingStyle}
-            onRoutingStyleChange={setRoutingStyle}
-            onZoomIn={() => setDiagramTransform((value) => ({ ...value, zoom: Math.min(1.6, Number((value.zoom + 0.1).toFixed(2))) }))}
-            onZoomOut={() => setDiagramTransform((value) => ({ ...value, zoom: Math.max(0.7, Number((value.zoom - 0.1).toFixed(2))) }))}
-            onFit={() => setDiagramTransform((value) => ({ ...value, zoom: fitZoomFor(activeMode, activeView, activeFlow) }))}
-            onReset={() => setDiagramTransform((value) => ({ ...value, zoom: 1 }))}
-            onToggleFocus={() => setDiagramTransform((value) => {
-              const focused = !value.focused;
-              return { ...value, focused, zoom: focused ? fitZoomFor(activeMode, activeView, activeFlow) : value.zoom };
-            })}
+        {isReleaseTruthView ? (
+          <ReleaseTruthWorkspace
+            releases={model.releases}
+            activeReleaseSummary={activeReleaseSummary}
+            activeReleaseDetail={activeReleaseDetail}
+            selection={selection}
+            onSelectCurrentRelease={selectCurrentRelease}
+            onSelectReleaseItem={(id) => {
+              setSelection({ kind: "release-item", itemId: id });
+              setRightCollapsed(false);
+            }}
+            onSelectReleaseMilestone={(id) => {
+              setSelection({ kind: "release-milestone", milestoneId: id });
+              setRightCollapsed(false);
+            }}
           />
-          <details className="legend">
-            <summary>Legend</summary>
-            <div>
-              {(["actor", "software-system", "client", "service", "worker", "queue", "data-store", "external-service"] as NodeType[]).map((type) => (
-                <span key={type}><i className={`dot ${type}`} />{type}</span>
-              ))}
-            </div>
-          </details>
-        </section>
+        ) : (
+          <>
+            <section className="diagram-header">
+              <div className="diagram-title-line">
+                <h2 title={activeView.name}>{activeView.name}</h2>
+                <p title={activeView.summary}>{activeView.summary}</p>
+              </div>
+              <DiagramControls
+                transform={diagramTransform}
+                routingStyle={routingStyle}
+                onRoutingStyleChange={setRoutingStyle}
+                onZoomIn={() => setDiagramTransform((value) => ({ ...value, zoom: Math.min(1.6, Number((value.zoom + 0.1).toFixed(2))) }))}
+                onZoomOut={() => setDiagramTransform((value) => ({ ...value, zoom: Math.max(0.7, Number((value.zoom - 0.1).toFixed(2))) }))}
+                onFit={() => setDiagramTransform((value) => ({ ...value, zoom: fitZoomFor(activeMode, activeView, activeFlow) }))}
+                onReset={() => setDiagramTransform((value) => ({ ...value, zoom: 1 }))}
+                onToggleFocus={() => setDiagramTransform((value) => {
+                  const focused = !value.focused;
+                  return { ...value, focused, zoom: focused ? fitZoomFor(activeMode, activeView, activeFlow) : value.zoom };
+                })}
+              />
+              <details className="legend">
+                <summary>Legend</summary>
+                <div>
+                  {(["actor", "software-system", "client", "service", "worker", "queue", "data-store", "external-service"] as NodeType[]).map((type) => (
+                    <span key={type}><i className={`dot ${type}`} />{type}</span>
+                  ))}
+                </div>
+              </details>
+            </section>
 
-        <section className="diagram-viewport" ref={diagramViewportRef}>
-          {isSequenceView ? (
-            <SequenceDiagram
-              activeFlow={activeFlow}
-              nodesById={nodesById}
-              dataById={dataById}
-              selectedStepId={selectedActiveStepId}
-              transform={diagramTransform}
-              onSelectStep={(stepId) => setSelection({ kind: "step", flowId: activeFlow.id, stepId })}
-              onSelectRelationship={selectRelationship}
-            />
-          ) : isC4View ? (
-            <C4Diagram
-              view={activeView}
-              nodesById={nodesById}
-              selectedNodeId={selectedNodeId}
-              selectedRelationship={selection?.kind === "relationship" ? selection : null}
-              transform={diagramTransform}
-              routingStyle={routingStyle}
-              debugRouting={debugRouting}
-              onSelectNode={(id) => setSelection({ kind: "node", id })}
-              onSelectRelationship={selectRelationship}
-            />
-          ) : (
-            <SystemMap
-              view={activeView}
-              nodesById={nodesById}
-              activeFlow={showOrderedFlow ? activeFlow : null}
-              showStructuralConnections={showStructuralConnections}
-              selectedStepId={selectedActiveStepId}
-              selectedRelationship={selection?.kind === "relationship" ? selection : null}
-              selectedNodeId={selectedNodeId}
-              transform={diagramTransform}
-              routingStyle={routingStyle}
-              debugRouting={debugRouting}
-              onSelectNode={(id) => setSelection({ kind: "node", id })}
-              onSelectRelationship={selectRelationship}
-            />
-          )}
-        </section>
+            <section className="diagram-viewport" ref={diagramViewportRef}>
+              {isSequenceView ? (
+                <SequenceDiagram
+                  activeFlow={activeFlow}
+                  nodesById={nodesById}
+                  dataById={dataById}
+                  selectedStepId={selectedActiveStepId}
+                  transform={diagramTransform}
+                  onSelectStep={(stepId) => setSelection({ kind: "step", flowId: activeFlow.id, stepId })}
+                  onSelectRelationship={selectRelationship}
+                />
+              ) : isC4View ? (
+                <C4Diagram
+                  view={activeView}
+                  nodesById={nodesById}
+                  selectedNodeId={selectedNodeId}
+                  selectedRelationship={selection?.kind === "relationship" ? selection : null}
+                  transform={diagramTransform}
+                  routingStyle={routingStyle}
+                  debugRouting={debugRouting}
+                  onSelectNode={(id) => setSelection({ kind: "node", id })}
+                  onSelectRelationship={selectRelationship}
+                />
+              ) : (
+                <SystemMap
+                  view={activeView}
+                  nodesById={nodesById}
+                  activeFlow={showOrderedFlow ? activeFlow : null}
+                  showStructuralConnections={showStructuralConnections}
+                  selectedStepId={selectedActiveStepId}
+                  selectedRelationship={selection?.kind === "relationship" ? selection : null}
+                  selectedNodeId={selectedNodeId}
+                  transform={diagramTransform}
+                  routingStyle={routingStyle}
+                  debugRouting={debugRouting}
+                  onSelectNode={(id) => setSelection({ kind: "node", id })}
+                  onSelectRelationship={selectRelationship}
+                />
+              )}
+            </section>
+          </>
+        )}
 
-        {showStepSummary && (
+        {!isReleaseTruthView && showStepSummary && (
           <section className={`steps ${stepsCollapsed ? "collapsed" : ""}`}>
             <div className="steps-head">
               <div className="steps-title-line">
@@ -515,7 +1098,15 @@ function App() {
           {rightCollapsed ? "‹" : "›"}
         </button>
         {rightCollapsed ? (
-          <div className="panel-rail">Details</div>
+          <button type="button" className="panel-rail" onClick={() => setRightCollapsed(false)}>
+            Details
+          </button>
+        ) : isReleaseTruthView ? (
+          <ReleaseTruthDetails
+            releaseSummary={activeReleaseSummary}
+            releaseDetail={activeReleaseDetail}
+            selection={selection}
+          />
         ) : (
           <DetailPanel
             model={model}
@@ -552,11 +1143,14 @@ function LeftPanel({
   nodes,
   dataClasses,
   risks,
+  releases,
+  activeReleaseId,
   riskFilter,
   onRiskFilterChange,
   onSelectFlow,
   onSelectView,
-  onSelectNode
+  onSelectNode,
+  onSelectRelease
 }: {
   mode: Mode;
   query: string;
@@ -569,12 +1163,49 @@ function LeftPanel({
   nodes: ArchNode[];
   dataClasses: DataClass[];
   risks: Risk[];
+  releases?: ReleaseModel;
+  activeReleaseId: Id;
   riskFilter: string;
   onRiskFilterChange: (value: string) => void;
   onSelectFlow: (id: Id) => void;
   onSelectView: (id: Id) => void;
   onSelectNode: (id: Id) => void;
+  onSelectRelease: (id: Id) => void;
 }) {
+  if (mode === "release-truth") {
+    return (
+      <>
+        <div className="panel-head">
+          <h2>Release Truth</h2>
+          <p>{releases ? `${releases.index.releases.length} tracked releases` : "No release data configured."}</p>
+        </div>
+        <div className="entity-list">
+          {releases ? [...releases.index.releases]
+            .sort((a, b) => (b.releasedAt ?? b.targetDate ?? b.targetWindow ?? "").localeCompare(a.releasedAt ?? a.targetDate ?? a.targetWindow ?? ""))
+            .map((release) => (
+            <button
+              key={release.id}
+              type="button"
+              className={`entity-card ${activeReleaseId === release.id ? "active" : ""}`}
+              onClick={() => onSelectRelease(release.id)}
+            >
+              <strong>{release.name}</strong>
+              <span>{release.summary}</span>
+              <div className="release-card-badges">
+                <ReleaseStateBadges status={release.status} posture={release.posture} />
+              </div>
+            </button>
+          )) : (
+            <article className="entity-card passive">
+              <strong>No Release Truth data</strong>
+              <span>Add docs/architext/data/releases/index.json and reference it from manifest.files.releases.</span>
+            </article>
+          )}
+        </div>
+      </>
+    );
+  }
+
   if (mode === "c4") {
     const c4Views = views.filter((view) => view.type.startsWith("c4-"));
     return (

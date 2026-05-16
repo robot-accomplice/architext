@@ -16,6 +16,17 @@ When architecture changes, update the relevant files under
 - Update risks when adding external dependencies, persistence, async
   processing, sensitive data handling, trust boundary crossings, or operational
   complexity.
+- Update Release Truth data under `docs/architext/data/releases/` when release
+  scope, blockers, milestones, posture, evidence, or target dates change.
+- Treat Release Truth as the reviewed release source of truth. If you complete,
+  defer, add, remove, reprioritize, or block release work, update the release
+  detail file and ensure `releases/index.json` is regenerated from those facts.
+- Keep Release Path rows concise. Put rationale, blocker explanation,
+  dependency detail, evidence, and next actions in the selected release item's
+  detail data instead of duplicating long prose in labels or summaries.
+- Do not use Release Planning concepts as current release facts. Release
+  Planning is targeted for Architext 1.3.0 and should write reviewed proposals
+  into the same Release Truth JSON model when it exists.
 - Prefer source-path-backed claims.
 - Mark uncertainty explicitly instead of inventing details.
 - Keep C4 Context, Container, and Component views at their proper abstraction
@@ -36,6 +47,7 @@ When architecture changes, update the relevant files under
 Persist these project-owned files in git:
 
 - `docs/architext/data/*.json`
+- `docs/architext/data/releases/*.json`
 - `docs/architext/.architext.json`
 - repository-level `AGENTS.md` or `CLAUDE.md` Architext instructions, when
   present

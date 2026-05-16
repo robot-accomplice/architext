@@ -14,7 +14,8 @@
     "dataClassification": "data-classification.json",
     "decisions": "decisions.json",
     "risks": "risks.json",
-    "glossary": "glossary.json"
+    "glossary": "glossary.json",
+    "releases": "releases/index.json"
   },
   "notes": [
     "This self-hosted model describes Architext itself after the 1.0 global CLI migration.",

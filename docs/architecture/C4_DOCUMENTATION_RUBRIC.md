@@ -61,14 +61,11 @@ quality failure, not a layout feature.
 ## Acceptance Fixtures
 
 Formal Architext acceptance must be self-contained. CI and package scripts must
-not depend on sibling repositories such as Roboticus or Aegis being checked out
-on the runner.
+depend only on fixtures committed to this repository.
 
-Local sibling repositories may still be used as informal litmus tests. Roboticus
-and Aegis are useful because they represent different stress profiles:
-Roboticus stresses UI/runtime surface boundaries, and Aegis stresses dense
-blockchain component decomposition. Those checks are manual proving passes, not
-formal lifecycle gates.
+Manual experiments outside the repository may inform future fixture design, but
+committed documentation, tests, and release data must describe only Architext's
+self-contained fixtures and lifecycle gates.
 
 Acceptance requires:
 

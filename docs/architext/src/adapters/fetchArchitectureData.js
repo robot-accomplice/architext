@@ -20,6 +20,10 @@ export async function loadArchitectureModel(fetcher = fetch) {
     fetchJson(fetcher, base + manifest.files.risks)
   ]);
 
+  const releases = manifest.files.releases
+    ? await loadReleaseModel(fetcher, base, manifest.files.releases)
+    : undefined;
+
   const model = {
     manifest,
     nodes: nodes.nodes,
@@ -27,11 +31,28 @@ export async function loadArchitectureModel(fetcher = fetch) {
     views: views.views,
     dataClasses: dataClassification.classes,
     decisions: decisions.decisions,
-    risks: risks.risks
+    risks: risks.risks,
+    ...(releases ? { releases } : {})
   };
   const errors = validateArchitectureReferences(model);
   if (errors.length > 0) {
     throw new Error(`Architext data failed viewer validation:\n${errors.join("\n")}`);
   }
   return model;
+}
+
+export async function loadReleaseDetail(fetcher = fetch, releaseModel, releaseId) {
+  const summary = releaseModel.index.releases.find((release) => release.id === releaseId);
+  if (!summary) {
+    throw new Error(`Release "${releaseId}" is not listed in the release index`);
+  }
+  return fetchJson(fetcher, `/data/${releaseModel.detailBasePath}${summary.file}`);
+}
+
+async function loadReleaseModel(fetcher, base, indexPath) {
+  const index = await fetchJson(fetcher, base + indexPath);
+  const current = index.releases.find((release) => release.id === index.currentReleaseId);
+  const detailBasePath = indexPath.includes("/") ? indexPath.slice(0, indexPath.lastIndexOf("/") + 1) : "";
+  const details = current ? [await fetchJson(fetcher, `${base}${detailBasePath}${current.file}`)] : [];
+  return { index, details, detailBasePath };
 }

@@ -6,18 +6,70 @@
       "status": "implemented",
       "summary": "A maintainer installs Architext into a repository without copying viewer implementation files.",
       "trigger": "Maintainer runs architext sync [path] in a repository with no Architext data.",
-      "actors": ["maintainer"],
-      "steps": [
-        { "id": "resolve-target", "from": "maintainer", "to": "architext-cli", "action": "resolveTargetPath", "summary": "CLI resolves the optional path argument or defaults to the current directory.", "data": ["repository-metadata"] },
-        { "id": "write-starter-data", "from": "architext-cli", "to": "target-data-files", "action": "writeStarterData", "summary": "CLI writes neutral starter data under docs/architext/data.", "data": ["architecture-model"] },
-        { "id": "write-metadata", "from": "architext-cli", "to": "target-repository", "action": "writeLifecycleMetadata", "summary": "CLI writes docs/architext/.architext.json with install state.", "data": ["repository-metadata"] },
-        { "id": "validate-install", "from": "architext-cli", "to": "schema-validator", "action": "validateStarterModel", "summary": "Package-owned schemas validate the starter model.", "data": ["architecture-model", "validation-output"] }
+      "actors": [
+        "maintainer"
       ],
-      "guarantees": ["Target repo does not receive copied viewer, schema, tool, package, or Vite files."],
-      "failureBehavior": ["Invalid starter data fails sync before claiming installation health."],
-      "observability": ["CLI output", "doctor status", "validation output"],
-      "verification": ["architext sync /tmp/repo --yes", "architext validate /tmp/repo"],
-      "knownGaps": ["Install prompt UX still needs real user testing on Windows shells."]
+      "steps": [
+        {
+          "id": "resolve-target",
+          "from": "maintainer",
+          "to": "architext-cli",
+          "action": "resolveTargetPath",
+          "summary": "CLI resolves the optional path argument or defaults to the current directory.",
+          "data": [
+            "repository-metadata"
+          ]
+        },
+        {
+          "id": "write-starter-data",
+          "from": "architext-cli",
+          "to": "target-data-files",
+          "action": "writeStarterData",
+          "summary": "CLI writes neutral starter data under docs/architext/data.",
+          "data": [
+            "architecture-model"
+          ]
+        },
+        {
+          "id": "write-metadata",
+          "from": "architext-cli",
+          "to": "target-repository",
+          "action": "writeLifecycleMetadata",
+          "summary": "CLI writes docs/architext/.architext.json with install state.",
+          "data": [
+            "repository-metadata"
+          ]
+        },
+        {
+          "id": "validate-install",
+          "from": "architext-cli",
+          "to": "schema-validator",
+          "action": "validateStarterModel",
+          "summary": "Package-owned schemas validate the starter model.",
+          "data": [
+            "architecture-model",
+            "validation-output"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Target repo does not receive copied viewer, schema, tool, package, or Vite files."
+      ],
+      "failureBehavior": [
+        "Invalid starter data fails sync before claiming installation health."
+      ],
+      "observability": [
+        "CLI output",
+        "doctor status",
+        "validation output"
+      ],
+      "verification": [
+        "architext sync /tmp/repo --yes",
+        "architext validate /tmp/repo"
+      ],
+      "knownGaps": [
+        "Install prompt UX still needs real user testing on Windows shells."
+      ]
     },
     {
       "id": "copied-install-migration",
@@ -25,19 +77,81 @@
       "status": "implemented",
       "summary": "An existing copied-template install is converted into the 1.0 data-only layout.",
       "trigger": "Maintainer runs architext sync [path] where docs/architext contains copied implementation files.",
-      "actors": ["maintainer"],
-      "steps": [
-        { "id": "detect-copied-files", "from": "architext-cli", "to": "target-repository", "action": "detectCopiedInstall", "summary": "CLI detects package-owned files such as src, schema, tools, package.json, and Vite config.", "data": ["repository-metadata"] },
-        { "id": "preserve-data", "from": "architext-cli", "to": "target-data-files", "action": "preserveArchitectureData", "summary": "CLI leaves docs/architext/data/*.json untouched unless overwrite is explicit.", "data": ["architecture-model"] },
-        { "id": "rewrite-instructions", "from": "architext-cli", "to": "target-repository", "action": "replaceArchitextInstructionSection", "summary": "CLI replaces old Architext agent sections with global-CLI guidance while preserving unrelated instructions.", "data": ["agent-instructions"] },
-        { "id": "remove-copied-files", "from": "architext-cli", "to": "target-repository", "action": "removePackageOwnedFiles", "summary": "CLI removes copied viewer, schema, tool, package, and Vite files from the target repository.", "data": ["package-assets"] },
-        { "id": "validate-migration", "from": "architext-cli", "to": "schema-validator", "action": "validateMigratedData", "summary": "CLI validates preserved target data against package-owned schemas.", "data": ["architecture-model", "validation-output"] }
+      "actors": [
+        "maintainer"
       ],
-      "guarantees": ["Architecture facts are not rewritten silently.", "Agent instructions no longer tell agents to edit copied package-owned files."],
-      "failureBehavior": ["Dry-run exposes destructive removals; validation failure points to repair prompt."],
-      "observability": ["Dry-run output", "doctor copied install status", "Git diff"],
-      "verification": ["architext sync ../roboticus --dry-run", "architext doctor ../roboticus"],
-      "knownGaps": ["Instruction replacement is intentionally marker-based and does not parse arbitrary Markdown ASTs."]
+      "steps": [
+        {
+          "id": "detect-copied-files",
+          "from": "architext-cli",
+          "to": "target-repository",
+          "action": "detectCopiedInstall",
+          "summary": "CLI detects package-owned files such as src, schema, tools, package.json, and Vite config.",
+          "data": [
+            "repository-metadata"
+          ]
+        },
+        {
+          "id": "preserve-data",
+          "from": "architext-cli",
+          "to": "target-data-files",
+          "action": "preserveArchitectureData",
+          "summary": "CLI leaves docs/architext/data/*.json untouched unless overwrite is explicit.",
+          "data": [
+            "architecture-model"
+          ]
+        },
+        {
+          "id": "rewrite-instructions",
+          "from": "architext-cli",
+          "to": "target-repository",
+          "action": "replaceArchitextInstructionSection",
+          "summary": "CLI replaces old Architext agent sections with global-CLI guidance while preserving unrelated instructions.",
+          "data": [
+            "agent-instructions"
+          ]
+        },
+        {
+          "id": "remove-copied-files",
+          "from": "architext-cli",
+          "to": "target-repository",
+          "action": "removePackageOwnedFiles",
+          "summary": "CLI removes copied viewer, schema, tool, package, and Vite files from the target repository.",
+          "data": [
+            "package-assets"
+          ]
+        },
+        {
+          "id": "validate-migration",
+          "from": "architext-cli",
+          "to": "schema-validator",
+          "action": "validateMigratedData",
+          "summary": "CLI validates preserved target data against package-owned schemas.",
+          "data": [
+            "architecture-model",
+            "validation-output"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Architecture facts are not rewritten silently.",
+        "Agent instructions no longer tell agents to edit copied package-owned files."
+      ],
+      "failureBehavior": [
+        "Dry-run exposes destructive removals; validation failure points to repair prompt."
+      ],
+      "observability": [
+        "Dry-run output",
+        "doctor copied install status",
+        "Git diff"
+      ],
+      "verification": [
+        "architext sync /tmp/repo --dry-run",
+        "architext doctor /tmp/repo"
+      ],
+      "knownGaps": [
+        "Instruction replacement is intentionally marker-based and does not parse arbitrary Markdown ASTs."
+      ]
     },
     {
       "id": "architecture-maintenance",
@@ -45,18 +159,68 @@
       "status": "implemented",
       "summary": "An LLM agent updates architecture data in response to real repository changes.",
       "trigger": "A code change alters architecture, persistence, data flow, external integrations, deployment, risks, or decisions.",
-      "actors": ["llm-agent"],
-      "steps": [
-        { "id": "read-instructions", "from": "llm-agent", "to": "target-repository", "action": "readAgentInstructions", "summary": "Agent reads the managed Architext section and any project-specific constraints.", "data": ["agent-instructions"] },
-        { "id": "read-data", "from": "llm-agent", "to": "target-data-files", "action": "readArchitectureModel", "summary": "Agent reads existing JSON before editing.", "data": ["architecture-model"] },
-        { "id": "edit-data", "from": "llm-agent", "to": "target-data-files", "action": "updateArchitectureFacts", "summary": "Agent updates only project-owned data files and preserves stable IDs.", "data": ["architecture-model"] },
-        { "id": "run-validation", "from": "llm-agent", "to": "schema-validator", "action": "runArchitextValidate", "summary": "Agent runs package-owned validation before claiming completion.", "data": ["validation-output"] }
+      "actors": [
+        "llm-agent"
       ],
-      "guarantees": ["Package-owned viewer/schema/tool files are not edited in target repositories."],
-      "failureBehavior": ["If validation fails, agent repairs JSON or reports the failure loudly."],
-      "observability": ["Validation result in final answer", "JSON diffs"],
-      "verification": ["architext prompt . --mode architecture-change", "architext validate ."],
-      "knownGaps": ["Generated architecture claims still require human review."]
+      "steps": [
+        {
+          "id": "read-instructions",
+          "from": "llm-agent",
+          "to": "target-repository",
+          "action": "readAgentInstructions",
+          "summary": "Agent reads the managed Architext section and any project-specific constraints.",
+          "data": [
+            "agent-instructions"
+          ]
+        },
+        {
+          "id": "read-data",
+          "from": "llm-agent",
+          "to": "target-data-files",
+          "action": "readArchitectureModel",
+          "summary": "Agent reads existing JSON before editing.",
+          "data": [
+            "architecture-model"
+          ]
+        },
+        {
+          "id": "edit-data",
+          "from": "llm-agent",
+          "to": "target-data-files",
+          "action": "updateArchitectureFacts",
+          "summary": "Agent updates only project-owned data files and preserves stable IDs.",
+          "data": [
+            "architecture-model"
+          ]
+        },
+        {
+          "id": "run-validation",
+          "from": "llm-agent",
+          "to": "schema-validator",
+          "action": "runArchitextValidate",
+          "summary": "Agent runs package-owned validation before claiming completion.",
+          "data": [
+            "validation-output"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Package-owned viewer/schema/tool files are not edited in target repositories."
+      ],
+      "failureBehavior": [
+        "If validation fails, agent repairs JSON or reports the failure loudly."
+      ],
+      "observability": [
+        "Validation result in final answer",
+        "JSON diffs"
+      ],
+      "verification": [
+        "architext prompt . --mode architecture-change",
+        "architext validate ."
+      ],
+      "knownGaps": [
+        "Generated architecture claims still require human review."
+      ]
     },
     {
       "id": "local-review",
@@ -64,17 +228,58 @@
       "status": "implemented",
       "summary": "A maintainer serves the package-owned viewer against target repository data.",
       "trigger": "Maintainer runs architext serve [path].",
-      "actors": ["maintainer"],
-      "steps": [
-        { "id": "start-server", "from": "maintainer", "to": "architext-cli", "action": "startLocalServer", "summary": "CLI starts the package-owned Vite server with target data directory configured.", "data": ["repository-metadata"] },
-        { "id": "serve-assets", "from": "architext-cli", "to": "viewer-runtime", "action": "servePackageViewer", "summary": "Viewer assets are served from the installed package.", "data": ["package-assets"] },
-        { "id": "load-data", "from": "viewer-runtime", "to": "target-data-files", "action": "fetchTargetData", "summary": "Viewer fetches /data/*.json from the selected target repository.", "data": ["architecture-model"] }
+      "actors": [
+        "maintainer"
       ],
-      "guarantees": ["Review requires a local server but not target-local npm dependencies."],
-      "failureBehavior": ["Missing data produces viewer load errors and doctor guidance."],
-      "observability": ["Browser view", "Browser console", "CLI server output"],
-      "verification": ["architext serve ."],
-      "knownGaps": ["The viewer remains a local dev server in normal review mode."]
+      "steps": [
+        {
+          "id": "start-server",
+          "from": "maintainer",
+          "to": "architext-cli",
+          "action": "startLocalServer",
+          "summary": "CLI starts the package-owned Vite server with target data directory configured.",
+          "data": [
+            "repository-metadata"
+          ]
+        },
+        {
+          "id": "serve-assets",
+          "from": "architext-cli",
+          "to": "viewer-runtime",
+          "action": "servePackageViewer",
+          "summary": "Viewer assets are served from the installed package.",
+          "data": [
+            "package-assets"
+          ]
+        },
+        {
+          "id": "load-data",
+          "from": "viewer-runtime",
+          "to": "target-data-files",
+          "action": "fetchTargetData",
+          "summary": "Viewer fetches /data/*.json from the selected target repository.",
+          "data": [
+            "architecture-model"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Review requires a local server but not target-local npm dependencies."
+      ],
+      "failureBehavior": [
+        "Missing data produces viewer load errors and doctor guidance."
+      ],
+      "observability": [
+        "Browser view",
+        "Browser console",
+        "CLI server output"
+      ],
+      "verification": [
+        "architext serve ."
+      ],
+      "knownGaps": [
+        "The viewer remains a local dev server in normal review mode."
+      ]
     },
     {
       "id": "static-export",
@@ -82,16 +287,47 @@
       "status": "implemented",
       "summary": "A maintainer builds a static viewer that includes a copy of selected target data.",
       "trigger": "Maintainer runs architext build [path].",
-      "actors": ["maintainer"],
-      "steps": [
-        { "id": "build-viewer-assets", "from": "architext-cli", "to": "viewer-runtime", "action": "buildStaticViewer", "summary": "CLI builds package-owned viewer assets into target docs/architext/dist.", "data": ["package-assets"] },
-        { "id": "copy-data", "from": "architext-cli", "to": "static-dist", "action": "copyTargetData", "summary": "CLI copies target data into dist/data for static serving.", "data": ["architecture-model"] }
+      "actors": [
+        "maintainer"
       ],
-      "guarantees": ["Generated static output can be served without Vite."],
-      "failureBehavior": ["Stale dist output is treated as generated and can be cleaned."],
-      "observability": ["Build output", "dist file list"],
-      "verification": ["architext build ."],
-      "knownGaps": ["Static export can become stale after data edits."]
+      "steps": [
+        {
+          "id": "build-viewer-assets",
+          "from": "architext-cli",
+          "to": "viewer-runtime",
+          "action": "buildStaticViewer",
+          "summary": "CLI builds package-owned viewer assets into target docs/architext/dist.",
+          "data": [
+            "package-assets"
+          ]
+        },
+        {
+          "id": "copy-data",
+          "from": "architext-cli",
+          "to": "static-dist",
+          "action": "copyTargetData",
+          "summary": "CLI copies target data into dist/data for static serving.",
+          "data": [
+            "architecture-model"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Generated static output can be served without Vite."
+      ],
+      "failureBehavior": [
+        "Stale dist output is treated as generated and can be cleaned."
+      ],
+      "observability": [
+        "Build output",
+        "dist file list"
+      ],
+      "verification": [
+        "architext build ."
+      ],
+      "knownGaps": [
+        "Static export can become stale after data edits."
+      ]
     },
     {
       "id": "pdf-export",
@@ -99,16 +335,48 @@
       "status": "planned",
       "summary": "A maintainer exports selected Architext views as a portable PDF for review, archival, or offline sharing.",
       "trigger": "Maintainer requests a PDF export from the CLI or viewer.",
-      "actors": ["maintainer"],
-      "steps": [
-        { "id": "select-export-scope", "from": "maintainer", "to": "architext-cli", "action": "selectPdfScope", "summary": "Maintainer chooses whether to export the active view, all views, or a report bundle.", "data": ["architecture-model"] },
-        { "id": "render-pdf", "from": "architext-cli", "to": "pdf-export", "action": "renderPdfExport", "summary": "CLI renders package-owned viewer output or a print-specific document into a PDF artifact.", "data": ["architecture-model", "package-assets"] }
+      "actors": [
+        "maintainer"
       ],
-      "guarantees": ["PDF output should not require copied viewer files in the target repository."],
-      "failureBehavior": ["Missing fonts, oversized diagrams, or route warnings should fail loudly or appear in export diagnostics."],
-      "observability": ["CLI output", "PDF file metadata"],
-      "verification": ["planned"],
-      "knownGaps": ["Export approach is undecided: headless browser print, print-specific renderer, or both."]
+      "steps": [
+        {
+          "id": "select-export-scope",
+          "from": "maintainer",
+          "to": "architext-cli",
+          "action": "selectPdfScope",
+          "summary": "Maintainer chooses whether to export the active view, all views, or a report bundle.",
+          "data": [
+            "architecture-model"
+          ]
+        },
+        {
+          "id": "render-pdf",
+          "from": "architext-cli",
+          "to": "pdf-export",
+          "action": "renderPdfExport",
+          "summary": "CLI renders package-owned viewer output or a print-specific document into a PDF artifact.",
+          "data": [
+            "architecture-model",
+            "package-assets"
+          ]
+        }
+      ],
+      "guarantees": [
+        "PDF output should not require copied viewer files in the target repository."
+      ],
+      "failureBehavior": [
+        "Missing fonts, oversized diagrams, or route warnings should fail loudly or appear in export diagnostics."
+      ],
+      "observability": [
+        "CLI output",
+        "PDF file metadata"
+      ],
+      "verification": [
+        "planned"
+      ],
+      "knownGaps": [
+        "Export approach is undecided: headless browser print, print-specific renderer, or both."
+      ]
     },
     {
       "id": "release-packaging",
@@ -116,16 +384,48 @@
       "status": "implemented",
       "summary": "Architext ships the global CLI, package-owned viewer, schemas, and starter templates as a major semver release.",
       "trigger": "Maintainer prepares a release.",
-      "actors": ["maintainer"],
-      "steps": [
-        { "id": "run-build", "from": "maintainer", "to": "package-artifacts", "action": "runBuildAndValidation", "summary": "Maintainer runs validation and production build.", "data": ["package-assets", "validation-output"] },
-        { "id": "inspect-package", "from": "maintainer", "to": "package-artifacts", "action": "runPackageDryRun", "summary": "Maintainer verifies npm package contents exclude target generated artifacts.", "data": ["package-assets"] }
+      "actors": [
+        "maintainer"
       ],
-      "guarantees": ["1.0.0 marks the breaking distribution model change."],
-      "failureBehavior": ["Package contents mismatch blocks release."],
-      "observability": ["npm pack --dry-run output", "build output"],
-      "verification": ["npm pack --dry-run"],
-      "knownGaps": ["A CI workflow is still needed to enforce packaging checks automatically."]
+      "steps": [
+        {
+          "id": "run-build",
+          "from": "maintainer",
+          "to": "package-artifacts",
+          "action": "runBuildAndValidation",
+          "summary": "Maintainer runs validation and production build.",
+          "data": [
+            "package-assets",
+            "validation-output"
+          ]
+        },
+        {
+          "id": "inspect-package",
+          "from": "maintainer",
+          "to": "package-artifacts",
+          "action": "runPackageDryRun",
+          "summary": "Maintainer verifies npm package contents exclude target generated artifacts.",
+          "data": [
+            "package-assets"
+          ]
+        }
+      ],
+      "guarantees": [
+        "1.0.0 marks the breaking distribution model change."
+      ],
+      "failureBehavior": [
+        "Package contents mismatch blocks release."
+      ],
+      "observability": [
+        "npm pack --dry-run output",
+        "build output"
+      ],
+      "verification": [
+        "npm pack --dry-run"
+      ],
+      "knownGaps": [
+        "A CI workflow is still needed to enforce packaging checks automatically."
+      ]
     }
   ]
 }
