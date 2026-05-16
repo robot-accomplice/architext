@@ -43,7 +43,7 @@
     "cli": "node tools/architext-adopt.mjs",
     "doctor": "node tools/architext-adopt.mjs doctor --target .",
     "prepack": "npm run build",
-    "test": "node --test test/architecture-references.test.mjs test/browser-preferences.test.mjs test/cli.test.mjs test/c4-documents.test.mjs test/c4-quality.test.mjs test/command-router.test.mjs test/doctor-repairs.test.mjs test/fetch-architecture-data.test.mjs test/planned-diagram-state.test.mjs test/routing-fitness.test.mjs test/routing.test.mjs test/step-selection.test.mjs test/terminal-presenter.test.mjs test/view-modes.test.mjs test/view-selection.test.mjs",
+    "test": "node --test test/architecture-references.test.mjs test/browser-preferences.test.mjs test/cli.test.mjs test/c4-documents.test.mjs test/c4-quality.test.mjs test/command-router.test.mjs test/diagram-layout.test.mjs test/doctor-repairs.test.mjs test/fetch-architecture-data.test.mjs test/planned-diagram-state.test.mjs test/routing-fitness.test.mjs test/routing.test.mjs test/step-selection.test.mjs test/terminal-presenter.test.mjs test/view-modes.test.mjs test/view-selection.test.mjs",
     "test:all": "npm test",
     "test:benchmark": "node --test test/c4-documents.test.mjs test/routing-fitness.test.mjs",
     "validate": "node docs/architext/tools/validate-architext.mjs",

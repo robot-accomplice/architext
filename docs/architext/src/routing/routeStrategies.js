@@ -60,8 +60,20 @@ export function selectRouteCandidate(input) {
         const start = startPort.anchor;
         const end = endPort.anchor;
         const centerDistance = Math.hypot(end.x - start.x, end.y - start.y);
-        const curveOffset = clamp(centerDistance * 0.18 + pairIndex * 8, 36, 120);
-        for (const offset of [curveOffset, -curveOffset, curveOffset * 0.55, -curveOffset * 0.55]) {
+        const curveOffset = clamp(centerDistance * 0.18 + pairIndex * 8, 36, 180);
+        const routeSpread = (index % 7) * 10;
+        for (const offset of [
+          curveOffset + routeSpread,
+          -curveOffset - routeSpread,
+          curveOffset * 0.72,
+          -curveOffset * 0.72,
+          curveOffset * 1.36 + routeSpread,
+          -curveOffset * 1.36 - routeSpread,
+          curveOffset * 2.1 + routeSpread,
+          -curveOffset * 2.1 - routeSpread,
+          curveOffset * 0.38,
+          -curveOffset * 0.38
+        ]) {
           splineCandidates.push(routeCandidates.splineCandidate(relationship, fromId, toId, startSide, endSide, usedRoutes, startPort, endPort, pairIndex, offset));
         }
       }

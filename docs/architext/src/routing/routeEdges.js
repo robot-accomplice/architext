@@ -94,13 +94,14 @@ function routePlannerContext(input) {
           qualityCosts.nodeClearanceCost += (30 - distance) * 120;
         }
       }
-      if (input.scoreEdgeProximity) {
+      if (input.scoreEdgeProximity || input.style === "spline") {
         for (const usedRoute of usedRoutes) {
           for (let usedIndex = 0; usedIndex < usedRoute.length; usedIndex += 2) {
             const used = usedRoute[usedIndex];
             const distance = Math.hypot(point.x - used.x, point.y - used.y);
-            if (distance < 26) qualityCosts.edgeProximityCost += 450;
-            if (distance < 12) qualityCosts.edgeProximityCost += 1600;
+            if (distance < 36) qualityCosts.edgeProximityCost += 1800;
+            if (distance < 20) qualityCosts.edgeProximityCost += 6200;
+            if (distance < 10) qualityCosts.edgeProximityCost += 18000;
           }
         }
       }

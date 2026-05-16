@@ -429,6 +429,10 @@ Near-term approach:
   covered for the spline rendering path.
 - Score curve candidates by node clearance, label clearance, bend smoothness,
   edge-edge proximity, and route length.
+- Dense spline views must avoid reusing the same visible channel for unrelated
+  routes. Parallel or nearly parallel curves may run near each other briefly at
+  a shared source/target fan-out, but long close runs indicate a missing
+  route-index penalty or insufficient candidate diversity.
 - Preserve style purity: a view rendered in spline mode uses spline edges
   consistently; a view rendered in orthogonal mode uses orthogonal edges
   consistently.

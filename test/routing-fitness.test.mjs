@@ -231,6 +231,27 @@ function sharedOrthogonalSegmentCount(plan) {
   return sharedSegments;
 }
 
+function sampledRouteCloseRunCount(plan, threshold = 10, sampleCount = 3) {
+  const routes = [...plan.routes.entries()];
+  let closeRuns = 0;
+  for (let leftIndex = 0; leftIndex < routes.length; leftIndex += 1) {
+    for (let rightIndex = leftIndex + 1; rightIndex < routes.length; rightIndex += 1) {
+      const [, leftRoute] = routes[leftIndex];
+      const [, rightRoute] = routes[rightIndex];
+      let closeSamples = 0;
+      for (const leftSample of leftRoute.samples) {
+        for (const rightSample of rightRoute.samples) {
+          if (Math.hypot(leftSample.x - rightSample.x, leftSample.y - rightSample.y) < threshold) {
+            closeSamples += 1;
+          }
+        }
+      }
+      if (closeSamples > sampleCount) closeRuns += 1;
+    }
+  }
+  return closeRuns;
+}
+
 function flowRelationshipsForView(flow, view) {
   const visibleNodeIds = new Set(view.lanes.flatMap((lane) => lane.nodeIds));
   return flow.steps
@@ -311,6 +332,38 @@ test("fitness: complex fan-in keeps endpoint stacks distinguishable", () => {
     labelNodeConflictCost: 0,
     perimeterFallbackRoutes: 0
   });
+});
+
+test("fitness: dense spline fan-out avoids reusing the same visual channel", () => {
+  const view = {
+    id: "dense-spline-fan-out",
+    name: "Dense Spline Fan-Out",
+    type: "system-map",
+    lanes: [
+      { id: "source", name: "Source", nodeIds: ["source"] },
+      { id: "middle", name: "Middle", nodeIds: ["blocker-a", "blocker-b", "blocker-c"] },
+      { id: "targets", name: "Targets", nodeIds: ["target-a", "target-b", "target-c", "target-d"] }
+    ]
+  };
+  const relationships = ["target-a", "target-b", "target-c", "target-d"].map((targetId) => ({
+    id: `source-${targetId}`,
+    from: "source",
+    to: targetId,
+    label: `routes to ${targetId}`
+  }));
+  const plan = planFixture(view, relationships, { style: "spline" });
+
+  assert.equal(plan.routes.size, relationships.length);
+  for (const relationship of relationships) {
+    const route = plan.routes.get(relationship.id);
+    assert.ok(route, `missing route for ${relationship.id}`);
+    assert.equal(route.style, "spline");
+    assert.equal(route.collisions, 0, `${relationship.id} intersects a node`);
+    assertRouteQualityCosts(route);
+    assertNoNodeBodyCollisions(route, plan, relationship);
+    assertLabelAvoidsNodes(plan.labelBoxes.get(relationship.id), plan, relationship);
+  }
+  assert.equal(sampledRouteCloseRunCount(plan), 0, "spline routes reuse the same visible channel");
 });
 
 test("fitness: C4-style component lanes use the shared planner", () => {

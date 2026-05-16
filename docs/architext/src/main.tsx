@@ -6,6 +6,7 @@ import { relationshipLabel } from "./routing/relationshipLabels.js";
 import { plannedCanvasFallback, usePlannedDiagram } from "./routing/usePlannedDiagram.js";
 import { loadArchitectureModel } from "./adapters/fetchArchitectureData.js";
 import { isSelectedStep, orderSelectedLast, selectedFlowIdForSelection, selectedStepIdForSelection } from "./presentation/stepSelection.js";
+import { diagramLayoutFor } from "./presentation/diagramLayout.js";
 import { modeShowsOrderedFlow, modeUsesStructuralRelationships } from "./presentation/viewModes.js";
 import { defaultViewForMode, modeForView, modeLabels, viewBelongsToMode } from "./presentation/viewSelection.js";
 import { readBooleanPreference, readDebugRouting, readRoutingStylePreference, writeBooleanPreference, writeRoutingStylePreference } from "./adapters/browserPreferences.js";
@@ -781,14 +782,6 @@ function SystemMap({
 }) {
   const visibleNodeIds = new Set(view.lanes.flatMap((lane) => lane.nodeIds));
   const flowNodeIds = new Set(activeFlow ? activeFlow.steps.flatMap((step) => [step.from, step.to]) : Array.from(visibleNodeIds));
-  const nodeWidth = 136;
-  const nodeHeight = 54;
-  const laneWidth = 210;
-  const rowGap = 102;
-  const routeGutter = 132;
-  const marginX = routeGutter + 48;
-  const marginY = 76;
-
   const structuralRelationships = Array.from(visibleNodeIds).flatMap((nodeId) => {
     const node = nodesById.get(nodeId);
     return (node?.dependencies ?? [])
@@ -824,6 +817,20 @@ function SystemMap({
     };
   }) ?? [];
 
+  const layout = diagramLayoutFor(view, showStructuralConnections ? structuralRelationships.length : flowRelationships.length);
+  const {
+    nodeWidth,
+    nodeHeight,
+    laneWidth,
+    rowGap,
+    marginX,
+    marginY,
+    minCanvasWidth,
+    minCanvasHeight,
+    canvasExtraWidth,
+    canvasExtraHeight
+  } = layout;
+
   const planInput = {
     view,
     relationships: showStructuralConnections ? structuralRelationships : flowRelationships,
@@ -834,10 +841,10 @@ function SystemMap({
     rowGap,
     marginX,
     marginY,
-    minCanvasWidth: 0,
-    minCanvasHeight: 340,
-    canvasExtraWidth: routeGutter,
-    canvasExtraHeight: 88,
+    minCanvasWidth,
+    minCanvasHeight,
+    canvasExtraWidth,
+    canvasExtraHeight,
     style: routingStyle
   };
   const planningState = usePlannedDiagram(planInput);
