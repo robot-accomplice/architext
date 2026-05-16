@@ -617,6 +617,16 @@ Publishing remains a human-controlled release operation. CI proves that the
 commit is releasable; it must not embed public README instructions for npm
 publication operations.
 
+Local release operations are captured as `just` recipes so maintainers have a
+single command path for validation, CI inspection, passkey authentication, and
+publication without putting protected operational instructions in public
+user-facing documentation.
+
+Npm publication should prefer GitHub Actions trusted publishing over local
+write-time OTP. The publish workflow checks out the released tag, reruns the
+release gate, and uses OIDC provenance so the package can be published without
+embedding long-lived npm tokens or public operational runbooks.
+
 ## Open Questions
 
 - Should the validator be pure browser JavaScript, Node-based, or both?

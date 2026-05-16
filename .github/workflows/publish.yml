@@ -1,0 +1,65 @@
+name: Publish to npm
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to publish, without the leading v.
+        required: true
+        type: string
+      dry_run:
+        description: Run npm publish in dry-run mode.
+        required: true
+        default: "true"
+        type: choice
+        options:
+          - "true"
+          - "false"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out released tag
+        uses: actions/checkout@v6
+        with:
+          ref: v${{ inputs.version }}
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            docs/architext/package-lock.json
+
+      - name: Confirm package version
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')"
+          test "$actual" = "${{ inputs.version }}"
+
+      - name: Install package dependencies
+        run: npm ci
+
+      - name: Install viewer workspace dependencies
+        run: npm ci --prefix docs/architext
+
+      - name: Run release gate
+        run: npm run release:check
+
+      - name: Dry-run publish
+        if: ${{ inputs.dry_run == 'true' }}
+        run: npm publish --access public --provenance --dry-run
+
+      - name: Publish
+        if: ${{ inputs.dry_run == 'false' }}
+        run: npm publish --access public --provenance
