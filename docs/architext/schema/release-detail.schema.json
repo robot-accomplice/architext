@@ -1,0 +1,159 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architext.local/schema/release-detail.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["id", "version", "name", "status", "posture", "summary", "lastUpdated", "scope", "workstreams", "blockers", "milestones", "dependencies", "evidence"],
+  "properties": {
+    "id": { "$ref": "#/$defs/id" },
+    "version": { "type": "string", "minLength": 1 },
+    "name": { "type": "string", "minLength": 1 },
+    "status": { "$ref": "#/$defs/releaseStatus" },
+    "posture": { "$ref": "#/$defs/posture" },
+    "summary": { "type": "string", "minLength": 1 },
+    "targetDate": { "type": "string", "format": "date" },
+    "targetWindow": { "type": "string", "minLength": 1 },
+    "releasedAt": { "type": "string", "format": "date-time" },
+    "lastUpdated": { "type": "string", "format": "date-time" },
+    "updateSource": { "type": "string", "minLength": 1 },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["required", "planned", "stretch", "deferred", "outOfScope"],
+      "properties": {
+        "required": { "type": "array", "items": { "$ref": "#/$defs/releaseItem" } },
+        "planned": { "type": "array", "items": { "$ref": "#/$defs/releaseItem" } },
+        "stretch": { "type": "array", "items": { "$ref": "#/$defs/releaseItem" } },
+        "deferred": { "type": "array", "items": { "$ref": "#/$defs/releaseItem" } },
+        "outOfScope": { "type": "array", "items": { "$ref": "#/$defs/releaseItem" } }
+      }
+    },
+    "workstreams": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/workstream" }
+    },
+    "blockers": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/blocker" }
+    },
+    "milestones": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/milestone" }
+    },
+    "dependencies": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/dependency" }
+    },
+    "evidence": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/evidence" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "releaseStatus": {
+      "type": "string",
+      "enum": ["planning", "active", "blocked", "candidate", "released", "deferred"]
+    },
+    "itemStatus": {
+      "type": "string",
+      "enum": ["planned", "in-progress", "blocked", "complete", "deferred", "stretch", "cut"]
+    },
+    "posture": {
+      "type": "string",
+      "enum": ["on-track", "at-risk", "blocked", "release-candidate", "shipped"]
+    },
+    "releaseItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "kind", "status", "summary"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "enum": ["feature", "bug-fix", "documentation", "architecture", "test", "chore"] },
+        "status": { "$ref": "#/$defs/itemStatus" },
+        "summary": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "priority": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+        "rationale": { "type": "string", "minLength": 1 },
+        "decisionSource": { "type": "string", "minLength": 1 },
+        "workstreamId": { "$ref": "#/$defs/id" },
+        "dependsOn": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "workstream": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "owner", "status", "posture", "summary", "itemIds", "evidence"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "name": { "type": "string", "minLength": 1 },
+        "owner": { "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/itemStatus" },
+        "posture": { "$ref": "#/$defs/posture" },
+        "summary": { "type": "string", "minLength": 1 },
+        "progress": { "type": "integer", "minimum": 0, "maximum": 100 },
+        "itemIds": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "blocker": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "severity", "status", "owner", "summary", "nextAction", "itemIds", "evidenceNeeded"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+        "status": { "$ref": "#/$defs/itemStatus" },
+        "owner": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "dependency": { "type": "string", "minLength": 1 },
+        "nextAction": { "type": "string", "minLength": 1 },
+        "itemIds": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "evidenceNeeded": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    },
+    "milestone": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "status", "order", "itemIds"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/itemStatus" },
+        "date": { "type": "string", "format": "date" },
+        "targetWindow": { "type": "string", "minLength": 1 },
+        "order": { "type": "integer", "minimum": 0 },
+        "itemIds": { "type": "array", "items": { "$ref": "#/$defs/id" } }
+      }
+    },
+    "dependency": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "from", "to", "summary"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "from": { "$ref": "#/$defs/id" },
+        "to": { "$ref": "#/$defs/id" },
+        "summary": { "type": "string", "minLength": 1 }
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "label", "kind", "status"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "label": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "enum": ["test", "build", "manual-check", "release-note", "screenshot", "document"] },
+        "status": { "$ref": "#/$defs/itemStatus" },
+        "href": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

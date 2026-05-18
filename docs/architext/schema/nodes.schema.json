@@ -34,7 +34,7 @@
           "id": { "$ref": "#/$defs/id" },
           "type": {
             "type": "string",
-            "enum": ["actor", "client", "service", "module", "worker", "queue", "data-store", "external-service", "deployment-unit", "trust-boundary"]
+            "enum": ["actor", "software-system", "client", "service", "module", "worker", "queue", "data-store", "external-service", "deployment-unit", "trust-boundary"]
           },
           "name": { "type": "string", "minLength": 1 },
           "summary": { "type": "string", "minLength": 1 },
@@ -67,4 +67,3 @@
     }
   }
 }
-

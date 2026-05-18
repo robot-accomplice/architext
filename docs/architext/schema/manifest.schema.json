@@ -29,7 +29,8 @@
         "dataClassification": { "type": "string", "minLength": 1 },
         "decisions": { "type": "string", "minLength": 1 },
         "risks": { "type": "string", "minLength": 1 },
-        "glossary": { "type": "string", "minLength": 1 }
+        "glossary": { "type": "string", "minLength": 1 },
+        "releases": { "type": "string", "minLength": 1 }
       }
     },
     "notes": {
@@ -44,4 +45,3 @@
     }
   }
 }
-

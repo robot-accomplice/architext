@@ -1,0 +1,87 @@
+{
+  "name": "@robotaccomplice/architext",
+  "version": "1.2.0",
+  "description": "Local JSON-backed architecture and dataflow viewer for engineering teams and LLM-maintained architecture maps.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "bin": {
+    "architext": "tools/architext-adopt.mjs"
+  },
+  "files": [
+    "docs/architecture",
+    "docs/assets/screenshots",
+    "docs/architext/data",
+    "docs/architext/dist",
+    "docs/architext/index.html",
+    "docs/architext/AGENTS_APPENDIX.md",
+    "docs/architext/LLM_ARCHITEXT.md",
+    "docs/architext/package.json",
+    "docs/architext/package-lock.json",
+    "docs/architext/public",
+    "docs/architext/README.md",
+    "docs/architext/schema",
+    "docs/architext/src",
+    "docs/architext/tools",
+    "docs/architext/tsconfig.json",
+    "docs/architext/vite.config.ts",
+    "src",
+    "tools",
+    "LICENSE",
+    "README.md",
+    "THIRD_PARTY_NOTICES.md"
+  ],
+  "scripts": {
+    "architext": "node tools/architext-adopt.mjs serve .",
+    "architext:build": "node tools/architext-adopt.mjs build .",
+    "architext:clean": "node tools/architext-adopt.mjs clean .",
+    "architext:doctor": "node tools/architext-adopt.mjs doctor .",
+    "architext:prompt": "node tools/architext-adopt.mjs prompt .",
+    "architext:validate": "node tools/architext-adopt.mjs validate .",
+    "build": "npm --prefix docs/architext run build",
+    "cli": "node tools/architext-adopt.mjs",
+    "doctor": "node tools/architext-adopt.mjs doctor --target .",
+    "prepack": "npm run build",
+    "test": "node --test test/architecture-references.test.mjs test/browser-preferences.test.mjs test/cli.test.mjs test/c4-documents.test.mjs test/c4-quality.test.mjs test/command-router.test.mjs test/diagram-layout.test.mjs test/doctor-repairs.test.mjs test/fetch-architecture-data.test.mjs test/planned-diagram-state.test.mjs test/routing-fitness.test.mjs test/routing.test.mjs test/step-selection.test.mjs test/terminal-presenter.test.mjs test/view-modes.test.mjs test/view-selection.test.mjs",
+    "test:all": "npm test",
+    "test:benchmark": "node --test test/c4-documents.test.mjs test/routing-fitness.test.mjs",
+    "validate": "node docs/architext/tools/validate-architext.mjs",
+    "verify": "npm test && npm run validate && npm run build",
+    "release:check": "npm run verify && npm pack --dry-run"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.4",
+    "@types/react": "^19.0.2",
+    "@types/react-dom": "^19.0.2",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/robot-accomplice/architext.git"
+  },
+  "keywords": [
+    "architecture",
+    "c4",
+    "dataflow",
+    "documentation",
+    "llm",
+    "schema"
+  ],
+  "author": "Robot Accomplice",
+  "bugs": {
+    "url": "https://github.com/robot-accomplice/architext/issues"
+  },
+  "homepage": "https://github.com/robot-accomplice/architext#readme"
+}

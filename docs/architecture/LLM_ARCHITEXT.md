@@ -22,10 +22,54 @@ complete.
 - Update risks when adding external dependencies, persistence, async
   processing, sensitive data handling, trust boundary crossings, or operational
   complexity.
+- Update Release Truth data under `docs/architext/data/releases/` when release
+  scope, blockers, milestones, posture, evidence, or target dates change.
+- Treat Release Truth as the reviewed release source of truth. If you complete,
+  defer, add, remove, reprioritize, or block release work, update the release
+  detail file and ensure `releases/index.json` is regenerated from those facts.
+- Keep Release Path rows concise. Put rationale, blocker explanation,
+  dependency detail, evidence, and next actions in the selected release item's
+  detail data instead of duplicating long prose in labels or summaries.
+- Do not use Release Planning concepts as current release facts. Release
+  Planning is targeted for Architext 1.3.0 and should write reviewed proposals
+  into the same Release Truth JSON model when it exists.
 - Prefer source-path-backed claims.
 - Mark uncertainty explicitly instead of inventing details.
-- Run the Architext validator after changing data.
+- Keep C4 Context, Container, and Component views at their proper abstraction
+  level; split dense C4 views instead of hiding labels or relying on tangled
+  routing.
+- Repair duplicate node membership in a single C4 view by updating
+  `docs/architext/data/views.json`.
+- Prefer `architext doctor [path]` or `architext sync [path] --dry-run` before
+  manual C4 view repair. Use `architext doctor [path] --yes` or `architext sync
+  [path] --yes` when deterministic repairs are sufficient.
+- Run `architext validate [path]` after changing data.
 - Do not claim Architext is current if validation failed or was skipped.
+- Do not edit copied viewer, schema, package, Vite, or local tool files in a
+  target repository. Those files are package-owned in Architext 1.0+.
+
+## Persistence Rules
+
+Persist these project-owned files in git:
+
+- `docs/architext/data/*.json`
+- `docs/architext/data/releases/*.json`
+- `docs/architext/.architext.json`
+- repository-level `AGENTS.md` or `CLAUDE.md` Architext instructions, when
+  present
+
+Do not persist generated or local runtime artifacts:
+
+- `docs/architext/dist/`
+- `.DS_Store`
+- editor/OS temp files
+- local server logs
+- screenshots created only for debugging unless intentionally added to project
+  documentation
+
+If the target project does not already ignore generated artifacts, use
+`architext sync [path]` to update lifecycle metadata, instructions, and ignore
+rules.
 
 ## Files
 
@@ -42,8 +86,9 @@ docs/architext/
     decisions.json
     risks.json
     glossary.json
-  schema/
-    *.schema.json
+    releases/
+      index.json
+      <release-id>.json
 ```
 
 ## Update Triggers
@@ -69,4 +114,3 @@ Update Architext when changing:
 
 Validation is not optional. Broken Architext data is worse than missing
 Architext data because it gives humans and future LLMs false confidence.
-

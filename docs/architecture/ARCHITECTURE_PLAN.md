@@ -2,8 +2,9 @@
 
 ## Context
 
-Architext is a reusable, project-local architecture viewer backed by strict JSON
-data files. The JSON files serve two audiences:
+Architext is a reusable global CLI and local architecture viewer backed by
+strict JSON data files in each target repository. The JSON files serve two
+audiences:
 
 - humans reading the rendered local site
 - LLMs maintaining an explicit map of the project's architecture, dataflows,
@@ -20,7 +21,7 @@ tiny local static server so the browser can load JSON files with normal
   update mechanically.
 - **Human readability:** engineers should be able to inspect architecture,
   flows, data movement, and risks quickly.
-- **Project locality:** each target project owns its Architext files under
+- **Project locality:** each target project owns its Architext data under
   version control.
 - **Low operational burden:** no hosted backend, database, or remote build
   service.
@@ -42,16 +43,14 @@ tiny local static server so the browser can load JSON files with normal
 
 ## Local Serving Model
 
-Architext requires a local server. The default development command should be:
+Architext requires a local server. The default user command should be:
 
 ```sh
-cd docs/architext
-npm install
-npm run dev
+architext serve [path]
 ```
 
-The viewer loads data from `/data/manifest.json`, then follows the file list in
-the manifest to load the remaining JSON files.
+The package-owned viewer loads target data from `/data/manifest.json`, then
+follows the file list in the manifest to load the remaining JSON files.
 
 This avoids browser lock-in. A direct `file://` page with sibling JSON files is
 not a sound baseline because browser security rules differ.
@@ -60,12 +59,76 @@ The viewer may use a frontend framework internally. Dependencies must be
 installed locally and bundled or served from local project files. The running
 site must not pull code, styles, fonts, schemas, or assets from remote URLs.
 
-The build output must remain static so a copied project can also serve `dist/`
-with a tiny local static server.
+The build output must remain static so a target project can serve a generated
+`docs/architext/dist/` with a tiny local static server when needed.
 
 NPM scripts should call Node/Vite entrypoints directly and avoid shell command
 chains, environment-variable syntax, or utilities that are not available on all
 target operating systems.
+
+## Adoption And Upgrade Workflow
+
+Architext needs a cross-platform Node CLI because copied templates are
+error-prone and difficult to upgrade consistently. The intended interface is
+the globally installed `architext` command. This is a breaking distribution
+change and starts the `1.0.0` line.
+
+The CLI should support lifecycle commands:
+
+- **Sync:** install when absent, upgrade when stale, and no-op when current.
+- **Install:** write neutral starter data and metadata into
+  `docs/architext`, plus optional repository-level agent instructions.
+- **Migrate/upgrade:** preserve target data, remove copied viewer/schema/tool
+  files from old installs, update metadata and agent instructions, and validate
+  with package-owned schemas.
+- **Doctor/status:** inspect installation health, version, validation, ignore
+  rules, instruction appendix presence, and accidentally tracked generated
+  artifacts. Doctor may apply deterministic, user-approved repairs; status is
+  the read-only machine-readable health view.
+- **Serve/validate/build:** run package-owned commands against an optional
+  target path. The path defaults to the current directory.
+- **Prompt:** print LLM-ready instructions for initial build-out, architecture
+  changes, or validation repair.
+- **Clean:** remove generated local artifacts such as `dist/`, with an explicit
+  flag required before deleting dependencies.
+- **Explain:** summarize schema files and data contracts for humans or LLMs.
+
+Upgrade and migration must preserve target-owned architecture data by default:
+
+- do not overwrite `docs/architext/data/*.json`
+- remove copied implementation files such as `src/`, `schema/`, `tools/`,
+  `public/`, `index.html`, `package.json`, `package-lock.json`, `tsconfig.json`,
+  and `vite.config.ts`
+- update old Architext sections in `AGENTS.md` and `CLAUDE.md` so agents know
+  to edit only project-owned data and use the global CLI
+- allow explicit data overwrite only for starter resets or controlled
+  migrations
+
+The script should also be able to append the Architext agent mandate to a
+target `AGENTS.md` or `CLAUDE.md` file when explicitly requested. It must avoid
+duplicate appendix insertion by checking for the Architext heading before
+appending.
+
+The script should maintain deterministic ignore rules for generated local
+artifacts. `docs/architext/dist/` should be ignored. Target repositories no
+longer commit copied Architext dependencies or viewer implementation files.
+
+When a target project has a root `package.json`, the install workflow should
+offer to add convenience scripts such as `architext`, `architext:validate`,
+`architext:build`, `architext:doctor`, and `architext:prompt`. These scripts
+keep daily usage at the repository root and avoid requiring users to remember
+`docs/architext` paths.
+
+Each install should also write Architext-owned metadata at
+`docs/architext/.architext.json`. This file records the CLI version,
+install/update time, operation, migrated copied install state, whether
+instruction files and `.gitignore` were managed, and the last successful
+validation. The metadata is not the architecture source of truth; it is
+lifecycle state for automation.
+
+The workflow must avoid POSIX-only shell behavior. Use Node filesystem APIs for
+copying, directory creation, path handling, and file updates so the same command
+works on Windows, Linux, and macOS.
 
 ## Template Placement
 
@@ -74,20 +137,6 @@ In a consuming project, the intended structure is:
 ```text
 docs/
   architext/
-    index.html
-    package.json
-    src/
-    README.md
-    LLM_ARCHITEXT.md
-    AGENTS_APPENDIX.md
-    schema/
-      manifest.schema.json
-      nodes.schema.json
-      flows.schema.json
-      views.schema.json
-      data-classification.schema.json
-      decisions.schema.json
-      risks.schema.json
     data/
       manifest.json
       nodes.json
@@ -97,25 +146,54 @@ docs/
       decisions.json
       risks.json
       glossary.json
-    examples/
-      claimsdesk/
-        data/
-          manifest.json
-          nodes.json
-          flows.json
-          views.json
-          data-classification.json
-          decisions.json
-          risks.json
-          glossary.json
-    tools/
-      validate-architext.mjs
+    .architext.json
 ```
 
 ## Data Model
 
 The data model is split by responsibility instead of stored as one large file.
 `manifest.json` is the entrypoint.
+
+## Current Implementation Boundaries
+
+The current implementation is being moved toward explicit clean-architecture
+boundaries. The important rule is that Architext policy should live in pure
+domain/application modules, while CLI, filesystem, HTTP, browser, React, and
+SVG details stay at the edges.
+
+Implemented boundaries:
+
+- `src/domain/architecture-model/` owns shared architecture reference
+  validation and C4 quality diagnosis/repair policy.
+- `src/domain/lifecycle/` owns doctor repair derivation so `doctor` and `sync`
+  can share the same repair categories.
+- `src/adapters/cli/` owns argument parsing, command routing, and terminal
+  presentation.
+- `docs/architext/src/adapters/` owns browser data loading and preference
+  storage.
+- `docs/architext/src/domain/` owns viewer-side architecture DTO types.
+- `docs/architext/src/presentation/` owns mode, view, and step selection
+  policy.
+- `docs/architext/src/routing/` now separates diagram planning state,
+  geometry, ports, port-pair enumeration, corridor discovery, labels, route
+  candidate construction, route strategy assembly, route indexing, route
+  rendering, route scoring and warnings, route style normalization, route
+  caching, and the priority queue used by grid search.
+
+Remaining architectural pressure:
+
+- `tools/architext-adopt.mjs` is still too responsible for lifecycle execution,
+  filesystem operations, validation process orchestration, HTTP serving, and
+  build commands.
+- `docs/architext/src/main.tsx` still combines many React components and detail
+  presenters in one entrypoint.
+- The routing strategy module is still internally organized by conditional
+  branches for orthogonal, spline, and straight routing. Future work can split
+  those into separate strategy files if the branch bodies continue to grow.
+
+The next routing correctness work should be implemented against these named
+boundaries. For example, Deployment and Data/Risks line-overlap fixes belong in
+route indexing, candidate generation, and scoring rather than in React or CSS.
 
 ### `manifest.json`
 
@@ -276,20 +354,19 @@ Required interactions:
 - pan/zoom/fit diagram
 - maximize diagram
 - independent left-panel collapse and right-panel collapse
-- collapse controls visible from both panel edges so either side can reclaim
-  diagram space without hunting in a global toolbar
+- collapse controls attached to the sidebars they control so either side can
+  reclaim diagram space without hunting in a global toolbar
 - persisted collapse state across reloads
 - right-panel deep links to sections
 
 Collapse behavior should follow the pattern used in Palm Command Center: a
-small control straddles the panel/content border, the panel shrinks to a narrow
-rail instead of disappearing entirely, and the expanded/collapsed affordance is
-clear from the icon orientation. Architext needs this on both sides because the
-diagram canvas is the primary work area.
-
-The first demo currently falls short here: it only collapses the left panel from
-the top toolbar, has no right-panel collapse, and hides the left panel entirely
-instead of retaining a useful rail.
+small polished control lives on the controlled panel edge, the panel shrinks to
+a narrow rail instead of disappearing entirely, and the expanded/collapsed
+affordance is clear from the icon orientation. Collapsed rails should identify
+the panel purpose, not repeat the current mode or selection; the left rail is
+for browsing architecture objects, and the right rail is for details.
+Architext needs this on both sides because the diagram canvas is the primary
+work area.
 
 The right panel should be scrollable and sectioned:
 
@@ -322,15 +399,79 @@ short labels and secondary metadata; large dashboard cards waste diagram space.
 Architext should prefer compact node boxes, lane headers, and scrollable/pannable
 canvas behavior over large fixed cards.
 
+Canvas scaling must be handled as a renderer-wide invariant. CSS transforms do
+not change scroll dimensions, so every zoomed diagram should use the same
+scaled extent wrapper around an unscaled coordinate plane. Sequence, workflow,
+deployment, and C4 canvases should not each invent localized scroll handling.
+
+Fit behavior should preserve readability before exhaustive visibility. On
+desktop-sized viewports, Fit should not shrink architecture diagrams below a
+readable working zoom just to include empty canvas or every offscreen gutter;
+horizontal/vertical scrolling is acceptable when the alternative is a tiny,
+unreadable diagram.
+
 Vertical space should be allocated the same way: non-diagram sections should
 auto-size to their content, while the diagram canvas takes the remaining height.
 Headers, filters, legends, and selected-flow step summaries are supporting
-controls, not primary layout regions.
+controls, not primary layout regions. Diagram header titles and summaries should
+wrap within available space instead of truncating. Header controls must never
+require horizontal scrolling; when width is constrained, the control group wraps
+inside the header as a group before any control is clipped. Canvas headers
+should reserve intrinsic space for controls and legend first, then let the title
+and summary region compress or wrap within the actual diagram column as side
+panels open and close. Header content must not escape underneath adjacent side
+panels; diagram grid columns must be explicitly shrinkable so child max-content
+width cannot enlarge the canvas column. The canvas viewport is its own contained
+layout and scroll region; zoomed canvas extents, panning, and diagram overflow
+must not influence header, steps, or side-panel sizing. Top-level mode tabs
+should remain a single grouped row at desktop widths; orphaned one-tab rows read
+as broken navigation. If a viewport or future clamp forces truncation, the full
+title or summary must remain available through a tooltip.
 
 Flows must be visible as lines between boxes, not only as a textual list of
 steps. A selected flow should draw directional edges between involved nodes,
 with numbered step markers or labels where legible. The textual ordered step
 list remains useful, but it is not a substitute for visual relationships.
+Numbered route markers should read as labels attached to the line, not as
+separate filled blocks. Equivalent route marker treatments should share a common
+visual system across workflow and sequence views.
+Selected flow steps should use one shared standout selection color across the
+route line, arrowhead, route marker, and bottom step card so a stage selection
+reads as one highlighted path. A rendered flow should expose one primary
+selectable step surface; duplicated step strips reduce canvas real estate
+without adding architectural information.
+
+Flow routing must optimize readability over geometric cleverness. The original
+visual target uses compact boxes and readable highlighted paths; Architext
+should preserve that. Lines should not take surprising paths, pass behind
+related boxes, or hide numbered markers. The Line Style control should expose
+distinct orthogonal, spline, and straight presentations without mixing routing
+styles in a single rendered view. Its text label should remain visually separate
+from the interactive dropdown so it does not read as another selectable box.
+Prefer simple direct or gently curved paths through clear gutters, with step
+markers placed on readable line segments.
+If a clean route cannot be drawn in a dense canvas, the renderer should choose a
+simpler layout or require explicit layout hints.
+
+Any side of a node box is a valid source or target for an edge. The renderer
+should choose the least contentious attachment surface and path for the actual
+node positions: under, over, or around objects is acceptable when it is clear;
+behind a node or through an ambiguous overlap is not. Same-column relationships
+should usually route through an outside gutter. Backward or cross-lane
+relationships should reserve a clean corridor above or below the involved boxes
+instead of crossing behind active nodes. The canvas should keep enough left and
+top breathing room for these gutters so the columnar layout does not force
+unreadable paths.
+
+Two distinct edges should not share the same route unless there is no readable
+alternative. Even when two edges connect the same pair of nodes, the renderer
+should fan them into separate nearby lanes or corridors so each relationship can
+be followed independently and its marker remains legible.
+
+Architext should also support sequence diagrams as a separate view type. A
+sequence diagram is not the same as the free-form flow map: it shows the ordered
+messages in one selected flow across lifelines, with message numbers,
+participants, and payload/data classifications.
 
 ## C4 And Architecture Views
 
@@ -344,11 +485,60 @@ groupings:
 - **Component:** major components inside a selected container, with dependencies
   and source paths.
 
+The quality bar for these diagrams is captured in
+[`C4_DOCUMENTATION_RUBRIC.md`](C4_DOCUMENTATION_RUBRIC.md). That rubric is the
+acceptance standard for C4 renderer work and for target-repository C4 data.
+
 Each view should be generated from the same JSON model. C4 views are projections
 over nodes, flows, and relationships, not separate hand-maintained diagrams.
 
-The first demo currently has only system map, dataflow, and deployment views.
-That is insufficient for the original requirement.
+The first demo previously mislabeled lane-grouped views as C4 views. That is
+not acceptable. C4 levels are semantic zoom levels, not alternate column
+groupings:
+
+- Context shows the system boundary and its relationships to actors and external
+  systems. It should not expose internal containers.
+- Container shows deployable/runtime units inside the system boundary plus
+  external context. It should label communication protocols or interaction
+  styles.
+- Component shows major components inside one selected container. It should not
+  mix unrelated runtime units from the whole system.
+
+The schema needs enough relationship metadata to render these levels honestly:
+relationship label, technology/protocol where known, source, target, and whether
+the source/target is inside or outside the system boundary.
+
+The UI should expose C4 as drilldown navigation:
+
+1. **Context:** select the system boundary.
+2. **Container:** drill into that system to see deployable/runtime units.
+3. **Component:** drill into one selected container to see internal modules.
+
+This should not be rendered like a selected ordered flow. Flow diagrams show
+scenario paths. C4 diagrams show structural containment and static
+relationships at a chosen abstraction level.
+
+C4 diagrams should show structural connections, not workflows. A C4 Context,
+Container, or Component diagram may show that one element uses, calls, reads
+from, writes to, publishes to, or depends on another element. It should not show
+the numbered step-by-step path for a selected flow. Ordered behavior belongs in
+flow, dynamic, or sequence diagrams.
+
+The UI implementation should now move from a generic "view dropdown" toward
+work modes. Flows, sequence, C4, deployment, and data/risk review are different
+jobs for engineers and should expose different left-panel navigation, diagram
+controls, and details states.
+
+The first dedicated C4 renderer does not need full Structurizr parity, but it
+must stop behaving like an ordered flow diagram. It should show a system
+boundary, actor/external context, relationship labels, and level switching
+between context, container, and component projections. C4 edges are structural
+relationships and should never use numbered workflow markers.
+
+Diagram inspection is a core workflow. The viewer should expose zoom, fit,
+reset, and focus-mode controls; selectable/hoverable edges; keyboard-focusable
+nodes and relationships; and right-panel details that distinguish node, flow,
+step, and relationship selections.
 
 ## Alignment Checkpoint
 
@@ -369,39 +559,73 @@ Against the original brief:
 - **Engineer-first UX:** partially aligned. Search/details exist, but visual
   flow lines and C4 views are missing.
 - **Right-hand details panel:** aligned, but it also needs collapse behavior.
-- **Fictitious example project:** aligned with ClaimsDesk.
-- **AGENTS/CLAUDE mandate:** aligned as appendix text, but adoption scripting is
-  still pending.
+- **Self-hosted example project:** aligned. The bundled example describes
+  Architext itself instead of a fictitious product.
+- **AGENTS/CLAUDE mandate:** aligned. Migration must replace old copied-template
+  instructions with global-CLI/data-only instructions.
 
-## Fictitious Example Project
+## Self-Hosted Example Project
 
-The bundled example should be `ClaimsDesk`, a fictitious claims-processing SaaS.
+The bundled example should describe Architext itself.
 
 It should include:
 
-- web app
-- auth provider
-- claims API
-- worker service
-- document store
-- queue
-- fraud scoring external API
-- audit log
-- notification service
-- analytics warehouse
+- global CLI
+- package-owned viewer runtime
+- package-owned schemas and validator
+- target repository data files
+- lifecycle metadata
+- copied-install migration
+- agent instruction management
+- static export
+- PDF export
+- release/package workflow
 
 Example flows:
 
-- user signup
-- claim submission
-- document upload
-- fraud review
-- approval payout
-- audit export
-- admin role change
+- fresh data-only install
+- copied install migration
+- architecture data maintenance
+- local viewer review
+- static export
+- PDF export
+- release packaging
 
-This example is broad enough to exercise auth, PII, files, queues, external
-services, trust boundaries, deployment views, risks, and data classification.
+This example is broad enough to exercise package-owned runtime boundaries,
+target-owned data, migrations, generated artifacts, agent instructions,
+deployment views, risks, and data classification.
+
+## CI And Release Gates
+
+CI must verify the same lifecycle that maintainers rely on locally. The formal
+pipeline should be self-contained and must depend only on this repository's
+fixtures, package scripts, and generated package contents.
+
+Required CI gates:
+
+- install root package dependencies with the lockfile
+- install viewer workspace dependencies with the lockfile
+- run the self-contained CLI and routing test suite
+- run C4/routing fitness checks
+- validate bundled Architext data with package-owned schemas
+- build the package-owned viewer
+- inspect package contents with `npm pack`
+- install the packed tarball into a clean prefix and smoke-test the global
+  `architext` binary against a temporary target repository
+
+Publishing remains a human-controlled release operation. CI proves that the
+commit is releasable; it must not embed public README instructions for npm
+publication operations.
+
+Local release operations are captured as `just` recipes so maintainers have a
+single command path for validation, CI inspection, passkey authentication, and
+publication without putting protected operational instructions in public
+user-facing documentation.
+
+Npm publication should prefer GitHub Actions trusted publishing over local
+write-time OTP. The publish workflow checks out the released tag, reruns the
+release gate, and uses OIDC provenance so the package can be published without
+embedding long-lived npm tokens or public operational runbooks.
 
 ## Open Questions
 
@@ -409,3 +633,5 @@ services, trust boundaries, deployment views, risks, and data classification.
 - Should diagram layout be hand-hinted in JSON or computed deterministically?
 - Should future source-code extraction be plugin-based by language/ecosystem?
 - Should schema version migrations be supported from the first release?
+- Should PDF export render the interactive viewer through a headless browser,
+  generate a print-specific static document, or support both modes?

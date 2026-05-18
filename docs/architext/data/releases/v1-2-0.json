@@ -1,0 +1,265 @@
+{
+  "id": "v1-2-0",
+  "version": "1.2.0",
+  "name": "Architext 1.2.0 Release Truth",
+  "status": "released",
+  "posture": "shipped",
+  "summary": "Release Truth makes release posture, scope, blockers, milestones, and historical trends first-class Architext data.",
+  "lastUpdated": "2026-05-16T14:15:00.000Z",
+  "updateSource": "Architext 1.2.0 release ceremony",
+  "scope": {
+    "required": [
+      {
+        "id": "release-schema-contract",
+        "title": "Release index and detail schema contract",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Define optional manifest-driven release data without invalidating existing repositories.",
+        "owner": "maintainer",
+        "workstreamId": "data-contract",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/RELEASE_TRUTH_PLAN.md"
+        ]
+      },
+      {
+        "id": "release-validation",
+        "title": "Release validation",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Validate release index/detail files and broken release references through the existing validate lifecycle.",
+        "owner": "maintainer",
+        "workstreamId": "lifecycle",
+        "dependsOn": [
+          "release-schema-contract"
+        ],
+        "evidence": []
+      },
+      {
+        "id": "release-truth-mode",
+        "title": "Native Release Truth mode",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Add a top-level Release Truth viewer mode for current release posture and history.",
+        "owner": "maintainer",
+        "workstreamId": "viewer",
+        "dependsOn": [
+          "release-schema-contract"
+        ],
+        "evidence": []
+      },
+      {
+        "id": "release-history-trends",
+        "title": "Historical release trends",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Render a compact history view with feature and bug-fix count trends by release date.",
+        "owner": "maintainer",
+        "workstreamId": "viewer",
+        "dependsOn": [
+          "release-truth-mode"
+        ],
+        "evidence": []
+      }
+    ],
+    "planned": [
+      {
+        "id": "release-self-fixture",
+        "title": "Architext self release fixture",
+        "kind": "documentation",
+        "status": "complete",
+        "summary": "Describe the latest shipped Release Truth release in Architext's own data.",
+        "owner": "maintainer",
+        "workstreamId": "data-contract",
+        "dependsOn": [
+          "release-schema-contract"
+        ],
+        "evidence": []
+      },
+      {
+        "id": "release-doctor-reporting",
+        "title": "Doctor reporting for release data",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Report stale release metadata, broken dependencies, and count mismatches through doctor.",
+        "owner": "maintainer",
+        "workstreamId": "lifecycle",
+        "dependsOn": [
+          "release-validation"
+        ],
+        "evidence": []
+      }
+    ],
+    "stretch": [
+      {
+        "id": "release-chart-series",
+        "title": "Additional trend chart series",
+        "kind": "feature",
+        "status": "stretch",
+        "summary": "Add optional blocker, scope-size, and stretch-item trend lines after the first chart is proven.",
+        "owner": "maintainer",
+        "workstreamId": "viewer",
+        "dependsOn": [
+          "release-history-trends"
+        ],
+        "evidence": [],
+        "rationale": "Additional chart series beyond features and bug fixes remain optional after the first Release Truth chart shipped."
+      },
+      {
+        "id": "release-detail-on-demand",
+        "title": "Strict detail-on-demand loading",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Optimize historical detail loading once the first UI proves the release contract.",
+        "owner": "maintainer",
+        "workstreamId": "performance",
+        "dependsOn": [
+          "release-truth-mode"
+        ],
+        "evidence": []
+      }
+    ],
+    "deferred": [],
+    "outOfScope": [
+      {
+        "id": "network-release-ingestion",
+        "title": "Network release ingestion",
+        "kind": "feature",
+        "status": "cut",
+        "summary": "Release Truth must not depend on GitHub or npm network access for the initial release.",
+        "owner": "maintainer",
+        "workstreamId": "lifecycle",
+        "dependsOn": [],
+        "evidence": []
+      }
+    ]
+  },
+  "workstreams": [
+    {
+      "id": "data-contract",
+      "name": "Release data contract",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Define index/detail files, schema vocabulary, and self-hosted fixture data.",
+      "progress": 100,
+      "itemIds": [
+        "release-schema-contract",
+        "release-self-fixture"
+      ],
+      "evidence": [
+        "docs/architecture/RELEASE_TRUTH_PLAN.md"
+      ]
+    },
+    {
+      "id": "lifecycle",
+      "name": "Lifecycle validation",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Use existing validate and doctor commands for release data correctness.",
+      "progress": 100,
+      "itemIds": [
+        "release-validation",
+        "release-doctor-reporting",
+        "network-release-ingestion"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "viewer",
+      "name": "Release Truth viewer",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Add the current release snapshot, workstreams, blockers, milestones, and history trend UI.",
+      "progress": 100,
+      "itemIds": [
+        "release-truth-mode",
+        "release-history-trends",
+        "release-chart-series"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "performance",
+      "name": "Historical loading performance",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Keep history navigation cheap by loading summaries first and details only when needed.",
+      "progress": 100,
+      "itemIds": [
+        "release-detail-on-demand"
+      ],
+      "evidence": []
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "contract-proven",
+      "label": "Data contract proven",
+      "status": "complete",
+      "targetWindow": "Released in 1.2.0",
+      "order": 1,
+      "itemIds": [
+        "release-schema-contract",
+        "release-self-fixture"
+      ]
+    },
+    {
+      "id": "viewer-proven",
+      "label": "Viewer slice proven",
+      "status": "complete",
+      "targetWindow": "Released in 1.2.0",
+      "order": 2,
+      "itemIds": [
+        "release-truth-mode",
+        "release-history-trends"
+      ]
+    },
+    {
+      "id": "lifecycle-proven",
+      "label": "Lifecycle checks proven",
+      "status": "complete",
+      "targetWindow": "Released in 1.2.0",
+      "order": 3,
+      "itemIds": [
+        "release-validation",
+        "release-doctor-reporting"
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "validation-after-contract",
+      "from": "release-validation",
+      "to": "release-schema-contract",
+      "summary": "Validation must use the finalized release schema vocabulary."
+    },
+    {
+      "id": "viewer-after-contract",
+      "from": "release-truth-mode",
+      "to": "release-schema-contract",
+      "summary": "The viewer should render the same release data contract used by validation."
+    },
+    {
+      "id": "history-after-viewer",
+      "from": "release-history-trends",
+      "to": "release-truth-mode",
+      "summary": "History navigation depends on the native Release Truth mode."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "release-truth-plan",
+      "label": "Release Truth architecture plan",
+      "kind": "document",
+      "status": "complete",
+      "href": "docs/architecture/RELEASE_TRUTH_PLAN.md"
+    }
+  ],
+  "targetDate": "2026-05-16",
+  "releasedAt": "2026-05-16T14:15:00.000Z"
+}

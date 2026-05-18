@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architext.local/schema/release-index.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["currentReleaseId", "releases"],
+  "properties": {
+    "currentReleaseId": { "$ref": "#/$defs/id" },
+    "releases": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/releaseSummary" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "releaseStatus": {
+      "type": "string",
+      "enum": ["planning", "active", "blocked", "candidate", "released", "deferred"]
+    },
+    "posture": {
+      "type": "string",
+      "enum": ["on-track", "at-risk", "blocked", "release-candidate", "shipped"]
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["features", "bugFixes", "workstreams", "blockers", "complete", "inProgress", "planned", "stretch"],
+      "properties": {
+        "features": { "type": "integer", "minimum": 0 },
+        "bugFixes": { "type": "integer", "minimum": 0 },
+        "workstreams": { "type": "integer", "minimum": 0 },
+        "blockers": { "type": "integer", "minimum": 0 },
+        "complete": { "type": "integer", "minimum": 0 },
+        "inProgress": { "type": "integer", "minimum": 0 },
+        "planned": { "type": "integer", "minimum": 0 },
+        "stretch": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "releaseSummary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "version", "name", "status", "posture", "lastUpdated", "summary", "counts", "file"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "version": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "status": { "$ref": "#/$defs/releaseStatus" },
+        "posture": { "$ref": "#/$defs/posture" },
+        "targetDate": { "type": "string", "format": "date" },
+        "targetWindow": { "type": "string", "minLength": 1 },
+        "releasedAt": { "type": "string", "format": "date-time" },
+        "lastUpdated": { "type": "string", "format": "date-time" },
+        "summary": { "type": "string", "minLength": 1 },
+        "counts": { "$ref": "#/$defs/counts" },
+        "file": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

@@ -1,11 +1,54 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import fsSync from "node:fs";
+import fs from "node:fs/promises";
+import { fileURLToPath } from "node:url";
+import path from "node:path";
+
+const dataDir = process.env.ARCHITEXT_DATA_DIR;
+const configDir = path.dirname(fileURLToPath(import.meta.url));
+const packageJson = JSON.parse(fsSync.readFileSync(path.resolve(configDir, "../..", "package.json"), "utf8")) as { version: string };
 
 export default defineConfig({
-  plugins: [react()],
+  define: {
+    __ARCHITEXT_VERSION__: JSON.stringify(packageJson.version)
+  },
+  plugins: [
+    react(),
+    {
+      name: "architext-target-data",
+      configureServer(server) {
+        if (!dataDir) return;
+        server.middlewares.use(async (request, response, next) => {
+          if (!request.url?.startsWith("/data/")) {
+            next();
+            return;
+          }
+
+          const relativePath = decodeURIComponent(request.url.slice("/data/".length).split("?")[0] ?? "");
+          const filePath = path.resolve(dataDir, relativePath);
+          const root = path.resolve(dataDir);
+
+          if (!filePath.startsWith(`${root}${path.sep}`)) {
+            response.statusCode = 403;
+            response.end("Forbidden");
+            return;
+          }
+
+          try {
+            const body = await fs.readFile(filePath);
+            response.setHeader("Content-Type", "application/json; charset=utf-8");
+            response.end(body);
+          } catch {
+            response.statusCode = 404;
+            response.end("Not found");
+          }
+        });
+      }
+    }
+  ],
   server: {
     host: "127.0.0.1",
     port: 4317
   }
 });
-

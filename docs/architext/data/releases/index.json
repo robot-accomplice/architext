@@ -1,0 +1,49 @@
+{
+  "currentReleaseId": "v1-2-0",
+  "releases": [
+    {
+      "id": "v1-1-2",
+      "version": "1.1.2",
+      "name": "Architext 1.1.2",
+      "status": "released",
+      "posture": "shipped",
+      "targetDate": "2026-05-16",
+      "releasedAt": "2026-05-16T09:20:00.000Z",
+      "lastUpdated": "2026-05-16T09:20:00.000Z",
+      "summary": "Patch release with dense spline routing and dense topology layout improvements.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 2,
+        "workstreams": 3,
+        "blockers": 0,
+        "complete": 3,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-1-2.json"
+    },
+    {
+      "id": "v1-2-0",
+      "version": "1.2.0",
+      "name": "Architext 1.2.0 Release Truth",
+      "status": "released",
+      "posture": "shipped",
+      "lastUpdated": "2026-05-16T14:15:00.000Z",
+      "summary": "Release Truth makes release posture, scope, blockers, milestones, and historical trends first-class Architext data.",
+      "counts": {
+        "features": 6,
+        "bugFixes": 0,
+        "workstreams": 4,
+        "blockers": 0,
+        "complete": 7,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 1
+      },
+      "file": "v1-2-0.json",
+      "targetDate": "2026-05-16",
+      "releasedAt": "2026-05-16T14:15:00.000Z"
+    }
+  ]
+}

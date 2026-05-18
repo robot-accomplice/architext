@@ -1,21 +1,24 @@
 {
   "terms": [
     {
-      "term": "Claim",
-      "definition": "A customer request for reimbursement or coverage review."
+      "term": "Data-only install",
+      "definition": "An Architext target repository layout that commits architecture JSON, lifecycle metadata, and optional instructions, but not viewer code or schemas."
     },
     {
-      "term": "Fraud review",
-      "definition": "Automated and manual evaluation of whether a claim appears suspicious."
+      "term": "Copied install",
+      "definition": "A pre-1.0 Architext target repository that contains copied viewer, schema, tool, package, and Vite files under docs/architext."
     },
     {
-      "term": "Signed URL",
-      "definition": "Short-lived URL granting scoped access to upload or download one object."
+      "term": "Package-owned runtime",
+      "definition": "The Architext CLI, viewer, schemas, validation tools, and starter templates shipped by the installed npm package."
     },
     {
-      "term": "Payment instruction",
-      "definition": "A command sent to the payment gateway to execute an approved payout."
+      "term": "Target-owned data",
+      "definition": "The docs/architext/data/*.json files that describe a project architecture and are reviewed as part of that project."
+    },
+    {
+      "term": "Managed Architext section",
+      "definition": "The repository-level AGENTS.md or CLAUDE.md section headed 'Architext Architecture Documentation' that the CLI can replace during migration."
     }
   ]
 }
-
