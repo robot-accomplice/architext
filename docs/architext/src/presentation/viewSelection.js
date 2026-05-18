@@ -7,14 +7,39 @@ export const modeLabels = {
   "release-truth": "Release Truth"
 };
 
+const modeHashAliases = {
+  flows: "flows",
+  flow: "flows",
+  sequence: "sequence",
+  c4: "c4",
+  deployment: "deployment",
+  datarisks: "data-risks",
+  "data-risks": "data-risks",
+  releasetruth: "release-truth",
+  "release-truth": "release-truth"
+};
+
 const modeViewTypes = {
   flows: ["system-map", "flow-explorer", "dataflow"],
   sequence: ["sequence"],
-  c4: ["c4-context", "c4-container", "c4-component"],
+  c4: ["c4-context", "c4-container", "c4-component", "c4-code"],
   deployment: ["deployment"],
   "data-risks": ["risk-overlay", "dataflow"],
   "release-truth": []
 };
+
+export function modeForHash(hash) {
+  const key = String(hash ?? "")
+    .replace(/^#/, "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-]+/g, "");
+  return modeHashAliases[key] ?? null;
+}
+
+export function hashForMode(mode) {
+  return `#${mode.replace(/-/g, "")}`;
+}
 
 export function modeForView(view) {
   if (!view) return "flows";

@@ -193,6 +193,9 @@ test("prompt includes Release Truth maintenance rules for LLM agents", () => {
   assert.match(output, /refresh the generated release index from those facts/);
   assert.match(output, /Keep Release Path labels concise/);
   assert.match(output, /rationale, blocker explanation, evidence, dependencies, and next actions in detail data/);
+  assert.match(output, /roadmap\.json for release planning source items/);
+  assert.match(output, /source: "roadmap"/);
+  assert.match(output, /source: "ad-hoc"/);
 });
 
 test("managed agent instructions include Release Truth source-of-truth rules", () => {
@@ -206,7 +209,10 @@ test("managed agent instructions include Release Truth source-of-truth rules", (
       assert.match(instructions, /Release Truth is the reviewed release source of truth/);
       assert.match(instructions, /completed work,\s+deferrals, reprioritization, blockers, dependencies, and next actions belong in\s+the release detail file/);
       assert.match(instructions, /Keep Release Path labels concise/);
-      assert.match(instructions, /Release Planning is a later Architext 1\.3\.0 capability/);
+      assert.match(instructions, /roadmap\.json` as the\s+roadmap source/);
+      assert.match(instructions, /source: "roadmap"/);
+      assert.match(instructions, /source:\s+"ad-hoc"/);
+      assert.match(instructions, /Do not represent unreviewed planning proposals as current Release Truth facts/);
       assert.match(instructions, /Do not claim the architecture documentation is current if validation fails or\s+was skipped/);
     }
   } finally {

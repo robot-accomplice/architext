@@ -179,6 +179,7 @@ export function routeEdges(input) {
   const rawRoutes = [];
   const routeIndex = createRouteIndex();
   const pairCounts = new Map();
+  const endpointTotals = new Map();
   const endpointCounts = new Map();
   const style = normalizeRouteStyle(input.style);
   const cacheKey = routeCacheKey(input);
@@ -187,6 +188,14 @@ export function routeEdges(input) {
   const planner = cachedRawRoutes ? null : routePlannerContext(input);
 
   if (!cachedRawRoutes) {
+    for (const relationship of input.relationships) {
+      if (!input.laneIndexByNode.has(relationship.from) || !input.laneIndexByNode.has(relationship.to)) {
+        continue;
+      }
+      endpointTotals.set(relationship.from, (endpointTotals.get(relationship.from) ?? 0) + 1);
+      endpointTotals.set(relationship.to, (endpointTotals.get(relationship.to) ?? 0) + 1);
+    }
+
     input.relationships.forEach((relationship, index) => {
       if (!input.laneIndexByNode.has(relationship.from) || !input.laneIndexByNode.has(relationship.to)) {
         return;
@@ -209,8 +218,8 @@ export function routeEdges(input) {
         rawRoutes,
         routeIndex,
         {
-          from: offsetForEndpointOrder(fromEndpointCount),
-          to: offsetForEndpointOrder(toEndpointCount)
+          from: endpointTotals.get(relationship.from) === 1 ? 0 : offsetForEndpointOrder(fromEndpointCount),
+          to: endpointTotals.get(relationship.to) === 1 ? 0 : offsetForEndpointOrder(toEndpointCount)
         },
         style
       );

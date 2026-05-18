@@ -5,10 +5,26 @@ import { c4LayoutFor } from "./routing/c4Layout.js";
 import { relationshipLabel } from "./routing/relationshipLabels.js";
 import { plannedCanvasFallback, usePlannedDiagram } from "./routing/usePlannedDiagram.js";
 import { loadArchitectureModel, loadReleaseDetail } from "./adapters/fetchArchitectureData.js";
+import { subscribeToDataEvents } from "./adapters/dataEvents.js";
 import { isSelectedStep, orderSelectedLast, selectedFlowIdForSelection, selectedStepIdForSelection } from "./presentation/stepSelection.js";
 import { diagramLayoutFor } from "./presentation/diagramLayout.js";
+import { c4DrilldownUnavailableReason, childC4ViewForNode } from "./presentation/c4Drilldown.js";
+import { releaseKanbanColumns } from "./presentation/releaseKanban.js";
+import { ReleasePlanningPanel, ReleasePlanningWorkspace } from "./presentation/ReleasePlanning.js";
+import {
+  progressFill,
+  progressTone,
+  releaseBadgeTone,
+  releaseItems,
+  releaseLineCheckClass,
+  releaseLineState,
+  releaseProgress,
+  releaseScopeByItemId,
+  releaseStatusLabels,
+  releaseTone
+} from "./presentation/releaseTruth.js";
 import { modeShowsOrderedFlow, modeUsesStructuralRelationships } from "./presentation/viewModes.js";
-import { defaultViewForMode, modeForView, modeLabels, viewBelongsToMode } from "./presentation/viewSelection.js";
+import { defaultViewForMode, hashForMode, modeForHash, modeForView, modeLabels, viewBelongsToMode } from "./presentation/viewSelection.js";
 import { readBooleanPreference, readDebugRouting, readRoutingStylePreference, writeBooleanPreference, writeRoutingStylePreference } from "./adapters/browserPreferences.js";
 import type {
   ArchNode,
@@ -28,6 +44,7 @@ import type {
   ReleaseModel,
   ReleaseSummary,
   Relationship,
+  RoadmapItem,
   Risk,
   RoutingStyle,
   Selection,
@@ -53,56 +70,8 @@ const routingStyleLabels: Record<RoutingStyle, string> = {
   straight: "Straight"
 };
 
-const releaseStatusLabels: Record<ReleaseItemStatus, string> = {
-  planned: "Planned",
-  "in-progress": "In Progress",
-  blocked: "Blocked",
-  complete: "Complete",
-  deferred: "Deferred",
-  stretch: "Stretch",
-  cut: "Cut"
-};
-
-function releaseTone(value?: string): string {
-  if (!value) return "neutral";
-  if (["complete", "released", "shipped", "on-track", "low"].includes(value)) return "healthy";
-  if (["planned", "planning", "active", "in-progress", "release-candidate", "stretch", "medium"].includes(value)) return "progressing";
-  if (["blocked", "at-risk", "critical", "high"].includes(value)) return "blocked";
-  if (["deferred", "cut"].includes(value)) return "inactive";
-  return "neutral";
-}
-
-function releaseBadgeTone(value?: string): string {
-  return `release-${releaseTone(value)}`;
-}
-
-function progressTone(value?: number): string {
-  const progress = value ?? 0;
-  if (progress <= 0) return "inactive";
-  if (progress < 100) return "progressing";
-  return "healthy";
-}
-
-function progressFill(value?: number): string {
-  const progress = Math.max(0, Math.min(100, value ?? 0));
-  if (progress <= 0) return "var(--line-strong)";
-  return `color-mix(in srgb, var(--green) ${progress}%, var(--yellow))`;
-}
-
 function progressBarStyle(value?: number): React.CSSProperties {
   return { "--progress-fill": progressFill(value) } as React.CSSProperties;
-}
-
-function releaseLineState(status: ReleaseItemStatus, blocked = false): "Complete" | "Blocked" | "Deferred" | "Clear" {
-  if (status === "complete") return "Complete";
-  if (status === "deferred" || status === "cut") return "Deferred";
-  if (blocked || status === "blocked") return "Blocked";
-  return "Clear";
-}
-
-function releaseLineCheckClass(state: ReturnType<typeof releaseLineState>): string {
-  if (state === "Complete") return "checked";
-  return "";
 }
 
 function byId<T extends { id: Id }>(items: T[]): Map<Id, T> {
@@ -113,18 +82,22 @@ function Badge({ children, tone, title }: { children: React.ReactNode; tone?: st
   return <span className={`badge ${tone ?? ""}`} title={title}>{children}</span>;
 }
 
+function releaseStateLabel(value: string) {
+  return value.replaceAll("-", " ").toUpperCase();
+}
+
 function ReleaseStateBadges({ status, posture }: { status: string; posture: string }) {
   if (status === posture) {
     return (
       <Badge tone={releaseBadgeTone(status)} title={`Release status and posture are both ${status}`}>
-        {status}
+        {releaseStateLabel(status)}
       </Badge>
     );
   }
   return (
     <>
-      <Badge tone={releaseBadgeTone(status)} title="Release lifecycle status">Status: {status}</Badge>
-      <Badge tone={releaseBadgeTone(posture)} title="Release readiness posture">Posture: {posture}</Badge>
+      <Badge tone={releaseBadgeTone(status)} title="Release lifecycle status">Status: {releaseStateLabel(status)}</Badge>
+      <Badge tone={releaseBadgeTone(posture)} title="Release readiness posture">Posture: {releaseStateLabel(posture)}</Badge>
     </>
   );
 }
@@ -232,22 +205,9 @@ function FieldList({ title, items }: { title: string; items: string[] }) {
   );
 }
 
-function releaseItems(detail: ReleaseDetail | null): ReleaseItem[] {
-  if (!detail) return [];
-  return [
-    ...detail.scope.required,
-    ...detail.scope.planned,
-    ...detail.scope.stretch,
-    ...detail.scope.deferred,
-    ...detail.scope.outOfScope
-  ];
-}
-
-function releaseProgress(detail: ReleaseDetail | null): number {
-  const required = detail?.scope.required ?? [];
-  if (required.length === 0) return 0;
-  const complete = required.filter((item) => item.status === "complete").length;
-  return Math.round((complete / required.length) * 100);
+function OptionalFieldList({ title, items }: { title: string; items: string[] }) {
+  if (items.length === 0) return null;
+  return <FieldList title={title} items={items} />;
 }
 
 function formatReleaseDate(value?: string) {
@@ -262,7 +222,11 @@ function ReleaseTruthWorkspace({
   selection,
   onSelectCurrentRelease,
   onSelectReleaseItem,
-  onSelectReleaseMilestone
+  onSelectReleaseMilestone,
+  planningMode,
+  onPlanningModeChange,
+  roadmapItems,
+  onReleasePlanApproved
 }: {
   releases?: ReleaseModel;
   activeReleaseSummary: ReleaseSummary | null;
@@ -271,7 +235,13 @@ function ReleaseTruthWorkspace({
   onSelectCurrentRelease: () => void;
   onSelectReleaseItem: (id: Id) => void;
   onSelectReleaseMilestone: (id: Id) => void;
+  planningMode: boolean;
+  onPlanningModeChange: (value: boolean) => void;
+  roadmapItems?: RoadmapItem[];
+  onReleasePlanApproved: () => Promise<void>;
 }) {
+  const [releaseProjection, setReleaseProjection] = useState<"path" | "kanban">("path");
+
   if (!releases || !activeReleaseSummary) {
     return (
       <section className="release-truth-empty">
@@ -287,26 +257,48 @@ function ReleaseTruthWorkspace({
   const completeCount = items.filter((item) => item.status === "complete").length;
   const inProgressCount = items.filter((item) => item.status === "in-progress").length;
   const blockedCount = activeReleaseDetail?.blockers.length ?? activeReleaseSummary.counts.blockers;
+  const canEditRelease = activeReleaseSummary.status !== "completed";
 
   return (
     <section className="release-truth-workspace">
       <header className="release-hero">
         <div>
-          <p className="eyebrow">Release Truth</p>
+          <div className="release-hero-heading">
+            <p className="eyebrow">Release Truth</p>
+            {canEditRelease ? (
+              <button type="button" className="button-reset release-edit-button" onClick={() => onPlanningModeChange(!planningMode)}>
+                {planningMode ? "View truth" : "Edit plan"}
+              </button>
+            ) : null}
+          </div>
           <h2>{activeReleaseSummary.name}</h2>
           <p>{activeReleaseSummary.summary}</p>
         </div>
         <div className="release-hero-meta">
-          <ReleaseStateBadges status={activeReleaseSummary.status} posture={activeReleaseSummary.posture} />
-          <span>Updated {formatReleaseDate(activeReleaseSummary.lastUpdated)}</span>
+          <div className="release-hero-status">
+            <ReleaseStateBadges status={activeReleaseSummary.status} posture={activeReleaseSummary.posture} />
+          </div>
+          <span className="release-hero-updated">Updated {formatReleaseDate(activeReleaseSummary.lastUpdated)}</span>
           {releases.index.currentReleaseId !== activeReleaseSummary.id ? (
-            <button type="button" className="button-reset release-current-button" onClick={onSelectCurrentRelease}>
-              Current release
-            </button>
+            <div className="release-hero-actions">
+              <button type="button" className="button-reset release-current-button" onClick={onSelectCurrentRelease}>
+                Current release
+              </button>
+            </div>
           ) : null}
         </div>
       </header>
 
+      {planningMode && canEditRelease ? (
+        <ReleasePlanningPanel
+          releaseIndex={releases.index}
+          roadmapItems={roadmapItems ?? []}
+          activeReleaseSummary={activeReleaseSummary}
+          activeReleaseDetail={activeReleaseDetail}
+          onApproved={onReleasePlanApproved}
+        />
+      ) : (
+        <>
       <section className="release-progress-panel">
         <div className="release-progress-copy">
           <strong>{progress}% required scope complete</strong>
@@ -319,14 +311,32 @@ function ReleaseTruthWorkspace({
 
       <div className="release-grid">
         <section className="release-section release-section-wide">
-          <h3>Release Path</h3>
+          <div className="release-section-head">
+            <h3>{releaseProjection === "path" ? "Release Path" : "Kanban"}</h3>
+            <div className="release-view-toggle" aria-label="Release Truth projection">
+              <button type="button" className={releaseProjection === "path" ? "active" : ""} onClick={() => setReleaseProjection("path")}>
+                Path
+              </button>
+              <button type="button" className={releaseProjection === "kanban" ? "active" : ""} onClick={() => setReleaseProjection("kanban")}>
+                Kanban
+              </button>
+            </div>
+          </div>
           {activeReleaseDetail ? (
-            <ReleasePath
-              detail={activeReleaseDetail}
-              selection={selection}
-              onSelectItem={onSelectReleaseItem}
-              onSelectMilestone={onSelectReleaseMilestone}
-            />
+            releaseProjection === "path" ? (
+              <ReleasePath
+                detail={activeReleaseDetail}
+                selection={selection}
+                onSelectItem={onSelectReleaseItem}
+                onSelectMilestone={onSelectReleaseMilestone}
+              />
+            ) : (
+              <ReleaseKanban
+                detail={activeReleaseDetail}
+                selection={selection}
+                onSelectItem={onSelectReleaseItem}
+              />
+            )
           ) : (
             <p className="muted">Release detail is loading.</p>
           )}
@@ -337,6 +347,8 @@ function ReleaseTruthWorkspace({
           <ReleaseTrendChart releases={releases.index.releases} activeReleaseId={activeReleaseSummary.id} />
         </section>
       </div>
+        </>
+      )}
     </section>
   );
 }
@@ -364,6 +376,7 @@ function ReleasePath({
       id: "unlinked-release-scope",
       label: "Other considered release scope",
       status: "planned" as ReleaseItemStatus,
+      date: undefined,
       targetWindow: "Tracked outside explicit milestones",
       order: Math.max(0, ...detail.milestones.map((milestone) => milestone.order)) + 1,
       itemIds: unlinkedItems.map((item) => item.id)
@@ -419,14 +432,60 @@ function ReleasePath({
   );
 }
 
-function releaseScopeByItemId(detail: ReleaseDetail): Map<Id, string> {
-  return new Map([
-    ...detail.scope.required.map((item) => [item.id, "required"] as const),
-    ...detail.scope.planned.map((item) => [item.id, "planned"] as const),
-    ...detail.scope.stretch.map((item) => [item.id, "stretch"] as const),
-    ...detail.scope.deferred.map((item) => [item.id, "deferred"] as const),
-    ...detail.scope.outOfScope.map((item) => [item.id, "out of scope"] as const)
-  ]);
+function ReleaseKanban({
+  detail,
+  selection,
+  onSelectItem
+}: {
+  detail: ReleaseDetail;
+  selection: Selection | null;
+  onSelectItem: (id: Id) => void;
+}) {
+  const columns = releaseKanbanColumns(detail) as { id: string; label: string; items: ReleaseItem[] }[];
+  const blockersByItemId = blockersGroupedByItem(detail.blockers);
+  const workstreamsById = byId(detail.workstreams);
+  const scopeByItemId = releaseScopeByItemId(detail);
+
+  return (
+    <div className="release-kanban">
+      {columns.map((column) => (
+        <section className="release-kanban-column" key={column.id}>
+          <header>
+            <strong>{column.label}</strong>
+            <span>{column.items.length}</span>
+          </header>
+          <div className="release-kanban-cards">
+            {column.items.length ? column.items.map((item) => {
+              const blockers = blockersByItemId.get(item.id) ?? [];
+              const blocked = item.status === "blocked" || blockers.length > 0;
+              const workstream = item.workstreamId ? workstreamsById.get(item.workstreamId) : undefined;
+              return (
+                <button
+                  type="button"
+                  className={`release-kanban-card stage-${column.id} ${selection?.kind === "release-item" && selection.itemId === item.id ? "active" : ""}`}
+                  key={item.id}
+                  onClick={() => onSelectItem(item.id)}
+                >
+                  <span className={`release-check ${releaseLineCheckClass(releaseLineState(item.status, blocked))}`} aria-label={releaseLineState(item.status, blocked)} />
+                  <div>
+                    <strong>{item.title}</strong>
+                    <p>{item.summary}</p>
+                    <small>{scopeByItemId.get(item.id) ?? "scope"} · {workstream?.name ?? "Unassigned"} · {item.kind}{item.priority ? ` · ${item.priority}` : ""}</small>
+                  </div>
+                  <div className="release-card-badges">
+                    <Badge tone={releaseBadgeTone(blocked ? "blocked" : item.status)}>{releaseLineState(item.status, blocked)}</Badge>
+                    {item.dependsOn?.length ? <Badge>{item.dependsOn.length} deps</Badge> : null}
+                  </div>
+                </button>
+              );
+            }) : (
+              <p className="muted">No items.</p>
+            )}
+          </div>
+        </section>
+      ))}
+    </div>
+  );
 }
 
 function ReleasePathMilestoneLine({
@@ -547,20 +606,29 @@ function ReleaseTrendChart({
         <path className="release-chart-line feature" d={pathFor("features")} />
         <path className="release-chart-line fix" d={pathFor("bugFixes")} />
         <path className="release-chart-active-line" d={`M ${xFor(markerIndex)} ${padTop} V ${baseline}`} />
-        {sorted.map((release, index) => (
-          <g
-            key={release.id}
-            role="listitem"
-            tabIndex={0}
-            aria-label={`${release.name}, released ${formatReleaseDate(release.releasedAt ?? release.targetDate)}, ${release.counts.features} features, ${release.counts.bugFixes} bug fixes. Select it from the release list to inspect details.`}
-            onClick={() => setInspectedReleaseId(release.id)}
-            onFocus={() => setInspectedReleaseId(release.id)}
-          >
-            <title>{`${release.name} · ${formatReleaseDate(release.releasedAt ?? release.targetDate)} · ${release.counts.features} features · ${release.counts.bugFixes} bug fixes · select from the release list`}</title>
-            <circle className={`${release.id === activeReleaseId ? "active" : ""} ${releaseTone(release.posture)}`} cx={xFor(index)} cy={yFor(release.counts.features)} r="3.5" />
-            <text className="release-chart-x-label" x={xFor(index)} y={height - 8} textAnchor="end" transform={`rotate(-65 ${xFor(index)} ${height - 8})`}>{release.version}</text>
-          </g>
-        ))}
+        {sorted.map((release, index) => {
+          const releaseDateLabel = release.releasedAt
+            ? `completed ${formatReleaseDate(release.releasedAt)}`
+            : release.targetDate
+              ? `target ${formatReleaseDate(release.targetDate)}`
+              : release.targetWindow
+                ? `target ${release.targetWindow}`
+                : "no date recorded";
+          return (
+            <g
+              key={release.id}
+              role="listitem"
+              tabIndex={0}
+              aria-label={`${release.name}, ${releaseDateLabel}, ${release.counts.features} features, ${release.counts.bugFixes} bug fixes. Select it from the release list to inspect details.`}
+              onClick={() => setInspectedReleaseId(release.id)}
+              onFocus={() => setInspectedReleaseId(release.id)}
+            >
+              <title>{`${release.name} · ${releaseDateLabel} · ${release.counts.features} features · ${release.counts.bugFixes} bug fixes · select from the release list`}</title>
+              <circle className={`${release.id === activeReleaseId ? "active" : ""} ${releaseTone(release.posture)}`} cx={xFor(index)} cy={yFor(release.counts.features)} r="3.5" />
+              <text className="release-chart-x-label" x={xFor(index)} y={height - 8} textAnchor="end" transform={`rotate(-65 ${xFor(index)} ${height - 8})`}>{release.version}</text>
+            </g>
+          );
+        })}
       </svg>
       <div className="release-chart-legend">
         <span><i className="feature" />Features</span>
@@ -596,21 +664,36 @@ function ReleaseTruthDetails({
 
   if (detailSelection?.kind === "item") {
     const { item, blockers, dependencies, evidence, scope, workstream } = detailSelection;
+    const state = releaseLineState(item.status, blockers.length > 0);
+    const showScopeBadge = scope.toLowerCase().replaceAll(" ", "-") !== item.status;
+    const decisionItems = [item.rationale, item.decisionSource].filter(Boolean) as string[];
+    const blockerItems = blockers.map((blocker) => `${blocker.title}: ${blocker.summary}`);
+    const nextActionItems = blockers.map((blocker) => blocker.nextAction);
+    const dependencyItems = dependencies.map((dependency) => dependency.summary);
+    const evidenceItems = evidence.map((item) => item.href ? `${item.label} (${item.href})` : item.label);
+    const sections = [
+      "Workstream",
+      ...(decisionItems.length ? ["Decision"] : []),
+      ...(blockerItems.length ? ["Blockers"] : []),
+      ...(nextActionItems.length ? ["Next Actions"] : []),
+      ...(dependencyItems.length ? ["Dependencies"] : []),
+      ...(evidenceItems.length ? ["Evidence"] : [])
+    ];
     return (
-      <DetailShell eyebrow="Release item" title={item.title} summary={item.summary}>
+      <DetailShell eyebrow="Release item" title={item.title} summary={item.summary} sections={sections}>
         <div className="badge-row">
-          <Badge tone={releaseBadgeTone(item.status)}>{releaseStatusLabels[item.status]}</Badge>
-          <Badge>{scope}</Badge>
+          <Badge tone={releaseBadgeTone(state === "Blocked" ? "blocked" : item.status)}>{state}</Badge>
+          {showScopeBadge ? <Badge>{scope}</Badge> : null}
           <Badge>{item.kind}</Badge>
           {item.priority ? <Badge tone={releaseBadgeTone(item.priority)}>{item.priority} priority</Badge> : null}
           {item.owner ? <Badge>{item.owner}</Badge> : null}
         </div>
         <FieldList title="Workstream" items={[workstream?.name ?? "Unassigned"]} />
-        <FieldList title="Decision" items={[item.rationale, item.decisionSource].filter(Boolean) as string[]} />
-        <FieldList title="Blockers" items={blockers.map((blocker) => `${blocker.title}: ${blocker.summary}`)} />
-        <FieldList title="Next Actions" items={blockers.map((blocker) => blocker.nextAction)} />
-        <FieldList title="Dependencies" items={dependencies.map((dependency) => dependency.summary)} />
-        <FieldList title="Evidence" items={evidence.map((item) => item.href ? `${item.label} (${item.href})` : item.label)} />
+        <OptionalFieldList title="Decision" items={decisionItems} />
+        <OptionalFieldList title="Blockers" items={blockerItems} />
+        <OptionalFieldList title="Next Actions" items={nextActionItems} />
+        <OptionalFieldList title="Dependencies" items={dependencyItems} />
+        <OptionalFieldList title="Evidence" items={evidenceItems} />
       </DetailShell>
     );
   }
@@ -692,6 +775,7 @@ function releasePathDetailSelection(detail: ReleaseDetail | null, selection: Sel
 function App() {
   const [model, setModel] = useState<Model | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dataNotice, setDataNotice] = useState<string | null>(null);
   const [navCollapsed, setNavCollapsed] = useState(() => readBooleanPreference(localStorage, "architext-left-collapsed"));
   const [rightCollapsed, setRightCollapsed] = useState(() => readBooleanPreference(localStorage, "architext-right-collapsed"));
   const [query, setQuery] = useState("");
@@ -701,6 +785,7 @@ function App() {
   const [activeReleaseId, setActiveReleaseId] = useState<Id>("");
   const [releaseDetailsById, setReleaseDetailsById] = useState<Map<Id, ReleaseDetail>>(new Map());
   const [selection, setSelection] = useState<Selection | null>(null);
+  const [releasePlanningMode, setReleasePlanningMode] = useState(false);
   const [diagramTransform, setDiagramTransform] = useState<DiagramTransform>({ zoom: 1, focused: false });
   const [routingStyle, setRoutingStyle] = useState<RoutingStyle>(() => readRoutingStylePreference(localStorage) as RoutingStyle);
   const [debugRouting] = useState(() => readDebugRouting(window.location.search));
@@ -708,21 +793,76 @@ function App() {
   const [stepsCollapsed, setStepsCollapsed] = useState(false);
   const [diagramViewportRef, diagramViewportSize] = useElementSize<HTMLElement>();
 
+  const applyLoadedModel = (loaded: Model, resetSelection = true) => {
+    const requestedMode = modeForHash(window.location.hash) as Mode | null;
+    setModel(loaded);
+    if (resetSelection) {
+      const fallback = loaded.views.find((view) => view.id === loaded.manifest.defaultViewId) ?? loaded.views[0];
+      const nextMode = requestedMode ?? modeForView(fallback);
+      const nextView = defaultViewForMode(nextMode, loaded.views, fallback);
+      setActiveViewId(nextView.id);
+      setActiveMode(nextMode);
+      setActiveFlowId(loaded.flows[0]?.id ?? "");
+      setSelection(nextMode === "release-truth" ? null : { kind: "flow", id: loaded.flows[0]?.id ?? "" });
+    } else {
+      setActiveViewId((current) => loaded.views.some((view) => view.id === current) ? current : loaded.manifest.defaultViewId);
+      setActiveFlowId((current) => loaded.flows.some((flow) => flow.id === current) ? current : loaded.flows[0]?.id ?? "");
+    }
+    setActiveReleaseId(loaded.releases?.index.currentReleaseId ?? "");
+    setReleaseDetailsById(new Map((loaded.releases?.details ?? []).map((detail) => [detail.id, detail])));
+  };
+
   useEffect(() => {
     loadArchitectureModel()
-      .then((loaded: Model) => {
-        setModel(loaded);
-        setActiveViewId(loaded.manifest.defaultViewId);
-        setActiveMode(modeForView(loaded.views.find((view) => view.id === loaded.manifest.defaultViewId)));
-        setActiveFlowId(loaded.flows[0]?.id ?? "");
-        setActiveReleaseId(loaded.releases?.index.currentReleaseId ?? "");
-        setReleaseDetailsById(new Map((loaded.releases?.details ?? []).map((detail) => [detail.id, detail])));
-        setSelection({ kind: "flow", id: loaded.flows[0]?.id ?? "" });
-      })
+      .then((loaded: Model) => applyLoadedModel(loaded))
       .catch((loadError: unknown) => {
         setError(loadError instanceof Error ? loadError.message : String(loadError));
       });
   }, []);
+
+  useEffect(() => subscribeToDataEvents({
+    onValid: async () => {
+      try {
+        const loaded = await loadArchitectureModel();
+        applyLoadedModel(loaded, false);
+        setDataNotice("Architext data refreshed.");
+      } catch (loadError) {
+        setDataNotice(loadError instanceof Error ? loadError.message : String(loadError));
+      }
+    },
+    onInvalid: async (payload: { output?: string }) => {
+      const message = payload.output ?? "The JSON data was updated and left in an invalid state.";
+      const refreshAnyway = window.confirm(`The JSON data was updated and left in an invalid state. Refresh anyway?\n\n${message}`);
+      if (!refreshAnyway) {
+        setDataNotice("Architext data changed but did not validate. Keeping the last known good model.");
+        return;
+      }
+      try {
+        const loaded = await loadArchitectureModel();
+        applyLoadedModel(loaded, false);
+      } catch (loadError) {
+        setError(loadError instanceof Error ? loadError.message : String(loadError));
+      }
+    }
+  }), []);
+
+  useEffect(() => {
+    if (!dataNotice) return undefined;
+    const timeout = window.setTimeout(() => setDataNotice(null), 2600);
+    return () => window.clearTimeout(timeout);
+  }, [dataNotice]);
+
+  const reloadReleasePlanningModel = async () => {
+    const loaded = await loadArchitectureModel();
+    setModel(loaded);
+    setActiveReleaseId((current) => {
+      const releases: ReleaseSummary[] = loaded.releases?.index.releases ?? [];
+      if (current && releases.some((release) => release.id === current)) return current;
+      return loaded.releases?.index.currentReleaseId ?? "";
+    });
+    setReleaseDetailsById(new Map((loaded.releases?.details ?? []).map((detail) => [detail.id, detail])));
+    setSelection(null);
+  };
 
   useEffect(() => {
     writeBooleanPreference(localStorage, "architext-left-collapsed", navCollapsed);
@@ -735,6 +875,15 @@ function App() {
   useEffect(() => {
     writeRoutingStylePreference(localStorage, routingStyle);
   }, [routingStyle]);
+
+  useEffect(() => {
+    const onHashChange = () => {
+      const requestedMode = modeForHash(window.location.hash) as Mode | null;
+      if (requestedMode && model) switchMode(requestedMode);
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  });
 
   useEffect(() => {
     const narrowWidth = window.matchMedia("(max-width: 760px)");
@@ -844,6 +993,7 @@ function App() {
 
   const switchMode = (mode: Mode) => {
     const nextView = defaultViewForMode(mode, model.views, fallbackView);
+    window.history.replaceState(null, "", hashForMode(mode));
     setActiveMode(mode);
     setActiveViewId(nextView.id);
     setSelection(null);
@@ -875,6 +1025,20 @@ function App() {
     const view = viewsById.get(viewId);
     const firstNodeId = view?.lanes.flatMap((lane) => lane.nodeIds)[0];
     if (firstNodeId) setSelection({ kind: "node", id: firstNodeId });
+  };
+
+  const selectC4Node = (nodeId: Id) => {
+    const childView = childC4ViewForNode(model.views, activeView, nodeId) as View | null;
+    if (childView) {
+      setActiveViewId(childView.id);
+      const firstNodeId = childView.lanes.flatMap((lane) => lane.nodeIds)[0] ?? nodeId;
+      setSelection({ kind: "node", id: firstNodeId });
+      return;
+    }
+    const node = nodesById.get(nodeId);
+    const reason = c4DrilldownUnavailableReason(activeView, node);
+    if (reason) setDataNotice(reason);
+    setSelection({ kind: "node", id: nodeId });
   };
 
   const selectRelationship = (relationship: Relationship) => {
@@ -916,6 +1080,11 @@ function App() {
           </div>
         </div>
       </header>
+      {dataNotice ? (
+        <div className="data-refresh-notice" role="status">
+          {dataNotice}
+        </div>
+      ) : null}
 
       <aside className="left-nav">
         <button
@@ -968,6 +1137,10 @@ function App() {
             activeReleaseDetail={activeReleaseDetail}
             selection={selection}
             onSelectCurrentRelease={selectCurrentRelease}
+            planningMode={releasePlanningMode}
+            onPlanningModeChange={setReleasePlanningMode}
+            roadmapItems={model.roadmap}
+            onReleasePlanApproved={reloadReleasePlanningModel}
             onSelectReleaseItem={(id) => {
               setSelection({ kind: "release-item", itemId: id });
               setRightCollapsed(false);
@@ -1027,7 +1200,7 @@ function App() {
                   transform={diagramTransform}
                   routingStyle={routingStyle}
                   debugRouting={debugRouting}
-                  onSelectNode={(id) => setSelection({ kind: "node", id })}
+                  onSelectNode={selectC4Node}
                   onSelectRelationship={selectRelationship}
                 />
               ) : (
@@ -1189,7 +1362,7 @@ function LeftPanel({
               className={`entity-card ${activeReleaseId === release.id ? "active" : ""}`}
               onClick={() => onSelectRelease(release.id)}
             >
-              <strong>{release.name}</strong>
+              <strong className="entity-card-title">{release.name}</strong>
               <span>{release.summary}</span>
               <div className="release-card-badges">
                 <ReleaseStateBadges status={release.status} posture={release.posture} />
@@ -2229,8 +2402,19 @@ function DetailPanel({
   );
 }
 
-function DetailShell({ eyebrow, title, summary, children }: { eyebrow: string; title: string; summary: string; children: React.ReactNode }) {
-  const sections = ["Summary", "Runtime", "Interfaces", "Data", "Security", "Observability", "Risks", "Decisions", "Verification"];
+function DetailShell({
+  eyebrow,
+  title,
+  summary,
+  children,
+  sections = ["Summary", "Runtime", "Interfaces", "Data", "Security", "Observability", "Risks", "Decisions", "Verification"]
+}: {
+  eyebrow: string;
+  title: string;
+  summary: string;
+  children: React.ReactNode;
+  sections?: string[];
+}) {
   return (
     <div className="detail-content">
       <div className="detail-sticky">

@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - main
+      - develop
 
 jobs:
   verify:
@@ -45,15 +46,4 @@ jobs:
         run: npm pack --dry-run
 
       - name: Smoke test packed global CLI
-        shell: bash
-        run: |
-          set -euo pipefail
-          npm pack --json --silent | sed -n '/^\[/,$p' > /tmp/architext-pack.json
-          package_file="$(node -e 'const fs = require("node:fs"); const pack = JSON.parse(fs.readFileSync("/tmp/architext-pack.json", "utf8")); console.log(pack[0].filename);')"
-          prefix="$(mktemp -d)"
-          target="$(mktemp -d)"
-          npm install -g --prefix "$prefix" "./$package_file"
-          "$prefix/bin/architext" --version
-          "$prefix/bin/architext" sync "$target" --yes --branch none
-          "$prefix/bin/architext" doctor "$target" --dry-run
-          "$prefix/bin/architext" validate "$target"
+        run: npm run smoke:pack

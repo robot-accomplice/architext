@@ -68,7 +68,7 @@ summaries, counts, and historical chart inputs from those detail files.
       "id": "v1-1-2",
       "version": "1.1.2",
       "name": "Architext 1.1.2",
-      "status": "released",
+      "status": "completed",
       "posture": "shipped",
       "targetDate": "2026-05-16",
       "releasedAt": "2026-05-16T09:20:00.000Z",
@@ -110,12 +110,10 @@ Each detail file owns the full release snapshot:
 
 Release status should be narrow and consistent:
 
-- `planning`
-- `active`
-- `blocked`
-- `candidate`
-- `released`
-- `deferred`
+- `draft`
+- `planned`
+- `implementing`
+- `completed`
 
 Release item status should be similarly constrained:
 
@@ -194,7 +192,7 @@ consistent across release cards, badges, progress bars, workstreams, blockers,
 milestones, and historical trend markers:
 
 - Green: shipped, complete, on-track, and otherwise healthy.
-- Yellow: planned, active, in-progress, release-candidate, stretch, and work
+- Yellow: planned, implementing, in-progress, release-candidate, stretch, and work
   that is progressing but not complete.
 - Red: blocked, at-risk, critical, and high-severity blockers.
 - Muted neutral: deferred, cut, historical, or intentionally inactive scope.
@@ -227,7 +225,7 @@ navigation without fetching every detail file:
 The historical release view should include:
 
 - release timeline/list sorted by date
-- filters for released, active, blocked, deferred, and planned releases
+- filters for completed, implementing, planned, and draft releases
 - full-width filled trend chart at the bottom of the current-release canvas
   with release date on the X axis and counts on the Y axis
 - one filled series for feature count
@@ -269,8 +267,8 @@ Validation should cover:
 - milestones reference existing release items
 - blockers reference existing items or external dependencies
 - historical counts are non-negative integers
-- released entries include `releasedAt`
-- active/planned entries include target date or target window
+- completed entries include `releasedAt`
+- planned/implementing entries include target date or target window
 
 CLI commands should not require a new lifecycle. Existing commands should pick
 up release data automatically:
