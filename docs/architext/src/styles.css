@@ -134,12 +134,6 @@ input:focus {
   min-width: 0;
 }
 
-.topbar > div:first-child p:not(.eyebrow) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .topbar h1 {
   font-family: var(--font-headline);
   font-size: 22px;
@@ -150,28 +144,20 @@ input:focus {
 .diagram-title-line {
   display: flex;
   min-width: 0;
-  align-items: baseline;
+  max-width: 100%;
+  align-items: flex-start;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
-.project-title-line p {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.diagram-title-line {
-  max-width: 100%;
-  flex-wrap: wrap;
-  align-items: flex-start;
-}
-
+.project-title-line h1,
+.project-title-line p,
 .diagram-title-line h2,
 .diagram-title-line p {
   min-width: 0;
 }
 
+.project-title-line p,
 .diagram-title-line p {
   flex: 1 1 320px;
 }
