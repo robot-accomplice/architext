@@ -2,6 +2,7 @@ import { execFileSync } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { parseNpmPackJson } from "../src/adapters/cli/npm-pack-output.mjs";
 
 function run(command, args, options = {}) {
   return execFileSync(command, args, {
@@ -14,7 +15,7 @@ function run(command, args, options = {}) {
 
 function packCurrentPackage() {
   const output = run("npm", ["pack", "--json", "--silent"]);
-  const pack = JSON.parse(output.slice(output.indexOf("[")));
+  const pack = parseNpmPackJson(output);
   return pack[0].filename;
 }
 
