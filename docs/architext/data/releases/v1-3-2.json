@@ -1,0 +1,75 @@
+{
+  "id": "v1-3-2",
+  "version": "1.3.2",
+  "name": "Architext 1.3.2 Schema Label Correction",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Patch release that clarified package version versus data schema version and repaired stale manifest schema metadata through doctor/sync.",
+  "targetDate": "2026-05-19",
+  "releasedAt": "2026-05-19T09:49:21.512Z",
+  "lastUpdated": "2026-05-19T09:49:21.512Z",
+  "updateSource": "Patch release ceremony",
+  "scope": {
+    "required": [
+      {
+        "id": "schema-version-label-correction",
+        "title": "Schema version display and repair",
+        "kind": "bug-fix",
+        "summary": "Display manifest schema version as Schema instead of Data, keep it separate from the package version, and let doctor/sync repair stale manifest.schemaVersion values.",
+        "evidence": [
+          "cli-schema-repair-tests",
+          "npm-package-1-3-2"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "patch-corrections",
+        "dependsOn": []
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "patch-corrections",
+      "name": "Patch corrections",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Patch release that clarified package version versus data schema version and repaired stale manifest schema metadata through doctor/sync.",
+      "progress": 100,
+      "itemIds": [
+        "schema-version-label-correction"
+      ],
+      "evidence": [
+        "npm-package-1-3-2"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "patch-published",
+      "label": "Patch published",
+      "status": "complete",
+      "date": "2026-05-19",
+      "order": 1,
+      "itemIds": [
+        "schema-version-label-correction"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "npm-package-1-3-2",
+      "label": "npm package @robotaccomplice/architext@1.3.2",
+      "href": "https://www.npmjs.com/package/@robotaccomplice/architext/v/1.3.2",
+      "kind": "release-note",
+      "status": "complete"
+    }
+  ]
+}

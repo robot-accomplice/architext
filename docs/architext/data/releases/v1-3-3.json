@@ -1,0 +1,84 @@
+{
+  "id": "v1-3-3",
+  "version": "1.3.3",
+  "name": "Architext 1.3.3 Step Route and C4 Drilldown Corrections",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Patch release with shared step-route pill rendering, C4 drilldown guidance and diagnostics, and drilldown-complete starter C4 data.",
+  "targetDate": "2026-05-19",
+  "releasedAt": "2026-05-19T12:30:14.814Z",
+  "lastUpdated": "2026-05-19T12:30:14.814Z",
+  "updateSource": "Patch release ceremony",
+  "scope": {
+    "required": [
+      {
+        "id": "shared-step-route-rendering",
+        "title": "Shared step-route rendering and C4 drilldown guidance",
+        "kind": "bug-fix",
+        "summary": "Centralize flow and sequence route-plus-pill rendering so selected lines cannot bisect pills, report missing C4 drilldown chains, and teach managed LLM instructions to create scopeNodeId-based C4 drilldowns.",
+        "evidence": [
+          "step-route-rendering-tests",
+          "release-check-1-3-3",
+          "npm-package-1-3-3"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "patch-corrections",
+        "dependsOn": []
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "patch-corrections",
+      "name": "Patch corrections",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Patch release with shared step-route pill rendering, C4 drilldown guidance and diagnostics, and drilldown-complete starter C4 data.",
+      "progress": 100,
+      "itemIds": [
+        "shared-step-route-rendering"
+      ],
+      "evidence": [
+        "npm-package-1-3-3",
+        "github-release-1-3-3"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "patch-published",
+      "label": "Patch published",
+      "status": "complete",
+      "date": "2026-05-19",
+      "order": 1,
+      "itemIds": [
+        "shared-step-route-rendering"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "npm-package-1-3-3",
+      "label": "npm package @robotaccomplice/architext@1.3.3",
+      "href": "https://www.npmjs.com/package/@robotaccomplice/architext/v/1.3.3",
+      "kind": "release-note",
+      "status": "complete"
+    },
+    {
+      "id": "github-release-1-3-3",
+      "label": "GitHub release v1.3.3",
+      "href": "https://github.com/robot-accomplice/architext/releases/tag/v1.3.3",
+      "kind": "release-note",
+      "status": "complete"
+    }
+  ]
+}

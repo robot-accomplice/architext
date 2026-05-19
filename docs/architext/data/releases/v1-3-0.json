@@ -2,12 +2,11 @@
   "id": "v1-3-0",
   "version": "1.3.0",
   "name": "Architext 1.3.0 Release Planning",
-  "status": "implementing",
-  "posture": "release-candidate",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Release Planning lets users craft one specific next release from cherry-picked roadmap items and ad hoc manually entered items without creating a second planning model.",
-  "targetWindow": "Next minor release",
-  "lastUpdated": "2026-05-18T15:55:00.000Z",
-  "updateSource": "Release readiness correction for implemented draft planning support",
+  "lastUpdated": "2026-05-19T06:17:33.721Z",
+  "updateSource": "Architext 1.3.0 release ceremony",
   "scope": {
     "required": [
       {
@@ -770,5 +769,7 @@
       "kind": "manual-check",
       "status": "complete"
     }
-  ]
+  ],
+  "targetDate": "2026-05-19",
+  "releasedAt": "2026-05-19T06:17:33.721Z"
 }

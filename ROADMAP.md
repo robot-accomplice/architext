@@ -29,7 +29,12 @@ Implemented:
 - Static viewer export.
 - Orthogonal, spline, and straight line styles through one shared planning
   pipeline.
-- C4 context/container/component views and C4 document quality checks.
+- Shared route-plus-step-pill rendering for ordered flow, data/risk, and
+  sequence views.
+- C4 context/container/component views, scope-based C4 drilldown, and C4
+  document quality checks.
+- Release Truth, Release Planning edit mode, release Kanban projection, and
+  data-file watching with validated viewer refreshes.
 - Routing fitness tests and benchmark checks.
 - Initial clean-architecture refactor seams for CLI adapters, lifecycle domain,
   architecture model validation, viewer adapters, presentation policy, diagram
@@ -144,7 +149,7 @@ See `docs/architecture/RELEASE_TRUTH_PLAN.md`.
 
 ### Release Planning
 
-Target: Architext 1.3.0.
+Target: Architext 1.3.0. Shipped.
 
 Goal: let users craft a plan for a specific next release from cherry-picked
 roadmap items and ad hoc manually entered items without creating a second
@@ -170,6 +175,8 @@ Direction:
   reviewed Release Truth data, then visual tracking and history.
 
 ### Data File Watching
+
+Target: Architext 1.3.0. Shipped.
 
 Goal: make local review responsive when architecture or release JSON changes.
 
