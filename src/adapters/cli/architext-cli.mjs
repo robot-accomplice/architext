@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { copyFile, cp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createInterface } from "node:readline/promises";
 import path from "node:path";
@@ -879,6 +879,12 @@ function sendJson(response, status, payload) {
   response.end(`${JSON.stringify(payload, null, 2)}\n`);
 }
 
+function sendServerError(response, error, requestPath) {
+  console.error(`Architext serve failed for ${requestPath}: ${error.message}`);
+  response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
+  response.end("Architext could not serve this request. Run `architext doctor [path]` and check the terminal output for details.");
+}
+
 async function requestJson(request) {
   const chunks = [];
   let total = 0;
@@ -908,7 +914,19 @@ async function serveTarget(target) {
   const targetDataDir = dataDir(target);
   const watchHub = createDataWatchHub({ target, dataDir, validateTarget });
   watchHub.start();
-  const server = createServer(async (request, response) => {
+  const server = createServer(createViewerRequestHandler({ target, targetDataDir, watchHub }));
+
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(4317, "127.0.0.1", resolve);
+  });
+  server.once("close", () => watchHub.close());
+  console.log(`Serving Architext for ${target}`);
+  console.log("Open http://127.0.0.1:4317");
+}
+
+export function createViewerRequestHandler({ target, targetDataDir = dataDir(target), watchHub }) {
+  return async function viewerRequestHandler(request, response) {
     try {
       const url = new URL(request.url || "/", "http://127.0.0.1");
       if (url.pathname === "/api/data-events" && request.method === "GET") {
@@ -942,18 +960,9 @@ async function serveTarget(target) {
       const assetStat = assetFile ? await stat(assetFile).catch(() => null) : null;
       await sendFile(response, assetStat?.isFile() ? assetFile : path.join(viewerDistDir, "index.html"));
     } catch (error) {
-      response.writeHead(500);
-      response.end(error.message);
+      sendServerError(response, error, request.url || "/");
     }
-  });
-
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(4317, "127.0.0.1", resolve);
-  });
-  server.once("close", () => watchHub.close());
-  console.log(`Serving Architext for ${target}`);
-  console.log("Open http://127.0.0.1:4317");
+  };
 }
 
 function commandHandlers(version) {
