@@ -1,10 +1,21 @@
 # LLM Architext Contract
 
-Architext JSON files are the machine-readable architecture source of truth for
-this project.
+This file is written for LLM agents working inside a project that uses
+Architext.
 
-When architecture changes, update the relevant files under
-`docs/architext/data/` before claiming the implementation is complete.
+## Purpose
+
+Architext JSON files are the machine-readable architecture source of truth for
+the project. They describe components, dataflows, deployment/runtime structure,
+data classification, risks, and architecture decisions.
+
+`docs/architext/data/manifest.json` records the Architext data schema version.
+That version tracks the JSON data contract, not the installed CLI/package
+version. Additive schema changes may ship in minor releases; breaking schema
+changes require a major semver release and an Architext-managed migration path.
+
+When architecture changes, update Architext data before claiming the task is
+complete.
 
 ## Required Behavior
 
@@ -70,12 +81,34 @@ If the target project does not already ignore generated artifacts, use
 `architext sync [path]` to update lifecycle metadata, instructions, and ignore
 rules.
 
+## Files
+
+Expected project-local location:
+
+```text
+docs/architext/
+  data/
+    manifest.json
+    nodes.json
+    flows.json
+    views.json
+    data-classification.json
+    decisions.json
+    risks.json
+    glossary.json
+    roadmap.json
+    releases/
+      index.json
+      <release-id>.json
+```
+
 ## Update Triggers
 
 Update Architext when changing:
 
 - module or service responsibilities
-- public or internal APIs
+- public APIs
+- internal APIs
 - queues, topics, jobs, or workers
 - data stores
 - external integrations
@@ -87,3 +120,8 @@ Update Architext when changing:
 - core business flows
 - architecture decisions
 - known architecture risks
+
+## Validation Rule
+
+Validation is not optional. Broken Architext data is worse than missing
+Architext data because it gives humans and future LLMs false confidence.
