@@ -1057,7 +1057,7 @@ function App() {
     <div className={`app ${navCollapsed ? "left-collapsed" : ""} ${rightCollapsed ? "right-collapsed" : ""} ${diagramTransform.focused ? "diagram-focused" : ""}`}>
       <header className="topbar">
         <div>
-          <p className="eyebrow">Architext / {__ARCHITEXT_VERSION__} · Data / {model.manifest.schemaVersion}</p>
+          <p className="eyebrow">Architext / {__ARCHITEXT_VERSION__} · Schema / {model.manifest.schemaVersion}</p>
           <div className="project-title-line">
             <h1>{model.manifest.project.name}</h1>
             <p>{model.manifest.project.summary}</p>

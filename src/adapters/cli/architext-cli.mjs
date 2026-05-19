@@ -31,6 +31,7 @@ const viewerDistDir = path.join(viewerDir, "dist");
 const schemaDir = path.join(viewerDir, "schema");
 const validatorPath = path.join(viewerDir, "tools", "validate-architext.mjs");
 const appendixPath = path.join(viewerDir, "AGENTS_APPENDIX.md");
+const dataSchemaVersion = "1.3.0";
 
 async function packageVersion() {
   return (await readJson(path.join(packageRoot, "package.json"))).version;
@@ -100,6 +101,27 @@ async function collectReleaseTruthStatus(target) {
   return { configured, indexPath, indexExists, repairChanges };
 }
 
+async function collectManifestStatus(target) {
+  const manifestPath = path.join(dataDir(target), "manifest.json");
+  if (!existsSync(manifestPath)) return null;
+  const manifest = await readJson(manifestPath);
+  const currentSchemaVersion = manifest.schemaVersion ?? "";
+  const repairChanges = currentSchemaVersion === dataSchemaVersion
+    ? []
+    : [`update manifest.schemaVersion from ${currentSchemaVersion || "missing"} to ${dataSchemaVersion}`];
+  return { path: manifestPath, schemaVersion: currentSchemaVersion, expectedSchemaVersion: dataSchemaVersion, repairChanges };
+}
+
+async function repairManifestData(target, dryRun) {
+  const manifestPath = path.join(dataDir(target), "manifest.json");
+  if (!existsSync(manifestPath)) return { repairChanges: [] };
+  const manifest = await readJson(manifestPath);
+  const status = await collectManifestStatus(target);
+  if (!status?.repairChanges.length) return { repairChanges: [] };
+  if (!dryRun) await writeJson(manifestPath, { ...manifest, schemaVersion: dataSchemaVersion });
+  return { repairChanges: status.repairChanges };
+}
+
 async function releaseDetailEntries(indexPath, index) {
   const releaseDir = path.dirname(indexPath);
   return Promise.all(index.releases.map(async (summary) => ({
@@ -144,6 +166,7 @@ async function repairReleaseTruthData(target, dryRun) {
 
 const doctorRepairHandlers = {
   c4: repairC4Data,
+  manifest: repairManifestData,
   "release-truth": repairReleaseTruthData
 };
 
@@ -271,7 +294,7 @@ async function writeStarterData(target, version) {
   const flowId = "architecture-buildout";
 
   await writeJson(path.join(targetDataDir, "manifest.json"), {
-    schemaVersion: version,
+    schemaVersion: dataSchemaVersion,
     project: {
       id: projectId,
       name: projectName,
@@ -499,6 +522,7 @@ async function collectStatus(target, version, { runValidation = false } = {}) {
   const validation = runValidation ? await validateTarget(target) : null;
   const c4 = installed ? await collectC4Status(target) : null;
   const releaseTruth = installed ? await collectReleaseTruthStatus(target) : null;
+  const manifest = installed ? await collectManifestStatus(target) : null;
   const gitignoreText = existsSync(path.join(target, ".gitignore")) ? await readFile(path.join(target, ".gitignore"), "utf8") : "";
   const gitignoreMissing = generatedIgnores.filter((entry) => !gitignoreText.split(/\r?\n/).includes(entry));
   const instructionStatus = {};
@@ -535,6 +559,7 @@ async function collectStatus(target, version, { runValidation = false } = {}) {
     rootPackageExists: packageInfo.exists,
     rootScripts: rootScriptStatus,
     trackedGenerated,
+    manifest,
     c4,
     releaseTruth,
     validation
@@ -610,7 +635,9 @@ async function applyDoctorRepairs(target, status, dryRun) {
     const result = await handler(target, dryRun);
     const file = category === "c4"
       ? path.join(dataDir(target), "views.json")
-      : path.join(dataDir(target), "releases", "index.json");
+      : category === "manifest"
+        ? path.join(dataDir(target), "manifest.json")
+        : path.join(dataDir(target), "releases", "index.json");
     for (const change of result.repairChanges ?? []) {
       applied.push({
         category,
@@ -783,6 +810,7 @@ First read AGENTS.md/CLAUDE.md if present, then docs/architext/data/**/*.json.
 
 Rules:
 - Update only docs/architext/data/**/*.json unless the Architext package itself is being changed.
+- Treat manifest.schemaVersion as the Architext data schema contract version, not the installed CLI/package version. Update it only when the data contract changes or when architext doctor/sync applies a schema repair.
 - Reuse stable IDs, create nodes before references, keep flows ordered, and prefer source-path-backed claims.
 - Keep Release Truth data current when release scope, blockers, milestones, evidence, target dates, dependencies, or posture changes.
 - Treat Release Truth as reviewed release state, not a planning scratchpad: update detail files for completed, deferred, blocked, reprioritized, or newly scoped work, then refresh the generated release index from those facts.

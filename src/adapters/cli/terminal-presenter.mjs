@@ -14,6 +14,9 @@ export function statusLines(status, { verbose = false } = {}) {
   if (status.releaseTruth) {
     lines.push(`Release Truth: ${status.releaseTruth.configured && status.releaseTruth.indexExists ? "configured" : status.releaseTruth.configured ? "index missing" : "not configured"}`);
   }
+  if (status.manifest) {
+    lines.push(`Schema: ${status.manifest.schemaVersion || "missing"}${status.manifest.repairChanges.length ? ` (expected ${status.manifest.expectedSchemaVersion})` : ""}`);
+  }
 
   lines.push(`Doctor repairs: ${status.doctorRepairs.length ? status.doctorRepairs.length : "none"}`);
 
