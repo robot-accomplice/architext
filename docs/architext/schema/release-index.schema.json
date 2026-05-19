@@ -18,7 +18,7 @@
     },
     "releaseStatus": {
       "type": "string",
-      "enum": ["planning", "active", "blocked", "candidate", "released", "deferred"]
+      "enum": ["draft", "planned", "implementing", "completed"]
     },
     "posture": {
       "type": "string",

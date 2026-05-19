@@ -33,6 +33,7 @@ export function validateArchitectureReferences(model) {
   }
 
   for (const view of model.views) {
+    if (view.scopeNodeId) requireKnown(view.scopeNodeId, nodeIds, `view ${view.id}.scopeNodeId`);
     for (const lane of view.lanes) {
       for (const id of lane.nodeIds) requireKnown(id, nodeIds, `view ${view.id} lane ${lane.id}`);
     }
@@ -40,6 +41,12 @@ export function validateArchitectureReferences(model) {
 
   if (model.releases) {
     validateReleaseReferences(model.releases, errors, { requireAllDetails: false });
+  }
+  if (model.roadmap && model.releases) {
+    const releaseIds = new Set(model.releases.index.releases.map((release) => release.id));
+    for (const item of model.roadmap) {
+      if (item.targetReleaseId) requireKnown(item.targetReleaseId, releaseIds, `roadmap item ${item.id}.targetReleaseId`);
+    }
   }
 
   return errors;
@@ -79,10 +86,10 @@ export function validateReleaseReferences(releases, errors = [], options = {}) {
     if (!sameGeneratedReleaseSummary(summary, detail)) {
       errors.push(`release ${summary.id}.index summary is stale; regenerate Release Truth history`);
     }
-    if (summary.status === "released" && !summary.releasedAt) {
-      errors.push(`release index ${summary.id}.releasedAt is required for released entries`);
+    if (summary.status === "completed" && !summary.releasedAt) {
+      errors.push(`release index ${summary.id}.releasedAt is required for completed entries`);
     }
-    if ((summary.status === "active" || summary.status === "planning") && !summary.targetDate && !summary.targetWindow) {
+    if ((summary.status === "implementing" || summary.status === "planned" || summary.status === "draft") && !summary.targetDate && !summary.targetWindow) {
       errors.push(`release index ${summary.id} requires targetDate or targetWindow`);
     }
   }
@@ -92,10 +99,10 @@ export function validateReleaseReferences(releases, errors = [], options = {}) {
     const itemIds = new Set(items.map((item) => item.id));
     const workstreamIds = new Set(detail.workstreams.map((workstream) => workstream.id));
 
-    if (detail.status === "released" && !detail.releasedAt) {
-      errors.push(`release ${detail.id}.releasedAt is required for released entries`);
+    if (detail.status === "completed" && !detail.releasedAt) {
+      errors.push(`release ${detail.id}.releasedAt is required for completed entries`);
     }
-    if ((detail.status === "active" || detail.status === "planning") && !detail.targetDate && !detail.targetWindow) {
+    if ((detail.status === "implementing" || detail.status === "planned" || detail.status === "draft") && !detail.targetDate && !detail.targetWindow) {
       errors.push(`release ${detail.id} requires targetDate or targetWindow`);
     }
 

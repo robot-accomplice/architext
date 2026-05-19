@@ -1,0 +1,774 @@
+{
+  "id": "v1-3-0",
+  "version": "1.3.0",
+  "name": "Architext 1.3.0 Release Planning",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Release Planning lets users craft one specific next release from cherry-picked roadmap items and ad hoc manually entered items without creating a second planning model.",
+  "targetWindow": "Next minor release",
+  "lastUpdated": "2026-05-18T15:55:00.000Z",
+  "updateSource": "Release readiness correction for implemented draft planning support",
+  "scope": {
+    "required": [
+      {
+        "id": "release-planning-contract",
+        "title": "Release planning data contract",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Define how one target release plan maps selected roadmap items and manually entered ad hoc items into the existing Release Truth detail file, with optional source/date-added metadata but one shared release item shape.",
+        "owner": "maintainer",
+        "priority": "critical",
+        "workstreamId": "planning-contract",
+        "dependsOn": [],
+        "evidence": [
+          "release-1-3-success-criteria",
+          "release-schema-tests"
+        ],
+        "rationale": "Release Planning must help craft a specific next release while preserving Release Truth as the reviewed source of truth rather than creating a competing planning artifact.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "ad-hoc"
+      },
+      {
+        "id": "roadmap-scope-assembly",
+        "title": "Roadmap-to-release scope assembly",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Present roadmap items as a selectable list, let users add inline ad hoc items that become selected on submit, then create one next-release plan with a prefilled version and optional theme/title.",
+        "owner": "maintainer",
+        "priority": "critical",
+        "workstreamId": "planning-workflow",
+        "dependsOn": [
+          "release-planning-contract"
+        ],
+        "evidence": [
+          "release-planning-tests",
+          "release-planning-ui-smoke"
+        ],
+        "rationale": "The next release starts by making the selected feature/fix list explicit and reviewable before implementation.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "ad-hoc"
+      },
+      {
+        "id": "approve-release-plan",
+        "title": "Approve release plan",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Let the maintainer approve a reviewed release plan so Architext writes the release JSON, regenerates release history, and updates the roadmap source for selected or newly added items.",
+        "owner": "maintainer",
+        "priority": "critical",
+        "workstreamId": "planning-workflow",
+        "dependsOn": [
+          "roadmap-scope-assembly"
+        ],
+        "evidence": [
+          "release-planning-tests",
+          "release-planning-api-tests"
+        ],
+        "rationale": "User approval is the boundary between draft planning and accepted Release Truth state.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "ad-hoc"
+      },
+      {
+        "id": "release-kanban-view",
+        "title": "Release Truth Kanban view",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Add a Kanban projection grouped by planned, ready, in progress, blocked, deferred, and complete using the same Release Truth items.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "viewer",
+        "dependsOn": [
+          "release-planning-contract"
+        ],
+        "evidence": [
+          "release-kanban-tests",
+          "browser-ui-audit"
+        ],
+        "rationale": "Kanban is only an alternative projection of Release Truth items, not a second task tracker or planning model.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "ad-hoc"
+      },
+      {
+        "id": "c4-container-drilldown",
+        "title": "C4 container drilldown",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Let users click a C4 container and navigate to the component-level C4 diagram within that container when a matching view exists.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "viewer",
+        "dependsOn": [],
+        "evidence": [
+          "c4-drilldown-tests"
+        ],
+        "rationale": "C4 views should support natural architecture exploration from context to container to component without requiring users to hunt through the view list.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "ad-hoc"
+      },
+      {
+        "id": "validate-release-plan-data",
+        "title": "Validate release plan data",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Validate planned release items, optional source/date-added metadata, dependencies, milestones, blockers, evidence needs, generated release history, and roadmap-source updates before the plan is accepted as Release Truth.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "lifecycle",
+        "dependsOn": [
+          "release-planning-contract",
+          "approve-release-plan"
+        ],
+        "evidence": [
+          "release-schema-tests",
+          "architecture-reference-tests"
+        ],
+        "rationale": "A bad release plan should fail loudly before it becomes accepted Release Truth or appears as healthy in the viewer.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "ad-hoc"
+      },
+      {
+        "id": "release-planning-llm-instructions",
+        "title": "Release planning LLM instructions",
+        "kind": "documentation",
+        "status": "complete",
+        "summary": "Update managed LLM instructions so agents know how to help draft next-release plans, record roadmap/ad hoc item origins, surface prioritization and deferral decisions, and update Release Truth only after review.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "agent-guidance",
+        "dependsOn": [
+          "release-planning-contract"
+        ],
+        "evidence": [
+          "managed-agent-instruction-tests"
+        ],
+        "rationale": "LLM agents need explicit rules for drafting release plans so they do not silently choose scope, hide deferrals, or edit the wrong files.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "ad-hoc"
+      },
+      {
+        "id": "routing-correctness-pass",
+        "title": "Routing correctness pass",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Improve remaining dense-route failures, especially overlapping lines and readability issues found in complex Deployment and Data/Risks views.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "routing",
+        "dependsOn": [],
+        "evidence": [
+          "routing-fitness-tests"
+        ],
+        "rationale": "Routing correctness is standing release scope until the remaining issues are solved or further gains are no longer worth the complexity.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "roadmap"
+      },
+      {
+        "id": "viewer-refactor",
+        "title": "Viewer refactor boundaries",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Extract Release Planning presentation UI from the main application file and keep Release Truth rendering policy in named presentation modules so future planning work no longer deepens the app shell.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "viewer-architecture",
+        "dependsOn": [],
+        "evidence": [
+          "browser-ui-audit",
+          "release-planning-component-boundary",
+          "release-truth-presentation-tests"
+        ],
+        "rationale": "Release Planning will add more viewer surface area; the viewer needs cleaner boundaries before that complexity lands.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "roadmap"
+      },
+      {
+        "id": "cli-lifecycle-refactor",
+        "title": "CLI lifecycle refactor boundaries",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Move the CLI executable into a thin bootstrap and place lifecycle runtime behavior behind CLI adapter modules, including shared process, git, target-layout, and JSON filesystem boundaries.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "cli-architecture",
+        "dependsOn": [],
+        "evidence": [
+          "cli-tests",
+          "thin-cli-bootstrap",
+          "cli-runtime-tests",
+          "packed-cli-smoke"
+        ],
+        "rationale": "Release Planning and data watching will touch lifecycle behavior, so lifecycle policy must stop accumulating in one executable file.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "roadmap"
+      },
+      {
+        "id": "ci-release-gates-hardening",
+        "title": "CI and release gate hardening",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Keep releasability verifiable through repository-owned fixtures, validation, build, benchmark, package dry-run, packed CLI smoke tests, and develop/main workflow checks.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "release-gates",
+        "dependsOn": [],
+        "evidence": [
+          "release-checks",
+          "cli-tests"
+        ],
+        "rationale": "The modified Gitflow process depends on CI proving develop aggregation and main release readiness.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "roadmap"
+      }
+    ],
+    "planned": [
+      {
+        "id": "data-file-watch-refresh",
+        "title": "Data file watching and auto refresh",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Have architext serve watch target data JSON files, wait for writes to settle, validate before refresh, and prompt before loading invalid updated JSON.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "local-iteration",
+        "dependsOn": [
+          "validate-release-plan-data"
+        ],
+        "evidence": [
+          "data-watch-tests"
+        ],
+        "rationale": "Release Planning will create more frequent JSON edits, so local review should update without restarting the server.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "roadmap"
+      },
+      {
+        "id": "planning-ux-smoke-tests",
+        "title": "Release planning visual smoke coverage",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Add browser smoke coverage for the full Release Planning interface: roadmap selection, inline ad hoc item creation, automatic selection, version prefill, optional title/theme, save/create, Kanban projection, details pane, and invalid-data prompts.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "viewer",
+        "dependsOn": [
+          "release-kanban-view",
+          "approve-release-plan"
+        ],
+        "evidence": [
+          "browser-ui-audit"
+        ],
+        "rationale": "Release Planning is interaction-heavy enough that unit tests alone will not protect the user workflow.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "ad-hoc"
+      },
+      {
+        "id": "release-planning-saved-drafts",
+        "title": "Saved planning drafts",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Persist release plans as draft Release Truth entries, keep them editable, show them in the release browser, and allow later approval without changing roadmap targets before approval.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "planning-workflow",
+        "dependsOn": [
+          "approve-release-plan"
+        ],
+        "evidence": [
+          "release-planning-tests",
+          "release-planning-api-tests",
+          "browser-ui-audit"
+        ],
+        "rationale": "Draft persistence is now part of the reviewed planning workflow: it preserves work in progress without creating a second source of truth or making the draft current before approval.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "ad-hoc"
+      }
+    ],
+    "stretch": [
+      {
+        "id": "pdf-export",
+        "title": "PDF export",
+        "kind": "feature",
+        "status": "stretch",
+        "summary": "Export the active Architext view as a portable PDF artifact for review, archival, or offline sharing.",
+        "owner": "maintainer",
+        "priority": "low",
+        "workstreamId": "future-exports",
+        "dependsOn": [],
+        "evidence": [],
+        "rationale": "PDF export is useful enough to keep visible for 1.3.0, but it should not displace Release Planning fundamentals.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "roadmap"
+      },
+      {
+        "id": "source-extraction",
+        "title": "Source extraction drafts",
+        "kind": "feature",
+        "status": "stretch",
+        "summary": "Explore future source-file inspection that suggests architecture-data changes as review-only drafts; exact 1.3.0 target is TBD.",
+        "owner": "maintainer",
+        "priority": "low",
+        "workstreamId": "source-evidence",
+        "dependsOn": [],
+        "evidence": [],
+        "rationale": "Source extraction means suggested architecture-data changes from source inspection. It remains TBD stretch scope because the first useful extraction target is not defined.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "roadmap"
+      }
+    ],
+    "deferred": [],
+    "outOfScope": [
+      {
+        "id": "hosted-release-planning",
+        "title": "Hosted release planning service",
+        "kind": "feature",
+        "status": "cut",
+        "summary": "A hosted planning service is outside Architext's local-first, repository-owned model.",
+        "owner": "maintainer",
+        "priority": "low",
+        "workstreamId": "future-exports",
+        "dependsOn": [],
+        "evidence": [],
+        "rationale": "The release must keep planning local and data-owned.",
+        "dateAdded": "2026-05-18T06:05:00.000Z",
+        "source": "ad-hoc"
+      }
+    ]
+  },
+  "workstreams": [
+    {
+      "id": "planning-contract",
+      "name": "Planning contract",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Keep Release Planning inside the Release Truth model and define proposal-to-release writes.",
+      "progress": 100,
+      "itemIds": [
+        "release-planning-contract"
+      ],
+      "evidence": [
+        "release-1-3-success-criteria",
+        "release-schema-tests"
+      ]
+    },
+    {
+      "id": "planning-workflow",
+      "name": "Planning workflow",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Assemble explicitly selected roadmap items and manually entered ad hoc work into reviewed scope for one target release.",
+      "progress": 100,
+      "itemIds": [
+        "roadmap-scope-assembly",
+        "approve-release-plan",
+        "release-planning-saved-drafts"
+      ],
+      "evidence": [
+        "release-planning-tests",
+        "release-planning-api-tests"
+      ]
+    },
+    {
+      "id": "viewer",
+      "name": "Viewer planning projections",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Render planning state through Release Truth Kanban and focused details.",
+      "progress": 100,
+      "itemIds": [
+        "release-kanban-view",
+        "c4-container-drilldown",
+        "planning-ux-smoke-tests"
+      ],
+      "evidence": [
+        "release-kanban-tests",
+        "c4-drilldown-tests",
+        "browser-ui-audit"
+      ]
+    },
+    {
+      "id": "lifecycle",
+      "name": "Release plan validation",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Keep accepted release plans deterministic, validated, and repairable through existing lifecycle commands.",
+      "progress": 100,
+      "itemIds": [
+        "validate-release-plan-data"
+      ],
+      "evidence": [
+        "release-schema-tests",
+        "data-watch-tests",
+        "routing-fitness-tests"
+      ]
+    },
+    {
+      "id": "agent-guidance",
+      "name": "LLM release planning instructions",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Teach LLM agents how to draft and maintain release plans without inventing side channels.",
+      "progress": 100,
+      "itemIds": [
+        "release-planning-llm-instructions"
+      ],
+      "evidence": [
+        "managed-agent-instruction-tests"
+      ]
+    },
+    {
+      "id": "local-iteration",
+      "name": "Local iteration",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Make local review respond to data changes quickly while preserving validation safety.",
+      "progress": 100,
+      "itemIds": [
+        "data-file-watch-refresh"
+      ],
+      "evidence": [
+        "data-watch-tests"
+      ]
+    },
+    {
+      "id": "routing",
+      "name": "Routing correctness",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Carry routing readability forward as a recurring quality track for dense diagrams.",
+      "progress": 100,
+      "itemIds": [
+        "routing-correctness-pass"
+      ],
+      "evidence": [
+        "routing-fitness-tests"
+      ]
+    },
+    {
+      "id": "future-exports",
+      "name": "Future export scope",
+      "owner": "maintainer",
+      "status": "stretch",
+      "posture": "on-track",
+      "summary": "Track stretch and future-facing export ideas so they remain visible without blocking the release.",
+      "progress": 0,
+      "itemIds": [
+        "pdf-export",
+        "hosted-release-planning"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "viewer-architecture",
+      "name": "Viewer architecture",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Release Planning and Release Truth presentation policy now live behind explicit viewer modules instead of expanding the app shell.",
+      "progress": 100,
+      "itemIds": [
+        "viewer-refactor"
+      ],
+      "evidence": [
+        "browser-ui-audit",
+        "release-planning-component-boundary",
+        "release-truth-presentation-tests"
+      ]
+    },
+    {
+      "id": "cli-architecture",
+      "name": "CLI lifecycle architecture",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "The CLI executable is a bootstrap over adapter-owned lifecycle runtime and shared target-layout/process boundaries.",
+      "progress": 100,
+      "itemIds": [
+        "cli-lifecycle-refactor"
+      ],
+      "evidence": [
+        "cli-tests",
+        "thin-cli-bootstrap",
+        "cli-runtime-tests",
+        "packed-cli-smoke"
+      ]
+    },
+    {
+      "id": "release-gates",
+      "name": "CI and release gates",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Keep develop aggregation and main release readiness covered by repeatable repository-owned checks.",
+      "progress": 100,
+      "itemIds": [
+        "ci-release-gates-hardening"
+      ],
+      "evidence": [
+        "release-checks",
+        "cli-tests"
+      ]
+    },
+    {
+      "id": "source-evidence",
+      "name": "Source evidence drafts",
+      "owner": "maintainer",
+      "status": "stretch",
+      "posture": "on-track",
+      "summary": "Track source extraction as a stretch source of reviewable draft evidence.",
+      "progress": 0,
+      "itemIds": [
+        "source-extraction"
+      ],
+      "evidence": []
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "planning-contract-approved",
+      "label": "Planning contract approved",
+      "status": "complete",
+      "targetWindow": "Start of 1.3.0",
+      "order": 1,
+      "itemIds": [
+        "release-planning-contract",
+        "release-planning-llm-instructions"
+      ]
+    },
+    {
+      "id": "scope-assembly-working",
+      "label": "Scope assembly working",
+      "status": "complete",
+      "targetWindow": "Middle of 1.3.0",
+      "order": 2,
+      "itemIds": [
+        "roadmap-scope-assembly",
+        "approve-release-plan",
+        "release-planning-saved-drafts"
+      ]
+    },
+    {
+      "id": "planning-projections-usable",
+      "label": "Planning projections usable",
+      "status": "complete",
+      "targetWindow": "Middle of 1.3.0",
+      "order": 3,
+      "itemIds": [
+        "release-kanban-view",
+        "c4-container-drilldown",
+        "planning-ux-smoke-tests"
+      ]
+    },
+    {
+      "id": "lifecycle-ready",
+      "label": "Lifecycle ready",
+      "status": "complete",
+      "targetWindow": "Before release candidate",
+      "order": 4,
+      "itemIds": [
+        "validate-release-plan-data",
+        "data-file-watch-refresh",
+        "routing-correctness-pass"
+      ]
+    },
+    {
+      "id": "deferred-scope-recorded",
+      "label": "Stretch and deferred scope recorded",
+      "status": "stretch",
+      "targetWindow": "Before release notes",
+      "order": 5,
+      "itemIds": [
+        "pdf-export",
+        "source-extraction"
+      ]
+    },
+    {
+      "id": "architecture-boundaries-ready",
+      "label": "Architecture boundaries ready",
+      "status": "complete",
+      "targetWindow": "Before feature implementation expands",
+      "order": 2,
+      "itemIds": [
+        "viewer-refactor",
+        "cli-lifecycle-refactor"
+      ]
+    },
+    {
+      "id": "release-gates-ready",
+      "label": "Release gates ready",
+      "status": "complete",
+      "targetWindow": "Before release candidate",
+      "order": 5,
+      "itemIds": [
+        "ci-release-gates-hardening"
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "scope-after-contract",
+      "from": "roadmap-scope-assembly",
+      "to": "release-planning-contract",
+      "summary": "Scope assembly must write into the approved planning contract."
+    },
+    {
+      "id": "proposal-after-scope",
+      "from": "approve-release-plan",
+      "to": "roadmap-scope-assembly",
+      "summary": "Approving a release plan depends on having assembled candidate scope."
+    },
+    {
+      "id": "kanban-after-contract",
+      "from": "release-kanban-view",
+      "to": "release-planning-contract",
+      "summary": "Kanban should render Release Truth items instead of defining its own model."
+    },
+    {
+      "id": "validation-after-proposals",
+      "from": "validate-release-plan-data",
+      "to": "approve-release-plan",
+      "summary": "Validation should cover the writes performed when an approved release plan becomes Release Truth."
+    },
+    {
+      "id": "watching-after-validation",
+      "from": "data-file-watch-refresh",
+      "to": "validate-release-plan-data",
+      "summary": "Auto refresh must keep invalid edits from replacing the last known good model."
+    },
+    {
+      "id": "smoke-after-kanban",
+      "from": "planning-ux-smoke-tests",
+      "to": "release-kanban-view",
+      "summary": "Visual smoke coverage depends on the initial planning projection UI."
+    },
+    {
+      "id": "planning-ui-after-viewer-refactor",
+      "from": "release-kanban-view",
+      "to": "viewer-refactor",
+      "summary": "Kanban should build on the cleaned viewer component and presenter boundaries."
+    },
+    {
+      "id": "watching-after-cli-refactor",
+      "from": "data-file-watch-refresh",
+      "to": "cli-lifecycle-refactor",
+      "summary": "Data watching should attach to explicit serve lifecycle boundaries rather than deepen executable coupling."
+    },
+    {
+      "id": "release-gates-after-lifecycle",
+      "from": "ci-release-gates-hardening",
+      "to": "cli-lifecycle-refactor",
+      "summary": "Packed CLI smoke tests should verify the refactored lifecycle path."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "roadmap",
+      "label": "Architext roadmap",
+      "kind": "document",
+      "status": "complete",
+      "href": "ROADMAP.md"
+    },
+    {
+      "id": "release-truth-plan",
+      "label": "Release Truth architecture plan",
+      "kind": "document",
+      "status": "complete",
+      "href": "docs/architecture/RELEASE_TRUTH_PLAN.md"
+    },
+    {
+      "id": "release-1-3-success-criteria",
+      "label": "1.3.0 success criteria",
+      "kind": "document",
+      "status": "complete",
+      "href": "docs/architecture/RELEASE_1_3_SUCCESS_CRITERIA.md"
+    },
+    {
+      "id": "release-planning-tests",
+      "label": "Release planning unit tests",
+      "kind": "test",
+      "status": "complete",
+      "href": "test/release-planning.test.mjs"
+    },
+    {
+      "id": "release-planning-api-tests",
+      "label": "Release planning API tests",
+      "kind": "test",
+      "status": "complete",
+      "href": "test/cli.test.mjs"
+    },
+    {
+      "id": "release-schema-tests",
+      "label": "Release schema tests",
+      "kind": "test",
+      "status": "complete",
+      "href": "test/release-schema.test.mjs"
+    },
+    {
+      "id": "architecture-reference-tests",
+      "label": "Architecture reference tests",
+      "kind": "test",
+      "status": "complete",
+      "href": "test/architecture-references.test.mjs"
+    },
+    {
+      "id": "release-kanban-tests",
+      "label": "Release Kanban tests",
+      "kind": "test",
+      "status": "complete",
+      "href": "test/release-kanban.test.mjs"
+    },
+    {
+      "id": "c4-drilldown-tests",
+      "label": "C4 drilldown tests",
+      "kind": "test",
+      "status": "complete",
+      "href": "test/c4-drilldown.test.mjs"
+    },
+    {
+      "id": "data-watch-tests",
+      "label": "Data watch tests",
+      "kind": "test",
+      "status": "complete",
+      "href": "test/data-watch-hub.test.mjs"
+    },
+    {
+      "id": "routing-fitness-tests",
+      "label": "Routing fitness tests",
+      "kind": "test",
+      "status": "complete",
+      "href": "test/routing-fitness.test.mjs"
+    },
+    {
+      "id": "managed-agent-instruction-tests",
+      "label": "Managed agent instruction tests",
+      "kind": "test",
+      "status": "complete",
+      "href": "test/cli.test.mjs"
+    },
+    {
+      "id": "cli-tests",
+      "label": "CLI lifecycle tests",
+      "kind": "test",
+      "status": "complete",
+      "href": "test/cli.test.mjs"
+    },
+    {
+      "id": "release-checks",
+      "label": "Local release gate checks",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "browser-ui-audit",
+      "label": "Browser UI audit",
+      "kind": "manual-check",
+      "status": "complete"
+    }
+  ]
+}

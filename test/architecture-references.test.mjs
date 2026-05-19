@@ -41,12 +41,13 @@ test("architecture reference validation reports unknown ids with context", () =>
   assert.deepEqual(validateArchitectureReferences(minimalModel({
     manifest: { defaultViewId: "missing-view" },
     flows: [{ id: "flow", actors: ["missing-actor"], steps: [{ id: "step", from: "actor", to: "missing-node", data: ["missing-data"] }] }],
-    views: [{ id: "main", lanes: [{ id: "lane", nodeIds: ["missing-node"] }] }]
+    views: [{ id: "main", scopeNodeId: "missing-scope", lanes: [{ id: "lane", nodeIds: ["missing-node"] }] }]
   })), [
     'manifest.defaultViewId references unknown id "missing-view"',
     'flow flow.actors references unknown id "missing-actor"',
     'flow flow step step.to references unknown id "missing-node"',
     'flow flow step step.data references unknown id "missing-data"',
+    'view main.scopeNodeId references unknown id "missing-scope"',
     'view main lane lane references unknown id "missing-node"'
   ]);
 });
@@ -56,7 +57,7 @@ test("release reference validation accepts index/detail item references", () => 
     id: "v1-2-0",
     version: "1.2.0",
     name: "Release Truth",
-    status: "active",
+    status: "implementing",
     posture: "on-track",
     summary: "Track release posture and history.",
     targetWindow: "next",
@@ -94,7 +95,7 @@ test("release reference validation reports stale generated release history", () 
     id: "v1-2-0",
     version: "1.2.0",
     name: "Release Truth",
-    status: "active",
+    status: "implementing",
     posture: "on-track",
     summary: "Track release posture and history.",
     targetWindow: "next",
@@ -138,6 +139,68 @@ test("release reference validation reports stale generated release history", () 
   ]);
 });
 
+test("roadmap items may point at known release plans", () => {
+  const detail = {
+    id: "v1-3-0",
+    version: "1.3.0",
+    name: "Release Planning",
+    status: "planned",
+    posture: "on-track",
+    summary: "Plan a release.",
+    targetWindow: "next",
+    lastUpdated: "2026-05-18T06:05:00.000Z",
+    scope: { required: [], planned: [], stretch: [], deferred: [], outOfScope: [] },
+    workstreams: [],
+    blockers: [],
+    milestones: [],
+    dependencies: [],
+    evidence: []
+  };
+
+  assert.deepEqual(validateArchitectureReferences(minimalModel({
+    roadmap: [{ id: "release-planning", targetReleaseId: "v1-3-0" }],
+    releases: {
+      index: {
+        currentReleaseId: "v1-3-0",
+        releases: [releaseSummaryFromDetail(detail, "v1-3-0.json")]
+      },
+      details: [detail]
+    }
+  })), []);
+});
+
+test("roadmap release targets must reference known releases", () => {
+  const detail = {
+    id: "v1-3-0",
+    version: "1.3.0",
+    name: "Release Planning",
+    status: "planned",
+    posture: "on-track",
+    summary: "Plan a release.",
+    targetWindow: "next",
+    lastUpdated: "2026-05-18T06:05:00.000Z",
+    scope: { required: [], planned: [], stretch: [], deferred: [], outOfScope: [] },
+    workstreams: [],
+    blockers: [],
+    milestones: [],
+    dependencies: [],
+    evidence: []
+  };
+
+  assert.deepEqual(validateArchitectureReferences(minimalModel({
+    roadmap: [{ id: "release-planning", targetReleaseId: "missing-release" }],
+    releases: {
+      index: {
+        currentReleaseId: "v1-3-0",
+        releases: [releaseSummaryFromDetail(detail, "v1-3-0.json")]
+      },
+      details: [detail]
+    }
+  })), [
+    'roadmap item release-planning.targetReleaseId references unknown id "missing-release"'
+  ]);
+});
+
 test("release reference validation reports broken release relationships", () => {
   assert.deepEqual(validateArchitectureReferences(minimalModel({
     releases: {
@@ -146,13 +209,13 @@ test("release reference validation reports broken release relationships", () => 
         releases: [{
           id: "v1-2-0",
           version: "1.2.0",
-          status: "active"
+          status: "implementing"
         }]
       },
       details: [{
         id: "v1-2-0",
         version: "1.2.1",
-        status: "released",
+        status: "completed",
         scope: {
           required: [{ id: "contract", workstreamId: "missing-workstream", dependsOn: ["missing-item"] }],
           planned: [],
@@ -172,7 +235,7 @@ test("release reference validation reports broken release relationships", () => 
     "release v1-2-0.status does not match release index",
     "release v1-2-0.index summary is stale; regenerate Release Truth history",
     "release index v1-2-0 requires targetDate or targetWindow",
-    "release v1-2-0.releasedAt is required for released entries",
+    "release v1-2-0.releasedAt is required for completed entries",
     'release v1-2-0 item contract.workstreamId references unknown id "missing-workstream"',
     'release v1-2-0 item contract.dependsOn references unknown id "missing-item"',
     'release v1-2-0 workstream data.itemIds references unknown id "missing-item"',

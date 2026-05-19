@@ -2,7 +2,7 @@
   "id": "v1-1-2",
   "version": "1.1.2",
   "name": "Architext 1.1.2",
-  "status": "released",
+  "status": "completed",
   "posture": "shipped",
   "summary": "Patch release with dense spline routing and dense topology layout improvements.",
   "targetDate": "2026-05-16",

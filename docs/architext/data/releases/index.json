@@ -1,11 +1,11 @@
 {
-  "currentReleaseId": "v1-2-0",
+  "currentReleaseId": "v1-3-0",
   "releases": [
     {
       "id": "v1-1-2",
       "version": "1.1.2",
       "name": "Architext 1.1.2",
-      "status": "released",
+      "status": "completed",
       "posture": "shipped",
       "targetDate": "2026-05-16",
       "releasedAt": "2026-05-16T09:20:00.000Z",
@@ -27,8 +27,10 @@
       "id": "v1-2-0",
       "version": "1.2.0",
       "name": "Architext 1.2.0 Release Truth",
-      "status": "released",
+      "status": "completed",
       "posture": "shipped",
+      "targetDate": "2026-05-16",
+      "releasedAt": "2026-05-16T14:15:00.000Z",
       "lastUpdated": "2026-05-16T14:15:00.000Z",
       "summary": "Release Truth makes release posture, scope, blockers, milestones, and historical trends first-class Architext data.",
       "counts": {
@@ -41,9 +43,49 @@
         "planned": 0,
         "stretch": 1
       },
-      "file": "v1-2-0.json",
-      "targetDate": "2026-05-16",
-      "releasedAt": "2026-05-16T14:15:00.000Z"
+      "file": "v1-2-0.json"
+    },
+    {
+      "id": "v1-3-0",
+      "version": "1.3.0",
+      "name": "Architext 1.3.0 Release Planning",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetWindow": "Next minor release",
+      "lastUpdated": "2026-05-18T15:55:00.000Z",
+      "summary": "Release Planning lets users craft one specific next release from cherry-picked roadmap items and ad hoc manually entered items without creating a second planning model.",
+      "counts": {
+        "features": 9,
+        "bugFixes": 1,
+        "workstreams": 12,
+        "blockers": 0,
+        "complete": 14,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 2
+      },
+      "file": "v1-3-0.json"
+    },
+    {
+      "id": "v1-4-0",
+      "version": "1.4.0",
+      "name": "Architext 1.4.0",
+      "status": "draft",
+      "posture": "on-track",
+      "targetWindow": "Next release",
+      "lastUpdated": "2026-05-18T14:17:48.651Z",
+      "summary": "Architext 1.4.0 release plan.",
+      "counts": {
+        "features": 2,
+        "bugFixes": 0,
+        "workstreams": 3,
+        "blockers": 0,
+        "complete": 0,
+        "inProgress": 0,
+        "planned": 3,
+        "stretch": 0
+      },
+      "file": "v1-4-0.json"
     }
   ]
 }

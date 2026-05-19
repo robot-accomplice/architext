@@ -15,6 +15,7 @@
     "decisions": "decisions.json",
     "risks": "risks.json",
     "glossary": "glossary.json",
+    "roadmap": "roadmap.json",
     "releases": "releases/index.json"
   },
   "notes": [

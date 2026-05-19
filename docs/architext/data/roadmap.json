@@ -1,0 +1,113 @@
+{
+  "items": [
+    {
+      "id": "release-planning",
+      "title": "Release Planning",
+      "summary": "Craft one target release from selected roadmap items and manually entered ad hoc items, then approve it into Release Truth.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "critical",
+      "section": "Release Planning",
+      "targetReleaseId": "v1-4-0",
+      "dateAdded": "2026-05-18T06:05:00.000Z"
+    },
+    {
+      "id": "release-kanban-view",
+      "title": "Release Truth Kanban view",
+      "summary": "Show Release Truth items in a Kanban projection without creating a second task model.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "high",
+      "section": "Release Planning",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-05-18T06:05:00.000Z"
+    },
+    {
+      "id": "data-file-watch-refresh",
+      "title": "Data file watching and auto refresh",
+      "summary": "Refresh the local viewer after watched Architext JSON changes validate, while preserving the last known good model on invalid writes.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Data File Watching",
+      "targetReleaseId": "v1-4-0",
+      "dateAdded": "2026-05-18T06:05:00.000Z"
+    },
+    {
+      "id": "routing-correctness-pass",
+      "title": "Routing correctness pass",
+      "summary": "Improve dense diagram routing readability and add fixtures for remaining Deployment and Data/Risks overlaps.",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "high",
+      "section": "Routing Correctness",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-05-18T06:05:00.000Z"
+    },
+    {
+      "id": "viewer-refactor",
+      "title": "Viewer refactor boundaries",
+      "summary": "Extract viewer shell, panels, canvas, diagram renderers, detail presenters, and browser hooks into clearer boundaries.",
+      "kind": "architecture",
+      "status": "planned",
+      "priority": "high",
+      "section": "Viewer Refactor",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-05-18T06:05:00.000Z"
+    },
+    {
+      "id": "cli-lifecycle-refactor",
+      "title": "CLI lifecycle refactor boundaries",
+      "summary": "Move lifecycle commands out of the executable bootstrap behind explicit use cases and ports.",
+      "kind": "architecture",
+      "status": "planned",
+      "priority": "high",
+      "section": "CLI Lifecycle Refactor",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-05-18T06:05:00.000Z"
+    },
+    {
+      "id": "ci-release-gates-hardening",
+      "title": "CI and release gate hardening",
+      "summary": "Keep releasability verified through repository-owned tests, validation, build, package dry-run, and packed CLI smoke tests.",
+      "kind": "test",
+      "status": "planned",
+      "priority": "high",
+      "section": "CI And Release Gates",
+      "targetReleaseId": "v1-4-0",
+      "dateAdded": "2026-05-18T06:05:00.000Z"
+    },
+    {
+      "id": "pdf-export",
+      "title": "PDF export",
+      "summary": "Export the active Architext view as a portable PDF artifact with clear diagnostics.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "low",
+      "section": "PDF Export",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-05-18T06:05:00.000Z"
+    },
+    {
+      "id": "schema-data-migrations",
+      "title": "Schema and data migrations",
+      "summary": "Define explicit migration commands and dry-run reporting for schema evolution in data-only repositories.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Schema And Data Migrations",
+      "dateAdded": "2026-05-18T06:05:00.000Z"
+    },
+    {
+      "id": "source-extraction",
+      "title": "Source extraction drafts",
+      "summary": "Explore source-file inspection that suggests draft architecture-data changes requiring review.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "low",
+      "section": "Source Extraction",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-05-18T06:05:00.000Z"
+    }
+  ]
+}

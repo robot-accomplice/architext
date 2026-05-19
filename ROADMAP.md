@@ -42,6 +42,9 @@ Implemented:
 Goal: make dense diagrams readable without relying on ad hoc view-specific
 patches.
 
+- Treat routing correctness as recurring release scope. Every release should
+  include routing improvement work until the remaining problems are either
+  solved or explicitly judged not worth further complexity.
 - Split the current strategy assembly module into separate orthogonal, spline,
   and straight strategy modules if the style-specific branch bodies continue
   to grow. Geometry, ports, port-pair enumeration, corridor discovery,
@@ -143,19 +146,45 @@ See `docs/architecture/RELEASE_TRUTH_PLAN.md`.
 
 Target: Architext 1.3.0.
 
-Goal: turn roadmap items and ad hoc release work into proposed release scope
-without creating a second release model.
+Goal: let users craft a plan for a specific next release from cherry-picked
+roadmap items and ad hoc manually entered items without creating a second
+release model.
 
 Direction:
 
 - Keep Release Truth as the reviewed source of truth; Release Planning should
   author proposals that write into the same release JSON after user review.
-- Let maintainers compose a release from existing roadmap items, newly entered
-  ad hoc items, blockers, dependencies, milestones, and evidence requirements.
+- Let maintainers compose one target release from explicitly selected roadmap
+  items, newly entered ad hoc items, blockers, dependencies, milestones, and
+  evidence requirements.
+- Add a Kanban projection of Release Truth items grouped by state, such as
+  planned, ready, in progress, blocked, deferred, and complete. The board must
+  read from the same release JSON as the timeline/path/detail views rather than
+  introducing a second task model.
+- Make Kanban cards compact but inspection-friendly: status, scope class,
+  owner, priority, dependencies, blockers, and evidence should be visible or
+  reachable through the existing details pane.
 - Surface LLM-made scope recommendations, ordering, priority, and deferral
   rationale before those decisions become Release Truth.
 - Preserve a single path from planning to tracking: draft release plan,
   reviewed Release Truth data, then visual tracking and history.
+
+### Data File Watching
+
+Goal: make local review responsive when architecture or release JSON changes.
+
+Direction:
+
+- Have `architext serve [path]` watch the selected target repository's
+  `docs/architext/data/**/*.json` files and notify the viewer when data changes.
+- Refresh the loaded Architext model automatically after successful validation
+  so users do not need to restart the local server while iterating with an LLM.
+- Surface validation failures from watched changes in the viewer instead of
+  replacing the last known good model with invalid or partially written data.
+- Keep watching local-only and package-owned: target repositories should not
+  receive watcher scripts, dependencies, or generated runtime files.
+- Treat release data, architecture data, and manifest changes through the same
+  reload path so Release Truth, diagrams, risks, and C4 views stay consistent.
 
 ### Schema And Data Migrations
 

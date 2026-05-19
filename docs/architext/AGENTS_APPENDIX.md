@@ -20,8 +20,13 @@ Release Truth is the reviewed release source of truth: completed work,
 deferrals, reprioritization, blockers, dependencies, and next actions belong in
 the release detail file, with `releases/index.json` refreshed from those facts.
 Keep Release Path labels concise and put long context in the selected release
-item's detail data. Release Planning is a later Architext 1.3.0 capability; do
-not represent unreviewed planning proposals as current Release Truth facts.
+item's detail data.
+
+When planning a future release, use `docs/architext/data/roadmap.json` as the
+roadmap source and Release Planning as the approval boundary. Selected roadmap
+items keep `source: "roadmap"`; manually entered scope uses `source:
+"ad-hoc"` and should be promoted into `roadmap.json` when the plan is approved.
+Do not represent unreviewed planning proposals as current Release Truth facts.
 
 For C4 views, keep Context, Container, and Component diagrams at their proper
 abstraction level. Prefer splitting dense views over forcing tangled routing,
@@ -43,8 +48,9 @@ architext serve [path]
 The optional path defaults to the current directory. Target repositories should
 not vendor or edit Architext viewer, schema, tool, package, or Vite files.
 Those are owned by the globally installed `architext` package. Edit project
-architecture and release data under `docs/architext/data/**/*.json`; use `architext sync
-[path]` to install or migrate lifecycle metadata and instructions.
+architecture, roadmap, and release data under `docs/architext/data/**/*.json`;
+use `architext sync [path]` to install or migrate lifecycle metadata and
+instructions.
 
 Use `architext doctor [path]` to inspect installation health, including C4
 document quality issues, and `architext doctor [path] --yes` to apply
