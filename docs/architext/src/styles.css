@@ -1764,8 +1764,22 @@ select:disabled {
   pointer-events: none;
 }
 
+.route-step-pill {
+  pointer-events: none;
+}
+
+.route-step-pill .route-step-marker,
+.route-step-pill .route-step-label {
+  paint-order: stroke fill;
+}
+
 .flow-edge.selected .flow-step-dot {
-  fill: rgba(254, 214, 57, 0.18);
+  fill: rgba(12, 14, 17, 0.96);
+  stroke: var(--flow-selected);
+}
+
+.flow-edge.selected .flow-step-label {
+  fill: var(--flow-selected);
 }
 
 .sequence-message.selected .sequence-step-dot {

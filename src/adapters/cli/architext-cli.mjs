@@ -11,7 +11,7 @@ import { assertDirectory, git, gitAvailable, readJson, run, tryRun, writeJson } 
 import { printStatus } from "./terminal-presenter.mjs";
 import { createDataWatchHub } from "../http/data-watch-hub.mjs";
 import { approveReleasePlanRequest as approveReleasePlanApiRequest } from "../http/release-planning-api.mjs";
-import { c4IssuesForView, repairC4Views } from "../../domain/architecture-model/c4-quality.mjs";
+import { c4DrilldownIssues, c4IssuesForView, repairC4Views } from "../../domain/architecture-model/c4-quality.mjs";
 import { generatedReleaseIndex, releaseIndexGenerationChanges } from "../../domain/architecture-model/release-history.mjs";
 import { doctorRepairCategories, doctorRepairsForStatus } from "../../domain/lifecycle/doctor-repairs.mjs";
 import {
@@ -72,9 +72,10 @@ async function collectC4Status(target) {
   const viewsDocument = await readJson(viewsPath);
   const nodeMap = new Map((await readJson(nodesPath)).nodes.map((node) => [node.id, node]));
   const issues = viewsDocument.views.flatMap((view) => view.type?.startsWith("c4-") ? c4IssuesForView(view, nodeMap) : []);
+  const drilldownIssues = c4DrilldownIssues(viewsDocument.views, nodeMap);
   const repaired = repairC4Views(viewsDocument.views, nodeMap);
   const remainingIssues = repaired.views.flatMap((view) => view.type?.startsWith("c4-") ? c4IssuesForView(view, nodeMap) : []);
-  return { available: true, issues, repairChanges: repaired.changes, remainingIssues };
+  return { available: true, issues, drilldownIssues, repairChanges: repaired.changes, remainingIssues };
 }
 
 async function repairC4Data(target, dryRun) {
@@ -288,6 +289,7 @@ async function writeStarterData(target, version) {
   const projectName = path.basename(target);
   const projectId = slugify(projectName);
   const systemId = `${projectId}-system`;
+  const containerId = `${projectId}-container`;
   const componentId = `${projectId}-component`;
   const actorId = "project-team";
   const dataId = "architecture-knowledge";
@@ -359,6 +361,25 @@ async function writeStarterData(target, version) {
         verification: ["architext validate"]
       },
       {
+        id: containerId,
+        type: "service",
+        name: `${projectName} service placeholder`,
+        summary: "Placeholder container inside the system boundary. Replace with real deployable units during architecture build-out.",
+        responsibilities: ["Pending container discovery"],
+        owner: "Project maintainers",
+        sourcePaths: [],
+        runtime: "Unknown until architecture build-out is complete",
+        interfaces: ["Unknown until architecture build-out is complete"],
+        dependencies: [],
+        dataHandled: [dataId],
+        security: ["Unknown until architecture build-out is complete"],
+        observability: ["Unknown until architecture build-out is complete"],
+        relatedFlows: [flowId],
+        relatedDecisions: ["architext-buildout-required"],
+        knownRisks: ["architext-starter-data"],
+        verification: ["architext validate"]
+      },
+      {
         id: componentId,
         type: "module",
         name: `${projectName} component placeholder`,
@@ -415,8 +436,8 @@ async function writeStarterData(target, version) {
       { id: "sequence", name: "Sequence", type: "sequence", summary: "Starter sequence for the build-out flow.", lanes: [{ id: "participants", name: "Participants", nodeIds: [actorId, systemId] }] },
       { id: "deployment", name: "Deployment", type: "deployment", summary: "Starter deployment view. Replace with real runtime placement.", lanes: [{ id: "unknown", name: "Unknown", nodeIds: [systemId] }] },
       { id: "c4-context", name: "C4 Context", type: "c4-context", summary: "Starter C4 context. Replace with real actors, system boundary, and external systems.", lanes: [{ id: "people", name: "People", nodeIds: [actorId] }, { id: "system", name: "System", nodeIds: [systemId] }] },
-      { id: "c4-container", name: "C4 Container", type: "c4-container", summary: "Starter C4 container view. Replace with deployable units and dependencies.", lanes: [{ id: "containers", name: "Containers", nodeIds: [systemId] }] },
-      { id: "c4-component", name: "C4 Component", type: "c4-component", summary: "Starter C4 component view. Replace with components inside a selected container.", lanes: [{ id: "components", name: "Components", nodeIds: [componentId] }] }
+      { id: "c4-container", name: "C4 Container", type: "c4-container", summary: "Starter C4 container view. Replace with deployable units and dependencies.", scopeNodeId: systemId, lanes: [{ id: "containers", name: "Containers", nodeIds: [containerId] }] },
+      { id: "c4-component", name: "C4 Component", type: "c4-component", summary: "Starter C4 component view. Replace with components inside a selected container.", scopeNodeId: containerId, lanes: [{ id: "components", name: "Components", nodeIds: [componentId] }] }
     ]
   });
 
@@ -816,6 +837,7 @@ Rules:
 - Treat Release Truth as reviewed release state, not a planning scratchpad: update detail files for completed, deferred, blocked, reprioritized, or newly scoped work, then refresh the generated release index from those facts.
 - Keep Release Path labels concise; put rationale, blocker explanation, evidence, dependencies, and next actions in detail data for the selected release item.
 - Use docs/architext/data/roadmap.json for release planning source items. Selected roadmap scope uses source: "roadmap"; manually entered scope uses source: "ad-hoc" and must be promoted into roadmap.json when approved.
+- Build C4 drilldown chains with explicit scopeNodeId metadata for decomposable Context, Container, and Component nodes; leave actors and external dependencies without child views.
 - Mark uncertainty and known gaps explicitly.
 - Do not edit copied viewer, schema, package, Vite, or local tool files in the target repository.
 - Run architext validate ${target} before claiming completion.
