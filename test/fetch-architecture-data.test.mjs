@@ -22,7 +22,8 @@ function modelFiles(overrides = {}) {
         views: "views.json",
         dataClassification: "data-classification.json",
         decisions: "decisions.json",
-        risks: "risks.json"
+        risks: "risks.json",
+        roadmap: "roadmap.json"
       }
     },
     "/data/nodes.json": {
@@ -42,6 +43,9 @@ function modelFiles(overrides = {}) {
     "/data/data-classification.json": { classes: [] },
     "/data/decisions.json": { decisions: [] },
     "/data/risks.json": { risks: [] },
+    "/data/roadmap.json": {
+      items: [{ id: "release-planning", title: "Release Planning", summary: "Plan releases.", kind: "feature", status: "planned", section: "Release Planning" }]
+    },
     ...overrides
   };
 }
@@ -57,6 +61,7 @@ test("architecture data adapter loads the manifest file graph", async () => {
   assert.deepEqual(requested.sort(), Object.keys(files).sort());
   assert.equal(model.manifest.defaultViewId, "main");
   assert.equal(model.nodes[0].id, "actor");
+  assert.equal(model.roadmap[0].id, "release-planning");
 });
 
 test("architecture data adapter applies shared reference validation", async () => {
@@ -75,7 +80,7 @@ test("architecture data adapter loads release index and current release detail",
     id: "v1-1-2",
     version: "1.1.2",
     name: "Previous",
-    status: "released",
+    status: "completed",
     posture: "shipped",
     summary: "Previous release.",
     releasedAt: "2026-05-16T09:20:00.000Z",
@@ -91,7 +96,7 @@ test("architecture data adapter loads release index and current release detail",
     id: "v1-2-0",
     version: "1.2.0",
     name: "Current",
-    status: "active",
+    status: "implementing",
     posture: "on-track",
     summary: "Current release.",
     targetWindow: "next",

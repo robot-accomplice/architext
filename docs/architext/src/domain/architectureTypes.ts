@@ -17,6 +17,7 @@ export type Manifest = {
     decisions: string;
     risks: string;
     glossary: string;
+    roadmap?: string;
     releases?: string;
   };
   notes: string[];
@@ -84,6 +85,7 @@ export type View = {
   name: string;
   type: string;
   summary: string;
+  scopeNodeId?: Id;
   lanes: Array<{
     id: Id;
     name: string;
@@ -121,7 +123,7 @@ export type Risk = {
   relatedFlows: Id[];
 };
 
-export type ReleaseStatus = "planning" | "active" | "blocked" | "candidate" | "released" | "deferred";
+export type ReleaseStatus = "draft" | "planned" | "implementing" | "completed";
 export type ReleaseItemStatus = "planned" | "in-progress" | "blocked" | "complete" | "deferred" | "stretch" | "cut";
 export type ReleasePosture = "on-track" | "at-risk" | "blocked" | "release-candidate" | "shipped";
 export type ReleaseItemKind = "feature" | "bug-fix" | "documentation" | "architecture" | "test" | "chore";
@@ -163,6 +165,10 @@ export type ReleaseItem = {
   kind: ReleaseItemKind;
   status: ReleaseItemStatus;
   summary: string;
+  source?: "roadmap" | "ad-hoc";
+  dateAdded?: string;
+  deferredToReleaseId?: Id;
+  deferredToVersion?: string;
   owner?: string;
   priority?: "critical" | "high" | "medium" | "low";
   rationale?: string;
@@ -222,6 +228,19 @@ export type ReleaseEvidence = {
   href?: string;
 };
 
+export type RoadmapItem = {
+  id: Id;
+  title: string;
+  summary: string;
+  kind: ReleaseItemKind;
+  status: "planned" | "in-progress" | "complete" | "deferred" | "cut";
+  priority?: "critical" | "high" | "medium" | "low";
+  section: string;
+  targetReleaseId?: Id;
+  dateAdded?: string;
+  evidence?: string[];
+};
+
 export type ReleaseDetail = {
   id: Id;
   version: string;
@@ -262,6 +281,7 @@ export type Model = {
   dataClasses: DataClass[];
   decisions: Decision[];
   risks: Risk[];
+  roadmap?: RoadmapItem[];
   releases?: ReleaseModel;
 };
 

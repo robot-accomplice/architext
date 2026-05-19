@@ -24,9 +24,13 @@ When architecture changes, update the relevant files under
 - Keep Release Path rows concise. Put rationale, blocker explanation,
   dependency detail, evidence, and next actions in the selected release item's
   detail data instead of duplicating long prose in labels or summaries.
-- Do not use Release Planning concepts as current release facts. Release
-  Planning is targeted for Architext 1.3.0 and should write reviewed proposals
-  into the same Release Truth JSON model when it exists.
+- Use `docs/architext/data/roadmap.json` for release planning source items.
+  Selected roadmap items use `source: "roadmap"` in release detail data.
+  Manually entered scope uses `source: "ad-hoc"` and must be promoted into
+  `roadmap.json` when the release plan is approved.
+- Do not use unreviewed Release Planning proposals as current release facts.
+  Release Planning writes approved proposals into the same Release Truth JSON
+  model.
 - Prefer source-path-backed claims.
 - Mark uncertainty explicitly instead of inventing details.
 - Keep C4 Context, Container, and Component views at their proper abstraction
@@ -47,6 +51,7 @@ When architecture changes, update the relevant files under
 Persist these project-owned files in git:
 
 - `docs/architext/data/*.json`
+- `docs/architext/data/roadmap.json`
 - `docs/architext/data/releases/*.json`
 - `docs/architext/.architext.json`
 - repository-level `AGENTS.md` or `CLAUDE.md` Architext instructions, when

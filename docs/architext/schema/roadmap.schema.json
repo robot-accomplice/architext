@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architext.local/schema/roadmap.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["items"],
+  "properties": {
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/roadmapItem" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "roadmapItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "summary", "kind", "status", "section"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "kind": { "type": "string", "enum": ["feature", "bug-fix", "documentation", "architecture", "test", "chore"] },
+        "status": { "type": "string", "enum": ["planned", "in-progress", "complete", "deferred", "cut"] },
+        "priority": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
+        "section": { "type": "string", "minLength": 1 },
+        "targetReleaseId": { "$ref": "#/$defs/id" },
+        "dateAdded": { "type": "string", "format": "date-time" },
+        "evidence": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+      }
+    }
+  }
+}

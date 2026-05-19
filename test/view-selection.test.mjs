@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { defaultViewForMode, modeForView, viewBelongsToMode } from "../docs/architext/src/presentation/viewSelection.js";
+import { defaultViewForMode, hashForMode, modeForHash, modeForView, viewBelongsToMode } from "../docs/architext/src/presentation/viewSelection.js";
 
 const views = [
   { id: "system", type: "system-map" },
@@ -23,10 +23,19 @@ test("view selection chooses the first compatible view for a mode", () => {
   assert.equal(defaultViewForMode("sequence", views, views[0]).id, "sequence");
   assert.equal(defaultViewForMode("c4", views, views[0]).id, "context");
   assert.equal(defaultViewForMode("data-risks", views, views[0]).id, "risk");
+  assert.equal(defaultViewForMode("release-truth", views, views[0]).id, "system");
 });
 
 test("view selection rejects stale active views after mode changes", () => {
   assert.equal(viewBelongsToMode({ type: "deployment" }, "deployment"), true);
   assert.equal(viewBelongsToMode({ type: "deployment" }, "flows"), false);
+  assert.equal(viewBelongsToMode({ type: "deployment" }, "release-truth"), true);
   assert.equal(viewBelongsToMode(undefined, "flows"), false);
+});
+
+test("view selection supports direct hash links for top-level modes", () => {
+  assert.equal(modeForHash("#releasetruth"), "release-truth");
+  assert.equal(modeForHash("#release-truth"), "release-truth");
+  assert.equal(modeForHash("#datarisks"), "data-risks");
+  assert.equal(hashForMode("release-truth"), "#releasetruth");
 });

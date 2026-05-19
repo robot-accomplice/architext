@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-2ff801)](LICENSE)
 [![CI](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/%40robotaccomplice%2Farchitext?color=00dbe9)](https://www.npmjs.com/package/@robotaccomplice/architext)
-![SemVer](https://img.shields.io/badge/semver-patch%20release-fed639)
+![SemVer](https://img.shields.io/badge/semver-minor%20release-fed639)
 ![Node 20+](https://img.shields.io/badge/node-%3E%3D20-00dbe9)
 ![Global CLI](https://img.shields.io/badge/global%20CLI-yes-2ff801)
 ![Target Repos](https://img.shields.io/badge/target%20repos-data--only-2ff801)
@@ -113,6 +113,8 @@ validation, and release packaging.
 ![Architext C4 view showing package and target repository boundaries](docs/assets/screenshots/architext-c4.png)
 
 ![Architext data and risks view showing migration and release risks](docs/assets/screenshots/architext-data-risks.png)
+
+![Architext Release Truth view showing release posture, path, and historical feature and bug-fix volume](docs/assets/screenshots/architext-release-truth.png)
 
 ## Install Or Upgrade In A Project
 

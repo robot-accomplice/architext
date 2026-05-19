@@ -56,7 +56,7 @@
     },
     "releaseStatus": {
       "type": "string",
-      "enum": ["planning", "active", "blocked", "candidate", "released", "deferred"]
+      "enum": ["draft", "planned", "implementing", "completed"]
     },
     "itemStatus": {
       "type": "string",
@@ -76,6 +76,10 @@
         "kind": { "type": "string", "enum": ["feature", "bug-fix", "documentation", "architecture", "test", "chore"] },
         "status": { "$ref": "#/$defs/itemStatus" },
         "summary": { "type": "string", "minLength": 1 },
+        "source": { "type": "string", "enum": ["roadmap", "ad-hoc"] },
+        "dateAdded": { "type": "string", "format": "date-time" },
+        "deferredToReleaseId": { "$ref": "#/$defs/id" },
+        "deferredToVersion": { "type": "string", "minLength": 1 },
         "owner": { "type": "string", "minLength": 1 },
         "priority": { "type": "string", "enum": ["critical", "high", "medium", "low"] },
         "rationale": { "type": "string", "minLength": 1 },

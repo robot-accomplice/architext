@@ -1,0 +1,116 @@
+{
+  "id": "v1-4-0",
+  "version": "1.4.0",
+  "name": "Architext 1.4.0",
+  "status": "draft",
+  "posture": "on-track",
+  "summary": "Architext 1.4.0 release plan.",
+  "targetWindow": "Next release",
+  "lastUpdated": "2026-05-18T14:17:48.651Z",
+  "updateSource": "Release Planning",
+  "scope": {
+    "required": [],
+    "planned": [
+      {
+        "id": "release-planning",
+        "title": "Release Planning",
+        "kind": "feature",
+        "status": "planned",
+        "summary": "Craft one target release from selected roadmap items and manually entered ad hoc items, then approve it into Release Truth.",
+        "priority": "critical",
+        "source": "roadmap",
+        "dateAdded": "2026-05-18T14:17:48.651Z",
+        "workstreamId": "release-planning",
+        "dependsOn": [],
+        "evidence": []
+      },
+      {
+        "id": "data-file-watch-refresh",
+        "title": "Data file watching and auto refresh",
+        "kind": "feature",
+        "status": "planned",
+        "summary": "Refresh the local viewer after watched Architext JSON changes validate, while preserving the last known good model on invalid writes.",
+        "priority": "medium",
+        "source": "roadmap",
+        "dateAdded": "2026-05-18T14:17:48.651Z",
+        "workstreamId": "data-file-watching",
+        "dependsOn": [],
+        "evidence": []
+      },
+      {
+        "id": "ci-release-gates-hardening",
+        "title": "CI and release gate hardening",
+        "kind": "test",
+        "status": "planned",
+        "summary": "Keep releasability verified through repository-owned tests, validation, build, package dry-run, and packed CLI smoke tests.",
+        "priority": "high",
+        "source": "roadmap",
+        "dateAdded": "2026-05-18T14:17:48.651Z",
+        "workstreamId": "ci-and-release-gates",
+        "dependsOn": [],
+        "evidence": []
+      }
+    ],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "release-planning",
+      "name": "Release Planning",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Release Planning release scope.",
+      "progress": 0,
+      "itemIds": [
+        "release-planning"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "data-file-watching",
+      "name": "Data File Watching",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Data File Watching release scope.",
+      "progress": 0,
+      "itemIds": [
+        "data-file-watch-refresh"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "ci-and-release-gates",
+      "name": "CI And Release Gates",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "CI And Release Gates release scope.",
+      "progress": 0,
+      "itemIds": [
+        "ci-release-gates-hardening"
+      ],
+      "evidence": []
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "planned-scope",
+      "label": "Planned scope selected",
+      "status": "planned",
+      "targetWindow": "Release planning",
+      "order": 1,
+      "itemIds": [
+        "release-planning",
+        "data-file-watch-refresh",
+        "ci-release-gates-hardening"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": []
+}
