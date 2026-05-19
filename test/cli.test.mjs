@@ -185,9 +185,30 @@ test("sync diagnoses and seeds missing Release Truth data for existing installs"
   }
 });
 
+test("doctor repairs stale Architext data schema versions", () => {
+  const target = tempRepo();
+  try {
+    run(["sync", target, "--yes", "--branch", "none"]);
+    const manifestPath = path.join(target, "docs", "architext", "data", "manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8"));
+    writeJson(manifestPath, { ...manifest, schemaVersion: "0.1.0" });
+
+    const dryRun = run(["doctor", target, "--dry-run"]);
+    assert.match(dryRun, /Schema: 0\.1\.0 \(expected 1\.3\.0\)/);
+    assert.match(dryRun, /update manifest\.schemaVersion from 0\.1\.0 to 1\.3\.0/);
+
+    run(["doctor", target, "--yes"]);
+    assert.equal(JSON.parse(readFileSync(manifestPath, "utf8")).schemaVersion, "1.3.0");
+  } finally {
+    cleanup(target);
+  }
+});
+
 test("prompt includes Release Truth maintenance rules for LLM agents", () => {
   const output = run(["prompt", ".", "--mode", "architecture-change"]);
 
+  assert.match(output, /manifest\.schemaVersion as the Architext data schema contract version/);
+  assert.match(output, /not the installed CLI\/package version/);
   assert.match(output, /Keep Release Truth data current when release scope, blockers, milestones, evidence, target dates, dependencies, or posture changes/);
   assert.match(output, /Treat Release Truth as reviewed release state, not a planning scratchpad/);
   assert.match(output, /refresh the generated release index from those facts/);
@@ -207,6 +228,8 @@ test("managed agent instructions include Release Truth source-of-truth rules", (
     const claude = readFileSync(path.join(target, "CLAUDE.md"), "utf8");
     for (const instructions of [agents, claude]) {
       assert.match(instructions, /Release Truth is the reviewed release source of truth/);
+      assert.match(instructions, /manifest\.json` records the Architext data schema version/);
+      assert.match(instructions, /breaking schema\s+changes require a major semver release/);
       assert.match(instructions, /completed work,\s+deferrals, reprioritization, blockers, dependencies, and next actions belong in\s+the release detail file/);
       assert.match(instructions, /Keep Release Path labels concise/);
       assert.match(instructions, /roadmap\.json` as the\s+roadmap source/);

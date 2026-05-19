@@ -9,6 +9,11 @@ Architext.
 This project uses `docs/architext/data/**/*.json` as the machine-readable
 architecture and release source of truth.
 
+`docs/architext/data/manifest.json` records the Architext data schema version.
+That version tracks the JSON data contract, not the installed CLI/package
+version. Additive schema changes may ship in minor releases; breaking schema
+changes require a major semver release and an Architext-managed migration path.
+
 When changing architecture, data flow, persistence, external integrations, trust
 boundaries, deployment topology, observability paths, or major module
 responsibilities, update the relevant Architext JSON files before completing the

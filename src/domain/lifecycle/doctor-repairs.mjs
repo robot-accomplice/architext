@@ -1,5 +1,13 @@
 export function doctorRepairsForStatus(status) {
   const repairs = [];
+  for (const change of status.manifest?.repairChanges ?? []) {
+    repairs.push({
+      id: `manifest:${change}`,
+      category: "manifest",
+      file: "docs/architext/data/manifest.json",
+      summary: change
+    });
+  }
   for (const change of status.c4?.repairChanges ?? []) {
     repairs.push({
       id: `c4:${change}`,

@@ -11,6 +11,7 @@ test("terminal status presenter formats repository health without collecting it"
     gitignoreMissing: ["docs/architext/dist/"],
     trackedGenerated: [],
     c4: { issues: ["view: duplicate node membership"], remainingIssues: [] },
+    manifest: { schemaVersion: "0.1.0", expectedSchemaVersion: "1.3.0", repairChanges: ["update manifest.schemaVersion from 0.1.0 to 1.3.0"] },
     doctorRepairs: [{ summary: "view: remove duplicate node membership" }],
     validation: { ok: true, output: "Architext validation passed" },
     instructionStatus: {
@@ -29,6 +30,7 @@ test("terminal status presenter formats repository health without collecting it"
     "Gitignore: missing docs/architext/dist/",
     "Generated artifacts tracked: none",
     "C4 documents: 1 issue",
+    "Schema: 0.1.0 (expected 1.3.0)",
     "Doctor repairs: 1",
     "Doctor repairs available:",
     "- view: remove duplicate node membership",

@@ -4,6 +4,9 @@ import { doctorRepairCategories, doctorRepairsForStatus } from "../src/domain/li
 
 test("doctor repairs are derived from status findings without CLI or filesystem state", () => {
   const repairs = doctorRepairsForStatus({
+    manifest: {
+      repairChanges: ["update manifest.schemaVersion from 0.1.0 to 1.3.0"]
+    },
     c4: {
       repairChanges: [
         "c4-container: remove 1 duplicate node membership entry (api)",
@@ -13,6 +16,12 @@ test("doctor repairs are derived from status findings without CLI or filesystem 
   });
 
   assert.deepEqual(repairs, [
+    {
+      id: "manifest:update manifest.schemaVersion from 0.1.0 to 1.3.0",
+      category: "manifest",
+      file: "docs/architext/data/manifest.json",
+      summary: "update manifest.schemaVersion from 0.1.0 to 1.3.0"
+    },
     {
       id: "c4:c4-container: remove 1 duplicate node membership entry (api)",
       category: "c4",

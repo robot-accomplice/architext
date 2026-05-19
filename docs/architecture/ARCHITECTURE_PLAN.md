@@ -200,7 +200,10 @@ route indexing, candidate generation, and scoring rather than in React or CSS.
 Defines:
 
 - project identity
-- schema version
+- Architext data schema version, which tracks the JSON data contract rather
+  than the installed CLI package version. Additive data-contract changes may
+  ship in minor package releases; breaking schema changes require a major
+  semver release and an Architext-managed migration path.
 - generated timestamp
 - default view
 - required data files
