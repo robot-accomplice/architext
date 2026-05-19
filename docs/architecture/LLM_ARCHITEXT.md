@@ -9,6 +9,11 @@ Architext JSON files are the machine-readable architecture source of truth for
 the project. They describe components, dataflows, deployment/runtime structure,
 data classification, risks, and architecture decisions.
 
+`docs/architext/data/manifest.json` records the Architext data schema version.
+That version tracks the JSON data contract, not the installed CLI/package
+version. Additive schema changes may ship in minor releases; breaking schema
+changes require a major semver release and an Architext-managed migration path.
+
 When architecture changes, update Architext data before claiming the task is
 complete.
 

@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-2ff801)](LICENSE)
 [![CI](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/%40robotaccomplice%2Farchitext?color=00dbe9)](https://www.npmjs.com/package/@robotaccomplice/architext)
-![SemVer](https://img.shields.io/badge/semver-1.3.1-fed639)
+![SemVer](https://img.shields.io/badge/semver-1.3.2-fed639)
 ![Node 20+](https://img.shields.io/badge/node-%3E%3D20-00dbe9)
 ![Global CLI](https://img.shields.io/badge/global%20CLI-yes-2ff801)
 ![Target Repos](https://img.shields.io/badge/target%20repos-data--only-2ff801)
@@ -437,8 +437,11 @@ data classification, decisions, and risks are separate concerns.
 
 ## Data Model Overview
 
-`manifest.json` is the entrypoint. It identifies the project, schema version,
-default view, and data files to load.
+`manifest.json` is the entrypoint. It identifies the project, Architext data
+schema version, default view, and data files to load. The schema version tracks
+the JSON data contract, not the installed CLI package version. Additive schema
+changes may ship in minor releases; breaking schema changes require a major
+semver release and an Architext-managed migration path.
 
 `nodes.json` describes architectural elements such as services, modules,
 clients, actors, data stores, queues, workers, external services, and trust
