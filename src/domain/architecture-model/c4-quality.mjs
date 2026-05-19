@@ -10,6 +10,14 @@ const c4DensityBudgets = {
   "c4-component": { nodes: 14, relationships: 28 }
 };
 
+const c4DrilldownTypes = {
+  "c4-context": "c4-container",
+  "c4-container": "c4-component",
+  "c4-component": "c4-code"
+};
+
+const c4DecomposableTypes = new Set(["software-system", "service", "worker", "deployment-unit", "client"]);
+
 function viewNodeIds(view) {
   return view.lanes.flatMap((lane) => lane.nodeIds);
 }
@@ -129,6 +137,21 @@ export function c4IssuesForView(view, nodeMap) {
     const relationshipCount = structuralRelationshipCount(view, nodeMap);
     if (nodeCount > budget.nodes) issues.push(`${view.id}: ${nodeCount} nodes exceeds ${budget.nodes}; split the view`);
     if (relationshipCount > budget.relationships) issues.push(`${view.id}: ${relationshipCount} relationships exceeds ${budget.relationships}; split the view`);
+  }
+  return issues;
+}
+
+export function c4DrilldownIssues(views, nodeMap) {
+  const issues = [];
+  for (const view of views) {
+    const childType = c4DrilldownTypes[view.type];
+    if (!childType) continue;
+    for (const nodeId of viewNodeIds(view)) {
+      const node = nodeMap.get(nodeId);
+      if (!node || !c4DecomposableTypes.has(node.type)) continue;
+      const hasChild = views.some((candidate) => candidate.type === childType && candidate.scopeNodeId === nodeId);
+      if (!hasChild) issues.push(`${view.id}: ${nodeId} has no ${childType} drilldown view`);
+    }
   }
   return issues;
 }

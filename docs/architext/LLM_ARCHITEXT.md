@@ -47,6 +47,12 @@ complete.
 - Keep C4 Context, Container, and Component views at their proper abstraction
   level; split dense C4 views instead of hiding labels or relying on tangled
   routing.
+- Build C4 drilldown chains with explicit `scopeNodeId` metadata. A Context
+  node that represents the system should have a scoped Container view, a
+  decomposable Container node should have a scoped Component view, and a
+  decomposable Component node should have a scoped Code view when code-level
+  documentation exists. Do not invent child diagrams for actors, external
+  dependencies, or nodes outside the project boundary.
 - Repair duplicate node membership in a single C4 view by updating
   `docs/architext/data/views.json`.
 - Prefer `architext doctor [path]` or `architext sync [path] --dry-run` before

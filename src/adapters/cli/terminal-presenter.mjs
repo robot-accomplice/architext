@@ -10,6 +10,7 @@ export function statusLines(status, { verbose = false } = {}) {
 
   if (status.c4) {
     lines.push(`C4 documents: ${status.c4.issues.length ? `${status.c4.issues.length} issue${status.c4.issues.length === 1 ? "" : "s"}` : "ok"}`);
+    if (status.c4.drilldownIssues?.length) lines.push(`C4 drilldown: ${status.c4.drilldownIssues.length} gap${status.c4.drilldownIssues.length === 1 ? "" : "s"}`);
   }
   if (status.releaseTruth) {
     lines.push(`Release Truth: ${status.releaseTruth.configured && status.releaseTruth.indexExists ? "configured" : status.releaseTruth.configured ? "index missing" : "not configured"}`);
@@ -38,6 +39,10 @@ export function statusLines(status, { verbose = false } = {}) {
     if (status.c4?.remainingIssues.length) {
       lines.push("C4 issues requiring manual architecture judgment:");
       for (const issue of status.c4.remainingIssues) lines.push(`- ${issue}`);
+    }
+    if (status.c4?.drilldownIssues?.length) {
+      lines.push("C4 drilldown gaps requiring architecture documentation:");
+      for (const issue of status.c4.drilldownIssues) lines.push(`- ${issue}`);
     }
 
     lines.push("Instruction files:");
