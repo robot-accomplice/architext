@@ -11,6 +11,7 @@ import { diagramLayoutFor } from "./presentation/diagramLayout.js";
 import { c4DrilldownUnavailableReason, childC4ViewForNode } from "./presentation/c4Drilldown.js";
 import { releaseKanbanColumns } from "./presentation/releaseKanban.js";
 import { ReleasePlanningPanel, ReleasePlanningWorkspace } from "./presentation/ReleasePlanning.js";
+import { StepRoute } from "./presentation/StepRoute.js";
 import {
   progressFill,
   progressTone,
@@ -1766,13 +1767,17 @@ function SystemMap({
                   if (event.key === "Enter" || event.key === " ") onSelectRelationship(relationship);
                 }}
               >
-                <path
-                  className="flow-line"
+                <StepRoute
+                  className="flow-step-route"
+                  lineClassName="flow-line"
+                  markerClassName="flow-step-dot"
+                  labelClassName="flow-step-label"
                   d={route.d}
                   markerEnd={isSelected ? "url(#flow-arrowhead-selected)" : "url(#arrowhead)"}
+                  labelX={route.labelX}
+                  labelY={route.labelY}
+                  label={relationship.displayIndex}
                 />
-                <rect className="route-step-marker flow-step-dot" x={route.labelX - 12} y={route.labelY - 10} width="24" height="20" rx="10" />
-                <text className="route-step-label flow-step-label" x={route.labelX} y={route.labelY + 4}>{relationship.displayIndex}</text>
               </g>
             );
           })}
@@ -2256,16 +2261,20 @@ function SequenceDiagram({
                   }
                 }}
               >
-                <line
-                  className="sequence-line"
+                <StepRoute
+                  className="sequence-step-route"
+                  lineClassName="sequence-line"
+                  markerClassName="sequence-step-dot"
+                  labelClassName="sequence-step-label"
                   x1={fromX}
                   y1={y}
                   x2={toX}
                   y2={y}
                   markerEnd={`url(#${markerId})`}
+                  labelX={midX}
+                  labelY={y}
+                  label={index + 1}
                 />
-                <rect className="route-step-marker sequence-step-dot" x={midX - 12} y={y - 10} width="24" height="20" rx="10" />
-                <text className="route-step-label sequence-step-label" x={midX} y={y + 4}>{index + 1}</text>
                 <text className="sequence-action" x={midX} y={y - 17}>{step.action.length > 26 ? `${step.action.slice(0, 23)}...` : step.action}</text>
                 <text className="sequence-data" x={midX} y={y + 30}>{dataLabel}</text>
               </g>

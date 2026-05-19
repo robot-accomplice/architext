@@ -37,6 +37,13 @@ For C4 views, keep Context, Container, and Component diagrams at their proper
 abstraction level. Prefer splitting dense views over forcing tangled routing,
 keep relationship labels visible, and treat duplicate node membership in one
 C4 view as a documentation defect to repair in `docs/architext/data/views.json`.
+Use explicit `scopeNodeId` metadata to make C4 drilldown navigable: a Context
+node that represents the system should have a scoped Container view, a
+decomposable Container node should have a scoped Component view, and a
+decomposable Component node should have a scoped Code view when code-level
+documentation exists. If a node is external or intentionally outside the
+project boundary, leave it without a child view so the viewer can explain that
+drilldown is unavailable.
 
 Run the Architext validator after edits:
 

@@ -217,6 +217,8 @@ test("prompt includes Release Truth maintenance rules for LLM agents", () => {
   assert.match(output, /roadmap\.json for release planning source items/);
   assert.match(output, /source: "roadmap"/);
   assert.match(output, /source: "ad-hoc"/);
+  assert.match(output, /Build C4 drilldown chains with explicit scopeNodeId metadata/);
+  assert.match(output, /leave actors and external dependencies without child views/);
 });
 
 test("managed agent instructions include Release Truth source-of-truth rules", () => {
@@ -235,6 +237,8 @@ test("managed agent instructions include Release Truth source-of-truth rules", (
       assert.match(instructions, /roadmap\.json` as the\s+roadmap source/);
       assert.match(instructions, /source: "roadmap"/);
       assert.match(instructions, /source:\s+"ad-hoc"/);
+      assert.match(instructions, /C4 drilldown/);
+      assert.match(instructions, /scopeNodeId/);
       assert.match(instructions, /Do not represent unreviewed planning proposals as current Release Truth facts/);
       assert.match(instructions, /Do not claim the architecture documentation is current if validation fails or\s+was skipped/);
     }
