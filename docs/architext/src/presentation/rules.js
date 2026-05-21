@@ -71,3 +71,21 @@ export function ruleProtectionLabel(rule) {
   if (rule.protection.delete) return "delete protected";
   return "editable";
 }
+
+const categoryAccents = [
+  "#00e5ff",
+  "#a855ff",
+  "#35ff96",
+  "#ff4db8",
+  "#ff9f1a",
+  "#58a6ff",
+  "#d2f35f"
+];
+
+export function ruleCategoryAccent(category = "") {
+  let hash = 0;
+  for (const character of category) {
+    hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
+  }
+  return categoryAccents[hash % categoryAccents.length];
+}

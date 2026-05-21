@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { copyFile, cp, mkdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import { createInterface } from "node:readline/promises";
 import path from "node:path";
@@ -15,6 +15,7 @@ import { updateRulesRequest as updateRulesApiRequest } from "../http/rules-api.m
 import { c4DrilldownIssues, c4IssuesForView, repairC4Views } from "../../domain/architecture-model/c4-quality.mjs";
 import { generatedReleaseIndex, releaseIndexGenerationChanges } from "../../domain/architecture-model/release-history.mjs";
 import { doctorRepairCategories, doctorRepairsForStatus } from "../../domain/lifecycle/doctor-repairs.mjs";
+import { instructionRuleFiles, plannedInstructionRuleMigration } from "../../domain/lifecycle/instruction-rule-migration.mjs";
 import { schemaMigrationPlan } from "../../domain/lifecycle/schema-migrations.mjs";
 import {
   architextDir,
@@ -174,10 +175,65 @@ async function repairReleaseTruthData(target, dryRun) {
   return { repairChanges: ["add starter Release Truth data and manifest.files.releases"] };
 }
 
+async function cursorRuleFilePaths(target) {
+  const cursorRulesDir = path.join(target, ".cursor", "rules");
+  if (!existsSync(cursorRulesDir)) return [];
+  const entries = await readdir(cursorRulesDir, { withFileTypes: true }).catch(() => []);
+  return entries
+    .filter((entry) => entry.isFile() && /\.(md|mdc|txt)$/.test(entry.name))
+    .map((entry) => path.join(cursorRulesDir, entry.name));
+}
+
+async function instructionRuleSourceFiles(target) {
+  const explicitFiles = instructionRuleFiles.map((fileName) => path.join(target, fileName));
+  const cursorFiles = await cursorRuleFilePaths(target);
+  const files = [];
+  for (const filePath of [...explicitFiles, ...cursorFiles]) {
+    if (!existsSync(filePath)) continue;
+    files.push({
+      path: path.relative(target, filePath),
+      absolutePath: filePath,
+      text: await readFile(filePath, "utf8")
+    });
+  }
+  return files;
+}
+
+async function collectInstructionRuleStatus(target) {
+  const rulesPath = path.join(dataDir(target), "rules.json");
+  if (!existsSync(rulesPath)) return null;
+  const rulesDocument = await readJson(rulesPath).catch(() => ({ rules: [] }));
+  return plannedInstructionRuleMigration({
+    files: await instructionRuleSourceFiles(target),
+    existingRules: rulesDocument.rules ?? []
+  });
+}
+
+async function repairInstructionRules(target, dryRun) {
+  const rulesPath = path.join(dataDir(target), "rules.json");
+  if (!existsSync(rulesPath)) return { repairChanges: [] };
+  const rulesDocument = await readJson(rulesPath);
+  const migration = plannedInstructionRuleMigration({
+    files: await instructionRuleSourceFiles(target),
+    existingRules: rulesDocument.rules ?? []
+  });
+  if (!migration.repairChanges.length) return { repairChanges: [] };
+  if (!dryRun) {
+    if (migration.candidateRules.length) {
+      await writeJson(rulesPath, { ...rulesDocument, rules: [...(rulesDocument.rules ?? []), ...migration.candidateRules] });
+    }
+    for (const rewrite of migration.rewriteFiles) {
+      await writeFile(path.join(target, rewrite.path), rewrite.replacement.endsWith("\n") ? rewrite.replacement : `${rewrite.replacement}\n`, "utf8");
+    }
+  }
+  return { repairChanges: migration.repairChanges };
+}
+
 const doctorRepairHandlers = {
   c4: repairC4Data,
   manifest: repairManifestData,
-  "release-truth": repairReleaseTruthData
+  "release-truth": repairReleaseTruthData,
+  "instruction-rules": repairInstructionRules
 };
 
 function slugify(value) {
@@ -570,6 +626,7 @@ async function collectStatus(target, version, { runValidation = false } = {}) {
   const c4 = installed ? await collectC4Status(target) : null;
   const releaseTruth = installed ? await collectReleaseTruthStatus(target) : null;
   const manifest = installed ? await collectManifestStatus(target) : null;
+  const instructionRules = installed ? await collectInstructionRuleStatus(target) : null;
   const gitignoreText = existsSync(path.join(target, ".gitignore")) ? await readFile(path.join(target, ".gitignore"), "utf8") : "";
   const gitignoreMissing = generatedIgnores.filter((entry) => !gitignoreText.split(/\r?\n/).includes(entry));
   const instructionStatus = {};
@@ -607,6 +664,7 @@ async function collectStatus(target, version, { runValidation = false } = {}) {
     rootScripts: rootScriptStatus,
     trackedGenerated,
     manifest,
+    instructionRules,
     c4,
     releaseTruth,
     validation
@@ -673,18 +731,21 @@ async function removeCopiedInstallFiles(target, dryRun) {
   return removed;
 }
 
-async function applyDoctorRepairs(target, status, dryRun) {
+async function applyDoctorRepairs(target, status, dryRun, { skipInstructionRules = false } = {}) {
   const applied = [];
-  const categories = doctorRepairCategories(status.doctorRepairs);
+  const categories = doctorRepairCategories(status.doctorRepairs)
+    .filter((category) => !(skipInstructionRules && category === "instruction-rules"));
   for (const category of categories) {
     const handler = doctorRepairHandlers[category];
     if (!handler) continue;
     const result = await handler(target, dryRun);
-    const file = category === "c4"
-      ? path.join(dataDir(target), "views.json")
-      : category === "manifest"
-        ? path.join(dataDir(target), "manifest.json")
-        : path.join(dataDir(target), "releases", "index.json");
+    const repairFiles = {
+      c4: path.join(dataDir(target), "views.json"),
+      manifest: path.join(dataDir(target), "manifest.json"),
+      "release-truth": path.join(dataDir(target), "releases", "index.json"),
+      "instruction-rules": path.join(dataDir(target), "rules.json")
+    };
+    const file = repairFiles[category] ?? dataDir(target);
     for (const change of result.repairChanges ?? []) {
       applied.push({
         category,
@@ -744,7 +805,10 @@ async function syncTarget(target, options, version) {
   const status = await collectStatus(target, version, { runValidation: !options.skipValidate });
   const installing = !status.installed || options.overwriteData;
   const migrating = status.needsMigration;
-  const doctorRepairAvailable = Boolean(status.doctorRepairs.length);
+  const effectiveDoctorRepairs = options.noAgents
+    ? status.doctorRepairs.filter((repair) => repair.category !== "instruction-rules")
+    : status.doctorRepairs;
+  const doctorRepairAvailable = Boolean(effectiveDoctorRepairs.length);
   const shouldWrite = installing || migrating || doctorRepairAvailable || options.force || options.appendAgents || options.rootScripts || options.updateGitignore;
 
   console.log(`Target: ${target}`);
@@ -789,7 +853,7 @@ async function syncTarget(target, options, version) {
     }
 
     if (!installing && doctorRepairAvailable) {
-      const repairs = await applyDoctorRepairs(target, status, options.dryRun);
+      const repairs = await applyDoctorRepairs(target, status, options.dryRun, { skipInstructionRules: options.noAgents });
       console.log(`${options.dryRun ? "Would apply" : "Applied"} doctor repairs:`);
       repairs.forEach((repair) => console.log(`- ${repair.file}: ${repair.summary}`));
     }
@@ -1041,6 +1105,11 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
         } catch (error) {
           sendJson(response, 400, { error: error.message });
         }
+        return;
+      }
+
+      if (url.pathname.startsWith("/api/")) {
+        sendJson(response, 404, { error: `Unknown Architext API route: ${url.pathname}` });
         return;
       }
 

@@ -1,3 +1,5 @@
+import { releaseSummaryFromDetail } from "./release-history.mjs";
+
 function slug(value) {
   return value
     .toLowerCase()
@@ -32,36 +34,6 @@ function releaseScopeEntries(scope) {
     ["deferred", scope.deferred],
     ["outOfScope", scope.outOfScope]
   ];
-}
-
-function countItems(releaseDetail, predicate) {
-  return allReleaseItems(releaseDetail).filter(predicate).length;
-}
-
-function releaseSummaryFromDetail(releaseDetail, file = releaseFileForId(releaseDetail.id)) {
-  return {
-    id: releaseDetail.id,
-    version: releaseDetail.version,
-    name: releaseDetail.name,
-    status: releaseDetail.status,
-    posture: releaseDetail.posture,
-    ...(releaseDetail.targetDate ? { targetDate: releaseDetail.targetDate } : {}),
-    ...(releaseDetail.targetWindow ? { targetWindow: releaseDetail.targetWindow } : {}),
-    ...(releaseDetail.releasedAt ? { releasedAt: releaseDetail.releasedAt } : {}),
-    lastUpdated: releaseDetail.lastUpdated,
-    summary: releaseDetail.summary,
-    counts: {
-      features: countItems(releaseDetail, (item) => item.kind === "feature"),
-      bugFixes: countItems(releaseDetail, (item) => item.kind === "bug-fix"),
-      workstreams: releaseDetail.workstreams.length,
-      blockers: releaseDetail.blockers.length,
-      complete: countItems(releaseDetail, (item) => item.status === "complete"),
-      inProgress: countItems(releaseDetail, (item) => item.status === "in-progress"),
-      planned: countItems(releaseDetail, (item) => item.status === "planned"),
-      stretch: releaseDetail.scope.stretch.length
-    },
-    file
-  };
 }
 
 export function nextMinorVersion(releaseIndex) {

@@ -903,6 +903,20 @@ select:disabled {
   font-size: 12px;
 }
 
+.release-planning-actions .primary-action {
+  border-color: var(--cyan);
+  background: var(--cyan);
+  color: var(--bg);
+  font-weight: 900;
+}
+
+.release-planning-actions .approve-action {
+  border-color: color-mix(in srgb, var(--green) 70%, var(--line));
+  background: color-mix(in srgb, var(--green) 12%, var(--panel-2));
+  color: color-mix(in srgb, var(--green) 44%, var(--ink));
+  font-weight: 900;
+}
+
 .release-planning-actions > span:first-child {
   flex: 0 0 auto;
 }
@@ -1242,6 +1256,26 @@ select:disabled {
   color: var(--ink);
 }
 
+.rule-category-card {
+  --rule-category-accent: var(--cyan);
+  border-left: 4px solid color-mix(in srgb, var(--rule-category-accent) 68%, var(--line));
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--rule-category-accent) 12%, transparent), transparent 36%),
+    var(--panel-2);
+}
+
+.rule-category-card.active {
+  border-color: color-mix(in srgb, var(--rule-category-accent) 80%, var(--line));
+  border-left-color: var(--rule-category-accent);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--rule-category-accent) 18%, transparent), transparent 42%),
+    var(--panel-2);
+}
+
+.rule-category-card .entity-card-title {
+  color: color-mix(in srgb, var(--rule-category-accent) 28%, var(--ink));
+}
+
 .rule-category-add-button strong {
   color: var(--cyan);
   font-family: var(--font-mono);
@@ -1346,6 +1380,46 @@ select:disabled {
   display: flex;
   flex-wrap: wrap;
   gap: 6px;
+}
+
+.rule-editor-actions-footer {
+  justify-content: flex-end;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.rule-editor-actions button {
+  min-height: 32px;
+  padding: 6px 10px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.rule-editor-actions .primary-action {
+  border-color: var(--cyan);
+  background: var(--cyan);
+  color: var(--bg);
+}
+
+.rule-editor-actions .secondary-action {
+  border-color: color-mix(in srgb, var(--purple) 70%, var(--line));
+  background: color-mix(in srgb, var(--purple) 16%, var(--panel-2));
+  color: color-mix(in srgb, var(--purple) 42%, var(--ink));
+}
+
+.rule-editor-actions .danger-action {
+  border-color: color-mix(in srgb, var(--pink) 72%, var(--line));
+  background: color-mix(in srgb, var(--pink) 14%, var(--panel-2));
+  color: color-mix(in srgb, var(--pink) 38%, var(--ink));
+}
+
+.rule-editor-actions .quiet-action {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
 }
 
 .rule-editor-grid {

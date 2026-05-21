@@ -55,3 +55,19 @@ test("serve handler returns a controlled failure instead of leaking implementati
     await rm(target, { recursive: true, force: true });
   }
 });
+
+test("serve handler returns JSON for unknown API routes", async () => {
+  const target = await mkdtemp(path.join(tmpdir(), "architext-serve-"));
+  try {
+    await withServer(createViewerRequestHandler({ target, watchHub: { attach() {} } }), async (origin) => {
+      const response = await fetch(`${origin}/api/not-real`);
+      const body = await response.json();
+
+      assert.equal(response.status, 404);
+      assert.match(response.headers.get("content-type") ?? "", /application\/json/);
+      assert.deepEqual(body, { error: "Unknown Architext API route: /api/not-real" });
+    });
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});

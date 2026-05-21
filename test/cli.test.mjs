@@ -206,6 +206,48 @@ test("doctor repairs stale Architext data schema versions", () => {
   }
 });
 
+test("doctor and sync migrate model-specific instruction rules into Rules data", async () => {
+  const target = tempRepo();
+  try {
+    run(["sync", target, "--yes", "--branch", "none"]);
+    writeFileSync(path.join(target, "AGENTS.md"), [
+      "- Always prefer systemic fixes over local patches.",
+      "- Keep release truth current when release state changes.",
+      ""
+    ].join("\n"));
+    await mkdir(path.join(target, ".cursor", "rules"), { recursive: true });
+    writeFileSync(path.join(target, ".cursor", "rules", "project.mdc"), [
+      "# Project rules",
+      "- Validate Architext data before claiming the documentation is current.",
+      ""
+    ].join("\n"));
+
+    const dryRun = run(["doctor", target, "--dry-run"]);
+    assert.match(dryRun, /Instruction rule migration: 3 candidate rules/);
+    assert.match(dryRun, /Candidate rule: Always prefer systemic fixes over local patches/);
+    assert.match(dryRun, /Rewrite pointer: AGENTS\.md/);
+    assert.match(dryRun, /Rewrite pointer: \.cursor\/rules\/project\.mdc/);
+    assert.match(dryRun, /Dry run: no doctor repairs applied/);
+
+    run(["doctor", target, "--yes"]);
+    const rules = JSON.parse(readFileSync(path.join(target, "docs", "architext", "data", "rules.json"), "utf8")).rules;
+    assert.equal(rules.some((rule) => rule.summary === "Always prefer systemic fixes over local patches."), true);
+    assert.equal(rules.some((rule) => rule.summary === "Keep release truth current when release state changes."), true);
+    assert.equal(rules.some((rule) => rule.summary === "Validate Architext data before claiming the documentation is current."), true);
+    assert.match(readFileSync(path.join(target, "AGENTS.md"), "utf8"), /docs\/architext\/data\/rules\.json/);
+    assert.doesNotMatch(readFileSync(path.join(target, "AGENTS.md"), "utf8"), /Always prefer systemic fixes over local patches/);
+    assert.match(readFileSync(path.join(target, ".cursor", "rules", "project.mdc"), "utf8"), /Do not duplicate long-lived project rules/);
+
+    writeFileSync(path.join(target, ".cursorrules"), "- Prefer deterministic CLI repairs over manual JSON rewrites.\n");
+    const syncDryRun = run(["sync", target, "--dry-run", "--yes", "--branch", "none"]);
+    assert.match(syncDryRun, /Doctor repairs available/);
+    assert.match(syncDryRun, /Would apply doctor repairs/);
+    assert.match(syncDryRun, /migrate instruction rule: Prefer deterministic CLI repairs over manual JSON/);
+  } finally {
+    cleanup(target);
+  }
+});
+
 test("prompt includes Release Truth maintenance rules for agents", () => {
   const output = run(["prompt", ".", "--mode", "architecture-change"]);
 

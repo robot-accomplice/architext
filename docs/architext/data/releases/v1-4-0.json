@@ -2,12 +2,11 @@
   "id": "v1-4-0",
   "version": "1.4.0",
   "name": "Architext 1.4.0",
-  "status": "implementing",
-  "posture": "release-candidate",
-  "summary": "Architext 1.4.0 release candidate with Rules, schema migration reporting, workflow views, PDF export, and Release Truth hardening.",
-  "targetWindow": "Release ceremony",
-  "lastUpdated": "2026-05-21T08:00:00.000Z",
-  "updateSource": "Release Truth maintenance",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Architext 1.4.0 shipped Rules, schema migration reporting, workflow views, PDF export, and Release Truth hardening.",
+  "lastUpdated": "2026-05-21T12:47:01.000Z",
+  "updateSource": "Release ceremony",
   "scope": {
     "required": [
       {
@@ -321,5 +320,7 @@
       "label": "docs/architext build",
       "status": "complete"
     }
-  ]
+  ],
+  "targetDate": "2026-05-21",
+  "releasedAt": "2026-05-21T12:47:01.000Z"
 }

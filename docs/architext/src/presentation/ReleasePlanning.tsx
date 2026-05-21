@@ -436,10 +436,10 @@ export function ReleasePlanningPanel({
         <button type="button" onClick={() => submitPlan("preview")} disabled={pending || !version.trim() || selectedCount === 0}>
           {pending ? "Working..." : "Preview changes"}
         </button>
-        <button type="button" onClick={() => submitPlan("save-draft")} disabled={pending || !version.trim() || selectedCount === 0}>
+        <button type="button" className="primary-action" onClick={() => submitPlan("save-draft")} disabled={pending || !version.trim() || selectedCount === 0}>
           Save draft
         </button>
-        <button type="button" onClick={() => submitPlan("approve")} disabled={pending || !version.trim() || selectedCount === 0}>
+        <button type="button" className="approve-action" onClick={() => submitPlan("approve")} disabled={pending || !version.trim() || selectedCount === 0}>
           Approve release plan
         </button>
       </div>

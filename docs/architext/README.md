@@ -15,6 +15,7 @@ architext validate
 architext build
 architext doctor
 architext prompt
+architext version
 ```
 
 Each command also accepts an optional target path:
@@ -72,7 +73,7 @@ The script detects whether Architext data is absent, current, or from an older
 copied-template install. It prompts before writing files and can create a git
 branch before making changes. Migration preserves `docs/architext/data/*.json`
 by default, removes copied implementation files, updates lifecycle metadata,
-and corrects Architext sections in `AGENTS.md` and `CLAUDE.md`.
+and corrects Architext sections in model-specific instruction files.
 
 The script can also maintain the target repository `.gitignore`. Generated
 local artifacts, especially `docs/architext/dist/`, should be ignored.
@@ -94,8 +95,25 @@ architext clean --node-modules
 architext explain nodes
 ```
 
-`doctor` is read-only and should be the first command when an install looks
-stale or broken.
+`doctor` diagnoses stale or broken installs. Without `--yes`, it reports
+available deterministic repairs and prompts before applying them. With `--yes`,
+it applies those repairs directly. Repairs include converging model-specific
+rule files such as `AGENTS.md`, `CLAUDE.md`, Cursor rule files, and
+`.cursorrules` into the model-agnostic `data/rules.json` source of truth when
+the rules can be migrated deterministically.
+
+## Viewer Data
+
+The package-owned viewer can render and edit selected repository-owned data:
+
+- diagrams from nodes, flows, views, data classes, decisions, and risks
+- Release Truth and Release Planning data under `data/releases/`
+- ranked project Rules under `data/rules.json`
+- roadmap items under `data/roadmap.json`
+
+Browser editors write JSON through the local CLI server and validate before
+committing changes to disk. Target repositories still own the data; they do not
+own the viewer implementation.
 
 ## Data Entry Point
 

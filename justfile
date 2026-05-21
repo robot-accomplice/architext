@@ -5,9 +5,15 @@ package := "@robotaccomplice/architext"
 default:
     @just --list
 
-# Run the full local release gate used before tagging or publishing.
+# Run the local release ceremony gate used before tagging or publishing.
 release-check:
+    just release-doc-check
     npm run release:check
+
+# Refresh README-facing screenshots and grep for common stale public-doc markers.
+release-doc-check:
+    node scripts/capture-readme-screenshots.mjs
+    rg -n "semver-|currentVersion:|Release Truth|Rules|1\\.[0-9]+\\.[0-9]+" README.md docs/architext/README.md docs/architecture src || true
 
 # Show the most recent CI runs for the repository.
 ci:
