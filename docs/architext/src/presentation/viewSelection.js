@@ -4,7 +4,8 @@ export const modeLabels = {
   c4: "C4",
   deployment: "Deployment",
   "data-risks": "Data/Risks",
-  "release-truth": "Release Truth"
+  "release-truth": "Release Truth",
+  rules: "Rules"
 };
 
 const modeHashAliases = {
@@ -16,16 +17,18 @@ const modeHashAliases = {
   datarisks: "data-risks",
   "data-risks": "data-risks",
   releasetruth: "release-truth",
-  "release-truth": "release-truth"
+  "release-truth": "release-truth",
+  rules: "rules"
 };
 
 const modeViewTypes = {
-  flows: ["system-map", "flow-explorer", "dataflow"],
+  flows: ["system-map", "flow-explorer", "workflow", "dataflow"],
   sequence: ["sequence"],
   c4: ["c4-context", "c4-container", "c4-component", "c4-code"],
   deployment: ["deployment"],
   "data-risks": ["risk-overlay", "dataflow"],
-  "release-truth": []
+  "release-truth": [],
+  rules: []
 };
 
 export function modeForHash(hash) {
@@ -52,11 +55,17 @@ export function modeForView(view) {
 
 export function viewBelongsToMode(view, mode) {
   if (mode === "release-truth") return true;
+  if (mode === "rules") return true;
   return Boolean(view && modeViewTypes[mode]?.includes(view.type));
+}
+
+export function viewTypesForMode(mode) {
+  return modeViewTypes[mode] ?? [];
 }
 
 export function defaultViewForMode(mode, views, fallback) {
   if (mode === "release-truth") return fallback;
-  const types = modeViewTypes[mode] ?? [];
+  if (mode === "rules") return fallback;
+  const types = viewTypesForMode(mode);
   return views.find((view) => types.includes(view.type)) ?? fallback;
 }

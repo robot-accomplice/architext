@@ -13,6 +13,7 @@ export type ReleasePlanningScope = keyof ReleaseDetail["scope"];
 
 type AdHocPlanningItem = {
   id: Id;
+  persisted?: boolean;
   title: string;
   summary?: string;
   kind: ReleaseItemKind;
@@ -74,6 +75,14 @@ function sortRoadmapItems(items: RoadmapItem[]): RoadmapItem[] {
   });
 }
 
+function planningCandidateItems(items: RoadmapItem[], activeReleaseId?: Id): RoadmapItem[] {
+  return items.filter((item) => (
+    item.targetReleaseId === activeReleaseId
+    || item.status === "deferred"
+    || !item.targetReleaseId
+  ));
+}
+
 function editableReleaseScope(detail: ReleaseDetail | null) {
   if (!detail) return null;
   const itemScopes = new Map<Id, ReleasePlanningScope>([
@@ -91,6 +100,7 @@ function editableReleaseScope(detail: ReleaseDetail | null) {
       .filter((item) => item.source === "ad-hoc")
       .map((item) => ({
         id: item.id,
+        persisted: true,
         title: item.title,
         summary: item.summary === item.title ? undefined : item.summary,
         kind: item.kind,
@@ -106,13 +116,15 @@ export function ReleasePlanningPanel({
   roadmapItems,
   activeReleaseSummary,
   activeReleaseDetail,
-  onApproved
+  onApproved,
+  onEditingChange
 }: {
   releaseIndex: ReleaseModel["index"];
   roadmapItems: RoadmapItem[];
   activeReleaseSummary: ReleaseSummary | null;
   activeReleaseDetail: ReleaseDetail | null;
   onApproved: () => Promise<void>;
+  onEditingChange: (editing: boolean) => void;
 }) {
   const [selectedIds, setSelectedIds] = useState<Set<Id>>(new Set());
   const [adHocItems, setAdHocItems] = useState<AdHocPlanningItem[]>([]);
@@ -130,10 +142,14 @@ export function ReleasePlanningPanel({
   const [pending, setPending] = useState(false);
   const [adHocOpen, setAdHocOpen] = useState(false);
   const adHocDrawerRef = useRef<HTMLDivElement | null>(null);
+  const markEditing = () => onEditingChange(true);
   const editableRelease = activeReleaseSummary?.status !== "completed" ? activeReleaseSummary : null;
-  const selectedCount = selectedIds.size + adHocItems.length;
+  const candidateRoadmapItems = sortRoadmapItems(planningCandidateItems(roadmapItems, activeReleaseDetail?.id));
+  const candidateRoadmapIds = new Set(candidateRoadmapItems.map((item) => item.id));
+  const selectedRoadmapIds = [...selectedIds].filter((id) => candidateRoadmapIds.has(id));
+  const selectedCount = selectedRoadmapIds.length + adHocItems.length;
   const planningItems = [
-    ...sortRoadmapItems(roadmapItems).map((item) => ({
+    ...candidateRoadmapItems.map((item) => ({
       ...item,
       scope: itemScopes[item.id] ?? "planned",
       selected: selectedIds.has(item.id),
@@ -179,6 +195,7 @@ export function ReleasePlanningPanel({
     setItemScopes(Object.fromEntries(scope?.itemScopes ?? []));
     setPreview(null);
     setMessage("");
+    onEditingChange(false);
   }, [activeReleaseDetail?.id, activeReleaseSummary?.status, releaseIndex.releases, editableRelease]);
 
   const proposalPayload = (dryRun: boolean, action: "preview" | "approve" | "save-draft") => ({
@@ -186,12 +203,16 @@ export function ReleasePlanningPanel({
     action,
     version,
     theme: theme.trim(),
-    selectedRoadmapItemIds: [...selectedIds],
+    selectedRoadmapItemIds: selectedRoadmapIds,
     itemScopes,
-    adHocItems: adHocItems.map(({ id: _id, ...item }) => item)
+    adHocItems: adHocItems.map(({ id, persisted, ...item }) => ({
+      ...(persisted ? { id } : {}),
+      ...item
+    }))
   });
 
   const toggleRoadmapItem = (id: Id) => {
+    markEditing();
     setSelectedIds((current) => {
       const next = new Set(current);
       if (next.has(id)) next.delete(id);
@@ -201,6 +222,7 @@ export function ReleasePlanningPanel({
   };
 
   const togglePlanningItem = (item: { id: Id; source: "roadmap" | "ad-hoc" }) => {
+    markEditing();
     setPreview(null);
     if (item.source === "ad-hoc") {
       setAdHocItems((current) => current.filter((candidate) => candidate.id !== item.id));
@@ -210,6 +232,7 @@ export function ReleasePlanningPanel({
   };
 
   const changePlanningItemScope = (item: { id: Id; source: "roadmap" | "ad-hoc" }, nextScope: ReleasePlanningScope) => {
+    markEditing();
     setPreview(null);
     if (item.source === "ad-hoc") {
       setAdHocItems((current) => current.map((candidate) => (
@@ -222,6 +245,7 @@ export function ReleasePlanningPanel({
 
   const addAdHocItem = () => {
     if (!title.trim()) return;
+    markEditing();
     setAdHocItems((current) => [
       ...current,
       {
@@ -251,8 +275,14 @@ export function ReleasePlanningPanel({
         headers: { "content-type": "application/json" },
         body: JSON.stringify(proposalPayload(dryRun, action))
       });
-      const payload = await response.json();
-      if (!response.ok) throw new Error(payload.error ?? "Release plan was not accepted.");
+      const responseText = await response.text();
+      let payload: ReleasePlanPreview & { error?: string } = {};
+      try {
+        payload = responseText ? JSON.parse(responseText) as ReleasePlanPreview & { error?: string } : {};
+      } catch {
+        throw new Error(`Release planning API did not return JSON. Start Architext with architext serve, or use the configured Vite dev server.`);
+      }
+      if (!response.ok) throw new Error(payload.error ?? `Release plan request failed: ${response.status} ${response.statusText || "Unknown error"}`);
       if (dryRun) {
         setPreview(payload);
         setMessage(`Preview ready for ${payload.release?.name ?? version}.`);
@@ -262,6 +292,7 @@ export function ReleasePlanningPanel({
           ? `Saved draft ${payload.release?.name ?? version}.`
           : `Created ${payload.release?.name ?? version}.`);
         await onApproved();
+        onEditingChange(false);
       }
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
@@ -281,6 +312,7 @@ export function ReleasePlanningPanel({
           <label>
             Version
             <input value={version} onChange={(event) => {
+              markEditing();
               setVersion(event.target.value);
               setPreview(null);
             }} />
@@ -288,6 +320,7 @@ export function ReleasePlanningPanel({
           <label>
             Theme
             <input value={theme} onChange={(event) => {
+              markEditing();
               setTheme(event.target.value);
               setPreview(null);
             }} placeholder="Optional" />
@@ -333,10 +366,19 @@ export function ReleasePlanningPanel({
         {adHocOpen ? (
           <div className="release-planning-ad-hoc">
             <strong>New release item</strong>
-            <input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Title" />
-            <input value={summary} onChange={(event) => setSummary(event.target.value)} placeholder="Summary (optional)" />
+            <input value={title} onChange={(event) => {
+              markEditing();
+              setTitle(event.target.value);
+            }} placeholder="Title" />
+            <input value={summary} onChange={(event) => {
+              markEditing();
+              setSummary(event.target.value);
+            }} placeholder="Summary (optional)" />
             <div className="release-planning-inline-fields">
-              <select value={kind} onChange={(event) => setKind(event.target.value as ReleaseItemKind)}>
+              <select value={kind} onChange={(event) => {
+                markEditing();
+                setKind(event.target.value as ReleaseItemKind);
+              }}>
                 <option value="feature">Feature</option>
                 <option value="bug-fix">Bug fix</option>
                 <option value="documentation">Documentation</option>
@@ -344,18 +386,27 @@ export function ReleasePlanningPanel({
                 <option value="test">Test</option>
                 <option value="chore">Chore</option>
               </select>
-              <select value={priority} onChange={(event) => setPriority(event.target.value as AdHocPlanningItem["priority"])}>
+              <select value={priority} onChange={(event) => {
+                markEditing();
+                setPriority(event.target.value as AdHocPlanningItem["priority"]);
+              }}>
                 <option value="critical">Critical</option>
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
                 <option value="low">Low</option>
               </select>
-              <select value={scope} onChange={(event) => setScope(event.target.value as ReleasePlanningScope)}>
+              <select value={scope} onChange={(event) => {
+                markEditing();
+                setScope(event.target.value as ReleasePlanningScope);
+              }}>
                 {Object.entries(releasePlanningScopeLabels).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
                 ))}
               </select>
-              <input value={section} onChange={(event) => setSection(event.target.value)} placeholder="Section" />
+              <input value={section} onChange={(event) => {
+                markEditing();
+                setSection(event.target.value);
+              }} placeholder="Section" />
             </div>
             <div className="release-planning-form-actions">
               <button type="button" onClick={addAdHocItem} disabled={!title.trim()}>
@@ -388,7 +439,7 @@ export function ReleasePlanningPanel({
         <button type="button" onClick={() => submitPlan("save-draft")} disabled={pending || !version.trim() || selectedCount === 0}>
           Save draft
         </button>
-        <button type="button" onClick={() => submitPlan("approve")} disabled={pending || !preview || !version.trim() || selectedCount === 0}>
+        <button type="button" onClick={() => submitPlan("approve")} disabled={pending || !version.trim() || selectedCount === 0}>
           Approve release plan
         </button>
       </div>
@@ -401,13 +452,15 @@ export function ReleasePlanningWorkspace({
   roadmapItems,
   activeReleaseSummary,
   activeReleaseDetail,
-  onReleasePlanApproved
+  onReleasePlanApproved,
+  onEditingChange
 }: {
   releases?: ReleaseModel;
   roadmapItems?: RoadmapItem[];
   activeReleaseSummary: ReleaseSummary | null;
   activeReleaseDetail: ReleaseDetail | null;
   onReleasePlanApproved: () => Promise<void>;
+  onEditingChange: (editing: boolean) => void;
 }) {
   if (!releases || !roadmapItems) {
     return (
@@ -433,6 +486,7 @@ export function ReleasePlanningWorkspace({
         activeReleaseSummary={activeReleaseSummary}
         activeReleaseDetail={activeReleaseDetail}
         onApproved={onReleasePlanApproved}
+        onEditingChange={onEditingChange}
       />
     </section>
   );

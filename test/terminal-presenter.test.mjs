@@ -11,7 +11,14 @@ test("terminal status presenter formats repository health without collecting it"
     gitignoreMissing: ["docs/architext/dist/"],
     trackedGenerated: [],
     c4: { issues: ["view: duplicate node membership"], drilldownIssues: ["context: system has no c4-container drilldown view"], remainingIssues: [] },
-    manifest: { schemaVersion: "0.1.0", expectedSchemaVersion: "1.3.0", repairChanges: ["update manifest.schemaVersion from 0.1.0 to 1.3.0"] },
+    manifest: {
+      schemaVersion: "0.1.0",
+      expectedSchemaVersion: "1.4.0",
+      repairChanges: ["apply breaking schema migration 0.1.0 -> 1.4.0: update manifest.schemaVersion"],
+      migrationPlan: {
+        pending: [{ summary: "apply breaking schema migration 0.1.0 -> 1.4.0: update manifest.schemaVersion" }]
+      }
+    },
     doctorRepairs: [{ summary: "view: remove duplicate node membership" }],
     validation: { ok: true, output: "Architext validation passed" },
     instructionStatus: {
@@ -31,7 +38,8 @@ test("terminal status presenter formats repository health without collecting it"
     "Generated artifacts tracked: none",
     "C4 documents: 1 issue",
     "C4 drilldown: 1 gap",
-    "Schema: 0.1.0 (expected 1.3.0)",
+    "Schema: 0.1.0 (expected 1.4.0)",
+    "Schema migrations: 1 pending",
     "Doctor repairs: 1",
     "Doctor repairs available:",
     "- view: remove duplicate node membership",

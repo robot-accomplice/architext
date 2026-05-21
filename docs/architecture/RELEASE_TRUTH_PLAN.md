@@ -154,10 +154,10 @@ Primary Release Truth views:
   path grouping and order. Each coarse row contains an indented vertical list of
   atomic sub-milestones/work items. Blocker data is state on the blocked item,
   not a separate sibling row. The center Release Path is a compact navigable
-  status index: every line must show completion, state, title, and enough scope
-  metadata to scan progress quickly. Long rationale, blocker explanation,
-  dependency detail, evidence, and next action belong in the right details pane
-  for the selected milestone or item.
+  status index: every item line must show completion, state, title, concise
+  summary, and enough scope metadata to scan progress quickly. Long rationale,
+  blocker explanation, dependency detail, evidence, and next action belong in
+  the right details pane for the selected milestone or item.
 - The Release Path must represent the full release scope expected to ship, not
   only the current session's active work or release-management gates. Completed
   product/project changes, validation evidence, release blockers, deferrals, and

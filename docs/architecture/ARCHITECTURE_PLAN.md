@@ -190,10 +190,44 @@ Remaining architectural pressure:
 - The routing strategy module is still internally organized by conditional
   branches for orthogonal, spline, and straight routing. Future work can split
   those into separate strategy files if the branch bodies continue to grow.
+- Automated unit, integration, browser, and UAT coverage is not yet a single
+  release-grade verification harness. Current checks cover many domain and
+  CLI paths, but user journeys such as release planning, Rules editing, C4
+  drilldown, data refresh recovery, PDF export, and packed CLI install/serve
+  flows need a shared automated UAT layer before future releases rely on them
+  as product-level gates.
 
 The next routing correctness work should be implemented against these named
 boundaries. For example, Deployment and Data/Risks line-overlap fixes belong in
 route indexing, candidate generation, and scoring rather than in React or CSS.
+
+## Automated Verification Harness
+
+Architext needs one verification model that covers both deterministic unit
+behavior and maintainer-visible UAT journeys. This should remain repository
+local and model agnostic: test code should drive the CLI, HTTP server, browser,
+and JSON data directly rather than asking an LLM to judge whether the product is
+usable.
+
+The harness should layer checks by cost and confidence:
+
+- Unit tests for pure domain and presentation policy such as routing, Release
+  Truth, Rules, schema migrations, CLI parsing, and validation.
+- Integration tests for packed CLI behavior against temporary data-only target
+  repositories, including `sync`, `doctor`, `validate`, `serve`, and `build`.
+- Browser smoke tests for top-level views, direct hash navigation, console
+  failures, data refresh recovery, and critical controls.
+- UAT journeys for user workflows such as drafting and approving a release
+  plan, editing a protected-aware Rules category, drilling down C4 diagrams,
+  exporting PDF, and recovering from invalid JSON writes.
+- Visual regression screenshots for stable, representative views with explicit
+  tolerance rules so layout regressions are caught without turning every pixel
+  into a false positive.
+
+The release gate should continue to expose a fast local check, but a stricter
+UAT gate should be available before publishing. A future command such as
+`npm run release:uat` can run the browser and journey suite, while
+`npm run release:check` remains the minimum local release readiness gate.
 
 ### `manifest.json`
 
@@ -278,6 +312,7 @@ Defines renderable views over the same model:
 
 - system map
 - flow explorer
+- workflow
 - C4 context
 - C4 container
 - C4 component
@@ -438,6 +473,10 @@ list remains useful, but it is not a substitute for visual relationships.
 Numbered route markers should read as labels attached to the line, not as
 separate filled blocks. Equivalent route marker treatments should share a common
 visual system across workflow and sequence views.
+Workflow diagrams are Flows projections over ordered work or use-case paths.
+They reuse the selected flow, shared route planner, step-pill rendering, and
+bottom step summary from the normal Flow map. They must not fork a
+workflow-specific router or duplicate flow facts into view data.
 Selected flow steps should use one shared standout selection color across the
 route line, arrowhead, route marker, and bottom step card so a stage selection
 reads as one highlighted path. A rendered flow should expose one primary
@@ -542,6 +581,18 @@ Diagram inspection is a core workflow. The viewer should expose zoom, fit,
 reset, and focus-mode controls; selectable/hoverable edges; keyboard-focusable
 nodes and relationships; and right-panel details that distinguish node, flow,
 step, and relationship selections.
+
+PDF export starts as a browser-native print/save-as-PDF pathway for the active
+diagram view. Export should preserve the visible diagram surface and selected
+step context rather than creating a second rendering grammar. Print-specific
+CSS may hide navigation chrome, but it should not alter the underlying
+architecture data or route planning.
+
+Source extraction starts as a prompt-driven drafting workflow, not an automatic
+rewrite engine. The CLI can ask an agent to inspect source files and propose
+architecture-data deltas, but those deltas must remain reviewable drafts until a
+maintainer or follow-up agent deliberately edits `docs/architext/data/**/*.json`
+and validates the result.
 
 ## Alignment Checkpoint
 

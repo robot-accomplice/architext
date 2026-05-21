@@ -44,7 +44,8 @@ test("release truth presentation maps status into visual state without UI depend
   assert.equal(releaseTone("blocked"), "blocked");
   assert.equal(releaseTone("cut"), "inactive");
 
-  assert.equal(releaseLineState("planned"), "Clear");
+  assert.equal(releaseLineState("planned"), "Not Blocked");
+  assert.equal(releaseLineState("in-progress"), "Not Blocked");
   assert.equal(releaseLineState("planned", true), "Blocked");
   assert.equal(releaseLineState("complete"), "Complete");
   assert.equal(releaseLineState("cut"), "Deferred");

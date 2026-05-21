@@ -11,9 +11,11 @@ import { assertDirectory, git, gitAvailable, readJson, run, tryRun, writeJson } 
 import { printStatus } from "./terminal-presenter.mjs";
 import { createDataWatchHub } from "../http/data-watch-hub.mjs";
 import { approveReleasePlanRequest as approveReleasePlanApiRequest } from "../http/release-planning-api.mjs";
+import { updateRulesRequest as updateRulesApiRequest } from "../http/rules-api.mjs";
 import { c4DrilldownIssues, c4IssuesForView, repairC4Views } from "../../domain/architecture-model/c4-quality.mjs";
 import { generatedReleaseIndex, releaseIndexGenerationChanges } from "../../domain/architecture-model/release-history.mjs";
 import { doctorRepairCategories, doctorRepairsForStatus } from "../../domain/lifecycle/doctor-repairs.mjs";
+import { schemaMigrationPlan } from "../../domain/lifecycle/schema-migrations.mjs";
 import {
   architextDir,
   copiedInstallCandidatePaths,
@@ -31,7 +33,7 @@ const viewerDistDir = path.join(viewerDir, "dist");
 const schemaDir = path.join(viewerDir, "schema");
 const validatorPath = path.join(viewerDir, "tools", "validate-architext.mjs");
 const appendixPath = path.join(viewerDir, "AGENTS_APPENDIX.md");
-const dataSchemaVersion = "1.3.0";
+const dataSchemaVersion = "1.4.0";
 
 async function packageVersion() {
   return (await readJson(path.join(packageRoot, "package.json"))).version;
@@ -107,10 +109,17 @@ async function collectManifestStatus(target) {
   if (!existsSync(manifestPath)) return null;
   const manifest = await readJson(manifestPath);
   const currentSchemaVersion = manifest.schemaVersion ?? "";
-  const repairChanges = currentSchemaVersion === dataSchemaVersion
-    ? []
-    : [`update manifest.schemaVersion from ${currentSchemaVersion || "missing"} to ${dataSchemaVersion}`];
-  return { path: manifestPath, schemaVersion: currentSchemaVersion, expectedSchemaVersion: dataSchemaVersion, repairChanges };
+  const migrationPlan = schemaMigrationPlan({
+    currentVersion: currentSchemaVersion,
+    targetVersion: dataSchemaVersion
+  });
+  return {
+    path: manifestPath,
+    schemaVersion: currentSchemaVersion,
+    expectedSchemaVersion: dataSchemaVersion,
+    migrationPlan,
+    repairChanges: migrationPlan.pending.map((migration) => migration.summary)
+  };
 }
 
 async function repairManifestData(target, dryRun) {
@@ -257,7 +266,7 @@ async function writeStarterReleaseData(targetDataDir) {
         status: "blocked",
         owner: "Project maintainers",
         summary: "The project has validating starter data, but it has not yet been replaced with source-backed architecture and release facts.",
-        nextAction: "Run the LLM Architext build-out workflow and review the JSON diff.",
+        nextAction: "Run the agent-assisted Architext build-out workflow and review the JSON diff.",
         itemIds: ["replace-starter-architecture-data"],
         evidenceNeeded: ["Source-backed JSON updates", "architext validate"]
       }
@@ -312,10 +321,11 @@ async function writeStarterData(target, version) {
       decisions: "decisions.json",
       risks: "risks.json",
       glossary: "glossary.json",
+      rules: "rules.json",
       releases: "releases/index.json"
     },
     notes: [
-      "Starter data only. Ask an LLM to inspect the codebase and build out docs/architext/data/**/*.json.",
+      "Starter data only. Ask an agent to inspect the codebase and build out docs/architext/data/**/*.json.",
       "Do not treat this starter model as architecture documentation for the target project."
     ]
   });
@@ -416,7 +426,7 @@ async function writeStarterData(target, version) {
             from: actorId,
             to: systemId,
             action: "inspectCodebaseAndReplaceStarterData",
-            summary: "An LLM should inspect the repository and replace every starter JSON file with real architecture data.",
+            summary: "An agent should inspect the repository and replace every starter JSON file with real architecture data.",
             data: [dataId]
           }
         ],
@@ -445,13 +455,29 @@ async function writeStarterData(target, version) {
     classes: [{ id: dataId, name: "Architecture Knowledge", sensitivity: "medium", handling: "Review generated architecture facts before treating them as project documentation." }]
   });
   await writeJson(path.join(targetDataDir, "decisions.json"), {
-    decisions: [{ id: "architext-buildout-required", status: "planned", title: "Replace starter Architext data", context: "Architext was installed with neutral starter data.", decision: "An LLM must inspect the target repository and replace docs/architext/data/*.json with project-specific architecture facts.", consequences: ["The site validates immediately", "The starter model is intentionally not useful as final documentation"], relatedNodes: [systemId], relatedFlows: [flowId] }]
+    decisions: [{ id: "architext-buildout-required", status: "planned", title: "Replace starter Architext data", context: "Architext was installed with neutral starter data.", decision: "An agent must inspect the target repository and replace docs/architext/data/*.json with project-specific architecture facts.", consequences: ["The site validates immediately", "The starter model is intentionally not useful as final documentation"], relatedNodes: [systemId], relatedFlows: [flowId] }]
   });
   await writeJson(path.join(targetDataDir, "risks.json"), {
-    risks: [{ id: "architext-starter-data", title: "Starter data is not project architecture", category: "technical", severity: "high", status: "open", summary: "The installed Architext data is a placeholder until an LLM builds out the real architecture model.", mitigations: ["Run the LLM JSON build-out workflow", "Review generated JSON diffs", "Run architext validate"], relatedNodes: [systemId], relatedFlows: [flowId] }]
+    risks: [{ id: "architext-starter-data", title: "Starter data is not project architecture", category: "technical", severity: "high", status: "open", summary: "The installed Architext data is a placeholder until an agent builds out the real architecture model.", mitigations: ["Run the agent-assisted JSON build-out workflow", "Review generated JSON diffs", "Run architext validate"], relatedNodes: [systemId], relatedFlows: [flowId] }]
   });
   await writeJson(path.join(targetDataDir, "glossary.json"), {
     terms: [{ term: "Architext starter data", definition: "A neutral validating placeholder installed into new projects before real architecture data is generated." }]
+  });
+  await writeJson(path.join(targetDataDir, "rules.json"), {
+    rules: [
+      {
+        id: "replace-starter-data",
+        title: "Replace starter data",
+        summary: "Replace neutral starter data with source-backed architecture, release, and project rules before treating Architext as current.",
+        category: "project",
+        criticality: "critical",
+        order: 10,
+        source: "maintainer",
+        rationale: "Fresh installs validate immediately, but starter data is not project-specific documentation.",
+        appliesTo: ["initial build-out", "agent maintenance", "validation"],
+        protection: { edit: true, delete: true }
+      }
+    ]
   });
   await writeStarterReleaseData(targetDataDir);
 }
@@ -817,12 +843,13 @@ async function printPrompt(target, mode) {
   const manifestPath = path.join(dataDir(target), "manifest.json");
   const manifest = existsSync(manifestPath) ? await readJson(manifestPath) : null;
   const projectName = manifest?.project?.name ?? path.basename(target);
-  const modes = new Set(["initial-buildout", "architecture-change", "repair-validation"]);
+  const modes = new Set(["initial-buildout", "architecture-change", "repair-validation", "source-extraction"]);
   const promptMode = modes.has(mode) ? mode : "initial-buildout";
   const lead = {
     "initial-buildout": `Build out Architext for ${projectName}. Replace neutral starter data with source-backed architecture facts.`,
     "architecture-change": `Update Architext for the architecture changes just made in ${projectName}. Keep existing stable IDs where concepts already exist.`,
-    "repair-validation": `Repair Architext JSON validation failures for ${projectName}. Do not change application code for this task.`
+    "repair-validation": `Repair Architext JSON validation failures for ${projectName}. Do not change application code for this task.`,
+    "source-extraction": `Inspect ${projectName} source files and draft proposed Architext data changes. Do not apply the draft silently.`
   }[promptMode];
 
   console.log(`${lead}
@@ -837,7 +864,9 @@ Rules:
 - Treat Release Truth as reviewed release state, not a planning scratchpad: update detail files for completed, deferred, blocked, reprioritized, or newly scoped work, then refresh the generated release index from those facts.
 - Keep Release Path labels concise; put rationale, blocker explanation, evidence, dependencies, and next actions in detail data for the selected release item.
 - Use docs/architext/data/roadmap.json for release planning source items. Selected roadmap scope uses source: "roadmap"; manually entered scope uses source: "ad-hoc" and must be promoted into roadmap.json when approved.
+- Use docs/architext/data/rules.json for project rules. Rule categories are maintainer-defined classifications, not a fixed Architext taxonomy. Respect edit/delete protection and rank rules by criticality and order instead of alphabetizing them.
 - Build C4 drilldown chains with explicit scopeNodeId metadata for decomposable Context, Container, and Component nodes; leave actors and external dependencies without child views.
+- For source extraction, return a reviewable draft of proposed JSON changes with source paths and confidence notes before editing data files. Validation remains required after any accepted edit.
 - Mark uncertainty and known gaps explicitly.
 - Do not edit copied viewer, schema, package, Vite, or local tool files in the target repository.
 - Run architext validate ${target} before claiming completion.
@@ -957,6 +986,17 @@ async function approveReleasePlanRequest(target, payload) {
   });
 }
 
+async function updateRulesRequest(target, payload) {
+  return updateRulesApiRequest({
+    target,
+    payload,
+    dataDir,
+    readJson,
+    writeJson,
+    validateTarget
+  });
+}
+
 async function serveTarget(target) {
   if (!existsSync(path.join(viewerDistDir, "index.html"))) {
     throw new Error("Package viewer assets are missing. Run npm run build before serving Architext.");
@@ -987,6 +1027,16 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
       if (url.pathname === "/api/release-plans" && request.method === "POST") {
         try {
           const result = await approveReleasePlanRequest(target, await requestJson(request));
+          sendJson(response, 200, result);
+        } catch (error) {
+          sendJson(response, 400, { error: error.message });
+        }
+        return;
+      }
+
+      if (url.pathname === "/api/rules" && request.method === "POST") {
+        try {
+          const result = await updateRulesRequest(target, await requestJson(request));
           sendJson(response, 200, result);
         } catch (error) {
           sendJson(response, 400, { error: error.message });

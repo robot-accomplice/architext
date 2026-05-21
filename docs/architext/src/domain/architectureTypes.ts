@@ -17,6 +17,7 @@ export type Manifest = {
     decisions: string;
     risks: string;
     glossary: string;
+    rules?: string;
     roadmap?: string;
     releases?: string;
   };
@@ -241,6 +242,22 @@ export type RoadmapItem = {
   evidence?: string[];
 };
 
+export type RuleItem = {
+  id: Id;
+  title: string;
+  summary: string;
+  category: string;
+  criticality: "critical" | "high" | "medium" | "low";
+  order: number;
+  source: "maintainer" | "agent";
+  rationale?: string;
+  appliesTo?: string[];
+  protection: {
+    edit: boolean;
+    delete: boolean;
+  };
+};
+
 export type ReleaseDetail = {
   id: Id;
   version: string;
@@ -281,6 +298,7 @@ export type Model = {
   dataClasses: DataClass[];
   decisions: Decision[];
   risks: Risk[];
+  rules?: RuleItem[];
   roadmap?: RoadmapItem[];
   releases?: ReleaseModel;
 };
@@ -303,9 +321,10 @@ export type Selection =
   | { kind: "step"; flowId: Id; stepId: Id }
   | { kind: "relationship"; from: Id; to: Id; label: string; relationshipType: Relationship["relationshipType"]; stepId?: Id; flowId?: Id }
   | { kind: "release-milestone"; milestoneId: Id }
-  | { kind: "release-item"; itemId: Id };
+  | { kind: "release-item"; itemId: Id }
+  | { kind: "rule"; id: Id };
 
-export type Mode = "flows" | "sequence" | "c4" | "deployment" | "data-risks" | "release-truth";
+export type Mode = "flows" | "sequence" | "c4" | "deployment" | "data-risks" | "release-truth" | "rules";
 export type RoutingStyle = "orthogonal" | "spline" | "straight";
 
 export type DiagramTransform = {
