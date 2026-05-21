@@ -11,6 +11,8 @@ import { diagramLayoutFor } from "./presentation/diagramLayout.js";
 import { c4DrilldownUnavailableReason, childC4ViewForNode } from "./presentation/c4Drilldown.js";
 import { releaseKanbanColumns } from "./presentation/releaseKanban.js";
 import { ReleasePlanningPanel, ReleasePlanningWorkspace } from "./presentation/ReleasePlanning.js";
+import { nextRuleCategoryName, orderedRules, ruleCategories, ruleCriticalityTone, ruleProtectionLabel } from "./presentation/rules.js";
+import { postRulesAction } from "./presentation/rulesClient.js";
 import { StepRoute } from "./presentation/StepRoute.js";
 import {
   progressFill,
@@ -25,7 +27,7 @@ import {
   releaseTone
 } from "./presentation/releaseTruth.js";
 import { modeShowsOrderedFlow, modeUsesStructuralRelationships } from "./presentation/viewModes.js";
-import { defaultViewForMode, hashForMode, modeForHash, modeForView, modeLabels, viewBelongsToMode } from "./presentation/viewSelection.js";
+import { defaultViewForMode, hashForMode, modeForHash, modeForView, modeLabels, viewBelongsToMode, viewTypesForMode } from "./presentation/viewSelection.js";
 import { readBooleanPreference, readDebugRouting, readRoutingStylePreference, writeBooleanPreference, writeRoutingStylePreference } from "./adapters/browserPreferences.js";
 import type {
   ArchNode,
@@ -45,6 +47,7 @@ import type {
   ReleaseModel,
   ReleaseSummary,
   Relationship,
+  RuleItem,
   RoadmapItem,
   Risk,
   RoutingStyle,
@@ -216,6 +219,259 @@ function formatReleaseDate(value?: string) {
   return value.includes("T") ? value.slice(0, 10) : value;
 }
 
+function slugifyRuleId(value: string) {
+  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "new-rule";
+}
+
+function RulesWorkspace({
+  rules,
+  selectedRule,
+  selectedCategory,
+  newRuleDraftRequest,
+  onSelectRule,
+  onRulesChanged
+}: {
+  rules: RuleItem[];
+  selectedRule: RuleItem | null;
+  selectedCategory: string;
+  newRuleDraftRequest: { id: number; category: string } | null;
+  onSelectRule: (id: Id) => void;
+  onRulesChanged: () => Promise<void>;
+}) {
+  const ordered = orderedRules(rules);
+  const visibleRules = selectedCategory === "all"
+    ? ordered
+    : ordered.filter((rule) => rule.category === selectedCategory);
+  const selectedCategoryLabel = selectedCategory === "all" ? "All Rules" : selectedCategory;
+  const [draft, setDraft] = useState<RuleItem | null>(selectedRule);
+  const [message, setMessage] = useState("");
+  const [dragRuleId, setDragRuleId] = useState<Id | null>(null);
+  const draftIsNew = Boolean(draft && !rules.some((rule) => rule.id === draft.id));
+  const draftEditProtected = !draftIsNew && selectedRule?.protection.edit;
+
+  useEffect(() => {
+    setDraft(selectedRule);
+    setMessage("");
+  }, [selectedRule?.id]);
+
+  const sendRuleAction = async (payload: object) => {
+    setMessage("");
+    await postRulesAction(fetch, payload);
+    await onRulesChanged();
+    setMessage("Rules updated.");
+  };
+
+  const createRuleDraft = (category = selectedCategory === "all" ? "Architecture" : selectedCategory) => {
+    const existingIds = new Set(rules.map((rule) => rule.id));
+    let id = "new-rule";
+    let suffix = 2;
+    while (existingIds.has(id)) {
+      id = `new-rule-${suffix}`;
+      suffix += 1;
+    }
+    setDraft({
+      id,
+      title: "New rule",
+      summary: "Describe the rule.",
+      category,
+      criticality: "medium",
+      order: Math.max(0, ...rules.map((rule) => rule.order)) + 10,
+      source: "agent",
+      protection: { edit: false, delete: false }
+    });
+    setMessage("");
+  };
+
+  useEffect(() => {
+    if (!newRuleDraftRequest) return;
+    createRuleDraft(newRuleDraftRequest.category);
+  }, [newRuleDraftRequest?.id]);
+
+  const saveDraft = async () => {
+    if (!draft) return;
+    try {
+      await sendRuleAction({ action: "update", rule: draft });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const deleteSelectedRule = async () => {
+    if (!selectedRule || selectedRule.protection.delete) return;
+    try {
+      await sendRuleAction({ action: "delete", id: selectedRule.id });
+      setDraft(null);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const moveSelectedRule = async (direction: "up" | "down") => {
+    if (!selectedRule || selectedRule.protection.edit || selectedRule.protection.delete) return;
+    try {
+      await sendRuleAction({ action: "move", id: selectedRule.id, direction });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    }
+  };
+
+  const dropRuleBefore = async (beforeId: Id) => {
+    if (!dragRuleId || dragRuleId === beforeId) return;
+    try {
+      await sendRuleAction({ action: "move-before", id: dragRuleId, beforeId });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setDragRuleId(null);
+    }
+  };
+
+  return (
+    <section className="truth-workspace rules-workspace">
+      <div className="release-hero">
+        <div>
+          <div className="rules-title-row">
+            <p className="eyebrow">Rules</p>
+            <button type="button" className="rules-add-button" onClick={() => createRuleDraft()}>Add Rule</button>
+          </div>
+          <h2>Project Rules</h2>
+          <p>{selectedCategoryLabel}: ranked architecture, development, design, release, and project-specific rules.</p>
+        </div>
+        <div className="release-state-badges">
+          <Badge>{visibleRules.length} rules</Badge>
+          <Badge tone={ruleCriticalityTone("critical")}>{visibleRules.filter((rule) => rule.criticality === "critical").length} critical</Badge>
+        </div>
+      </div>
+      <div className="rules-list">
+        {visibleRules.length ? visibleRules.map((rule) => (
+          <button
+            key={rule.id}
+            type="button"
+            draggable={!rule.protection.edit && !rule.protection.delete}
+            className={`rule-row ${selectedRule?.id === rule.id ? "active" : ""} ${dragRuleId === rule.id ? "dragging" : ""}`}
+            onClick={() => onSelectRule(rule.id)}
+            onDragStart={() => setDragRuleId(rule.id)}
+            onDragOver={(event) => {
+              if (!rule.protection.edit && !rule.protection.delete) event.preventDefault();
+            }}
+            onDrop={(event) => {
+              event.preventDefault();
+              dropRuleBefore(rule.id);
+            }}
+            onDragEnd={() => setDragRuleId(null)}
+          >
+            <span className="rule-order">{rule.order}</span>
+            <div className="rule-row-main">
+              <div className="rule-row-title">
+                <strong>{rule.title}</strong>
+                <Badge tone={ruleCriticalityTone(rule.criticality)}>{rule.criticality}</Badge>
+                <Badge>{rule.category}</Badge>
+                <Badge>{ruleProtectionLabel(rule)}</Badge>
+              </div>
+              <p>{rule.summary}</p>
+            </div>
+          </button>
+        )) : (
+          <article className="rule-row passive">
+            <span className="rule-order">0</span>
+            <div className="rule-row-main">
+              <div className="rule-row-title">
+                <strong>No rules in this category</strong>
+                <Badge>{selectedCategoryLabel}</Badge>
+              </div>
+              <p>Add a rule to this category, or select another category from the browse pane.</p>
+            </div>
+          </article>
+        )}
+      </div>
+      {draft ? (
+        <div className="rule-editor">
+          <div className="rule-editor-head">
+            <h3>Edit Rule</h3>
+            <div className="rule-editor-actions">
+              <button type="button" onClick={() => moveSelectedRule("up")} disabled={selectedRule?.protection.edit || selectedRule?.protection.delete}>Move up</button>
+              <button type="button" onClick={() => moveSelectedRule("down")} disabled={selectedRule?.protection.edit || selectedRule?.protection.delete}>Move down</button>
+              <button type="button" onClick={deleteSelectedRule} disabled={selectedRule?.protection.delete}>Delete</button>
+              <button type="button" className="primary-action" onClick={saveDraft} disabled={draftEditProtected}>Save rule</button>
+            </div>
+          </div>
+          <div className="rule-editor-grid">
+            <label>
+              ID
+              <input value={draft.id} disabled={!draftIsNew} onChange={(event) => setDraft({ ...draft, id: slugifyRuleId(event.target.value) })} />
+            </label>
+            <label>
+              Title
+              <input value={draft.title} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+            </label>
+            <label>
+              Criticality
+              <select value={draft.criticality} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, criticality: event.target.value as RuleItem["criticality"] })}>
+                <option value="critical">Critical</option>
+                <option value="high">High</option>
+                <option value="medium">Medium</option>
+                <option value="low">Low</option>
+              </select>
+            </label>
+            <label>
+              Category
+              <input value={draft.category} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, category: event.target.value })} />
+            </label>
+            <label>
+              Source
+              <select value={draft.source} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, source: event.target.value as RuleItem["source"] })}>
+                <option value="maintainer">Maintainer</option>
+                <option value="agent">Agent</option>
+              </select>
+            </label>
+            <label className="rule-protection-check">
+              <input type="checkbox" checked={draft.protection.edit} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, protection: { ...draft.protection, edit: event.target.checked } })} />
+              Edit protected
+            </label>
+            <label className="rule-protection-check">
+              <input type="checkbox" checked={draft.protection.delete} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, protection: { ...draft.protection, delete: event.target.checked } })} />
+              Delete protected
+            </label>
+          </div>
+          <label className="rule-editor-summary">
+            Summary
+            <textarea value={draft.summary} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} />
+          </label>
+          {message ? <p className="rule-editor-message">{message}</p> : null}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function RulesDetails({ rule }: { rule: RuleItem | null }) {
+  if (!rule) {
+    return (
+      <div className="detail-content">
+        <p className="eyebrow">Rules</p>
+        <h2>No rule selected</h2>
+      </div>
+    );
+  }
+
+  return (
+    <DetailShell eyebrow="Rule" title={rule.title} summary={rule.summary}>
+      <div className="badge-row">
+        <Badge tone={ruleCriticalityTone(rule.criticality)}>{rule.criticality}</Badge>
+        <Badge>{rule.category}</Badge>
+        <Badge>{rule.source}</Badge>
+        <Badge>{ruleProtectionLabel(rule)}</Badge>
+      </div>
+      <OptionalFieldList title="Rationale" items={rule.rationale ? [rule.rationale] : []} />
+      <OptionalFieldList title="Applies To" items={rule.appliesTo ?? []} />
+      <FieldList title="Protection" items={[
+        rule.protection.edit ? "Edit protected" : "Editable",
+        rule.protection.delete ? "Delete protected" : "Delete allowed"
+      ]} />
+    </DetailShell>
+  );
+}
+
 function ReleaseTruthWorkspace({
   releases,
   activeReleaseSummary,
@@ -227,7 +483,8 @@ function ReleaseTruthWorkspace({
   planningMode,
   onPlanningModeChange,
   roadmapItems,
-  onReleasePlanApproved
+  onReleasePlanApproved,
+  onReleasePlanningEditingChange
 }: {
   releases?: ReleaseModel;
   activeReleaseSummary: ReleaseSummary | null;
@@ -240,6 +497,7 @@ function ReleaseTruthWorkspace({
   onPlanningModeChange: (value: boolean) => void;
   roadmapItems?: RoadmapItem[];
   onReleasePlanApproved: () => Promise<void>;
+  onReleasePlanningEditingChange: (editing: boolean) => void;
 }) {
   const [releaseProjection, setReleaseProjection] = useState<"path" | "kanban">("path");
 
@@ -297,6 +555,7 @@ function ReleaseTruthWorkspace({
           activeReleaseSummary={activeReleaseSummary}
           activeReleaseDetail={activeReleaseDetail}
           onApproved={onReleasePlanApproved}
+          onEditingChange={onReleasePlanningEditingChange}
         />
       ) : (
         <>
@@ -553,6 +812,7 @@ function ReleasePathItem({
       <Badge tone={releaseBadgeTone(state === "Blocked" ? primaryBlocker?.severity ?? "blocked" : item.status)}>{state}</Badge>
       <div className="release-path-line-main">
         <strong>{item.title}</strong>
+        <span className="release-path-item-summary">{item.summary}</span>
         <small>{scope} · {workstreamName} · {releaseStatusLabels[item.status]} · {item.kind}{item.priority ? ` · ${item.priority} priority` : ""}{item.owner ? ` · ${item.owner}` : ""}</small>
       </div>
       {primaryBlocker ? <span className="release-path-blockers">Blocked by: {primaryBlocker.title}</span> : null}
@@ -787,6 +1047,9 @@ function App() {
   const [releaseDetailsById, setReleaseDetailsById] = useState<Map<Id, ReleaseDetail>>(new Map());
   const [selection, setSelection] = useState<Selection | null>(null);
   const [releasePlanningMode, setReleasePlanningMode] = useState(false);
+  const [releasePlanningDirty, setReleasePlanningDirty] = useState(false);
+  const [selectedRuleCategory, setSelectedRuleCategory] = useState("all");
+  const [newRuleDraftRequest, setNewRuleDraftRequest] = useState<{ id: number; category: string } | null>(null);
   const [diagramTransform, setDiagramTransform] = useState<DiagramTransform>({ zoom: 1, focused: false });
   const [routingStyle, setRoutingStyle] = useState<RoutingStyle>(() => readRoutingStylePreference(localStorage) as RoutingStyle);
   const [debugRouting] = useState(() => readDebugRouting(window.location.search));
@@ -804,7 +1067,7 @@ function App() {
       setActiveViewId(nextView.id);
       setActiveMode(nextMode);
       setActiveFlowId(loaded.flows[0]?.id ?? "");
-      setSelection(nextMode === "release-truth" ? null : { kind: "flow", id: loaded.flows[0]?.id ?? "" });
+      setSelection(nextMode === "release-truth" || nextMode === "rules" ? null : { kind: "flow", id: loaded.flows[0]?.id ?? "" });
     } else {
       setActiveViewId((current) => loaded.views.some((view) => view.id === current) ? current : loaded.manifest.defaultViewId);
       setActiveFlowId((current) => loaded.flows.some((flow) => flow.id === current) ? current : loaded.flows[0]?.id ?? "");
@@ -823,6 +1086,10 @@ function App() {
 
   useEffect(() => subscribeToDataEvents({
     onValid: async () => {
+      if (releasePlanningDirty) {
+        setDataNotice("Architext data changed. Finish release-plan edits before refreshing.");
+        return;
+      }
       try {
         const loaded = await loadArchitectureModel();
         applyLoadedModel(loaded, false);
@@ -845,7 +1112,7 @@ function App() {
         setError(loadError instanceof Error ? loadError.message : String(loadError));
       }
     }
-  }), []);
+  }), [releasePlanningDirty]);
 
   useEffect(() => {
     if (!dataNotice) return undefined;
@@ -855,14 +1122,25 @@ function App() {
 
   const reloadReleasePlanningModel = async () => {
     const loaded = await loadArchitectureModel();
+    const selectedReleaseId = activeReleaseId || loaded.releases?.index.currentReleaseId || "";
+    const releaseDetails = new Map((loaded.releases?.details ?? []).map((detail) => [detail.id, detail]));
+    if (loaded.releases && selectedReleaseId && !releaseDetails.has(selectedReleaseId)) {
+      const selectedDetail = await loadReleaseDetail(fetch, loaded.releases, selectedReleaseId);
+      releaseDetails.set(selectedDetail.id, selectedDetail);
+    }
     setModel(loaded);
     setActiveReleaseId((current) => {
       const releases: ReleaseSummary[] = loaded.releases?.index.releases ?? [];
       if (current && releases.some((release) => release.id === current)) return current;
       return loaded.releases?.index.currentReleaseId ?? "";
     });
-    setReleaseDetailsById(new Map((loaded.releases?.details ?? []).map((detail) => [detail.id, detail])));
+    setReleaseDetailsById(releaseDetails);
     setSelection(null);
+  };
+
+  const reloadArchitectureData = async () => {
+    const loaded = await loadArchitectureModel();
+    applyLoadedModel(loaded, false);
   };
 
   useEffect(() => {
@@ -939,6 +1217,7 @@ function App() {
   const isC4View = activeMode === "c4";
   const isSequenceView = activeMode === "sequence";
   const isReleaseTruthView = activeMode === "release-truth";
+  const isRulesView = activeMode === "rules";
   const showOrderedFlow = modeShowsOrderedFlow(activeMode);
   const showStructuralConnections = modeUsesStructuralRelationships(activeMode);
   const showStepSummary = showOrderedFlow;
@@ -955,6 +1234,9 @@ function App() {
     ?? model.releases?.index.releases.find((release) => release.id === model.releases?.index.currentReleaseId)
     ?? null;
   const activeReleaseDetail = activeReleaseSummary ? releaseDetailsById.get(activeReleaseSummary.id) ?? null : null;
+  const selectedRule = selection?.kind === "rule"
+    ? model.rules?.find((rule) => rule.id === selection.id) ?? null
+    : null;
 
   const filteredFlows = model.flows.filter((flow) => {
     const text = [flow.name, flow.summary, flow.status, flow.trigger, ...flow.knownGaps].join(" ").toLowerCase();
@@ -1020,12 +1302,19 @@ function App() {
     if (currentReleaseId) void selectRelease(currentReleaseId);
   };
 
-  const setC4View = (viewId: Id) => {
-    setActiveMode("c4");
-    setActiveViewId(viewId);
+  const selectView = (viewId: Id) => {
     const view = viewsById.get(viewId);
-    const firstNodeId = view?.lanes.flatMap((lane) => lane.nodeIds)[0];
-    if (firstNodeId) setSelection({ kind: "node", id: firstNodeId });
+    if (!view) return;
+    const nextMode = modeForView(view);
+    window.history.replaceState(null, "", hashForMode(nextMode));
+    setActiveMode(nextMode);
+    setActiveViewId(viewId);
+    if (nextMode === "c4") {
+      const firstNodeId = view.lanes.flatMap((lane) => lane.nodeIds)[0];
+      if (firstNodeId) setSelection({ kind: "node", id: firstNodeId });
+      return;
+    }
+    setSelection(null);
   };
 
   const selectC4Node = (nodeId: Id) => {
@@ -1052,6 +1341,15 @@ function App() {
       stepId: relationship.stepId,
       flowId: relationship.flowId
     });
+  };
+
+  const exportActiveViewPdf = () => {
+    if (typeof window.print !== "function") {
+      setDataNotice("PDF export is unavailable in this browser.");
+      return;
+    }
+    setDataNotice("Use the browser print dialog to save this view as PDF.");
+    window.requestAnimationFrame(() => window.print());
   };
 
   return (
@@ -1116,22 +1414,50 @@ function App() {
             dataClasses={model.dataClasses}
             risks={model.risks}
             releases={model.releases}
+            rules={model.rules}
             activeReleaseId={activeReleaseSummary?.id ?? ""}
+            activeRuleCategory={selectedRuleCategory}
             riskFilter={riskFilter}
             onRiskFilterChange={setRiskFilter}
             onSelectFlow={(flowId) => {
               setActiveFlowId(flowId);
               setSelection({ kind: "flow", id: flowId });
             }}
-            onSelectView={setC4View}
+            onSelectView={selectView}
             onSelectNode={(id) => setSelection({ kind: "node", id })}
             onSelectRelease={selectRelease}
+            onSelectRule={(id) => {
+              setSelection({ kind: "rule", id });
+              setRightCollapsed(false);
+            }}
+            onSelectRuleCategory={(category) => {
+              setSelectedRuleCategory(category);
+              setSelection(null);
+            }}
+            onAddRuleCategory={() => {
+              const category = nextRuleCategoryName(model.rules ?? []);
+              setSelectedRuleCategory(category);
+              setSelection(null);
+              setNewRuleDraftRequest((current) => ({ id: (current?.id ?? 0) + 1, category }));
+            }}
           />
         )}
       </aside>
 
       <main className="diagram-area">
-        {isReleaseTruthView ? (
+        {isRulesView ? (
+          <RulesWorkspace
+            rules={model.rules ?? []}
+            selectedRule={selectedRule}
+            selectedCategory={selectedRuleCategory}
+            newRuleDraftRequest={newRuleDraftRequest}
+            onSelectRule={(id) => {
+              setSelection({ kind: "rule", id });
+              setRightCollapsed(false);
+            }}
+            onRulesChanged={reloadArchitectureData}
+          />
+        ) : isReleaseTruthView ? (
           <ReleaseTruthWorkspace
             releases={model.releases}
             activeReleaseSummary={activeReleaseSummary}
@@ -1142,6 +1468,7 @@ function App() {
             onPlanningModeChange={setReleasePlanningMode}
             roadmapItems={model.roadmap}
             onReleasePlanApproved={reloadReleasePlanningModel}
+            onReleasePlanningEditingChange={setReleasePlanningDirty}
             onSelectReleaseItem={(id) => {
               setSelection({ kind: "release-item", itemId: id });
               setRightCollapsed(false);
@@ -1170,6 +1497,7 @@ function App() {
                   const focused = !value.focused;
                   return { ...value, focused, zoom: focused ? fitZoomFor(activeMode, activeView, activeFlow) : value.zoom };
                 })}
+                onExportPdf={exportActiveViewPdf}
               />
               <details className="legend">
                 <summary>Legend</summary>
@@ -1275,6 +1603,8 @@ function App() {
           <button type="button" className="panel-rail" onClick={() => setRightCollapsed(false)}>
             Details
           </button>
+        ) : isRulesView ? (
+          <RulesDetails rule={selectedRule} />
         ) : isReleaseTruthView ? (
           <ReleaseTruthDetails
             releaseSummary={activeReleaseSummary}
@@ -1318,13 +1648,18 @@ function LeftPanel({
   dataClasses,
   risks,
   releases,
+  rules,
   activeReleaseId,
+  activeRuleCategory,
   riskFilter,
   onRiskFilterChange,
   onSelectFlow,
   onSelectView,
   onSelectNode,
-  onSelectRelease
+  onSelectRelease,
+  onSelectRule,
+  onSelectRuleCategory,
+  onAddRuleCategory
 }: {
   mode: Mode;
   query: string;
@@ -1338,14 +1673,61 @@ function LeftPanel({
   dataClasses: DataClass[];
   risks: Risk[];
   releases?: ReleaseModel;
+  rules?: RuleItem[];
   activeReleaseId: Id;
+  activeRuleCategory: string;
   riskFilter: string;
   onRiskFilterChange: (value: string) => void;
   onSelectFlow: (id: Id) => void;
   onSelectView: (id: Id) => void;
   onSelectNode: (id: Id) => void;
   onSelectRelease: (id: Id) => void;
+  onSelectRule: (id: Id) => void;
+  onSelectRuleCategory: (category: string) => void;
+  onAddRuleCategory: () => void;
 }) {
+  if (mode === "rules") {
+    const categories = ruleCategories(rules ?? []);
+    return (
+      <>
+        <div className="panel-head">
+          <h2>Rule Categories</h2>
+          <p>{rules?.length ? `${rules.length} project rules` : "No rules configured."}</p>
+        </div>
+        <div className="entity-list rule-category-list">
+          {categories.length ? categories.map((category) => (
+            <button
+              key={category.id}
+              type="button"
+              className={`entity-card rule-category-card ${activeRuleCategory === category.id ? "active" : ""}`}
+              onClick={() => onSelectRuleCategory(category.id)}
+            >
+              <strong className="entity-card-title">{category.label}</strong>
+              <span>{category.count} {category.count === 1 ? "rule" : "rules"} ranked by criticality and order.</span>
+              <div className="release-card-badges">
+                <Badge>{category.count} total</Badge>
+                {category.criticalCount ? <Badge tone={ruleCriticalityTone("critical")}>{category.criticalCount} critical</Badge> : null}
+              </div>
+            </button>
+          )) : (
+            <article className="entity-card passive">
+              <strong>No Rules data</strong>
+              <span>Add docs/architext/data/rules.json and reference it from manifest.files.rules.</span>
+            </article>
+          )}
+          <button
+            type="button"
+            className="entity-card rule-category-card rule-category-add-button"
+            onClick={onAddRuleCategory}
+          >
+            <strong className="entity-card-title">Add Category and Rule</strong>
+            <span>Create the first rule in a new user-defined category.</span>
+          </button>
+        </div>
+      </>
+    );
+  }
+
   if (mode === "release-truth") {
     return (
       <>
@@ -1484,6 +1866,9 @@ function LeftPanel({
     );
   }
 
+  const flowProjectionTypes = new Set(viewTypesForMode("flows"));
+  const flowViews = views.filter((view) => flowProjectionTypes.has(view.type));
+
   return (
     <>
       <div className="panel-head">
@@ -1497,19 +1882,39 @@ function LeftPanel({
         />
         <p>{flows.length} of {allFlows.length} flows</p>
       </div>
-      <div className="flow-list">
-        {flows.map((flow) => (
-          <button
-            key={flow.id}
-            type="button"
-            className={`flow-card ${flow.id === activeFlow.id ? "active" : ""}`}
-            onClick={() => onSelectFlow(flow.id)}
-          >
-            <strong>{flow.name}</strong>
-            <span>{flow.summary}</span>
-            <Badge tone={flow.status}>{statusLabels[flow.status]}</Badge>
-          </button>
-        ))}
+      <div className="flow-panel-body">
+        {mode === "flows" && flowViews.length ? (
+          <div className="entity-list flow-projection-list">
+            <h3>Flow Views</h3>
+            {flowViews.map((view) => (
+              <button
+                key={view.id}
+                type="button"
+                className={`entity-card ${activeView.id === view.id ? "active" : ""}`}
+                onClick={() => onSelectView(view.id)}
+              >
+                <strong className="entity-card-title">{view.name}</strong>
+                <span>{view.summary}</span>
+                <Badge>{view.type}</Badge>
+              </button>
+            ))}
+          </div>
+        ) : null}
+        <div className="flow-list">
+          {mode === "flows" ? <h3>Flows</h3> : null}
+          {flows.map((flow) => (
+            <button
+              key={flow.id}
+              type="button"
+              className={`flow-card ${flow.id === activeFlow.id ? "active" : ""}`}
+              onClick={() => onSelectFlow(flow.id)}
+            >
+              <strong>{flow.name}</strong>
+              <span>{flow.summary}</span>
+              <Badge tone={flow.status}>{statusLabels[flow.status]}</Badge>
+            </button>
+          ))}
+        </div>
       </div>
     </>
   );
@@ -1523,7 +1928,8 @@ function DiagramControls({
   onZoomOut,
   onFit,
   onReset,
-  onToggleFocus
+  onToggleFocus,
+  onExportPdf
 }: {
   transform: DiagramTransform;
   routingStyle: RoutingStyle;
@@ -1533,6 +1939,7 @@ function DiagramControls({
   onFit: () => void;
   onReset: () => void;
   onToggleFocus: () => void;
+  onExportPdf: () => void;
 }) {
   return (
     <div className="diagram-controls" aria-label="Diagram controls">
@@ -1554,6 +1961,7 @@ function DiagramControls({
       <button type="button" onClick={onFit}>Fit</button>
       <button type="button" onClick={onReset}>Reset</button>
       <button type="button" onClick={onToggleFocus}>{transform.focused ? "Exit focus" : "Focus"}</button>
+      <button type="button" onClick={onExportPdf}>PDF</button>
     </div>
   );
 }

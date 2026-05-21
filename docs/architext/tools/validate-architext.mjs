@@ -40,6 +40,7 @@ const schemaFiles = {
   decisions: "decisions.schema.json",
   risks: "risks.schema.json",
   glossary: "glossary.schema.json",
+  rules: "rules.schema.json",
   roadmap: "roadmap.schema.json"
 };
 
@@ -135,6 +136,7 @@ for (const schema of [...Object.values(schemas), ...Object.values(releaseSchemas
 const manifest = readJson(path.join(dataDir, "manifest.json"));
 const releases = manifest.files.releases ? readReleases(dataDir, manifest.files.releases) : null;
 const roadmap = manifest.files.roadmap ? readJson(path.join(dataDir, manifest.files.roadmap)) : null;
+const rules = manifest.files.rules ? readJson(path.join(dataDir, manifest.files.rules)) : null;
 const model = {
   manifest,
   nodes: readJson(path.join(dataDir, manifest.files.nodes)),
@@ -144,6 +146,7 @@ const model = {
   decisions: readJson(path.join(dataDir, manifest.files.decisions)),
   risks: readJson(path.join(dataDir, manifest.files.risks)),
   glossary: readJson(path.join(dataDir, manifest.files.glossary)),
+  ...(rules ? { rules } : {}),
   ...(roadmap ? { roadmap } : {}),
   ...(releases ? { releases } : {})
 };
@@ -152,6 +155,7 @@ const errors = [];
 
 for (const [key, schema] of Object.entries(schemas)) {
   if (key === "roadmap" && !model.roadmap) continue;
+  if (key === "rules" && !model.rules) continue;
   const validate = ajv.getSchema(schema.$id);
   const value = key === "dataClassification" ? model.dataClassification : model[key];
   if (!validate(value)) {
@@ -168,6 +172,7 @@ requireUnique(model.dataClassification.classes, "dataClassification.classes", er
 requireUnique(model.decisions.decisions, "decisions", errors);
 requireUnique(model.risks.risks, "risks", errors);
 if (model.roadmap) requireUnique(model.roadmap.items, "roadmap.items", errors);
+if (model.rules) requireUnique(model.rules.rules, "rules", errors);
 validateReferences(model, errors);
 
 if (model.releases) {

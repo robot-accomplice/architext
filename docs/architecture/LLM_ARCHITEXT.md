@@ -1,7 +1,7 @@
-# LLM Architext Contract
+# Agent Architext Contract
 
-This file is written for LLM agents working inside a project that uses
-Architext.
+This file is written for AI-assisted agents and human maintainers working
+inside a project that uses Architext.
 
 ## Purpose
 
@@ -23,10 +23,17 @@ complete.
 - Reuse existing IDs for existing concepts.
 - Create new nodes before referencing them from flows or views.
 - Keep flows ordered.
+- Use a `workflow` view in `docs/architext/data/views.json` when ordered work
+  or use-case paths need a dedicated Flows projection. Workflow views should
+  reference existing nodes and selected flows instead of duplicating flow facts
+  or inventing workflow-specific routing rules.
 - Update data classification whenever data movement changes.
 - Update risks when adding external dependencies, persistence, async
   processing, sensitive data handling, trust boundary crossings, or operational
   complexity.
+- Update Rules data in `docs/architext/data/rules.json` when project rules
+  change. Rule categories are maintainer-defined classifications, not a fixed
+  Architext taxonomy.
 - Update Release Truth data under `docs/architext/data/releases/` when release
   scope, blockers, milestones, posture, evidence, or target dates change.
 - Treat Release Truth as the reviewed release source of truth. If you complete,
@@ -42,7 +49,13 @@ complete.
 - Do not use unreviewed Release Planning proposals as current release facts.
   Release Planning writes approved proposals into the same Release Truth JSON
   model.
+- Respect rule `protection.edit` and `protection.delete`. Protected rules are
+  not casual cleanup targets. Rank rules by `criticality` and `order`, not
+  alphabetical order, category name, or creation time.
 - Prefer source-path-backed claims.
+- For source extraction work, produce a reviewable draft of proposed JSON
+  changes with source paths and confidence notes before editing data files.
+  Never replace validation with extracted claims.
 - Mark uncertainty explicitly instead of inventing details.
 - Keep C4 Context, Container, and Component views at their proper abstraction
   level; split dense C4 views instead of hiding labels or relying on tangled
@@ -70,6 +83,7 @@ Persist these project-owned files in git:
 - `docs/architext/data/*.json`
 - `docs/architext/data/roadmap.json`
 - `docs/architext/data/releases/*.json`
+- `docs/architext/data/rules.json`
 - `docs/architext/.architext.json`
 - repository-level `AGENTS.md` or `CLAUDE.md` Architext instructions, when
   present
@@ -102,6 +116,7 @@ docs/architext/
     decisions.json
     risks.json
     glossary.json
+    rules.json
     roadmap.json
     releases/
       index.json
@@ -126,8 +141,9 @@ Update Architext when changing:
 - core business flows
 - architecture decisions
 - known architecture risks
+- project rules
 
 ## Validation Rule
 
 Validation is not optional. Broken Architext data is worse than missing
-Architext data because it gives humans and future LLMs false confidence.
+Architext data because it gives humans and future agents false confidence.

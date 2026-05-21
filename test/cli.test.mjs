@@ -53,6 +53,7 @@ test("sync installs data-only Architext into a fresh repository", () => {
     assert.equal(existsSync(path.join(target, "docs", "architext", "src")), false);
     assert.equal(existsSync(path.join(target, "docs", "architext", "schema")), false);
     assert.equal(existsSync(path.join(target, "docs", "architext", "package.json")), false);
+    assert.equal(existsSync(path.join(target, "docs", "architext", "data", "rules.json")), true);
 
     const packageJson = JSON.parse(readFileSync(path.join(target, "package.json"), "utf8"));
     assert.equal(packageJson.scripts.architext, "architext serve .");
@@ -194,20 +195,22 @@ test("doctor repairs stale Architext data schema versions", () => {
     writeJson(manifestPath, { ...manifest, schemaVersion: "0.1.0" });
 
     const dryRun = run(["doctor", target, "--dry-run"]);
-    assert.match(dryRun, /Schema: 0\.1\.0 \(expected 1\.3\.0\)/);
-    assert.match(dryRun, /update manifest\.schemaVersion from 0\.1\.0 to 1\.3\.0/);
+    assert.match(dryRun, /Schema: 0\.1\.0 \(expected 1\.4\.0\)/);
+    assert.match(dryRun, /Schema migrations: 1 pending/);
+    assert.match(dryRun, /apply breaking schema migration 0\.1\.0 -> 1\.4\.0: update manifest\.schemaVersion/);
 
     run(["doctor", target, "--yes"]);
-    assert.equal(JSON.parse(readFileSync(manifestPath, "utf8")).schemaVersion, "1.3.0");
+    assert.equal(JSON.parse(readFileSync(manifestPath, "utf8")).schemaVersion, "1.4.0");
   } finally {
     cleanup(target);
   }
 });
 
-test("prompt includes Release Truth maintenance rules for LLM agents", () => {
+test("prompt includes Release Truth maintenance rules for agents", () => {
   const output = run(["prompt", ".", "--mode", "architecture-change"]);
 
   assert.match(output, /manifest\.schemaVersion as the Architext data schema contract version/);
+  assert.match(output, /docs\/architext\/data\/rules\.json/);
   assert.match(output, /not the installed CLI\/package version/);
   assert.match(output, /Keep Release Truth data current when release scope, blockers, milestones, evidence, target dates, dependencies, or posture changes/);
   assert.match(output, /Treat Release Truth as reviewed release state, not a planning scratchpad/);
@@ -219,6 +222,16 @@ test("prompt includes Release Truth maintenance rules for LLM agents", () => {
   assert.match(output, /source: "ad-hoc"/);
   assert.match(output, /Build C4 drilldown chains with explicit scopeNodeId metadata/);
   assert.match(output, /leave actors and external dependencies without child views/);
+});
+
+test("prompt includes source extraction draft guidance", () => {
+  const output = run(["prompt", ".", "--mode", "source-extraction"]);
+
+  assert.match(output, /draft proposed Architext data changes/);
+  assert.match(output, /Do not apply the draft silently/);
+  assert.match(output, /reviewable draft of proposed JSON changes/);
+  assert.match(output, /source paths and confidence notes/);
+  assert.match(output, /Validation remains required/);
 });
 
 test("managed agent instructions include Release Truth source-of-truth rules", () => {
@@ -237,6 +250,9 @@ test("managed agent instructions include Release Truth source-of-truth rules", (
       assert.match(instructions, /roadmap\.json` as the\s+roadmap source/);
       assert.match(instructions, /source: "roadmap"/);
       assert.match(instructions, /source:\s+"ad-hoc"/);
+      assert.match(instructions, /docs\/architext\/data\/rules\.json/);
+      assert.match(instructions, /protection\.edit/);
+      assert.match(instructions, /criticality` and `order/);
       assert.match(instructions, /C4 drilldown/);
       assert.match(instructions, /scopeNodeId/);
       assert.match(instructions, /Do not represent unreviewed planning proposals as current Release Truth facts/);

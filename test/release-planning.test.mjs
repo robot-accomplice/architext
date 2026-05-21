@@ -8,6 +8,7 @@ import { approveReleasePlanRequest } from "../src/adapters/http/release-planning
 import {
   approveReleasePlan,
   buildReleasePlan,
+  mergeExistingReleasePlan,
   nextMinorVersion,
   releasePlanChanges,
   saveReleasePlanDraft
@@ -147,6 +148,88 @@ test("buildReleasePlan keeps scope separate from lifecycle status", () => {
   assert.deepEqual(plan.scope.required.map((item) => item.id), ["draft-cleanup"]);
   assert.deepEqual(plan.scope.stretch.map((item) => item.id), ["pdf-export"]);
   assert.equal(plan.scope.stretch[0].status, "planned");
+});
+
+test("mergeExistingReleasePlan preserves completed item state when extending a release", () => {
+  const existing = {
+    id: "v1-4-0",
+    version: "1.4.0",
+    name: "Architext 1.4.0",
+    status: "implementing",
+    posture: "on-track",
+    summary: "Existing release.",
+    targetWindow: "Next release",
+    lastUpdated: "2026-05-20T00:00:00.000Z",
+    scope: {
+      required: [{
+        id: "draft-release-plan-approval",
+        title: "Draft release plan approval",
+        summary: "Saved drafts can be approved.",
+        kind: "bug-fix",
+        status: "complete",
+        source: "roadmap",
+        workstreamId: "release-planning",
+        dependsOn: [],
+        evidence: ["test"]
+      }],
+      planned: [],
+      stretch: [],
+      deferred: [],
+      outOfScope: []
+    },
+    workstreams: [{
+      id: "release-planning",
+      name: "Release Planning",
+      owner: "maintainer",
+      status: "complete",
+      posture: "on-track",
+      summary: "Release planning fixes.",
+      progress: 100,
+      itemIds: ["draft-release-plan-approval"],
+      evidence: ["test"]
+    }],
+    blockers: [],
+    milestones: [],
+    dependencies: [],
+    evidence: []
+  };
+  const proposed = buildReleasePlan({
+    releaseIndex: { releases: [{ version: "1.3.3" }, { version: "1.4.0" }] },
+    roadmapItems: [
+      {
+        id: "draft-release-plan-approval",
+        title: "Draft release plan approval",
+        summary: "Saved drafts can be approved.",
+        kind: "bug-fix",
+        status: "complete",
+        priority: "critical",
+        section: "Release Planning",
+        targetReleaseId: "v1-4-0"
+      },
+      {
+        id: "rules-section",
+        title: "Rules section",
+        summary: "Render project rules.",
+        kind: "feature",
+        status: "planned",
+        priority: "critical",
+        section: "Rules"
+      }
+    ],
+    selectedRoadmapItemIds: ["draft-release-plan-approval", "rules-section"],
+    projectName: "Architext",
+    version: "1.4.0",
+    now: "2026-05-20T01:00:00.000Z"
+  });
+
+  const merged = mergeExistingReleasePlan(existing, proposed);
+  const mergedItems = [...merged.scope.required, ...merged.scope.planned];
+
+  assert.equal(merged.status, "implementing");
+  assert.equal(mergedItems.find((item) => item.id === "draft-release-plan-approval").status, "complete");
+  assert.deepEqual(mergedItems.find((item) => item.id === "draft-release-plan-approval").evidence, ["test"]);
+  assert.equal(mergedItems.find((item) => item.id === "rules-section").status, "planned");
+  assert.equal(merged.workstreams.find((workstream) => workstream.id === "release-planning").progress, 100);
 });
 
 test("buildReleasePlan rejects roadmap items already committed to another release", () => {
@@ -537,6 +620,203 @@ test("release planning API saves draft plans without changing roadmap targets", 
     assert.equal(roadmap.items[0].targetReleaseId, undefined);
     assert.equal(releaseDetail.status, "draft");
     assert.equal(result.changes.roadmap.retarget, 0);
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test("release planning API approves a previously saved draft plan", async () => {
+  const target = await mkdtemp(path.join(os.tmpdir(), "architext-release-plan-draft-approve-"));
+  try {
+    const targetDataDir = dataDir(target);
+    await mkdir(path.join(targetDataDir, "releases"), { recursive: true });
+    await writeJson(path.join(targetDataDir, "manifest.json"), {
+      project: { id: "fixture", name: "Fixture" },
+      files: {
+        releases: "releases/index.json",
+        roadmap: "roadmap.json"
+      }
+    });
+    await writeJson(path.join(targetDataDir, "releases", "index.json"), {
+      currentReleaseId: "v1-2-0",
+      releases: [{ id: "v1-2-0", version: "1.2.0", file: "v1-2-0.json" }]
+    });
+    await writeJson(path.join(targetDataDir, "roadmap.json"), {
+      items: [{
+        id: "release-kanban-view",
+        title: "Release Truth Kanban view",
+        summary: "Show Release Truth items as Kanban.",
+        kind: "feature",
+        status: "planned",
+        priority: "high",
+        section: "Release Planning"
+      }]
+    });
+
+    const basePayload = {
+      version: "1.3.0",
+      theme: "Planning",
+      selectedRoadmapItemIds: ["release-kanban-view"],
+      adHocItems: []
+    };
+
+    await approveReleasePlanRequest({
+      target,
+      payload: {
+        ...basePayload,
+        action: "save-draft",
+        dryRun: false
+      },
+      dataDir,
+      readJson,
+      writeJson,
+      validateTarget: async () => ({ ok: true, output: "validation passed" })
+    });
+
+    const result = await approveReleasePlanRequest({
+      target,
+      payload: {
+        ...basePayload,
+        action: "approve",
+        dryRun: false
+      },
+      dataDir,
+      readJson,
+      writeJson,
+      validateTarget: async () => ({ ok: true, output: "validation passed" })
+    });
+
+    const releaseIndex = await readJson(path.join(targetDataDir, "releases", "index.json"));
+    const roadmap = await readJson(path.join(targetDataDir, "roadmap.json"));
+    const releaseDetail = await readJson(path.join(targetDataDir, "releases", "v1-3-0.json"));
+
+    assert.equal(result.release.status, "planned");
+    assert.equal(releaseIndex.currentReleaseId, "v1-3-0");
+    assert.equal(releaseIndex.releases.at(-1).status, "planned");
+    assert.equal(roadmap.items[0].targetReleaseId, "v1-3-0");
+    assert.equal(releaseDetail.status, "planned");
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test("release planning API approves a persisted draft without rebuilt form scope", async () => {
+  const target = await mkdtemp(path.join(os.tmpdir(), "architext-release-plan-persisted-draft-"));
+  try {
+    const targetDataDir = dataDir(target);
+    await mkdir(path.join(targetDataDir, "releases"), { recursive: true });
+    await writeJson(path.join(targetDataDir, "manifest.json"), {
+      project: { id: "fixture", name: "Fixture" },
+      files: {
+        releases: "releases/index.json",
+        roadmap: "roadmap.json"
+      }
+    });
+    await writeJson(path.join(targetDataDir, "releases", "index.json"), {
+      currentReleaseId: "v1-2-0",
+      releases: [
+        { id: "v1-2-0", version: "1.2.0", file: "v1-2-0.json" },
+        {
+          id: "v1-3-0",
+          version: "1.3.0",
+          name: "Fixture 1.3.0 Planning",
+          status: "draft",
+          posture: "on-track",
+          targetWindow: "Next release",
+          lastUpdated: "2026-05-18T06:05:00.000Z",
+          summary: "Draft release.",
+          counts: {
+            features: 1,
+            bugFixes: 0,
+            workstreams: 1,
+            blockers: 0,
+            complete: 0,
+            inProgress: 0,
+            planned: 1,
+            stretch: 0
+          },
+          file: "v1-3-0.json"
+        }
+      ]
+    });
+    await writeJson(path.join(targetDataDir, "releases", "v1-3-0.json"), {
+      id: "v1-3-0",
+      version: "1.3.0",
+      name: "Fixture 1.3.0 Planning",
+      status: "draft",
+      posture: "on-track",
+      summary: "Draft release.",
+      targetWindow: "Next release",
+      lastUpdated: "2026-05-18T06:05:00.000Z",
+      scope: {
+        required: [],
+        planned: [{
+          id: "release-kanban-view",
+          title: "Release Truth Kanban view",
+          summary: "Show Release Truth items as Kanban.",
+          kind: "feature",
+          status: "planned",
+          source: "roadmap",
+          workstreamId: "release-planning",
+          dependsOn: [],
+          evidence: []
+        }],
+        stretch: [],
+        deferred: [],
+        outOfScope: []
+      },
+      workstreams: [{
+        id: "release-planning",
+        name: "Release Planning",
+        owner: "maintainer",
+        status: "planned",
+        posture: "on-track",
+        summary: "Release Planning release scope.",
+        progress: 0,
+        itemIds: ["release-kanban-view"],
+        evidence: []
+      }],
+      blockers: [],
+      milestones: [],
+      dependencies: [],
+      evidence: []
+    });
+    await writeJson(path.join(targetDataDir, "roadmap.json"), {
+      items: [{
+        id: "release-kanban-view",
+        title: "Release Truth Kanban view",
+        summary: "Show Release Truth items as Kanban.",
+        kind: "feature",
+        status: "planned",
+        priority: "high",
+        section: "Release Planning"
+      }]
+    });
+
+    const result = await approveReleasePlanRequest({
+      target,
+      payload: {
+        action: "approve",
+        dryRun: false,
+        version: "1.3.0",
+        selectedRoadmapItemIds: [],
+        adHocItems: []
+      },
+      dataDir,
+      readJson,
+      writeJson,
+      validateTarget: async () => ({ ok: true, output: "validation passed" })
+    });
+
+    const releaseIndex = await readJson(path.join(targetDataDir, "releases", "index.json"));
+    const roadmap = await readJson(path.join(targetDataDir, "roadmap.json"));
+    const releaseDetail = await readJson(path.join(targetDataDir, "releases", "v1-3-0.json"));
+
+    assert.equal(result.release.status, "planned");
+    assert.equal(releaseIndex.currentReleaseId, "v1-3-0");
+    assert.equal(releaseIndex.releases.at(-1).status, "planned");
+    assert.equal(releaseDetail.status, "planned");
+    assert.equal(roadmap.items[0].targetReleaseId, "v1-3-0");
   } finally {
     await rm(target, { recursive: true, force: true });
   }

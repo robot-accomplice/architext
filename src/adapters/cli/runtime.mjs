@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 export function run(command, args, cwd, extraEnv = {}) {
@@ -50,8 +50,16 @@ export async function readJson(file) {
 }
 
 export async function writeJson(file, value) {
-  await mkdir(path.dirname(file), { recursive: true });
-  await writeFile(file, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+  const directory = path.dirname(file);
+  await mkdir(directory, { recursive: true });
+  const temporaryFile = path.join(directory, `.${path.basename(file)}.${process.pid}.${Date.now()}.tmp`);
+  try {
+    await writeFile(temporaryFile, `${JSON.stringify(value, null, 2)}\n`, "utf8");
+    await rename(temporaryFile, file);
+  } catch (error) {
+    await rm(temporaryFile, { force: true }).catch(() => {});
+    throw error;
+  }
 }
 
 export async function assertDirectory(target, label = "Target") {

@@ -26,6 +26,9 @@ export async function loadArchitectureModel(fetcher = fetch) {
   const roadmap = manifest.files.roadmap
     ? await fetchJson(fetcher, base + manifest.files.roadmap)
     : undefined;
+  const rules = manifest.files.rules
+    ? await fetchJson(fetcher, base + manifest.files.rules)
+    : undefined;
 
   const model = {
     manifest,
@@ -35,6 +38,7 @@ export async function loadArchitectureModel(fetcher = fetch) {
     dataClasses: dataClassification.classes,
     decisions: decisions.decisions,
     risks: risks.risks,
+    ...(rules ? { rules: rules.rules } : {}),
     ...(roadmap ? { roadmap: roadmap.items } : {}),
     ...(releases ? { releases } : {})
   };

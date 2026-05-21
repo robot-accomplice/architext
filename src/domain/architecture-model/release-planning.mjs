@@ -24,6 +24,16 @@ function allReleaseItems(releaseDetail) {
   ];
 }
 
+function releaseScopeEntries(scope) {
+  return [
+    ["required", scope.required],
+    ["planned", scope.planned],
+    ["stretch", scope.stretch],
+    ["deferred", scope.deferred],
+    ["outOfScope", scope.outOfScope]
+  ];
+}
+
 function countItems(releaseDetail, predicate) {
   return allReleaseItems(releaseDetail).filter(predicate).length;
 }
@@ -131,6 +141,62 @@ function releaseItemFromAdHoc(item, usedItemIds, workstreamId, dateAdded) {
     workstreamId,
     dependsOn: [],
     evidence: item.evidence ?? []
+  };
+}
+
+function mergedReleaseItem(existing, proposed) {
+  if (!existing) return proposed;
+  const preserveImplementationStatus = ["complete", "in-progress", "blocked"].includes(existing.status)
+    && !["deferred", "cut"].includes(proposed.status);
+  return {
+    ...proposed,
+    source: existing.source ?? proposed.source,
+    dateAdded: existing.dateAdded ?? proposed.dateAdded,
+    status: preserveImplementationStatus ? existing.status : proposed.status,
+    ...(existing.owner ? { owner: existing.owner } : {}),
+    ...(existing.rationale ? { rationale: existing.rationale } : {}),
+    ...(existing.decisionSource ? { decisionSource: existing.decisionSource } : {}),
+    dependsOn: existing.dependsOn?.length ? existing.dependsOn : proposed.dependsOn,
+    evidence: existing.evidence?.length ? existing.evidence : proposed.evidence,
+    ...(existing.deferredToReleaseId ? { deferredToReleaseId: existing.deferredToReleaseId } : {}),
+    ...(existing.deferredToVersion ? { deferredToVersion: existing.deferredToVersion } : {})
+  };
+}
+
+function mergedWorkstream(existing, proposed) {
+  if (!existing) return proposed;
+  return {
+    ...proposed,
+    status: existing.status,
+    posture: existing.posture,
+    summary: existing.summary || proposed.summary,
+    progress: existing.progress ?? proposed.progress,
+    evidence: existing.evidence?.length ? existing.evidence : proposed.evidence
+  };
+}
+
+export function mergeExistingReleasePlan(existingDetail, proposedDetail) {
+  if (!existingDetail || existingDetail.id !== proposedDetail.id) return proposedDetail;
+  const existingItemsById = new Map(allReleaseItems(existingDetail).map((item) => [item.id, item]));
+  const existingWorkstreamsById = new Map(existingDetail.workstreams.map((workstream) => [workstream.id, workstream]));
+  const scope = Object.fromEntries(releaseScopeEntries(proposedDetail.scope).map(([key, items]) => [
+    key,
+    items.map((item) => mergedReleaseItem(existingItemsById.get(item.id), item))
+  ]));
+  return {
+    ...proposedDetail,
+    status: existingDetail.status === "draft" ? proposedDetail.status : existingDetail.status,
+    posture: existingDetail.posture,
+    summary: existingDetail.summary || proposedDetail.summary,
+    targetDate: existingDetail.targetDate ?? proposedDetail.targetDate,
+    targetWindow: existingDetail.targetWindow ?? proposedDetail.targetWindow,
+    releasedAt: existingDetail.releasedAt ?? proposedDetail.releasedAt,
+    updateSource: proposedDetail.updateSource,
+    scope,
+    workstreams: proposedDetail.workstreams.map((workstream) => mergedWorkstream(existingWorkstreamsById.get(workstream.id), workstream)),
+    blockers: existingDetail.blockers,
+    dependencies: existingDetail.dependencies,
+    evidence: existingDetail.evidence?.length ? existingDetail.evidence : proposedDetail.evidence
   };
 }
 

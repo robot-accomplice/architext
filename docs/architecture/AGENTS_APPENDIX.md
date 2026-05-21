@@ -33,6 +33,22 @@ items keep `source: "roadmap"`; manually entered scope uses `source:
 "ad-hoc"` and should be promoted into `roadmap.json` when the plan is approved.
 Do not represent unreviewed planning proposals as current Release Truth facts.
 
+When project rules change, update `docs/architext/data/rules.json`.
+Categories are maintainer-defined classifications such as Architecture,
+Development, Design, Release, or any project-specific grouping. Respect
+`protection.edit` and `protection.delete`; protected rules are not casual
+cleanup targets. Rank rules by `criticality` and `order`, not alphabetical
+order or creation time.
+
+When ordered work or use-case paths deserve a dedicated Flows projection, add a
+`workflow` view in `docs/architext/data/views.json`. Workflow views should reuse
+existing nodes and ordered flows; do not duplicate flow facts or invent
+workflow-specific routing rules.
+
+For source extraction work, produce a reviewable draft of proposed JSON changes
+with source paths and confidence notes before editing data files. Never replace
+validation with extracted claims.
+
 For C4 views, keep Context, Container, and Component diagrams at their proper
 abstraction level. Prefer splitting dense views over forcing tangled routing,
 keep relationship labels visible, and treat duplicate node membership in one
@@ -68,7 +84,7 @@ Use `architext doctor [path]` to inspect installation health, including C4
 document quality issues, and `architext doctor [path] --yes` to apply
 deterministic repairs. `architext sync [path]` runs the same doctor diagnostics
 before converging lifecycle state. Use `architext prompt [path]` to print the
-current LLM build-out or maintenance instructions.
+current agent build-out or maintenance instructions.
 Do not claim the architecture documentation is current if validation fails or
 was skipped.
 ```

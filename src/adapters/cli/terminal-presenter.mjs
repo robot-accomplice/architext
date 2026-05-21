@@ -17,6 +17,9 @@ export function statusLines(status, { verbose = false } = {}) {
   }
   if (status.manifest) {
     lines.push(`Schema: ${status.manifest.schemaVersion || "missing"}${status.manifest.repairChanges.length ? ` (expected ${status.manifest.expectedSchemaVersion})` : ""}`);
+    if (status.manifest.migrationPlan?.pending?.length) {
+      lines.push(`Schema migrations: ${status.manifest.migrationPlan.pending.length} pending`);
+    }
   }
 
   lines.push(`Doctor repairs: ${status.doctorRepairs.length ? status.doctorRepairs.length : "none"}`);

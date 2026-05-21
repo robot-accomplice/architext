@@ -1,0 +1,140 @@
+{
+  "rules": [
+    {
+      "id": "systemic-fixes-only",
+      "title": "Systemic fixes only",
+      "summary": "Always prefer systemic fixes over ad hoc, bandaid, short-lived, or partial fixes.",
+      "category": "Architecture",
+      "criticality": "critical",
+      "order": 10,
+      "source": "maintainer",
+      "rationale": "Architext's recurring failures have come from fixing one renderer, command, or view while leaving the same policy duplicated elsewhere.",
+      "appliesTo": [
+        "routing",
+        "viewer",
+        "CLI lifecycle",
+        "data contracts"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "architecture-docs-before-code",
+      "title": "Architecture and docs before code",
+      "summary": "Begin substantial changes with architecture analysis and documentation before implementation.",
+      "category": "Development",
+      "criticality": "critical",
+      "order": 20,
+      "source": "maintainer",
+      "rationale": "Architext is itself architecture tooling; unexplained implementation drift undermines the project.",
+      "appliesTo": [
+        "release work",
+        "feature work",
+        "refactors"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "data-only-target-repositories",
+      "title": "Target repositories stay data-only",
+      "summary": "Target repositories commit architecture data and lifecycle metadata, not copied Architext viewer, schema, tool, package, or Vite files.",
+      "category": "Architecture",
+      "criticality": "critical",
+      "order": 30,
+      "source": "maintainer",
+      "rationale": "Global CLI distribution only works if upgrades happen in the installed package rather than in vendored target copies.",
+      "appliesTo": [
+        "sync",
+        "doctor",
+        "migrations",
+        "agent instructions"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "release-truth-stays-current",
+      "title": "Release Truth stays current",
+      "summary": "When release scope, implementation state, blockers, or deferrals change, update Release Truth in the same work session.",
+      "category": "Release",
+      "criticality": "high",
+      "order": 40,
+      "source": "maintainer",
+      "rationale": "Release Truth exists so users do not have to infer agent release decisions from chat history.",
+      "appliesTo": [
+        "release planning",
+        "implementation",
+        "release ceremony"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "single-paths-to-success",
+      "title": "Single paths to success",
+      "summary": "Do not create parallel mechanisms for the same behavior; converge duplicated lifecycle, routing, rendering, and validation logic.",
+      "category": "Architecture",
+      "criticality": "high",
+      "order": 50,
+      "source": "maintainer",
+      "rationale": "Duplicated behavior has caused inconsistent routing, step selection, doctor/sync behavior, and release planning state.",
+      "appliesTo": [
+        "routing",
+        "release planning",
+        "doctor and sync",
+        "viewer projections"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "schema-change-discipline",
+      "title": "Schema change discipline",
+      "summary": "Purely additive schema changes may ship in a minor release; breaking schema changes require a major semver release and migration path.",
+      "category": "Release",
+      "criticality": "high",
+      "order": 60,
+      "source": "maintainer",
+      "rationale": "Data-only repositories depend on Architext to preserve and migrate user-owned JSON safely.",
+      "appliesTo": [
+        "schema",
+        "migrations",
+        "release versioning"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "agents-maintain-json-truth",
+      "title": "Agents maintain JSON truth",
+      "summary": "Agents should update reviewed Architext JSON data and validate it, not leave project truth only in prose.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 70,
+      "source": "maintainer",
+      "rationale": "The viewer and CLI can only help if the source data is current and valid.",
+      "appliesTo": [
+        "agents",
+        "prompt",
+        "architecture maintenance"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    }
+  ]
+}
