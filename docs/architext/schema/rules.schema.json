@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architext.local/schema/rules.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rules"],
+  "properties": {
+    "rules": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/rule" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "rule": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "title", "summary", "category", "criticality", "order", "source", "protection"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "title": { "type": "string", "minLength": 1 },
+        "summary": { "type": "string", "minLength": 1 },
+        "category": { "type": "string", "minLength": 1 },
+        "criticality": {
+          "type": "string",
+          "enum": ["critical", "high", "medium", "low"]
+        },
+        "order": { "type": "integer", "minimum": 0 },
+        "source": {
+          "type": "string",
+          "enum": ["maintainer", "agent"]
+        },
+        "rationale": { "type": "string", "minLength": 1 },
+        "appliesTo": {
+          "type": "array",
+          "items": { "type": "string", "minLength": 1 }
+        },
+        "protection": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["edit", "delete"],
+          "properties": {
+            "edit": { "type": "boolean" },
+            "delete": { "type": "boolean" }
+          }
+        }
+      }
+    }
+  }
+}

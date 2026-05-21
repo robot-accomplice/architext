@@ -2,98 +2,281 @@
   "id": "v1-4-0",
   "version": "1.4.0",
   "name": "Architext 1.4.0",
-  "status": "draft",
-  "posture": "on-track",
-  "summary": "Architext 1.4.0 release plan.",
-  "targetWindow": "Next release",
-  "lastUpdated": "2026-05-18T14:17:48.651Z",
-  "updateSource": "Release Planning",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Architext 1.4.0 release candidate with Rules, schema migration reporting, workflow views, PDF export, and Release Truth hardening.",
+  "targetWindow": "Release ceremony",
+  "lastUpdated": "2026-05-21T08:00:00.000Z",
+  "updateSource": "Release Truth maintenance",
   "scope": {
-    "required": [],
-    "planned": [
+    "required": [
       {
-        "id": "release-planning",
-        "title": "Release Planning",
+        "id": "pdf-export",
+        "title": "PDF export",
         "kind": "feature",
-        "status": "planned",
-        "summary": "Craft one target release from selected roadmap items and manually entered ad hoc items, then approve it into Release Truth.",
+        "status": "complete",
+        "summary": "Export the active Architext view as a portable PDF artifact with clear diagnostics.",
+        "priority": "low",
+        "source": "roadmap",
+        "dateAdded": "2026-05-20T12:33:50.447Z",
+        "workstreamId": "pdf-export",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architext/src/main.tsx PDF control",
+          "docs/architext/src/styles.css print artifact styles",
+          "test/pdf-export-ui.test.mjs",
+          "npm --prefix docs/architext run build"
+        ]
+      },
+      {
+        "id": "schema-data-migrations",
+        "title": "Schema and data migrations",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Define explicit migration commands and dry-run reporting for schema evolution in data-only repositories.",
+        "priority": "medium",
+        "source": "roadmap",
+        "dateAdded": "2026-05-20T12:33:50.447Z",
+        "workstreamId": "schema-and-data-migrations",
+        "dependsOn": [],
+        "evidence": [
+          "src/domain/lifecycle/schema-migrations.mjs",
+          "test/schema-migrations.test.mjs",
+          "node --test test/schema-migrations.test.mjs test/doctor-repairs.test.mjs test/terminal-presenter.test.mjs test/cli.test.mjs",
+          "npm run validate"
+        ]
+      },
+      {
+        "id": "source-extraction",
+        "title": "Source extraction drafts",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Explore source-file inspection that suggests draft architecture-data changes requiring review.",
+        "priority": "low",
+        "source": "roadmap",
+        "dateAdded": "2026-05-20T12:33:50.447Z",
+        "workstreamId": "source-extraction",
+        "dependsOn": [],
+        "evidence": [
+          "architext prompt --mode source-extraction",
+          "test/cli.test.mjs source extraction prompt coverage",
+          "docs/architecture/ARCHITECTURE_PLAN.md source extraction drafting policy"
+        ]
+      },
+      {
+        "id": "rules-section",
+        "title": "Rules section",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Add a JSON-backed Rules view for architecture and project rules, with editable entries, edit/delete protection, priority-ranked ordering, and protected-aware drag/drop reordering.",
         "priority": "critical",
         "source": "roadmap",
-        "dateAdded": "2026-05-18T14:17:48.651Z",
+        "dateAdded": "2026-05-20T12:33:50.447Z",
+        "workstreamId": "rules",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architext/schema/rules.schema.json",
+          "src/domain/architecture-model/rules.mjs",
+          "src/adapters/http/rules-api.mjs",
+          "test/rules-api.test.mjs",
+          "test/rules-presentation.test.mjs"
+        ]
+      },
+      {
+        "id": "draft-release-plan-approval",
+        "title": "Draft release plan approval",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Saved draft release plans remain approvable without requiring a new preview-only UI state.",
+        "priority": "critical",
+        "source": "roadmap",
+        "dateAdded": "2026-05-20T12:33:50.447Z",
         "workstreamId": "release-planning",
         "dependsOn": [],
         "evidence": []
       },
       {
-        "id": "data-file-watch-refresh",
-        "title": "Data file watching and auto refresh",
+        "id": "workflow-diagrams",
+        "title": "Workflow diagrams",
         "kind": "feature",
-        "status": "planned",
-        "summary": "Refresh the local viewer after watched Architext JSON changes validate, while preserving the last known good model on invalid writes.",
-        "priority": "medium",
+        "status": "complete",
+        "summary": "Add workflow-oriented diagrams to the Flows diagram set as a first-class view over ordered work/use-case paths without duplicating routing or renderer logic.",
+        "priority": "high",
         "source": "roadmap",
-        "dateAdded": "2026-05-18T14:17:48.651Z",
-        "workstreamId": "data-file-watching",
+        "dateAdded": "2026-05-20T12:33:50.447Z",
+        "workstreamId": "workflow-diagrams",
+        "dependsOn": [],
+        "evidence": [
+          "node --test test/view-selection.test.mjs test/fetch-architecture-data.test.mjs",
+          "npm run validate",
+          "npm --prefix docs/architext run build"
+        ]
+      },
+      {
+        "id": "summaries-should-be-visible-in-view-truth-mode",
+        "title": "Summaries should be visible in VIEW TRUTH mode",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Currently the summaries are only visible during editing",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-20T12:33:50.447Z",
+        "workstreamId": "release-planning",
         "dependsOn": [],
         "evidence": []
       },
       {
-        "id": "ci-release-gates-hardening",
-        "title": "CI and release gate hardening",
-        "kind": "test",
-        "status": "planned",
-        "summary": "Keep releasability verified through repository-owned tests, validation, build, package dry-run, and packed CLI smoke tests.",
-        "priority": "high",
+        "id": "replace-clear-with-not-blocked",
+        "title": "Replace CLEAR with NOT BLOCKED",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Release Truth labels incomplete unblocked items as NOT BLOCKED instead of CLEAR so blocker state is explicit.",
+        "priority": "critical",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-20T12:33:50.447Z",
+        "workstreamId": "release-planning",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architext/src/presentation/releaseTruth.js",
+          "test/release-truth-presentation.test.mjs"
+        ]
+      },
+      {
+        "id": "non-destructive-data-refresh",
+        "title": "Non-destructive data refresh",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Data watching must not replace in-progress browser edits and must apply valid refreshes atomically only when editing surfaces are clean.",
+        "priority": "critical",
         "source": "roadmap",
-        "dateAdded": "2026-05-18T14:17:48.651Z",
-        "workstreamId": "ci-and-release-gates",
+        "dateAdded": "2026-05-20T13:10:00.000Z",
+        "workstreamId": "release-planning",
+        "dependsOn": [],
+        "evidence": []
+      },
+      {
+        "id": "preserve-release-item-state-on-plan-extension",
+        "title": "Preserve release item state on plan extension",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Adding items to an approved or in-process release plan must preserve completed and in-progress state for existing release items.",
+        "priority": "critical",
+        "source": "roadmap",
+        "dateAdded": "2026-05-20T13:10:00.000Z",
+        "workstreamId": "release-planning",
         "dependsOn": [],
         "evidence": []
       }
     ],
+    "planned": [],
     "stretch": [],
     "deferred": [],
     "outOfScope": []
   },
   "workstreams": [
     {
+      "id": "pdf-export",
+      "name": "PDF Export",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "PDF Export release scope.",
+      "progress": 100,
+      "itemIds": [
+        "pdf-export"
+      ],
+      "evidence": [
+        "docs/architext/src/main.tsx PDF control",
+        "docs/architext/src/styles.css print artifact styles",
+        "test/pdf-export-ui.test.mjs",
+        "npm --prefix docs/architext run build"
+      ]
+    },
+    {
+      "id": "schema-and-data-migrations",
+      "name": "Schema And Data Migrations",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Schema And Data Migrations release scope.",
+      "progress": 100,
+      "itemIds": [
+        "schema-data-migrations"
+      ],
+      "evidence": [
+        "src/domain/lifecycle/schema-migrations.mjs",
+        "test/schema-migrations.test.mjs",
+        "node --test test/schema-migrations.test.mjs test/doctor-repairs.test.mjs test/terminal-presenter.test.mjs test/cli.test.mjs",
+        "npm run validate"
+      ]
+    },
+    {
+      "id": "source-extraction",
+      "name": "Source Extraction",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Source Extraction release scope.",
+      "progress": 100,
+      "itemIds": [
+        "source-extraction"
+      ],
+      "evidence": [
+        "architext prompt --mode source-extraction",
+        "test/cli.test.mjs source extraction prompt coverage",
+        "docs/architecture/ARCHITECTURE_PLAN.md source extraction drafting policy"
+      ]
+    },
+    {
+      "id": "rules",
+      "name": "Rules",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Rules data contract, validation, viewer surface, and protected edit/delete/reorder operations are complete.",
+      "progress": 100,
+      "itemIds": [
+        "rules-section"
+      ],
+      "evidence": [
+        "Rules schema validates repository-owned rules data.",
+        "Rules domain/API/presentation tests pass.",
+        "Viewer build passes with Rules editor controls."
+      ]
+    },
+    {
       "id": "release-planning",
       "name": "Release Planning",
       "owner": "maintainer",
-      "status": "planned",
+      "status": "complete",
       "posture": "on-track",
-      "summary": "Release Planning release scope.",
-      "progress": 0,
+      "summary": "Release Planning corrections for draft approval, state preservation, refresh safety, summaries, and release item state language are complete.",
+      "progress": 100,
       "itemIds": [
-        "release-planning"
+        "draft-release-plan-approval",
+        "summaries-should-be-visible-in-view-truth-mode",
+        "replace-clear-with-not-blocked",
+        "non-destructive-data-refresh",
+        "preserve-release-item-state-on-plan-extension"
       ],
       "evidence": []
     },
     {
-      "id": "data-file-watching",
-      "name": "Data File Watching",
+      "id": "workflow-diagrams",
+      "name": "Workflow Diagrams",
       "owner": "maintainer",
-      "status": "planned",
+      "status": "complete",
       "posture": "on-track",
-      "summary": "Data File Watching release scope.",
-      "progress": 0,
+      "summary": "Workflow Diagrams release scope.",
+      "progress": 100,
       "itemIds": [
-        "data-file-watch-refresh"
+        "workflow-diagrams"
       ],
-      "evidence": []
-    },
-    {
-      "id": "ci-and-release-gates",
-      "name": "CI And Release Gates",
-      "owner": "maintainer",
-      "status": "planned",
-      "posture": "on-track",
-      "summary": "CI And Release Gates release scope.",
-      "progress": 0,
-      "itemIds": [
-        "ci-release-gates-hardening"
-      ],
-      "evidence": []
+      "evidence": [
+        "node --test test/view-selection.test.mjs test/fetch-architecture-data.test.mjs",
+        "npm run validate",
+        "npm --prefix docs/architext run build"
+      ]
     }
   ],
   "blockers": [],
@@ -101,16 +284,42 @@
     {
       "id": "planned-scope",
       "label": "Planned scope selected",
-      "status": "planned",
+      "status": "complete",
       "targetWindow": "Release planning",
       "order": 1,
       "itemIds": [
-        "release-planning",
-        "data-file-watch-refresh",
-        "ci-release-gates-hardening"
+        "pdf-export",
+        "schema-data-migrations",
+        "source-extraction",
+        "rules-section",
+        "draft-release-plan-approval",
+        "workflow-diagrams",
+        "summaries-should-be-visible-in-view-truth-mode",
+        "replace-clear-with-not-blocked",
+        "non-destructive-data-refresh",
+        "preserve-release-item-state-on-plan-extension"
       ]
     }
   ],
   "dependencies": [],
-  "evidence": []
+  "evidence": [
+    {
+      "id": "local-tests",
+      "kind": "test",
+      "label": "npm test",
+      "status": "complete"
+    },
+    {
+      "id": "local-validation",
+      "kind": "manual-check",
+      "label": "npm run validate",
+      "status": "complete"
+    },
+    {
+      "id": "viewer-build",
+      "kind": "build",
+      "label": "docs/architext build",
+      "status": "complete"
+    }
+  ]
 }

@@ -64,6 +64,44 @@ test("architecture data adapter loads the manifest file graph", async () => {
   assert.equal(model.roadmap[0].id, "release-planning");
 });
 
+test("architecture data adapter loads optional rules data", async () => {
+  const files = modelFiles({
+    "/data/manifest.json": {
+      defaultViewId: "main",
+      files: {
+        nodes: "nodes.json",
+        flows: "flows.json",
+        views: "views.json",
+        dataClassification: "data-classification.json",
+        decisions: "decisions.json",
+        risks: "risks.json",
+        roadmap: "roadmap.json",
+        rules: "rules.json"
+      }
+    },
+    "/data/rules.json": {
+      rules: [{
+        id: "systemic-fixes",
+        title: "Systemic fixes",
+        summary: "Prefer systemic fixes.",
+        category: "architecture",
+        criticality: "critical",
+        order: 10,
+        source: "maintainer",
+        protection: { edit: true, delete: true }
+      }]
+    }
+  });
+  const requested = [];
+  const model = await loadArchitectureModel(async (path) => {
+    requested.push(path);
+    return response(files[path]);
+  });
+
+  assert.equal(requested.includes("/data/rules.json"), true);
+  assert.equal(model.rules[0].id, "systemic-fixes");
+});
+
 test("architecture data adapter applies shared reference validation", async () => {
   const files = modelFiles({
     "/data/views.json": { views: [{ id: "main", lanes: [{ id: "lane", nodeIds: ["missing-node"] }] }] }

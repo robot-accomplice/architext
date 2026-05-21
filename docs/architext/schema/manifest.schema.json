@@ -30,6 +30,7 @@
         "decisions": { "type": "string", "minLength": 1 },
         "risks": { "type": "string", "minLength": 1 },
         "glossary": { "type": "string", "minLength": 1 },
+        "rules": { "type": "string", "minLength": 1 },
         "roadmap": { "type": "string", "minLength": 1 },
         "releases": { "type": "string", "minLength": 1 }
       }

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -11,6 +11,7 @@ test("readJson and writeJson preserve structured CLI data with stable formatting
     const file = path.join(dir, "nested", "data.json");
     await writeJson(file, { ok: true, values: [1, 2] });
     assert.deepEqual(await readJson(file), { ok: true, values: [1, 2] });
+    assert.deepEqual((await readdir(path.dirname(file))).sort(), ["data.json"]);
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

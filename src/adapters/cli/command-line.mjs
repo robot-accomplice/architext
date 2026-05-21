@@ -50,7 +50,7 @@ Options:
   --no-root-scripts          Do not manage root package.json scripts.
   --update-gitignore         Add generated artifact ignores without prompting.
   --no-gitignore             Do not manage .gitignore.
-  --mode <name>              Prompt mode: initial-buildout, architecture-change, repair-validation.
+  --mode <name>              Prompt mode: initial-buildout, architecture-change, repair-validation, source-extraction.
   --out <path>               Build output path. Defaults to docs/architext/dist.
   --skip-validate            Do not run validation after sync/migration.
   --branch current|new|none  Branch handling for mutating sync.

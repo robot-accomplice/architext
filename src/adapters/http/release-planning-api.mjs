@@ -3,6 +3,7 @@ import { validateReleaseReferences } from "../../domain/architecture-model/refer
 import {
   approveReleasePlan,
   buildReleasePlan,
+  mergeExistingReleasePlan,
   saveReleasePlanDraft
 } from "../../domain/architecture-model/release-planning.mjs";
 
@@ -14,6 +15,18 @@ function releaseItems(detail) {
     ...detail.scope.deferred,
     ...detail.scope.outOfScope
   ];
+}
+
+function releaseFileForVersion(version) {
+  return `v${version.replaceAll(".", "-")}.json`;
+}
+
+async function readReleaseDetailForVersion({ payload, releaseIndex, releaseIndexPath, readJson }) {
+  if (!payload.version) return null;
+  const releaseFile = releaseIndex.releases.find((release) => release.version === payload.version)?.file
+    ?? releaseFileForVersion(payload.version);
+  const releasePath = path.join(path.dirname(releaseIndexPath), releaseFile);
+  return readJson(releasePath).catch(() => null);
 }
 
 async function writeDeferredTransferMarkers({
@@ -67,7 +80,15 @@ export async function approveReleasePlanRequest({
   const roadmap = await readJson(roadmapPath);
   const releaseIndex = await readJson(releaseIndexPath);
 
-  const releaseDetail = buildReleasePlan({
+  const action = payload.action ?? (payload.dryRun ? "preview" : "approve");
+  if (!["preview", "approve", "save-draft"].includes(action)) {
+    throw new Error(`Unknown release planning action "${action}"`);
+  }
+  const existingReleaseDetail = await readReleaseDetailForVersion({ payload, releaseIndex, releaseIndexPath, readJson });
+  const selectedCount = (payload.selectedRoadmapItemIds ?? []).length + (payload.adHocItems ?? []).length;
+  const releaseDetail = action === "approve" && selectedCount === 0 && existingReleaseDetail
+    ? existingReleaseDetail
+    : mergeExistingReleasePlan(existingReleaseDetail, buildReleasePlan({
     releaseIndex,
     roadmapItems: roadmap.items,
     selectedRoadmapItemIds: payload.selectedRoadmapItemIds ?? [],
@@ -76,12 +97,7 @@ export async function approveReleasePlanRequest({
     projectName: manifest.project.name,
     version: payload.version,
     theme: payload.theme
-  });
-
-  const action = payload.action ?? (payload.dryRun ? "preview" : "approve");
-  if (!["preview", "approve", "save-draft"].includes(action)) {
-    throw new Error(`Unknown release planning action "${action}"`);
-  }
+  }));
   const planned = action === "save-draft"
     ? saveReleasePlanDraft({ releaseIndex, roadmap, releaseDetail })
     : approveReleasePlan({ releaseIndex, roadmap, releaseDetail });

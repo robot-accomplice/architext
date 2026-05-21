@@ -56,7 +56,7 @@ export function releaseLineState(status, blocked = false) {
   if (status === "complete") return "Complete";
   if (status === "deferred" || status === "cut") return "Deferred";
   if (blocked || status === "blocked") return "Blocked";
-  return "Clear";
+  return "Not Blocked";
 }
 
 export function releaseLineCheckClass(state) {

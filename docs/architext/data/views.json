@@ -24,6 +24,18 @@
       ]
     },
     {
+      "id": "workflow",
+      "name": "Workflow",
+      "type": "workflow",
+      "summary": "Ordered maintainer and agent work paths across the global CLI, package runtime, and repository-owned data.",
+      "lanes": [
+        { "id": "work-origin", "name": "Work Origin", "nodeIds": ["maintainer", "llm-agent"] },
+        { "id": "cli-lifecycle", "name": "CLI Lifecycle", "nodeIds": ["architext-cli", "cli-adapters", "lifecycle-domain"] },
+        { "id": "architecture-data", "name": "Architecture Data", "nodeIds": ["architecture-model-domain", "schema-validator", "target-data-files", "target-repository"] },
+        { "id": "viewer-review", "name": "Viewer Review", "nodeIds": ["viewer-runtime", "viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine", "static-dist"] }
+      ]
+    },
+    {
       "id": "sequence",
       "name": "Sequence",
       "type": "sequence",
