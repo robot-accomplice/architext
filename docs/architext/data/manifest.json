@@ -20,7 +20,7 @@
     "releases": "releases/index.json"
   },
   "notes": [
-    "This self-hosted model describes Architext itself after the 1.0 global CLI migration.",
+    "This self-hosted model describes Architext itself after the 1.4 Rules and Release Truth work.",
     "Target repositories own architecture data only; viewer, schemas, validation, and starter templates are package-owned."
   ]
 }

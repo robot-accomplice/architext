@@ -11,7 +11,7 @@ const mainSource = readFileSync(path.resolve(import.meta.dirname, "../docs/archi
 
 test("release planning approval is not gated by transient preview state", () => {
   const approveButton = releasePlanningSource.match(
-    /<button type="button" onClick=\{\(\) => submitPlan\("approve"\)\} disabled=\{([^}]*)\}>/
+    /<button type="button" className="approve-action" onClick=\{\(\) => submitPlan\("approve"\)\} disabled=\{([^}]*)\}>/
   );
 
   assert.ok(approveButton, "approve button should remain present");
@@ -27,9 +27,10 @@ test("release truth path keeps item summaries visible in the central view", () =
   assert.match(mainSource, /<span className="release-path-item-summary">\{item\.summary\}<\/span>/);
 });
 
-test("valid data refreshes do not replace dirty release planning edits", () => {
-  assert.match(mainSource, /if \(releasePlanningDirty\) \{/);
-  assert.match(mainSource, /Finish release-plan edits before refreshing/);
+test("valid data refreshes do not replace dirty editor changes", () => {
+  assert.match(mainSource, /if \(releasePlanningDirty \|\| rulesEditorDirty\) \{/);
+  assert.match(mainSource, /Save or discard editor changes before refreshing/);
+  assert.match(mainSource, /useUnsavedEditorGuard\(editorStates\)/);
   assert.match(releasePlanningSource, /const markEditing = \(\) => onEditingChange\(true\);/);
 });
 

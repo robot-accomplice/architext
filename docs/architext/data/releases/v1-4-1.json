@@ -1,0 +1,161 @@
+{
+  "id": "v1-4-1",
+  "version": "1.4.1",
+  "name": "Architext 1.4.1 Verification and Rules Corrections",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Patch release targeting Rules editor action placement, agent instruction rule migration, and an automated verification harness for unit, integration, browser, and UAT coverage.",
+  "targetWindow": "Next patch release",
+  "lastUpdated": "2026-05-21T14:30:00.000Z",
+  "updateSource": "Release planning",
+  "scope": {
+    "required": [
+      {
+        "id": "rules-editor-actions-placement",
+        "title": "Rules editor action placement",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Move newly added rule action buttons below the rule form and use highlighted action colors so save/cancel/delete controls are visually obvious and spatially attached to the form.",
+        "priority": "high",
+        "source": "roadmap",
+        "dateAdded": "2026-05-21T13:00:00.000Z",
+        "workstreamId": "rules-corrections",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architext/src/main.tsx RulesWorkspace action footer",
+          "docs/architext/src/styles.css rule editor action styles",
+          "npm test"
+        ]
+      },
+      {
+        "id": "agent-rule-migration",
+        "title": "Agent instruction rule migration",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Offer a doctor/sync migration that extracts project rules from AGENTS.md, CLAUDE.md, Cursor rule files, and legacy .cursorrules into docs/architext/data/rules.json, then replaces tool-specific files with model-agnostic pointers.",
+        "priority": "high",
+        "source": "roadmap",
+        "dateAdded": "2026-05-21T13:30:00.000Z",
+        "workstreamId": "rules-migration",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/RELEASE_1_4_1_SUCCESS_CRITERIA.md agent instruction rule migration section",
+          "src/domain/lifecycle/instruction-rule-migration.mjs",
+          "test/cli.test.mjs doctor and sync migrate model-specific instruction rules into Rules data"
+        ]
+      },
+      {
+        "id": "automated-verification-harness",
+        "title": "Automated verification harness",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Create a release-grade automated unit, integration, browser, and UAT harness that exercises core user journeys before publication.",
+        "priority": "critical",
+        "source": "roadmap",
+        "dateAdded": "2026-05-21T08:30:00.000Z",
+        "workstreamId": "verification-harness",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/ARCHITECTURE_PLAN.md automated verification harness section",
+          "scripts/uat-harness.mjs",
+          "npm run test:uat"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "rules-corrections",
+      "name": "Rules Corrections",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Correct Rules editor action placement and visual hierarchy without changing the rules data contract.",
+      "progress": 100,
+      "itemIds": [
+        "rules-editor-actions-placement"
+      ],
+      "evidence": [
+        "docs/architext/src/main.tsx RulesWorkspace action footer",
+        "test/rules-presentation.test.mjs"
+      ]
+    },
+    {
+      "id": "verification-harness",
+      "name": "Automated Verification Harness",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Unify unit, integration, browser smoke, UAT journeys, and visual regression coverage into a repeatable pre-publication gate.",
+      "progress": 100,
+      "itemIds": [
+        "automated-verification-harness"
+      ],
+      "evidence": [
+        "docs/architecture/ARCHITECTURE_PLAN.md automated verification harness section",
+        "scripts/uat-harness.mjs",
+        "npm run test:uat"
+      ]
+    },
+    {
+      "id": "rules-migration",
+      "name": "Agent Instruction Rule Migration",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Move model-specific project rules into Architext Rules while leaving AGENTS, CLAUDE, and Cursor files as thin pointers to the model-agnostic source of truth.",
+      "progress": 100,
+      "itemIds": [
+        "agent-rule-migration"
+      ],
+      "evidence": [
+        "docs/architecture/RELEASE_1_4_1_SUCCESS_CRITERIA.md agent instruction rule migration section",
+        "src/domain/lifecycle/instruction-rule-migration.mjs",
+        "test/cli.test.mjs"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "scope-selected",
+      "label": "1.4.1 scope selected",
+      "status": "complete",
+      "targetWindow": "Release planning",
+      "order": 1,
+      "itemIds": [
+        "rules-editor-actions-placement",
+        "agent-rule-migration",
+        "automated-verification-harness"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "local-cli-tests",
+      "label": "Local CLI and domain tests",
+      "kind": "test",
+      "status": "complete",
+      "href": "npm test"
+    },
+    {
+      "id": "uat-harness",
+      "label": "Automated browser UAT harness",
+      "kind": "test",
+      "status": "complete",
+      "href": "npm run test:uat"
+    },
+    {
+      "id": "readme-screenshots",
+      "label": "README screenshot refresh",
+      "kind": "screenshot",
+      "status": "complete",
+      "href": "node scripts/capture-readme-screenshots.mjs"
+    }
+  ]
+}

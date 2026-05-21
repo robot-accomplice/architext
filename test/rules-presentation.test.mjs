@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { nextRuleCategoryName, orderedRules, ruleCategories, ruleCriticalityTone, ruleProtectionLabel } from "../docs/architext/src/presentation/rules.js";
+import { nextRuleCategoryName, orderedRules, ruleCategories, ruleCategoryAccent, ruleCriticalityTone, ruleProtectionLabel } from "../docs/architext/src/presentation/rules.js";
 import { postRulesAction } from "../docs/architext/src/presentation/rulesClient.js";
 
 test("rules are ordered by criticality before explicit order", () => {
@@ -49,6 +49,11 @@ test("new rule categories get a unique display name", () => {
   assert.equal(nextRuleCategoryName([]), "New Category");
   assert.equal(nextRuleCategoryName([{ category: "New Category" }]), "New Category 2");
   assert.equal(nextRuleCategoryName([{ category: "New Category" }, { category: "New Category 2" }]), "New Category 3");
+});
+
+test("rule category accents are deterministic visual accents", () => {
+  assert.equal(ruleCategoryAccent("Design"), ruleCategoryAccent("Design"));
+  assert.match(ruleCategoryAccent("Architecture"), /^#[0-9a-f]{6}$/i);
 });
 
 test("rules client reports request failures with actionable copy", async () => {

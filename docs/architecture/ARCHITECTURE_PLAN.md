@@ -99,15 +99,18 @@ Upgrade and migration must preserve target-owned architecture data by default:
 - remove copied implementation files such as `src/`, `schema/`, `tools/`,
   `public/`, `index.html`, `package.json`, `package-lock.json`, `tsconfig.json`,
   and `vite.config.ts`
-- update old Architext sections in `AGENTS.md` and `CLAUDE.md` so agents know
-  to edit only project-owned data and use the global CLI
+- update old Architext sections in `AGENTS.md`, `CLAUDE.md`, Cursor rule
+  files, and legacy `.cursorrules` so agents know to edit only project-owned
+  data, use the global CLI, and treat `docs/architext/data/rules.json` as the
+  model-agnostic project rules source of truth
 - allow explicit data overwrite only for starter resets or controlled
   migrations
 
-The script should also be able to append the Architext agent mandate to a
-target `AGENTS.md` or `CLAUDE.md` file when explicitly requested. It must avoid
-duplicate appendix insertion by checking for the Architext heading before
-appending.
+The script should also be able to append or migrate the Architext agent mandate
+for target `AGENTS.md`, `CLAUDE.md`, Cursor rule files, and legacy
+`.cursorrules` when explicitly requested. It must avoid duplicate insertion by
+checking for stable Architext markers before appending, and it must not silently
+rewrite unrelated project instructions.
 
 The script should maintain deterministic ignore rules for generated local
 artifacts. `docs/architext/dist/` should be ignored. Target repositories no
@@ -190,12 +193,10 @@ Remaining architectural pressure:
 - The routing strategy module is still internally organized by conditional
   branches for orthogonal, spline, and straight routing. Future work can split
   those into separate strategy files if the branch bodies continue to grow.
-- Automated unit, integration, browser, and UAT coverage is not yet a single
-  release-grade verification harness. Current checks cover many domain and
-  CLI paths, but user journeys such as release planning, Rules editing, C4
-  drilldown, data refresh recovery, PDF export, and packed CLI install/serve
-  flows need a shared automated UAT layer before future releases rely on them
-  as product-level gates.
+- Automated unit, integration, browser, and UAT coverage now has a first
+  browser-driven release gate through `npm run test:uat`. Coverage still needs
+  more journeys, especially release planning, C4 drilldown, data refresh
+  recovery, PDF export, and packed CLI install/serve flows.
 
 The next routing correctness work should be implemented against these named
 boundaries. For example, Deployment and Data/Risks line-overlap fixes belong in
@@ -224,10 +225,18 @@ The harness should layer checks by cost and confidence:
   tolerance rules so layout regressions are caught without turning every pixel
   into a false positive.
 
-The release gate should continue to expose a fast local check, but a stricter
-UAT gate should be available before publishing. A future command such as
-`npm run release:uat` can run the browser and journey suite, while
-`npm run release:check` remains the minimum local release readiness gate.
+The release gate exposes a fast local check through `npm run verify` and a
+browser-backed journey check through `npm run test:uat`. `npm run release:check`
+must run both before package dry-run and packed CLI smoke testing.
+
+Before a release is cut, the local release ceremony must also refresh the
+README-facing screenshot set from the current self-hosted viewer and audit
+README text and badges for stale feature/version language. When the maintainer
+also controls a public site that mentions Architext, that site should be checked
+for stale version numbers or capability descriptions as a local maintainer step;
+the Architext repository must not depend on external project checkouts to pass
+its formal lifecycle. These are documentation verification steps, not package
+publication instructions.
 
 ### `manifest.json`
 
@@ -672,9 +681,9 @@ commit is releasable; it must not embed public README instructions for npm
 publication operations.
 
 Local release operations are captured as `just` recipes so maintainers have a
-single command path for validation, CI inspection, passkey authentication, and
-publication without putting protected operational instructions in public
-user-facing documentation.
+single command path for documentation verification, validation, CI inspection,
+passkey authentication, and publication without putting protected operational
+instructions in public user-facing documentation.
 
 Npm publication should prefer GitHub Actions trusted publishing over local
 write-time OTP. The publish workflow checks out the released tag, reruns the

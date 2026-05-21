@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-2ff801)](LICENSE)
 [![CI](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/%40robotaccomplice%2Farchitext?color=00dbe9)](https://www.npmjs.com/package/@robotaccomplice/architext)
-![SemVer](https://img.shields.io/badge/semver-1.4.0-fed639)
+![SemVer](https://img.shields.io/badge/semver-1.4.1-fed639)
 ![Node 20+](https://img.shields.io/badge/node-%3E%3D20-00dbe9)
 ![Global CLI](https://img.shields.io/badge/global%20CLI-yes-2ff801)
 ![Target Repos](https://img.shields.io/badge/target%20repos-data--only-2ff801)
@@ -14,12 +14,13 @@
 ![React](https://img.shields.io/badge/React-19-00dbe9)
 ![Vite](https://img.shields.io/badge/Vite-6-00dbe9)
 
-Architext is a local, project-owned architecture and dataflow site generated
-from strict JSON files.
+Architext is a local, project-owned architecture, release, rules, and dataflow
+viewer generated from strict JSON files.
 
 It is meant for teams using LLMs to build and maintain software. The rendered
 site gives humans a navigable view of the system. The JSON gives future LLMs a
-stable architecture map they can read before changing code.
+stable architecture, release, and project-rules map they can read before
+changing code.
 
 Architext is not a hosted documentation platform. It is a global CLI that reads
 project-owned JSON from a repository and serves a local viewer from the
@@ -61,6 +62,10 @@ Architext is intended to describe:
 - architectural decisions
 - known risks and gaps
 - verification commands or tests tied to architectural claims
+- Release Truth: scope, status, blockers, milestones, evidence, and historical
+  feature/fix volume
+- release planning source items and approved release plans
+- ranked project rules that apply across LLMs and local workflows
 
 The goal is not just to draw diagrams. The goal is to preserve enough structured
 context that an LLM working later can understand what exists, where it lives,
@@ -69,7 +74,8 @@ why it exists, and what must stay true.
 ## Design Principles
 
 - **Local first:** every project owns its own Architext files.
-- **Read-only viewer:** editing happens through JSON changes, not the browser.
+- **Data-owned viewer:** project truth lives in JSON; browser editors are scoped
+  to structured release and rule updates.
 - **Strict schema:** invalid data should prevent rendering.
 - **LLM-maintained:** JSON is structured for machine upkeep, not casual manual
   authoring.
@@ -77,6 +83,8 @@ why it exists, and what must stay true.
   components quickly.
 - **Ordered flows:** flows are explicit step-by-step paths, not loose dependency
   graphs.
+- **Model-agnostic rules:** project rules live in Architext data instead of
+  drifting across model-specific instruction files.
 - **Project-neutral look and feel:** projects provide data, not custom UI
   behavior.
 - **No hosted dependency:** the site runs from a local dev server or static
@@ -84,27 +92,31 @@ why it exists, and what must stay true.
 - **No runtime CDN:** scripts, styles, fonts, schemas, and assets must be local
   to the repository or bundled into the build.
 
-## Planned Experience
+## Viewer Experience
 
-The viewer will use a dense engineering layout:
+The viewer uses a dense engineering layout:
 
 - collapsible navigation on the left
 - large diagram canvas in the center
 - selected-node and selected-step details on the right
 - search and filters
 - pan, zoom, fit, and maximize controls
-- per-view orthogonal, spline, or straight route rendering
+- per-view orthogonal, spline, or straight route rendering where diagrams use
+  routed lines
 - highlighted ordered paths through flows
-- scrollable detail sections for architecture, security, data, risks, and tests
+- C4 drilldown when lower-level diagrams exist
+- PDF export through the browser print flow
+- scoped browser editors for Release Truth planning and project Rules
+- scrollable detail sections for architecture, security, data, risks, tests,
+  release state, and rules
 
-The UI should be functional before it is pretty. Diagram space, legibility, and
-fast inspection matter more than branding.
+Diagram space, legibility, and fast inspection matter more than branding.
 
 ## Current Demo
 
-The repository demo now documents Architext itself: global CLI lifecycle,
+The repository demo documents Architext itself: global CLI lifecycle,
 package-owned viewer runtime, data-only target repositories, migrations,
-validation, and release packaging.
+validation, release tracking, rules, and release packaging.
 
 ![Architext system map showing the global CLI, package-owned runtime, and data-only target repository](docs/assets/screenshots/architext-flows.png)
 
@@ -115,6 +127,8 @@ validation, and release packaging.
 ![Architext data and risks view showing migration and release risks](docs/assets/screenshots/architext-data-risks.png)
 
 ![Architext Release Truth view showing release posture, path, and historical feature and bug-fix volume](docs/assets/screenshots/architext-release-truth.png)
+
+![Architext Rules view showing ranked project rules grouped by category](docs/assets/screenshots/architext-rules.png)
 
 ## Install Or Upgrade In A Project
 
@@ -299,15 +313,16 @@ architext --version
 Use `doctor` when something looks wrong. It reports the installed version,
 whether an upgrade is needed, validation status, missing ignore rules, missing
 AGENTS/CLAUDE appendix sections, root script status, accidentally tracked
-generated artifacts, and deterministic repairs. Run `doctor --yes` to apply
-available repairs.
+generated artifacts, model-specific instruction rules that can be migrated into
+`docs/architext/data/rules.json`, and deterministic repairs. Run `doctor --yes`
+to apply available repairs.
 
 Use `version` or `--version` when scripts need the installed package version
 without inspecting `package.json`.
 
 `sync` runs the same doctor diagnostics by default before converging lifecycle
-state. Deterministic repairs preserve existing nodes, dependencies, and
-architecture facts.
+state. Deterministic repairs preserve existing nodes, dependencies, architecture
+facts, and unrelated project instructions.
 
 Use `prompt` to print LLM-ready instructions:
 
@@ -385,6 +400,10 @@ Required output:
 - decisions.json: accepted architecture decisions or links to existing ADRs
 - risks.json: real architecture, security, privacy, operational, and data risks
 - glossary.json: project terms that future LLMs need to understand
+- rules.json: ranked project rules that should guide human and LLM work
+- roadmap.json: candidate future work for release planning
+- releases/index.json and releases/*.json: Release Truth history, current
+  release posture, scope, milestones, blockers, evidence, and deferrals
 - manifest.json: project identity, default view, and file references
 
 Persist in git:
@@ -429,11 +448,17 @@ docs/
       decisions.json
       risks.json
       glossary.json
+      rules.json
+      roadmap.json
+      releases/
+        index.json
+        v*.json
     .architext.json
 ```
 
 The exact files may evolve, but the split is intentional: nodes, flows, views,
-data classification, decisions, and risks are separate concerns.
+data classification, decisions, risks, rules, roadmap, and releases are
+separate concerns.
 
 ## Data Model Overview
 
@@ -459,6 +484,17 @@ views, dataflow diagrams, deployment views, and risk overlays.
 `decisions.json` and `risks.json` connect architecture facts to the reasoning
 and tradeoffs behind them.
 
+`rules.json` records ranked project rules with category, criticality, source,
+and edit/delete protection. It is the model-agnostic place for rules that should
+not drift across agent-specific instruction files.
+
+`roadmap.json` records candidate future work. Release Planning can use those
+items, plus ad hoc entries, to draft a target release.
+
+`releases/index.json` and `releases/*.json` power Release Truth: current release
+status, posture, scope, blockers, milestones, dependencies, evidence, and
+historical feature/fix trends.
+
 ## LLM Workflow
 
 An LLM working in a project that uses Architext should:
@@ -477,7 +513,11 @@ An LLM working in a project that uses Architext should:
 9. Keep Release Path labels concise and put rationale, blocker explanations,
    dependencies, next actions, and evidence in the selected release item's
    detail data.
-10. Run validation before claiming the task is complete.
+10. Update `docs/architext/data/rules.json` when project rules change. Respect
+    rule category, criticality, ordering, and edit/delete protection.
+11. Use `docs/architext/data/roadmap.json` for candidate future work and
+    Release Truth for approved or historical release scope.
+12. Run validation before claiming the task is complete.
 
 Broken architecture JSON is worse than missing JSON because it gives future
 humans and LLMs false confidence.

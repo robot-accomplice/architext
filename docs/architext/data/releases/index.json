@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-4-0",
+  "currentReleaseId": "v1-4-1",
   "releases": [
     {
       "id": "v1-1-2",
@@ -137,11 +137,12 @@
       "id": "v1-4-0",
       "version": "1.4.0",
       "name": "Architext 1.4.0",
-      "status": "implementing",
-      "posture": "release-candidate",
-      "targetWindow": "Release ceremony",
-      "lastUpdated": "2026-05-21T08:00:00.000Z",
-      "summary": "Architext 1.4.0 release candidate with Rules, schema migration reporting, workflow views, PDF export, and Release Truth hardening.",
+      "status": "completed",
+      "posture": "shipped",
+      "targetDate": "2026-05-21",
+      "releasedAt": "2026-05-21T12:47:01.000Z",
+      "lastUpdated": "2026-05-21T12:47:01.000Z",
+      "summary": "Architext 1.4.0 shipped Rules, schema migration reporting, workflow views, PDF export, and Release Truth hardening.",
       "counts": {
         "features": 7,
         "bugFixes": 3,
@@ -153,6 +154,27 @@
         "stretch": 0
       },
       "file": "v1-4-0.json"
+    },
+    {
+      "id": "v1-4-1",
+      "version": "1.4.1",
+      "name": "Architext 1.4.1 Verification and Rules Corrections",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetWindow": "Next patch release",
+      "lastUpdated": "2026-05-21T14:30:00.000Z",
+      "summary": "Patch release targeting Rules editor action placement, agent instruction rule migration, and an automated verification harness for unit, integration, browser, and UAT coverage.",
+      "counts": {
+        "features": 1,
+        "bugFixes": 1,
+        "workstreams": 3,
+        "blockers": 0,
+        "complete": 3,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-1.json"
     }
   ]
 }
