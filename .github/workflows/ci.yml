@@ -42,6 +42,12 @@ jobs:
       - name: Build package-owned viewer
         run: npm run build
 
+      - name: Install browser dependencies
+        run: npx playwright install --with-deps chromium
+
+      - name: Run automated UAT harness
+        run: npm run test:uat
+
       - name: Check package contents
         run: npm pack --dry-run
 

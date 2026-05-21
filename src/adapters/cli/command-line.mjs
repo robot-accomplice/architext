@@ -73,7 +73,9 @@ Target repository ownership:
   Target repos should commit docs/architext/data/*.json,
   docs/architext/.architext.json, and optional AGENTS.md or CLAUDE.md guidance.
   Do not copy or edit package-owned viewer, schema, tool, package, or Vite files
-  inside target repositories.`;
+  inside target repositories.
+  doctor/sync can migrate deterministic AGENTS, CLAUDE, Cursor, and .cursorrules
+  project rules into docs/architext/data/rules.json.`;
 }
 
 export function parseArgs(argv) {

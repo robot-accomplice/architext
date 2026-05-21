@@ -220,7 +220,30 @@
       "dateAdded": "2026-05-21T08:30:00.000Z",
       "evidence": [
         "docs/architecture/ARCHITECTURE_PLAN.md automated verification harness section"
-      ]
+      ],
+      "targetReleaseId": "v1-4-1"
+    },
+    {
+      "id": "rules-editor-actions-placement",
+      "title": "Rules editor action placement",
+      "summary": "Move newly added rule action buttons below the rule form and use highlighted action colors so save/cancel/delete controls are visually obvious and spatially attached to the form.",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "high",
+      "section": "Rules",
+      "targetReleaseId": "v1-4-1",
+      "dateAdded": "2026-05-21T13:00:00.000Z"
+    },
+    {
+      "id": "agent-rule-migration",
+      "title": "Agent instruction rule migration",
+      "summary": "Offer a doctor/sync migration that extracts project rules from AGENTS.md, CLAUDE.md, Cursor rule files, and legacy .cursorrules into docs/architext/data/rules.json, then replaces tool-specific files with model-agnostic pointers.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "high",
+      "section": "Rules",
+      "targetReleaseId": "v1-4-1",
+      "dateAdded": "2026-05-21T13:30:00.000Z"
     }
   ]
 }

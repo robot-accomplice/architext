@@ -24,6 +24,14 @@ export function doctorRepairsForStatus(status) {
       summary: change
     });
   }
+  for (const change of status.instructionRules?.repairChanges ?? []) {
+    repairs.push({
+      id: `instruction-rules:${change}`,
+      category: "instruction-rules",
+      file: "docs/architext/data/rules.json",
+      summary: change
+    });
+  }
   return repairs;
 }
 

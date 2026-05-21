@@ -11,8 +11,9 @@ import { diagramLayoutFor } from "./presentation/diagramLayout.js";
 import { c4DrilldownUnavailableReason, childC4ViewForNode } from "./presentation/c4Drilldown.js";
 import { releaseKanbanColumns } from "./presentation/releaseKanban.js";
 import { ReleasePlanningPanel, ReleasePlanningWorkspace } from "./presentation/ReleasePlanning.js";
-import { nextRuleCategoryName, orderedRules, ruleCategories, ruleCriticalityTone, ruleProtectionLabel } from "./presentation/rules.js";
+import { nextRuleCategoryName, orderedRules, ruleCategories, ruleCategoryAccent, ruleCriticalityTone, ruleProtectionLabel } from "./presentation/rules.js";
 import { postRulesAction } from "./presentation/rulesClient.js";
+import { useUnsavedEditorGuard } from "./presentation/unsavedEditorGuard.js";
 import { StepRoute } from "./presentation/StepRoute.js";
 import {
   progressFill,
@@ -223,20 +224,38 @@ function slugifyRuleId(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "new-rule";
 }
 
+function editableRuleSnapshot(rule: RuleItem | null) {
+  if (!rule) return null;
+  return JSON.stringify({
+    id: rule.id,
+    title: rule.title,
+    summary: rule.summary,
+    category: rule.category,
+    criticality: rule.criticality,
+    order: rule.order,
+    source: rule.source,
+    protection: rule.protection
+  });
+}
+
 function RulesWorkspace({
   rules,
   selectedRule,
   selectedCategory,
   newRuleDraftRequest,
   onSelectRule,
-  onRulesChanged
+  onRuleSaved,
+  onRulesChanged,
+  onEditingChange
 }: {
   rules: RuleItem[];
   selectedRule: RuleItem | null;
   selectedCategory: string;
   newRuleDraftRequest: { id: number; category: string } | null;
   onSelectRule: (id: Id) => void;
+  onRuleSaved: (id: Id) => void;
   onRulesChanged: () => Promise<void>;
+  onEditingChange: (editing: boolean) => void;
 }) {
   const ordered = orderedRules(rules);
   const visibleRules = selectedCategory === "all"
@@ -248,11 +267,22 @@ function RulesWorkspace({
   const [dragRuleId, setDragRuleId] = useState<Id | null>(null);
   const draftIsNew = Boolean(draft && !rules.some((rule) => rule.id === draft.id));
   const draftEditProtected = !draftIsNew && selectedRule?.protection.edit;
+  const draftCannotMove = !selectedRule || draftIsNew || selectedRule.protection.edit || selectedRule.protection.delete;
+  const draftCannotDelete = !selectedRule || draftIsNew || selectedRule.protection.delete;
+  const draftDirty = Boolean(draft) && (
+    draftIsNew || editableRuleSnapshot(draft) !== editableRuleSnapshot(selectedRule)
+  );
 
   useEffect(() => {
     setDraft(selectedRule);
     setMessage("");
-  }, [selectedRule?.id]);
+  }, [selectedRule]);
+
+  useEffect(() => {
+    onEditingChange(draftDirty);
+  }, [draftDirty, onEditingChange]);
+
+  useEffect(() => () => onEditingChange(false), [onEditingChange]);
 
   const sendRuleAction = async (payload: object) => {
     setMessage("");
@@ -291,23 +321,26 @@ function RulesWorkspace({
     if (!draft) return;
     try {
       await sendRuleAction({ action: "update", rule: draft });
+      onEditingChange(false);
+      onRuleSaved(draft.id);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     }
   };
 
   const deleteSelectedRule = async () => {
-    if (!selectedRule || selectedRule.protection.delete) return;
+    if (!selectedRule || draftCannotDelete) return;
     try {
       await sendRuleAction({ action: "delete", id: selectedRule.id });
       setDraft(null);
+      onEditingChange(false);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : String(error));
     }
   };
 
   const moveSelectedRule = async (direction: "up" | "down") => {
-    if (!selectedRule || selectedRule.protection.edit || selectedRule.protection.delete) return;
+    if (!selectedRule || draftCannotMove) return;
     try {
       await sendRuleAction({ action: "move", id: selectedRule.id, direction });
     } catch (error) {
@@ -387,26 +420,20 @@ function RulesWorkspace({
       {draft ? (
         <div className="rule-editor">
           <div className="rule-editor-head">
-            <h3>Edit Rule</h3>
-            <div className="rule-editor-actions">
-              <button type="button" onClick={() => moveSelectedRule("up")} disabled={selectedRule?.protection.edit || selectedRule?.protection.delete}>Move up</button>
-              <button type="button" onClick={() => moveSelectedRule("down")} disabled={selectedRule?.protection.edit || selectedRule?.protection.delete}>Move down</button>
-              <button type="button" onClick={deleteSelectedRule} disabled={selectedRule?.protection.delete}>Delete</button>
-              <button type="button" className="primary-action" onClick={saveDraft} disabled={draftEditProtected}>Save rule</button>
-            </div>
+            <h3>{draftIsNew ? "Add Rule" : "Edit Rule"}</h3>
           </div>
           <div className="rule-editor-grid">
             <label>
               ID
-              <input value={draft.id} disabled={!draftIsNew} onChange={(event) => setDraft({ ...draft, id: slugifyRuleId(event.target.value) })} />
+              <input aria-label="ID" value={draft.id} disabled={!draftIsNew} onChange={(event) => setDraft({ ...draft, id: slugifyRuleId(event.target.value) })} />
             </label>
             <label>
               Title
-              <input value={draft.title} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
+              <input aria-label="Title" value={draft.title} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, title: event.target.value })} />
             </label>
             <label>
               Criticality
-              <select value={draft.criticality} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, criticality: event.target.value as RuleItem["criticality"] })}>
+              <select aria-label="Criticality" value={draft.criticality} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, criticality: event.target.value as RuleItem["criticality"] })}>
                 <option value="critical">Critical</option>
                 <option value="high">High</option>
                 <option value="medium">Medium</option>
@@ -415,11 +442,11 @@ function RulesWorkspace({
             </label>
             <label>
               Category
-              <input value={draft.category} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, category: event.target.value })} />
+              <input aria-label="Category" value={draft.category} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, category: event.target.value })} />
             </label>
             <label>
               Source
-              <select value={draft.source} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, source: event.target.value as RuleItem["source"] })}>
+              <select aria-label="Source" value={draft.source} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, source: event.target.value as RuleItem["source"] })}>
                 <option value="maintainer">Maintainer</option>
                 <option value="agent">Agent</option>
               </select>
@@ -435,9 +462,20 @@ function RulesWorkspace({
           </div>
           <label className="rule-editor-summary">
             Summary
-            <textarea value={draft.summary} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} />
+            <textarea aria-label="Summary" value={draft.summary} disabled={draftEditProtected} onChange={(event) => setDraft({ ...draft, summary: event.target.value })} />
           </label>
           {message ? <p className="rule-editor-message">{message}</p> : null}
+          <div className="rule-editor-actions rule-editor-actions-footer">
+            <button type="button" className="secondary-action" onClick={() => moveSelectedRule("up")} disabled={draftCannotMove}>Move up</button>
+            <button type="button" className="secondary-action" onClick={() => moveSelectedRule("down")} disabled={draftCannotMove}>Move down</button>
+            <button type="button" className="quiet-action" onClick={() => {
+              setDraft(selectedRule);
+              setMessage("");
+              onEditingChange(false);
+            }}>Cancel</button>
+            <button type="button" className="danger-action" onClick={deleteSelectedRule} disabled={draftCannotDelete}>Delete</button>
+            <button type="button" className="primary-action" onClick={saveDraft} disabled={draftEditProtected}>Save rule</button>
+          </div>
         </div>
       ) : null}
     </section>
@@ -1048,6 +1086,7 @@ function App() {
   const [selection, setSelection] = useState<Selection | null>(null);
   const [releasePlanningMode, setReleasePlanningMode] = useState(false);
   const [releasePlanningDirty, setReleasePlanningDirty] = useState(false);
+  const [rulesEditorDirty, setRulesEditorDirty] = useState(false);
   const [selectedRuleCategory, setSelectedRuleCategory] = useState("all");
   const [newRuleDraftRequest, setNewRuleDraftRequest] = useState<{ id: number; category: string } | null>(null);
   const [diagramTransform, setDiagramTransform] = useState<DiagramTransform>({ zoom: 1, focused: false });
@@ -1056,6 +1095,11 @@ function App() {
   const [riskFilter, setRiskFilter] = useState("all");
   const [stepsCollapsed, setStepsCollapsed] = useState(false);
   const [diagramViewportRef, diagramViewportSize] = useElementSize<HTMLElement>();
+  const editorStates = useMemo(() => [
+    { id: "release-planning", label: "Release Planning", dirty: releasePlanningDirty },
+    { id: "rules", label: "Rules editor", dirty: rulesEditorDirty }
+  ], [releasePlanningDirty, rulesEditorDirty]);
+  const { confirmEditorNavigation } = useUnsavedEditorGuard(editorStates);
 
   const applyLoadedModel = (loaded: Model, resetSelection = true) => {
     const requestedMode = modeForHash(window.location.hash) as Mode | null;
@@ -1086,8 +1130,8 @@ function App() {
 
   useEffect(() => subscribeToDataEvents({
     onValid: async () => {
-      if (releasePlanningDirty) {
-        setDataNotice("Architext data changed. Finish release-plan edits before refreshing.");
+      if (releasePlanningDirty || rulesEditorDirty) {
+        setDataNotice("Architext data changed. Save or discard editor changes before refreshing.");
         return;
       }
       try {
@@ -1112,7 +1156,7 @@ function App() {
         setError(loadError instanceof Error ? loadError.message : String(loadError));
       }
     }
-  }), [releasePlanningDirty]);
+  }), [releasePlanningDirty, rulesEditorDirty]);
 
   useEffect(() => {
     if (!dataNotice) return undefined;
@@ -1158,11 +1202,12 @@ function App() {
   useEffect(() => {
     const onHashChange = () => {
       const requestedMode = modeForHash(window.location.hash) as Mode | null;
-      if (requestedMode && model) switchMode(requestedMode);
+      if (!requestedMode || !model) return;
+      switchMode(requestedMode, { restoreHashOnCancel: true });
     };
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
-  });
+  }, [activeMode, confirmEditorNavigation, model]);
 
   useEffect(() => {
     const narrowWidth = window.matchMedia("(max-width: 760px)");
@@ -1274,7 +1319,24 @@ function App() {
     return Math.min(1, Math.max(readableMinimum, Number(nextZoom.toFixed(2))));
   };
 
-  const switchMode = (mode: Mode) => {
+  const clearEditorDirtyState = () => {
+    setReleasePlanningDirty(false);
+    setRulesEditorDirty(false);
+  };
+
+  const confirmEditorNavigationOrStay = () => {
+    if (confirmEditorNavigation()) {
+      clearEditorDirtyState();
+      return true;
+    }
+    return false;
+  };
+
+  const switchMode = (mode: Mode, options: { restoreHashOnCancel?: boolean } = {}) => {
+    if (!confirmEditorNavigationOrStay()) {
+      if (options.restoreHashOnCancel) window.history.replaceState(null, "", hashForMode(activeMode));
+      return;
+    }
     const nextView = defaultViewForMode(mode, model.views, fallbackView);
     window.history.replaceState(null, "", hashForMode(mode));
     setActiveMode(mode);
@@ -1290,6 +1352,7 @@ function App() {
   };
 
   const selectRelease = async (releaseId: Id) => {
+    if (!confirmEditorNavigationOrStay()) return;
     setActiveReleaseId(releaseId);
     setSelection(null);
     if (!model.releases || releaseDetailsById.has(releaseId)) return;
@@ -1303,6 +1366,7 @@ function App() {
   };
 
   const selectView = (viewId: Id) => {
+    if (!confirmEditorNavigationOrStay()) return;
     const view = viewsById.get(viewId);
     if (!view) return;
     const nextMode = modeForView(view);
@@ -1318,6 +1382,7 @@ function App() {
   };
 
   const selectC4Node = (nodeId: Id) => {
+    if (!confirmEditorNavigationOrStay()) return;
     const childView = childC4ViewForNode(model.views, activeView, nodeId) as View | null;
     if (childView) {
       setActiveViewId(childView.id);
@@ -1332,6 +1397,7 @@ function App() {
   };
 
   const selectRelationship = (relationship: Relationship) => {
+    if (!confirmEditorNavigationOrStay()) return;
     setSelection({
       kind: "relationship",
       from: relationship.from,
@@ -1420,21 +1486,28 @@ function App() {
             riskFilter={riskFilter}
             onRiskFilterChange={setRiskFilter}
             onSelectFlow={(flowId) => {
+              if (!confirmEditorNavigationOrStay()) return;
               setActiveFlowId(flowId);
               setSelection({ kind: "flow", id: flowId });
             }}
             onSelectView={selectView}
-            onSelectNode={(id) => setSelection({ kind: "node", id })}
+            onSelectNode={(id) => {
+              if (!confirmEditorNavigationOrStay()) return;
+              setSelection({ kind: "node", id });
+            }}
             onSelectRelease={selectRelease}
             onSelectRule={(id) => {
+              if (!confirmEditorNavigationOrStay()) return;
               setSelection({ kind: "rule", id });
               setRightCollapsed(false);
             }}
             onSelectRuleCategory={(category) => {
+              if (!confirmEditorNavigationOrStay()) return;
               setSelectedRuleCategory(category);
               setSelection(null);
             }}
             onAddRuleCategory={() => {
+              if (!confirmEditorNavigationOrStay()) return;
               const category = nextRuleCategoryName(model.rules ?? []);
               setSelectedRuleCategory(category);
               setSelection(null);
@@ -1452,10 +1525,16 @@ function App() {
             selectedCategory={selectedRuleCategory}
             newRuleDraftRequest={newRuleDraftRequest}
             onSelectRule={(id) => {
+              if (!confirmEditorNavigationOrStay()) return;
+              setSelection({ kind: "rule", id });
+              setRightCollapsed(false);
+            }}
+            onRuleSaved={(id) => {
               setSelection({ kind: "rule", id });
               setRightCollapsed(false);
             }}
             onRulesChanged={reloadArchitectureData}
+            onEditingChange={setRulesEditorDirty}
           />
         ) : isReleaseTruthView ? (
           <ReleaseTruthWorkspace
@@ -1465,15 +1544,20 @@ function App() {
             selection={selection}
             onSelectCurrentRelease={selectCurrentRelease}
             planningMode={releasePlanningMode}
-            onPlanningModeChange={setReleasePlanningMode}
+            onPlanningModeChange={(nextPlanningMode) => {
+              if (!nextPlanningMode && !confirmEditorNavigationOrStay()) return;
+              setReleasePlanningMode(nextPlanningMode);
+            }}
             roadmapItems={model.roadmap}
             onReleasePlanApproved={reloadReleasePlanningModel}
             onReleasePlanningEditingChange={setReleasePlanningDirty}
             onSelectReleaseItem={(id) => {
+              if (!confirmEditorNavigationOrStay()) return;
               setSelection({ kind: "release-item", itemId: id });
               setRightCollapsed(false);
             }}
             onSelectReleaseMilestone={(id) => {
+              if (!confirmEditorNavigationOrStay()) return;
               setSelection({ kind: "release-milestone", milestoneId: id });
               setRightCollapsed(false);
             }}
@@ -1517,7 +1601,10 @@ function App() {
                   dataById={dataById}
                   selectedStepId={selectedActiveStepId}
                   transform={diagramTransform}
-                  onSelectStep={(stepId) => setSelection({ kind: "step", flowId: activeFlow.id, stepId })}
+                  onSelectStep={(stepId) => {
+                    if (!confirmEditorNavigationOrStay()) return;
+                    setSelection({ kind: "step", flowId: activeFlow.id, stepId });
+                  }}
                   onSelectRelationship={selectRelationship}
                 />
               ) : isC4View ? (
@@ -1544,7 +1631,10 @@ function App() {
                   transform={diagramTransform}
                   routingStyle={routingStyle}
                   debugRouting={debugRouting}
-                  onSelectNode={(id) => setSelection({ kind: "node", id })}
+                  onSelectNode={(id) => {
+                    if (!confirmEditorNavigationOrStay()) return;
+                    setSelection({ kind: "node", id });
+                  }}
                   onSelectRelationship={selectRelationship}
                 />
               )}
@@ -1574,7 +1664,10 @@ function App() {
                       key={step.id}
                       type="button"
                       className={`step-card ${isSelectedStep(selection, activeFlow.id, step.id) ? "active" : ""}`}
-                      onClick={() => setSelection({ kind: "step", flowId: activeFlow.id, stepId: step.id })}
+                      onClick={() => {
+                        if (!confirmEditorNavigationOrStay()) return;
+                        setSelection({ kind: "step", flowId: activeFlow.id, stepId: step.id });
+                      }}
                     >
                       <span className="step-number">{index + 1}</span>
                       <strong>{nodesById.get(step.from)?.name ?? step.from} {"→"} {nodesById.get(step.to)?.name ?? step.to}</strong>
@@ -1623,8 +1716,12 @@ function App() {
             selection={selection}
             selectedStep={selectedStep}
             activeFlow={activeFlow}
-            onSelectNode={(id) => setSelection({ kind: "node", id })}
+            onSelectNode={(id) => {
+              if (!confirmEditorNavigationOrStay()) return;
+              setSelection({ kind: "node", id });
+            }}
             onSelectFlow={(id) => {
+              if (!confirmEditorNavigationOrStay()) return;
               setActiveFlowId(id);
               setSelection({ kind: "flow", id });
             }}
@@ -1700,6 +1797,7 @@ function LeftPanel({
               key={category.id}
               type="button"
               className={`entity-card rule-category-card ${activeRuleCategory === category.id ? "active" : ""}`}
+              style={{ "--rule-category-accent": ruleCategoryAccent(category.id) } as React.CSSProperties}
               onClick={() => onSelectRuleCategory(category.id)}
             >
               <strong className="entity-card-title">{category.label}</strong>

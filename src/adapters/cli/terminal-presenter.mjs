@@ -15,6 +15,9 @@ export function statusLines(status, { verbose = false } = {}) {
   if (status.releaseTruth) {
     lines.push(`Release Truth: ${status.releaseTruth.configured && status.releaseTruth.indexExists ? "configured" : status.releaseTruth.configured ? "index missing" : "not configured"}`);
   }
+  if (status.instructionRules) {
+    lines.push(`Instruction rule migration: ${status.instructionRules.candidateRules.length ? `${status.instructionRules.candidateRules.length} candidate rule${status.instructionRules.candidateRules.length === 1 ? "" : "s"}` : "none"}`);
+  }
   if (status.manifest) {
     lines.push(`Schema: ${status.manifest.schemaVersion || "missing"}${status.manifest.repairChanges.length ? ` (expected ${status.manifest.expectedSchemaVersion})` : ""}`);
     if (status.manifest.migrationPlan?.pending?.length) {
@@ -46,6 +49,13 @@ export function statusLines(status, { verbose = false } = {}) {
     if (status.c4?.drilldownIssues?.length) {
       lines.push("C4 drilldown gaps requiring architecture documentation:");
       for (const issue of status.c4.drilldownIssues) lines.push(`- ${issue}`);
+    }
+
+    if (status.instructionRules?.candidateRules.length || status.instructionRules?.rewriteFiles.length || status.instructionRules?.ambiguousFiles.length) {
+      lines.push("Instruction rule migration:");
+      for (const rule of status.instructionRules.candidateRules) lines.push(`- Candidate rule: ${rule.title}`);
+      for (const file of status.instructionRules.rewriteFiles) lines.push(`- Rewrite pointer: ${file.path}`);
+      for (const file of status.instructionRules.ambiguousFiles) lines.push(`- Ambiguous content preserved: ${file.path} (${file.reason})`);
     }
 
     lines.push("Instruction files:");

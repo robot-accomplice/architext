@@ -1,6 +1,6 @@
 {
   "name": "@robotaccomplice/architext",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Local JSON-backed architecture and dataflow viewer for engineering teams and LLM-maintained architecture maps.",
   "type": "module",
   "engines": {
@@ -46,9 +46,10 @@
     "test": "node --test test/architecture-references.test.mjs test/browser-preferences.test.mjs test/cli-runtime.test.mjs test/cli.test.mjs test/c4-documents.test.mjs test/c4-drilldown.test.mjs test/c4-quality.test.mjs test/command-router.test.mjs test/data-events.test.mjs test/data-watch-hub.test.mjs test/diagram-layout.test.mjs test/doctor-repairs.test.mjs test/fetch-architecture-data.test.mjs test/npm-pack-output.test.mjs test/pdf-export-ui.test.mjs test/planned-diagram-state.test.mjs test/release-kanban.test.mjs test/release-planning.test.mjs test/release-planning-ui.test.mjs test/release-schema.test.mjs test/release-truth-presentation.test.mjs test/rules-api.test.mjs test/rules-presentation.test.mjs test/route-ports.test.mjs test/routing-fitness.test.mjs test/routing.test.mjs test/schema-migrations.test.mjs test/serve-handler.test.mjs test/step-route-rendering.test.mjs test/step-selection.test.mjs test/target-layout.test.mjs test/terminal-presenter.test.mjs test/view-modes.test.mjs test/view-selection.test.mjs",
     "test:all": "npm test",
     "test:benchmark": "node --test test/c4-documents.test.mjs test/routing-fitness.test.mjs",
+    "test:uat": "node scripts/uat-harness.mjs",
     "validate": "node docs/architext/tools/validate-architext.mjs",
     "verify": "npm test && npm run validate && npm run build && npm run test:benchmark",
-    "release:check": "npm run verify && npm pack --dry-run && npm run smoke:pack",
+    "release:check": "npm run verify && npm run test:uat && npm pack --dry-run && npm run smoke:pack",
     "smoke:pack": "node scripts/smoke-packed-cli.mjs"
   },
   "publishConfig": {
@@ -59,9 +60,10 @@
     "ajv-formats": "^3.0.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",
+    "@vitejs/plugin-react": "^4.3.4",
+    "playwright": "^1.60.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "typescript": "^5.7.2",
