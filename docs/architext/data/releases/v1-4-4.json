@@ -2,12 +2,12 @@
   "id": "v1-4-4",
   "version": "1.4.4",
   "name": "Architext 1.4.4 Resilient UI Repair",
-  "status": "implementing",
-  "posture": "release-candidate",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Architext 1.4.4 keeps the served UI useful when target data is invalid and lets users run safe doctor/sync recovery actions from the browser.",
   "targetDate": "2026-05-22",
-  "lastUpdated": "2026-05-22T14:00:00.000Z",
-  "updateSource": "Maintainer release direction",
+  "lastUpdated": "2026-05-22T15:24:00.000Z",
+  "updateSource": "Release ceremony and npm publish verification",
   "scope": {
     "required": [
       {
@@ -316,5 +316,6 @@
       "status": "complete",
       "href": "npm pack --dry-run; npm run smoke:pack"
     }
-  ]
+  ],
+  "releasedAt": "2026-05-22T15:24:00.000Z"
 }

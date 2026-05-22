@@ -1,0 +1,228 @@
+{
+  "id": "v1-4-5",
+  "version": "1.4.5",
+  "name": "Architext 1.4.5 Serve Instance Management",
+  "status": "implementing",
+  "posture": "on-track",
+  "summary": "Architext 1.4.5 makes background serve instances discoverable, addressable, restartable after CLI upgrades, and easier to update from npm.",
+  "targetDate": "2026-05-22",
+  "lastUpdated": "2026-05-22T16:10:00.000Z",
+  "updateSource": "1.4.5 serve lifecycle implementation",
+  "scope": {
+    "required": [
+      {
+        "id": "serve-instance-list",
+        "title": "Serve instance list",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Add architext --list and architext serve --list so users can see all recorded background serve instances with id, target, PID, URL, log path, start time, and liveness.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-22T15:30:00.000Z",
+        "workstreamId": "serve-discovery",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/RELEASE_1_4_5_SUCCESS_CRITERIA.md",
+          "test/serve-lifecycle.test.mjs",
+          "test/update-check.test.mjs",
+          "npm test",
+          "npm run validate"
+        ]
+      },
+      {
+        "id": "serve-instance-restart",
+        "title": "Serve instance refresh",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Add restart, refresh, and update lifecycle aliases so a recorded background serve instance is synced to the current Architext package, then relaunched with the current CLI version on the same host and port.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-22T15:30:00.000Z",
+        "workstreamId": "serve-refresh",
+        "dependsOn": [
+          "serve-instance-list"
+        ],
+        "evidence": [
+          "docs/architecture/RELEASE_1_4_5_SUCCESS_CRITERIA.md",
+          "test/serve-lifecycle.test.mjs",
+          "test/update-check.test.mjs",
+          "npm test",
+          "npm run validate"
+        ]
+      },
+      {
+        "id": "package-update-check",
+        "title": "Package update check",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Add a top-level update check that compares the current Architext version to npm latest, prompts before installing a newer version, and then offers to refresh selected or all running background instances with the newly installed CLI.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-22T15:30:00.000Z",
+        "workstreamId": "package-update",
+        "dependsOn": [
+          "serve-instance-list",
+          "serve-instance-restart"
+        ],
+        "evidence": [
+          "docs/architecture/RELEASE_1_4_5_SUCCESS_CRITERIA.md",
+          "test/serve-lifecycle.test.mjs",
+          "test/update-check.test.mjs",
+          "npm test",
+          "npm run validate"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": [
+      {
+        "id": "remote-process-management",
+        "title": "Remote process management",
+        "kind": "feature",
+        "status": "cut",
+        "summary": "1.4.5 only manages local Architext background serve processes recorded in the local runtime registry.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-22T15:30:00.000Z",
+        "workstreamId": "serve-discovery",
+        "dependsOn": []
+      }
+    ]
+  },
+  "workstreams": [
+    {
+      "id": "serve-discovery",
+      "name": "Serve Discovery",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Expose the local background server registry so users can discover running Architext viewers without remembering target paths.",
+      "progress": 100,
+      "itemIds": [
+        "serve-instance-list",
+        "remote-process-management"
+      ],
+      "evidence": [
+        "docs/architecture/RELEASE_1_4_5_SUCCESS_CRITERIA.md",
+        "test/serve-lifecycle.test.mjs",
+        "test/update-check.test.mjs"
+      ]
+    },
+    {
+      "id": "serve-refresh",
+      "name": "Serve Refresh",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Sync recorded background viewers to the current package and restart them with the current CLI after Architext upgrades.",
+      "progress": 100,
+      "itemIds": [
+        "serve-instance-restart"
+      ],
+      "evidence": [
+        "docs/architecture/RELEASE_1_4_5_SUCCESS_CRITERIA.md",
+        "test/serve-lifecycle.test.mjs",
+        "test/update-check.test.mjs"
+      ]
+    },
+    {
+      "id": "package-update",
+      "name": "Package Update",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Check npm for newer Architext versions, install after confirmation, and hand instance refresh to the newly installed CLI.",
+      "progress": 100,
+      "itemIds": [
+        "package-update-check"
+      ],
+      "evidence": [
+        "docs/architecture/RELEASE_1_4_5_SUCCESS_CRITERIA.md",
+        "test/serve-lifecycle.test.mjs",
+        "test/update-check.test.mjs"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "architecture-approved",
+      "label": "1.4.5 architecture approved",
+      "status": "complete",
+      "targetWindow": "Release planning",
+      "order": 1,
+      "itemIds": [
+        "serve-instance-list",
+        "serve-instance-restart"
+      ]
+    },
+    {
+      "id": "cli-contract-implemented",
+      "label": "CLI lifecycle contract implemented",
+      "status": "complete",
+      "targetWindow": "Implementation",
+      "order": 2,
+      "itemIds": [
+        "serve-instance-list",
+        "serve-instance-restart",
+        "package-update-check"
+      ]
+    },
+    {
+      "id": "release-gate",
+      "label": "Release gate passed",
+      "status": "planned",
+      "targetWindow": "Before release",
+      "order": 3,
+      "itemIds": [
+        "serve-instance-list",
+        "serve-instance-restart",
+        "package-update-check"
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "restart-needs-list-identity",
+      "from": "serve-instance-restart",
+      "to": "serve-instance-list",
+      "summary": "Restart-by-id depends on the instance identity exposed by list output."
+    },
+    {
+      "id": "update-check-needs-instance-refresh",
+      "from": "package-update-check",
+      "to": "serve-instance-restart",
+      "summary": "Post-install refresh depends on the same instance restart behavior used after manual upgrades."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "release-1-4-5-success-criteria",
+      "label": "1.4.5 success criteria",
+      "href": "docs/architecture/RELEASE_1_4_5_SUCCESS_CRITERIA.md",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "serve-lifecycle-tests",
+      "label": "Serve lifecycle and update-check tests",
+      "href": "test/serve-lifecycle.test.mjs",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "full-test-suite",
+      "label": "npm test",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "release-truth-validation",
+      "label": "npm run validate",
+      "kind": "test",
+      "status": "complete"
+    }
+  ]
+}
