@@ -8,6 +8,7 @@ import { fileURLToPath } from "node:url";
 import { createCommandHandlers, routeCommand } from "./command-router.mjs";
 import { parseArgs, usage } from "./command-line.mjs";
 import { assertDirectory, git, gitAvailable, readJson, run, tryRun, writeJson } from "./runtime.mjs";
+import { runServeLifecycle } from "./serve-lifecycle.mjs";
 import { printStatus } from "./terminal-presenter.mjs";
 import { createDataWatchHub } from "../http/data-watch-hub.mjs";
 import { approveReleasePlanRequest as approveReleasePlanApiRequest } from "../http/release-planning-api.mjs";
@@ -29,6 +30,7 @@ import {
 } from "../../domain/lifecycle/target-layout.mjs";
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
+const cliEntryPath = path.join(packageRoot, "tools", "architext-adopt.mjs");
 const viewerDir = path.join(packageRoot, "docs", "architext");
 const viewerDistDir = path.join(viewerDir, "dist");
 const schemaDir = path.join(viewerDir, "schema");
@@ -1167,7 +1169,7 @@ async function updateRulesRequest(target, payload) {
   });
 }
 
-async function serveTarget(target) {
+async function createViewerServer({ target, host, port }) {
   if (!existsSync(path.join(viewerDistDir, "index.html"))) {
     throw new Error("Package viewer assets are missing. Run npm run build before serving Architext.");
   }
@@ -1178,11 +1180,10 @@ async function serveTarget(target) {
 
   await new Promise((resolve, reject) => {
     server.once("error", reject);
-    server.listen(4317, "127.0.0.1", resolve);
+    server.listen(port, host, resolve);
   });
   server.once("close", () => watchHub.close());
-  console.log(`Serving Architext for ${target}`);
-  console.log("Open http://127.0.0.1:4317");
+  return server;
 }
 
 export function createViewerRequestHandler({ target, targetDataDir = dataDir(target), watchHub }) {
@@ -1243,7 +1244,7 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
 function commandHandlers(version) {
   return createCommandHandlers({
     sync: (target, options) => syncTarget(target, options, version),
-    serve: (target) => serveTarget(target),
+    serve: (target, options) => runServeLifecycle({ target, options, createViewerServer, cliEntryPath }),
     validate: async (target) => {
       const validation = await validateTarget(target);
       console.log(validation.output);

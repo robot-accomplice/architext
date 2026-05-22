@@ -275,6 +275,23 @@
         "npm test",
         "npm run validate"
       ]
+    },
+    {
+      "id": "serve-lifecycle-controls",
+      "title": "Serve lifecycle controls",
+      "summary": "Add explicit serve modes for foreground and background execution, browser launch controls, clickable URL output, status inspection, and server stop behavior.",
+      "kind": "feature",
+      "status": "complete",
+      "priority": "high",
+      "section": "CLI Lifecycle Refactor",
+      "dateAdded": "2026-05-22T00:00:00.000Z",
+      "targetReleaseId": "v1-4-3",
+      "evidence": [
+        "docs/architecture/RELEASE_1_4_3_SUCCESS_CRITERIA.md",
+        "src/adapters/cli/serve-lifecycle.mjs",
+        "test/serve-lifecycle.test.mjs",
+        "npm test"
+      ]
     }
   ]
 }
