@@ -232,6 +232,7 @@ async function main() {
   const browser = await chromium.launch();
   const pageErrors = [];
   const consoleErrors = [];
+  const failedResponses = [];
 
   try {
     await withServer(
@@ -253,12 +254,23 @@ async function main() {
           page.on("console", (message) => {
             if (message.type() === "error") consoleErrors.push(message.text());
           });
+          page.on("response", async (response) => {
+            if (response.status() < 400) return;
+            let body = "";
+            try {
+              body = await response.text();
+            } catch {
+              body = "<unavailable>";
+            }
+            failedResponses.push(`${response.status()} ${response.url()}\n${body}`);
+          });
 
           for (const { name, run } of workflows) {
             console.log(`UAT: ${name}`);
             await run({ page, origin });
           }
 
+          assert.deepEqual(failedResponses, [], `Unexpected failed responses: ${failedResponses.join("\n")}`);
           await assertNoBrowserErrors(pageErrors, consoleErrors);
         } finally {
           await page.close();

@@ -4,10 +4,12 @@ import { loadArchitectureModel, loadReleaseDetail } from "../docs/architext/src/
 import { releaseSummaryFromDetail } from "../src/domain/architecture-model/release-history.mjs";
 
 function response(body, ok = true) {
+  const text = typeof body === "string" ? body : JSON.stringify(body);
   return {
     ok,
     status: ok ? 200 : 404,
     statusText: ok ? "OK" : "Not Found",
+    text: async () => text,
     json: async () => body
   };
 }

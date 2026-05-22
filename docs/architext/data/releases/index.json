@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-4-3",
+  "currentReleaseId": "v1-4-4",
   "releases": [
     {
       "id": "v1-1-2",
@@ -156,6 +156,27 @@
       "file": "v1-4-0.json"
     },
     {
+      "id": "v1-4-4",
+      "version": "1.4.4",
+      "name": "Architext 1.4.4 Resilient UI Repair",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-05-22",
+      "lastUpdated": "2026-05-22T14:00:00.000Z",
+      "summary": "Architext 1.4.4 keeps the served UI useful when target data is invalid and lets users run safe doctor/sync recovery actions from the browser.",
+      "counts": {
+        "features": 6,
+        "bugFixes": 1,
+        "workstreams": 5,
+        "blockers": 0,
+        "complete": 6,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-4.json"
+    },
+    {
       "id": "v1-4-1",
       "version": "1.4.1",
       "name": "Architext 1.4.1 Verification and Rules Corrections",
@@ -203,10 +224,11 @@
       "id": "v1-4-3",
       "version": "1.4.3",
       "name": "Architext 1.4.3 Serve Lifecycle Controls",
-      "status": "implementing",
-      "posture": "release-candidate",
+      "status": "completed",
+      "posture": "shipped",
       "targetDate": "2026-05-22",
-      "lastUpdated": "2026-05-22T00:00:00.000Z",
+      "releasedAt": "2026-05-22T14:00:00.000Z",
+      "lastUpdated": "2026-05-22T14:00:00.000Z",
       "summary": "Architext 1.4.3 adds explicit local serve lifecycle controls for foreground, background, browser launch, status, and stop workflows.",
       "counts": {
         "features": 2,

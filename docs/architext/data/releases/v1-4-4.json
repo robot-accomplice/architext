@@ -1,0 +1,320 @@
+{
+  "id": "v1-4-4",
+  "version": "1.4.4",
+  "name": "Architext 1.4.4 Resilient UI Repair",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Architext 1.4.4 keeps the served UI useful when target data is invalid and lets users run safe doctor/sync recovery actions from the browser.",
+  "targetDate": "2026-05-22",
+  "lastUpdated": "2026-05-22T14:00:00.000Z",
+  "updateSource": "Maintainer release direction",
+  "scope": {
+    "required": [
+      {
+        "id": "degraded-data-shell",
+        "title": "Degraded data shell",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Render a useful recovery shell when initial architecture data loading or validation fails instead of replacing the app with a dead-end error page.",
+        "priority": "critical",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-22T14:00:00.000Z",
+        "workstreamId": "resilient-ui",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/RELEASE_1_4_4_SUCCESS_CRITERIA.md degraded data shell section"
+        ]
+      },
+      {
+        "id": "browser-repair-actions",
+        "title": "Browser repair actions",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Expose served-viewer APIs and UI controls for status, doctor dry-run, doctor apply, and safe sync repair flows.",
+        "priority": "critical",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-22T14:00:00.000Z",
+        "workstreamId": "browser-recovery",
+        "dependsOn": [
+          "write-lock-discipline"
+        ],
+        "evidence": [
+          "docs/architecture/RELEASE_1_4_4_SUCCESS_CRITERIA.md browser repair actions section"
+        ]
+      },
+      {
+        "id": "write-lock-discipline",
+        "title": "Write-lock discipline",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Add target-scoped write locking and write-settle waiting across CLI and browser mutating paths so repair and sync cannot corrupt active writes.",
+        "priority": "critical",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-22T14:00:00.000Z",
+        "workstreamId": "write-safety",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/RELEASE_1_4_4_SUCCESS_CRITERIA.md write-lock discipline section"
+        ]
+      },
+      {
+        "id": "release-history-chart-height",
+        "title": "Release history chart label fit",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Fix Release Truth history chart sizing so rotated x-axis release labels are not clipped.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-22T14:00:00.000Z",
+        "workstreamId": "visual-fit",
+        "dependsOn": [],
+        "evidence": [
+          "User-provided screenshot showing clipped x-axis labels"
+        ]
+      },
+      {
+        "id": "invalid-data-wait-now-choice",
+        "title": "Invalid data Wait/Now choice",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Replace the blocking invalid-data browser confirm with an in-app Wait or Now choice so users can keep the last known good model or intentionally try a reload.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-22T14:00:00.000Z",
+        "workstreamId": "resilient-ui",
+        "dependsOn": [
+          "degraded-data-shell"
+        ],
+        "evidence": [
+          "User-provided screenshot showing binary Cancel/OK invalid-data confirm"
+        ]
+      },
+      {
+        "id": "publishing-automation-plan",
+        "title": "npmjs trusted-publishing plan",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Document the npmjs trusted-publishing path and keep GitHub Packages out of scope while its namespace model conflicts with the existing package contract.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-22T14:00:00.000Z",
+        "workstreamId": "release-automation",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/PACKAGE_PUBLISHING_PLAN.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": [
+      {
+        "id": "browser-shell-access",
+        "title": "General browser shell access",
+        "kind": "feature",
+        "status": "cut",
+        "summary": "The viewer will not expose arbitrary shell command execution; recovery actions stay limited to Architext-owned status, doctor, and sync operations.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-22T14:00:00.000Z",
+        "workstreamId": "browser-recovery",
+        "dependsOn": []
+      }
+    ]
+  },
+  "workstreams": [
+    {
+      "id": "resilient-ui",
+      "name": "Resilient UI",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Keep the application chrome and recovery surface available when data cannot produce a complete architecture model.",
+      "progress": 100,
+      "itemIds": [
+        "degraded-data-shell",
+        "invalid-data-wait-now-choice"
+      ],
+      "evidence": [
+        "docs/architecture/RELEASE_1_4_4_SUCCESS_CRITERIA.md"
+      ]
+    },
+    {
+      "id": "browser-recovery",
+      "name": "Browser Recovery",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Expose constrained local repair APIs and UI controls that reuse existing doctor and sync repair behavior.",
+      "progress": 100,
+      "itemIds": [
+        "browser-repair-actions",
+        "browser-shell-access"
+      ],
+      "evidence": [
+        "docs/architecture/RELEASE_1_4_4_SUCCESS_CRITERIA.md"
+      ]
+    },
+    {
+      "id": "write-safety",
+      "name": "Write Safety",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Coordinate all Architext mutations through shared target-scoped lock and write-settle behavior.",
+      "progress": 100,
+      "itemIds": [
+        "write-lock-discipline"
+      ],
+      "evidence": [
+        "docs/architecture/RELEASE_1_4_4_SUCCESS_CRITERIA.md"
+      ]
+    },
+    {
+      "id": "visual-fit",
+      "name": "Visual Fit",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Keep release history chart labels legible within their SVG and section bounds.",
+      "progress": 100,
+      "itemIds": [
+        "release-history-chart-height"
+      ],
+      "evidence": [
+        "User-provided screenshot showing clipped x-axis labels"
+      ]
+    },
+    {
+      "id": "release-automation",
+      "name": "Release Automation",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Plan npmjs trusted publishing so releases do not require manual local publishing, while preserving the existing npm package identity.",
+      "progress": 100,
+      "itemIds": [
+        "publishing-automation-plan"
+      ],
+      "evidence": [
+        "docs/architecture/PACKAGE_PUBLISHING_PLAN.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "architecture-approved",
+      "label": "1.4.4 architecture approved",
+      "status": "complete",
+      "targetWindow": "Release planning",
+      "order": 1,
+      "itemIds": [
+        "degraded-data-shell",
+        "browser-repair-actions",
+        "write-lock-discipline"
+      ]
+    },
+    {
+      "id": "lock-boundary-implemented",
+      "label": "Shared write-lock boundary implemented",
+      "status": "complete",
+      "targetWindow": "Implementation",
+      "order": 2,
+      "itemIds": [
+        "write-lock-discipline"
+      ]
+    },
+    {
+      "id": "ui-recovery-verified",
+      "label": "UI recovery path verified",
+      "status": "complete",
+      "targetWindow": "Implementation",
+      "order": 3,
+      "itemIds": [
+        "degraded-data-shell",
+        "browser-repair-actions"
+      ]
+    },
+    {
+      "id": "history-chart-fit-verified",
+      "label": "History chart label fit verified",
+      "status": "complete",
+      "targetWindow": "Implementation",
+      "order": 4,
+      "itemIds": [
+        "release-history-chart-height"
+      ]
+    },
+    {
+      "id": "publishing-path-documented",
+      "label": "Publishing automation path documented",
+      "status": "complete",
+      "targetWindow": "Implementation",
+      "order": 5,
+      "itemIds": [
+        "publishing-automation-plan"
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "repair-actions-use-locks",
+      "from": "browser-repair-actions",
+      "to": "write-lock-discipline",
+      "summary": "Browser repair actions must use shared write locking before they can mutate target files."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "success-criteria",
+      "label": "1.4.4 success criteria",
+      "kind": "document",
+      "status": "complete",
+      "href": "docs/architecture/RELEASE_1_4_4_SUCCESS_CRITERIA.md"
+    },
+    {
+      "id": "package-publishing-plan",
+      "label": "Package publishing plan",
+      "kind": "document",
+      "status": "planned",
+      "href": "docs/architecture/PACKAGE_PUBLISHING_PLAN.md"
+    },
+    {
+      "id": "unit-test-suite",
+      "label": "npm test",
+      "kind": "test",
+      "status": "complete",
+      "href": "npm test"
+    },
+    {
+      "id": "architext-validation",
+      "label": "npm run validate",
+      "kind": "test",
+      "status": "complete",
+      "href": "npm run validate"
+    },
+    {
+      "id": "viewer-build",
+      "label": "npm run build",
+      "kind": "test",
+      "status": "complete",
+      "href": "npm run build"
+    },
+    {
+      "id": "browser-uat",
+      "label": "npm run test:uat",
+      "kind": "test",
+      "status": "complete",
+      "href": "npm run test:uat"
+    },
+    {
+      "id": "pack-smoke",
+      "label": "npm pack dry-run and smoke:pack",
+      "kind": "test",
+      "status": "complete",
+      "href": "npm pack --dry-run; npm run smoke:pack"
+    }
+  ]
+}
