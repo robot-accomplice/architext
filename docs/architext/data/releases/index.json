@@ -160,9 +160,9 @@
       "version": "1.4.5",
       "name": "Architext 1.4.5 Serve Instance Management",
       "status": "implementing",
-      "posture": "on-track",
+      "posture": "release-candidate",
       "targetDate": "2026-05-22",
-      "lastUpdated": "2026-05-22T16:10:00.000Z",
+      "lastUpdated": "2026-05-22T16:45:00.000Z",
       "summary": "Architext 1.4.5 makes background serve instances discoverable, addressable, restartable after CLI upgrades, and easier to update from npm.",
       "counts": {
         "features": 4,
