@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { cp, mkdtemp, rm } from "node:fs/promises";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
@@ -11,6 +11,9 @@ import { createViewerRequestHandler } from "../src/adapters/cli/architext-cli.mj
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceDataDir = path.join(repoRoot, "docs", "architext", "data");
 const viewerIndex = path.join(repoRoot, "docs", "architext", "dist", "index.html");
+const releaseIndex = JSON.parse(readFileSync(path.join(sourceDataDir, "releases", "index.json"), "utf8"));
+const currentRelease = releaseIndex.releases.find((release) => release.id === releaseIndex.currentReleaseId);
+const currentReleaseHeading = new RegExp(`Architext ${currentRelease.version.replaceAll(".", "\\.")}`);
 
 const workflows = [];
 
@@ -69,6 +72,25 @@ async function expectDiscardConfirmation(page, action) {
 async function assertNoBrowserErrors(pageErrors, consoleErrors) {
   assert.deepEqual(pageErrors, [], `Unexpected page errors: ${pageErrors.join("\n")}`);
   assert.deepEqual(consoleErrors, [], `Unexpected console errors: ${consoleErrors.join("\n")}`);
+}
+
+function writeJson(file, value) {
+  writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+function makeCurrentReleaseEditable(targetDataDir) {
+  const indexPath = path.join(targetDataDir, "releases", "index.json");
+  const index = JSON.parse(readFileSync(indexPath, "utf8"));
+  const current = index.releases.find((release) => release.id === index.currentReleaseId);
+  current.status = "implementing";
+  current.posture = "release-candidate";
+  writeJson(indexPath, index);
+
+  const detailPath = path.join(targetDataDir, "releases", current.file);
+  const detail = JSON.parse(readFileSync(detailPath, "utf8"));
+  detail.status = "implementing";
+  detail.posture = "release-candidate";
+  writeJson(detailPath, detail);
 }
 
 workflow("top-level navigation and diagram controls", async ({ page, origin }) => {
@@ -152,14 +174,14 @@ workflow("rules editor add, guard, save, move, delete, and category navigation",
 
 workflow("release truth projection and release planning controls", async ({ page, origin }) => {
   await page.goto(`${origin}/#releasetruth`, { waitUntil: "domcontentloaded" });
-  await page.getByRole("heading", { name: /Architext 1\.4\.1/ }).first().waitFor();
+  await page.getByRole("heading", { name: currentReleaseHeading }).first().waitFor();
 
   await clickRole(page, "button", "Kanban");
   await page.getByRole("heading", { name: "Kanban", exact: true }).waitFor();
   await clickRole(page, "button", "Path");
   await page.getByRole("heading", { name: "Release Path", exact: true }).waitFor();
   await clickRole(page, "button", "Edit plan");
-  await page.getByRole("heading", { name: /Edit Architext 1\.4\.1/ }).waitFor();
+  await page.getByRole("heading", { name: new RegExp(`Edit ${currentReleaseHeading.source}`) }).waitFor();
 
   await clickRole(page, "button", "Add new item");
   await fillPlaceholder(page, "Title", "UAT ad hoc release item");
@@ -205,6 +227,7 @@ async function main() {
   const target = await mkdtemp(path.join(tmpdir(), "architext-uat-"));
   const targetDataDir = path.join(target, "docs", "architext", "data");
   await cp(sourceDataDir, targetDataDir, { recursive: true });
+  makeCurrentReleaseEditable(targetDataDir);
 
   const browser = await chromium.launch();
   const pageErrors = [];

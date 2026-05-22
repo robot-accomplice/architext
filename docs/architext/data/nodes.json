@@ -327,20 +327,20 @@
       "id": "pdf-export",
       "type": "deployment-unit",
       "name": "PDF export",
-      "summary": "Planned generated PDF artifact containing selected Architext diagrams and supporting context.",
-      "responsibilities": ["Preserve selected architecture views in a portable artifact", "Expose export diagnostics for oversized or warning-heavy diagrams"],
+      "summary": "Browser-native print/save-as-PDF export path for the active Architext view.",
+      "responsibilities": ["Expose PDF export from shared diagram controls", "Preserve the active view through print-specific CSS", "Keep future generated PDF export separate from the shipped browser print path"],
       "owner": "Target project maintainers",
-      "sourcePaths": ["docs/architext/export/*.pdf"],
-      "runtime": "Generated document artifact",
-      "interfaces": ["planned architext export pdf [path]"],
+      "sourcePaths": ["docs/architext/src/main.tsx", "docs/architext/src/styles.css"],
+      "runtime": "Browser print dialog",
+      "interfaces": ["Viewer PDF control", "window.print()"],
       "dependencies": ["viewer-runtime", "diagram-planner", "target-data-files"],
       "dataHandled": ["architecture-model", "package-assets"],
       "security": ["Export must not require target-local copied viewer files"],
-      "observability": ["CLI output", "PDF file metadata"],
+      "observability": ["Viewer status notice", "Browser print dialog"],
       "relatedFlows": ["pdf-export"],
       "relatedDecisions": ["global-cli-data-only"],
       "knownRisks": ["pdf-export-fidelity"],
-      "verification": ["planned"]
+      "verification": ["test/pdf-export-ui.test.mjs", "scripts/uat-harness.mjs PDF control coverage", "npm --prefix docs/architext run build"]
     }
   ]
 }

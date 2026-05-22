@@ -86,6 +86,10 @@ Goal: make lifecycle behavior explicit use cases behind adapters.
   state, HTTP serving, and interactive prompts.
 - Keep `tools/architext-adopt.mjs` as a thin executable bootstrap.
 - Ensure `sync` and `doctor` continue to share one repair derivation path.
+- Remember repository-level `sync` choices after the first interactive run so
+  repeated syncs do not ask the same branch, agent-instruction, script, and
+  repair-approval questions. Provide an explicit forget/reset option so users
+  can discard remembered choices when repository policy changes.
 
 ### CI And Release Gates
 
@@ -101,27 +105,30 @@ package scripts, and generated package contents.
 
 ## Planned Capabilities
 
-### PDF Export
+### PDF Export Hardening
 
-Goal: export selected Architext views as a portable artifact for review,
-archival, or offline sharing.
+Target: Architext 1.4.0. First browser-native export path shipped.
 
-Open design questions:
+Goal: harden PDF export beyond the current active-view print/save-as-PDF
+workflow when teams need generated artifacts, broader export scope, or stronger
+diagnostics.
 
-- Should PDF export render the existing viewer through a headless browser,
-  generate a print-specific static document, or support both?
-- Should export scope be active view, all views, selected views, or a report
-  bundle?
+Current baseline:
+
+- The viewer exposes a PDF control for the active diagram view.
+- Export uses the browser's native print/save-as-PDF workflow.
+- Print-specific CSS hides navigation chrome while preserving the active
+  diagram artifact.
+- UAT coverage exercises the PDF control.
+
+Future design questions:
+
+- Should a later export path add CLI/headless browser generation, a
+  print-specific static document, or both?
+- Should expanded export scope include all views, selected views, release
+  reports, or only the active view?
 - How should oversized diagrams, route warnings, clipped content, and hidden
-  details be reported?
-
-Acceptance direction:
-
-- PDF export must not require copied viewer files in target repositories.
-- Export diagnostics should fail loudly for missing fonts, oversized diagrams,
-  clipped content, or route warnings.
-- Visual fixtures should cover large and dense diagrams before the feature is
-  considered release-ready.
+  details be reported before artifact generation?
 
 ### Release Truth
 
