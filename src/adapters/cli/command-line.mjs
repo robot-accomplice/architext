@@ -42,6 +42,14 @@ Options:
   --yes, -y                  Accept default prompts.
   --quiet                    Accept default sync prompts without interactive questions.
   --prompt                   Force sync prompts instead of offering saved answers.
+  --foreground               Run serve in the current terminal until interrupted.
+  --background               Run serve detached and return control after startup.
+  --open                     Open the local viewer in the system browser.
+  --no-open                  Do not open the system browser.
+  --host <host>              Serve bind host. Defaults to 127.0.0.1.
+  --port <port>              Serve bind port. Defaults to 4317.
+  --status                   Show the recorded background serve process.
+  --stop                     Stop the recorded background serve process.
   --json                     Machine-readable status/doctor output.
   --dry-run                  Show intended changes without writing files.
   --force                    Rerun lifecycle management even when current.
@@ -62,6 +70,13 @@ Options:
 Examples:
   architext sync
   architext serve
+  architext serve --foreground
+  architext serve --open
+  architext serve --background
+  architext serve --background --open
+  architext serve --status
+  architext serve --stop
+  architext serve --host 127.0.0.1 --port 4517
   architext --version
   architext validate .
   architext doctor .
@@ -92,6 +107,14 @@ export function parseArgs(argv) {
     yes: false,
     quiet: false,
     prompt: false,
+    foreground: false,
+    background: false,
+    open: false,
+    noOpen: false,
+    host: "127.0.0.1",
+    port: 4317,
+    serveStatus: false,
+    serveStop: false,
     json: false,
     dryRun: false,
     force: false,
@@ -116,7 +139,31 @@ export function parseArgs(argv) {
     else if (arg === "--yes" || arg === "-y") options.yes = true;
     else if (arg === "--quiet") options.quiet = true;
     else if (arg === "--prompt") options.prompt = true;
-    else if (arg === "--json") options.json = true;
+    else if (arg === "--foreground") {
+      assertServeCommand(options.command, arg);
+      options.foreground = true;
+    } else if (arg === "--background") {
+      assertServeCommand(options.command, arg);
+      options.background = true;
+    } else if (arg === "--open") {
+      assertServeCommand(options.command, arg);
+      options.open = true;
+    } else if (arg === "--no-open") {
+      assertServeCommand(options.command, arg);
+      options.noOpen = true;
+    } else if (arg === "--host") {
+      assertServeCommand(options.command, arg);
+      options.host = rest[++index] ?? "";
+    } else if (arg === "--port") {
+      assertServeCommand(options.command, arg);
+      options.port = Number(rest[++index] ?? "");
+    } else if (arg === "--status") {
+      assertServeCommand(options.command, arg);
+      options.serveStatus = true;
+    } else if (arg === "--stop") {
+      assertServeCommand(options.command, arg);
+      options.serveStop = true;
+    } else if (arg === "--json") options.json = true;
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--force") options.force = true;
     else if (arg === "--overwrite-data") options.overwriteData = true;
@@ -139,5 +186,24 @@ export function parseArgs(argv) {
     else throw new Error(`Unknown argument: ${arg}`);
   }
 
+  validateOptions(options);
   return options;
+}
+
+function validateOptions(options) {
+  if (options.command !== "serve") return;
+  if (options.foreground && options.background) throw new Error("--foreground and --background cannot be used together");
+  if (options.open && options.noOpen) throw new Error("--open and --no-open cannot be used together");
+  if (options.serveStatus && options.serveStop) throw new Error("--status and --stop cannot be used together");
+  if ((options.serveStatus || options.serveStop) && (options.foreground || options.background || options.open || options.noOpen)) {
+    throw new Error("--status and --stop cannot be combined with serve startup options");
+  }
+  if (!options.host) throw new Error("--host requires a value");
+  if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65535) {
+    throw new Error("--port must be an integer between 1 and 65535");
+  }
+}
+
+function assertServeCommand(command, arg) {
+  if (command !== "serve") throw new Error(`${arg} is only valid for architext serve`);
 }

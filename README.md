@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-2ff801)](LICENSE)
 [![CI](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/%40robotaccomplice%2Farchitext?color=00dbe9)](https://www.npmjs.com/package/@robotaccomplice/architext)
-![SemVer](https://img.shields.io/badge/semver-1.4.2-fed639)
+![SemVer](https://img.shields.io/badge/semver-1.4.3-fed639)
 ![Node 20+](https://img.shields.io/badge/node-%3E%3D20-00dbe9)
 ![Global CLI](https://img.shields.io/badge/global%20CLI-yes-2ff801)
 ![Target Repos](https://img.shields.io/badge/target%20repos-data--only-2ff801)
@@ -369,7 +369,7 @@ architext serve
 Then open:
 
 ```text
-http://localhost:4317/
+http://127.0.0.1:4317/
 ```
 
 Architext requires a local server instead of direct `file://` loading. That
@@ -377,6 +377,41 @@ avoids browser-specific restrictions around fetching local JSON files.
 
 The running site must not fetch framework code, stylesheets, fonts, or assets
 from remote URLs.
+
+By default, `serve` stays in the foreground and keeps the terminal attached.
+Use explicit lifecycle switches when you want a different behavior:
+
+```sh
+architext serve --open
+architext serve --background
+architext serve --background --open
+architext serve --status
+architext serve --stop
+architext serve --host 127.0.0.1 --port 4517
+```
+
+`--background` starts a detached local viewer server, waits until it is
+reachable, prints the URL, and returns control to the shell. `--status` reports
+the recorded background server for the target repository. `--stop` stops it.
+`--open` launches the system browser after the viewer is reachable. The command
+always prints a plain local URL so terminals that auto-link URLs remain enough
+even when browser launch is unavailable.
+
+Serve lifecycle options:
+
+| Option | Behavior |
+| --- | --- |
+| `--foreground` | Force the compatibility behavior: run in the current terminal until interrupted. |
+| `--background` | Start a detached local viewer server and return control after the URL is reachable. |
+| `--open` | Launch the system browser after the local viewer is reachable. |
+| `--no-open` | Suppress browser launch when combining options or future aliases. |
+| `--host <host>` | Bind to a specific host. Defaults to `127.0.0.1`. |
+| `--port <port>` | Bind to a specific port. Defaults to `4317`. |
+| `--status` | Show the recorded background server for this target and verify that it is reachable. |
+| `--stop` | Stop the recorded background server for this target and remove stale runtime state. |
+
+Background server state is local runtime state, not project architecture data.
+It is not written into `docs/architext/data/*.json` and should not be committed.
 
 For static usage after a build:
 

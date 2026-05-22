@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-4-2",
+  "currentReleaseId": "v1-4-3",
   "releases": [
     {
       "id": "v1-1-2",
@@ -198,6 +198,27 @@
         "stretch": 0
       },
       "file": "v1-4-2.json"
+    },
+    {
+      "id": "v1-4-3",
+      "version": "1.4.3",
+      "name": "Architext 1.4.3 Serve Lifecycle Controls",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-05-22",
+      "lastUpdated": "2026-05-22T00:00:00.000Z",
+      "summary": "Architext 1.4.3 adds explicit local serve lifecycle controls for foreground, background, browser launch, status, and stop workflows.",
+      "counts": {
+        "features": 2,
+        "bugFixes": 0,
+        "workstreams": 1,
+        "blockers": 0,
+        "complete": 1,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-3.json"
     }
   ]
 }

@@ -59,5 +59,7 @@ Before release:
   `--quiet`.
 - Existing sync behavior with explicit switches remains unchanged.
 - Architext self-data validates after PDF status correction.
+- CI and trusted-publishing release gates install Playwright browsers before
+  running UAT.
 - `npm test`
 - `npm run validate`
