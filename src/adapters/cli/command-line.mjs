@@ -40,6 +40,8 @@ Commands:
 Options:
   --target <repo>            Target repository. Positional [path] is preferred.
   --yes, -y                  Accept default prompts.
+  --quiet                    Accept default sync prompts without interactive questions.
+  --prompt                   Force sync prompts instead of offering saved answers.
   --json                     Machine-readable status/doctor output.
   --dry-run                  Show intended changes without writing files.
   --force                    Rerun lifecycle management even when current.
@@ -88,6 +90,8 @@ export function parseArgs(argv) {
     target: "",
     topic: "",
     yes: false,
+    quiet: false,
+    prompt: false,
     json: false,
     dryRun: false,
     force: false,
@@ -110,6 +114,8 @@ export function parseArgs(argv) {
     const arg = rest[index];
     if (arg === "--target") options.target = rest[++index] ?? "";
     else if (arg === "--yes" || arg === "-y") options.yes = true;
+    else if (arg === "--quiet") options.quiet = true;
+    else if (arg === "--prompt") options.prompt = true;
     else if (arg === "--json") options.json = true;
     else if (arg === "--dry-run") options.dryRun = true;
     else if (arg === "--force") options.force = true;

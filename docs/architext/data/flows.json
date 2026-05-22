@@ -332,9 +332,9 @@
     {
       "id": "pdf-export",
       "name": "PDF export",
-      "status": "planned",
-      "summary": "A maintainer exports selected Architext views as a portable PDF for review, archival, or offline sharing.",
-      "trigger": "Maintainer requests a PDF export from the CLI or viewer.",
+      "status": "implemented",
+      "summary": "A maintainer uses the viewer PDF control to hand the active Architext view to the browser print/save-as-PDF workflow.",
+      "trigger": "Maintainer requests PDF export from the active viewer diagram.",
       "actors": [
         "maintainer"
       ],
@@ -342,19 +342,19 @@
         {
           "id": "select-export-scope",
           "from": "maintainer",
-          "to": "architext-cli",
-          "action": "selectPdfScope",
-          "summary": "Maintainer chooses whether to export the active view, all views, or a report bundle.",
+          "to": "viewer-runtime",
+          "action": "selectActiveView",
+          "summary": "Maintainer selects the view and visible diagram state to preserve.",
           "data": [
             "architecture-model"
           ]
         },
         {
           "id": "render-pdf",
-          "from": "architext-cli",
+          "from": "viewer-runtime",
           "to": "pdf-export",
-          "action": "renderPdfExport",
-          "summary": "CLI renders package-owned viewer output or a print-specific document into a PDF artifact.",
+          "action": "printActiveView",
+          "summary": "Viewer exposes the PDF control, applies print CSS, and calls the browser print dialog.",
           "data": [
             "architecture-model",
             "package-assets"
@@ -365,17 +365,19 @@
         "PDF output should not require copied viewer files in the target repository."
       ],
       "failureBehavior": [
-        "Missing fonts, oversized diagrams, or route warnings should fail loudly or appear in export diagnostics."
+        "If browser printing is unavailable, the viewer reports that PDF export is unavailable.",
+        "Large diagrams may still rely on browser print scaling and user-selected page settings."
       ],
       "observability": [
-        "CLI output",
-        "PDF file metadata"
+        "Viewer status notice",
+        "Browser print dialog"
       ],
       "verification": [
-        "planned"
+        "test/pdf-export-ui.test.mjs",
+        "scripts/uat-harness.mjs"
       ],
       "knownGaps": [
-        "Export approach is undecided: headless browser print, print-specific renderer, or both."
+        "CLI/headless generated PDF artifacts, multi-view export bundles, and preflight clipping diagnostics remain future hardening work."
       ]
     },
     {

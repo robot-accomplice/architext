@@ -18,6 +18,15 @@ architext prompt
 architext version
 ```
 
+Install the CLI from the scoped npm package:
+
+```sh
+npm install -g @robotaccomplice/architext
+```
+
+Do not install the unscoped `architext` npm package. It is a different project
+and can leave the `architext` binary at an unrelated `0.0.7` version.
+
 Each command also accepts an optional target path:
 
 ```sh
@@ -80,7 +89,10 @@ local artifacts, especially `docs/architext/dist/`, should be ignored.
 
 The CLI writes lifecycle metadata to `.architext.json`. Keep that file with the
 project so automation can report CLI version, update time, managed instruction
-files, copied-install migration state, and last validation state.
+files, copied-install migration state, saved sync choices, and last validation
+state. Later interactive syncs offer to reuse saved choices; pass `--prompt` to
+ask the normal prompts again or `--quiet` to select the default choices without
+asking.
 
 ## Management
 

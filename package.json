@@ -1,6 +1,6 @@
 {
   "name": "@robotaccomplice/architext",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Local JSON-backed architecture and dataflow viewer for engineering teams and LLM-maintained architecture maps.",
   "type": "module",
   "engines": {
@@ -47,8 +47,9 @@
     "test:all": "npm test",
     "test:benchmark": "node --test test/c4-documents.test.mjs test/routing-fitness.test.mjs",
     "test:uat": "node scripts/uat-harness.mjs",
+    "check:install-docs": "node scripts/check-install-docs.mjs",
     "validate": "node docs/architext/tools/validate-architext.mjs",
-    "verify": "npm test && npm run validate && npm run build && npm run test:benchmark",
+    "verify": "npm run check:install-docs && npm test && npm run validate && npm run build && npm run test:benchmark",
     "release:check": "npm run verify && npm run test:uat && npm pack --dry-run && npm run smoke:pack",
     "smoke:pack": "node scripts/smoke-packed-cli.mjs"
   },

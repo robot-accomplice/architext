@@ -305,10 +305,96 @@ test("managed agent instructions include Release Truth source-of-truth rules", (
   }
 });
 
+test("sync can reuse saved interactive choices", () => {
+  const target = tempRepo();
+  try {
+    writeFileSync(path.join(target, "package.json"), "{\"scripts\":{\"test\":\"echo test\"}}\n");
+
+    run(["sync", target, "--quiet", "--branch", "none"]);
+    const metadataPath = path.join(target, "docs", "architext", ".architext.json");
+    const metadata = JSON.parse(readFileSync(metadataPath, "utf8"));
+    metadata.syncChoices = {
+      branch: "none",
+      instructionFiles: ["CLAUDE.md"],
+      manageGitignore: false,
+      manageRootScripts: false,
+      applyDoctorRepairs: true,
+      proceedWithChanges: true
+    };
+    writeJson(metadataPath, metadata);
+
+    const saved = JSON.parse(readFileSync(metadataPath, "utf8"));
+    assert.deepEqual(metadata.syncChoices, {
+      branch: "none",
+      instructionFiles: ["CLAUDE.md"],
+      manageGitignore: false,
+      manageRootScripts: false,
+      applyDoctorRepairs: true,
+      proceedWithChanges: true
+    });
+
+    rmSync(path.join(target, "AGENTS.md"), { force: true });
+    rmSync(path.join(target, "CLAUDE.md"), { force: true });
+    const reused = runWithInput(["sync", target, "--force"], "y\n");
+
+    assert.match(reused, /Reuse saved sync choices from the last run/);
+    assert.doesNotMatch(reused, /Create\/update AGENTS\.md/);
+    assert.deepEqual(saved.syncChoices.instructionFiles, ["CLAUDE.md"]);
+    assert.equal(existsSync(path.join(target, "CLAUDE.md")), true);
+    assert.equal(existsSync(path.join(target, "AGENTS.md")), false);
+  } finally {
+    cleanup(target);
+  }
+});
+
+test("--prompt bypasses saved sync choices and asks again", () => {
+  const target = tempRepo();
+  try {
+    writeFileSync(path.join(target, "package.json"), "{\"scripts\":{\"test\":\"echo test\"}}\n");
+
+    run(["sync", target, "--quiet", "--branch", "none"]);
+    const prompted = runWithInput(["sync", target, "--force", "--prompt", "--no-agents", "--no-gitignore", "--no-root-scripts"], "y\n");
+
+    assert.doesNotMatch(prompted, /Reuse saved sync choices from the last run/);
+    assert.match(prompted, /Proceed with selected Architext changes in this branch/);
+    const metadata = JSON.parse(readFileSync(path.join(target, "docs", "architext", ".architext.json"), "utf8"));
+    assert.deepEqual(metadata.syncChoices.instructionFiles, []);
+    assert.equal(metadata.syncChoices.manageGitignore, false);
+    assert.equal(metadata.syncChoices.manageRootScripts, false);
+  } finally {
+    cleanup(target);
+  }
+});
+
+test("--quiet sync selects defaults without prompting", () => {
+  const target = tempRepo();
+  try {
+    writeFileSync(path.join(target, "package.json"), "{\"scripts\":{\"test\":\"echo test\"}}\n");
+
+    const output = run(["sync", target, "--quiet"]);
+
+    assert.doesNotMatch(output, /Create\/update AGENTS\.md/);
+    assert.doesNotMatch(output, /Reuse saved sync choices/);
+    assert.equal(existsSync(path.join(target, "AGENTS.md")), true);
+    assert.equal(existsSync(path.join(target, "CLAUDE.md")), true);
+    assert.equal(readFileSync(path.join(target, ".gitignore"), "utf8").includes("docs/architext/dist/"), true);
+    assert.equal(JSON.parse(readFileSync(path.join(target, "package.json"), "utf8")).scripts.architext, "architext serve .");
+
+    const metadata = JSON.parse(readFileSync(path.join(target, "docs", "architext", ".architext.json"), "utf8"));
+    assert.deepEqual(metadata.syncChoices.instructionFiles, ["AGENTS.md", "CLAUDE.md"]);
+    assert.equal(metadata.syncChoices.manageGitignore, true);
+    assert.equal(metadata.syncChoices.manageRootScripts, true);
+  } finally {
+    cleanup(target);
+  }
+});
+
 test("--help documents path defaults and common commands", () => {
   const output = run(["--help"]);
 
   assert.match(output, /architext <command> \[path\]/);
+  assert.match(output, /--quiet\s+Accept default sync prompts without interactive questions/);
+  assert.match(output, /--prompt\s+Force sync prompts instead of offering saved answers/);
   assert.match(output, /\[path\] is optional and defaults to the current directory/);
   assert.match(output, /version\s+Print the Architext package version/);
   assert.match(output, /architext serve/);

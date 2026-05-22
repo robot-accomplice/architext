@@ -680,13 +680,108 @@ async function promptYesNo(rl, question, defaultValue) {
   return ["y", "yes"].includes(answer);
 }
 
-async function handleBranch({ target, options, version, rl }) {
-  if (options.dryRun || options.branch === "none" || !gitAvailable(target)) return;
-  let branchChoice = options.branch;
-  if (!branchChoice && !options.yes) {
-    branchChoice = await promptYesNo(rl, "Create a new git branch for Architext changes?", false) ? "new" : "current";
+function nonInteractiveSync(options) {
+  return options.yes || options.quiet;
+}
+
+function assertSyncPromptOptions(options) {
+  if (options.prompt && nonInteractiveSync(options)) {
+    throw new Error("--prompt cannot be combined with --yes or --quiet");
   }
-  if (!branchChoice) branchChoice = "current";
+}
+
+function normalizeInstructionFiles(files) {
+  return instructionFiles.filter((fileName) => files?.includes(fileName));
+}
+
+function defaultSyncChoices(rootPackageExists) {
+  return {
+    branch: "current",
+    instructionFiles,
+    manageGitignore: true,
+    manageRootScripts: rootPackageExists,
+    applyDoctorRepairs: true,
+    proceedWithChanges: true,
+    promptBeforeProceed: false
+  };
+}
+
+function rememberedSyncChoices(metadata) {
+  const choices = metadata?.syncChoices;
+  if (!choices || typeof choices !== "object") return null;
+  return {
+    branch: ["current", "new", "none"].includes(choices.branch) ? choices.branch : "current",
+    instructionFiles: normalizeInstructionFiles(choices.instructionFiles),
+    manageGitignore: Boolean(choices.manageGitignore),
+    manageRootScripts: Boolean(choices.manageRootScripts),
+    applyDoctorRepairs: choices.applyDoctorRepairs !== false,
+    proceedWithChanges: choices.proceedWithChanges !== false,
+    promptBeforeProceed: false
+  };
+}
+
+function applyExplicitSyncOptions(choices, options) {
+  const next = { ...choices };
+  if (options.branch) next.branch = options.branch;
+  if (options.noAgents) next.instructionFiles = [];
+  else if (options.appendAgents) next.instructionFiles = instructionFiles;
+  if (options.noGitignore) next.manageGitignore = false;
+  else if (options.updateGitignore) next.manageGitignore = true;
+  if (options.noRootScripts) next.manageRootScripts = false;
+  else if (options.rootScripts) next.manageRootScripts = true;
+  return next;
+}
+
+function persistedSyncChoices(choices) {
+  return {
+    branch: choices.branch,
+    instructionFiles: choices.instructionFiles,
+    manageGitignore: choices.manageGitignore,
+    manageRootScripts: choices.manageRootScripts,
+    applyDoctorRepairs: choices.applyDoctorRepairs,
+    proceedWithChanges: choices.proceedWithChanges
+  };
+}
+
+async function chooseBranchChoice({ target, options, rl }) {
+  if (options.dryRun || !gitAvailable(target)) return "none";
+  if (options.branch) return options.branch;
+  if (nonInteractiveSync(options)) return "current";
+  return await promptYesNo(rl, "Create a new git branch for Architext changes?", false) ? "new" : "current";
+}
+
+async function chooseApplyDoctorRepairs(options, rl, doctorRepairAvailable) {
+  if (!doctorRepairAvailable) return true;
+  if (nonInteractiveSync(options)) return true;
+  return promptYesNo(rl, "Apply deterministic doctor repairs during sync?", true);
+}
+
+async function promptSyncChoices({ target, options, rl, doctorRepairAvailable }) {
+  return applyExplicitSyncOptions({
+    branch: await chooseBranchChoice({ target, options, rl }),
+    instructionFiles: await chooseInstructionFiles(options, rl),
+    manageGitignore: await chooseGitignore(options, rl),
+    manageRootScripts: await chooseRootScripts(target, options, rl),
+    applyDoctorRepairs: await chooseApplyDoctorRepairs(options, rl, doctorRepairAvailable),
+    proceedWithChanges: true,
+    promptBeforeProceed: true
+  }, options);
+}
+
+async function selectSyncChoices({ target, options, rl, metadata, doctorRepairAvailable, rootPackageExists }) {
+  const defaults = applyExplicitSyncOptions(defaultSyncChoices(rootPackageExists), options);
+  if (nonInteractiveSync(options)) return defaults;
+
+  const savedChoices = options.prompt ? null : rememberedSyncChoices(metadata);
+  if (savedChoices && await promptYesNo(rl, "Reuse saved sync choices from the last run?", true)) {
+    return applyExplicitSyncOptions({ ...defaults, ...savedChoices }, options);
+  }
+
+  return promptSyncChoices({ target, options, rl, doctorRepairAvailable });
+}
+
+async function handleBranch({ target, options, version, branchChoice }) {
+  if (options.dryRun || branchChoice === "none" || !gitAvailable(target)) return;
   if (branchChoice === "current") return;
   if (branchChoice !== "new") throw new Error("--branch must be current, new, or none");
   const branchName = options.branchName || `architext/data-only-${version.replaceAll(".", "-")}`;
@@ -802,6 +897,7 @@ async function runDoctor(target, options, version) {
 }
 
 async function syncTarget(target, options, version) {
+  assertSyncPromptOptions(options);
   const status = await collectStatus(target, version, { runValidation: !options.skipValidate });
   const installing = !status.installed || options.overwriteData;
   const migrating = status.needsMigration;
@@ -809,30 +905,37 @@ async function syncTarget(target, options, version) {
     ? status.doctorRepairs.filter((repair) => repair.category !== "instruction-rules")
     : status.doctorRepairs;
   const doctorRepairAvailable = Boolean(effectiveDoctorRepairs.length);
-  const shouldWrite = installing || migrating || doctorRepairAvailable || options.force || options.appendAgents || options.rootScripts || options.updateGitignore;
 
   console.log(`Target: ${target}`);
   console.log(`Architext CLI: ${version}`);
   printStatus(status, { verbose: true });
-  console.log(`Operation: ${installing ? "install" : migrating ? "migrate" : "sync"}${shouldWrite ? "" : " (current)"}`);
   if (migrating) {
     console.log(`Copied install detected: ${status.copiedInstallPaths.length} package-owned paths`);
   }
 
   const rl = createInterface({ input, output });
   try {
-    const instructionFilesToManage = await chooseInstructionFiles(options, rl);
-    const manageGitignore = await chooseGitignore(options, rl);
-    const manageRootScripts = await chooseRootScripts(target, options, rl);
+    const syncChoices = await selectSyncChoices({
+      target,
+      options,
+      rl,
+      metadata: status.metadata,
+      doctorRepairAvailable,
+      rootPackageExists: status.rootPackageExists
+    });
+    const doctorRepairsSelected = doctorRepairAvailable && syncChoices.applyDoctorRepairs;
+    const shouldWrite = installing || migrating || doctorRepairsSelected || options.force || syncChoices.instructionFiles.length > 0 || syncChoices.manageGitignore || syncChoices.manageRootScripts;
 
-    if (!shouldWrite && instructionFilesToManage.length === 0 && !manageGitignore && !manageRootScripts) {
+    console.log(`Operation: ${installing ? "install" : migrating ? "migrate" : "sync"}${shouldWrite ? "" : " (current)"}`);
+
+    if (!shouldWrite) {
       console.log("No lifecycle changes needed.");
       return;
     }
 
-    await handleBranch({ target, options, version, rl });
-    if (!options.yes && !options.dryRun) {
-      const proceed = await promptYesNo(rl, "Proceed with selected Architext changes in this branch?", true);
+    await handleBranch({ target, options, version, branchChoice: syncChoices.branch });
+    if (!nonInteractiveSync(options) && syncChoices.promptBeforeProceed && !options.dryRun) {
+      const proceed = syncChoices.proceedWithChanges && await promptYesNo(rl, "Proceed with selected Architext changes in this branch?", true);
       if (!proceed) {
         console.log("Aborted.");
         return;
@@ -852,28 +955,30 @@ async function syncTarget(target, options, version) {
       removed.forEach((item) => console.log(`- ${item}`));
     }
 
-    if (!installing && doctorRepairAvailable) {
+    if (!installing && doctorRepairsSelected) {
       const repairs = await applyDoctorRepairs(target, status, options.dryRun, { skipInstructionRules: options.noAgents });
       console.log(`${options.dryRun ? "Would apply" : "Applied"} doctor repairs:`);
       repairs.forEach((repair) => console.log(`- ${repair.file}: ${repair.summary}`));
+    } else if (!installing && doctorRepairAvailable) {
+      console.log("Skipped doctor repairs.");
     }
 
     const managedInstructions = [];
-    for (const fileName of instructionFilesToManage) {
+    for (const fileName of syncChoices.instructionFiles) {
       const result = await upsertInstructionFile({ target, fileName, dryRun: options.dryRun });
       console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
       if (result.changed) managedInstructions.push(fileName);
     }
 
     let gitignoreManaged = false;
-    if (manageGitignore) {
+    if (syncChoices.manageGitignore) {
       const result = await upsertGitignore({ target, dryRun: options.dryRun });
       console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
       gitignoreManaged = result.changed || result.reason === "already present";
     }
 
     let rootScriptsManaged = false;
-    if (manageRootScripts) {
+    if (syncChoices.manageRootScripts) {
       const result = await upsertRootScripts({ target, dryRun: options.dryRun });
       console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination} with ${result.missing.length} scripts` : `Skipped ${result.destination}: ${result.reason}`);
       rootScriptsManaged = result.changed || result.reason === "already present";
@@ -891,10 +996,11 @@ async function syncTarget(target, options, version) {
         operation: installing ? "install" : migrating ? "migrate" : "sync",
         dataPolicy: installing ? "starter-written" : "preserved",
         copiedInstallMigrated: migrating,
-        instructionFiles: Object.fromEntries(instructionFiles.map((fileName) => [fileName, instructionFilesToManage.includes(fileName)])),
+        instructionFiles: Object.fromEntries(instructionFiles.map((fileName) => [fileName, syncChoices.instructionFiles.includes(fileName)])),
         managedInstructions,
         gitignoreManaged,
         rootScriptsManaged,
+        syncChoices: persistedSyncChoices(syncChoices),
         lastValidation: validation ? { ok: validation.ok, at: new Date().toISOString() } : undefined
       });
     }

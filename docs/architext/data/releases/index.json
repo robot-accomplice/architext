@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-4-1",
+  "currentReleaseId": "v1-4-2",
   "releases": [
     {
       "id": "v1-1-2",
@@ -159,11 +159,12 @@
       "id": "v1-4-1",
       "version": "1.4.1",
       "name": "Architext 1.4.1 Verification and Rules Corrections",
-      "status": "implementing",
-      "posture": "release-candidate",
-      "targetWindow": "Next patch release",
-      "lastUpdated": "2026-05-21T14:30:00.000Z",
-      "summary": "Patch release targeting Rules editor action placement, agent instruction rule migration, and an automated verification harness for unit, integration, browser, and UAT coverage.",
+      "status": "completed",
+      "posture": "shipped",
+      "targetDate": "2026-05-22",
+      "releasedAt": "2026-05-22T00:00:00.000Z",
+      "lastUpdated": "2026-05-22T00:00:00.000Z",
+      "summary": "Architext 1.4.1 shipped Rules editor action placement, agent instruction rule migration, and the automated browser UAT harness.",
       "counts": {
         "features": 1,
         "bugFixes": 1,
@@ -175,6 +176,28 @@
         "stretch": 0
       },
       "file": "v1-4-1.json"
+    },
+    {
+      "id": "v1-4-2",
+      "version": "1.4.2",
+      "name": "Architext 1.4.2 Sync Choice Reuse",
+      "status": "completed",
+      "posture": "shipped",
+      "targetDate": "2026-05-22",
+      "releasedAt": "2026-05-22T00:00:00.000Z",
+      "lastUpdated": "2026-05-22T00:00:00.000Z",
+      "summary": "Architext 1.4.2 shipped repository-level sync choice reuse and PDF self-data alignment.",
+      "counts": {
+        "features": 1,
+        "bugFixes": 0,
+        "workstreams": 2,
+        "blockers": 0,
+        "complete": 2,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-2.json"
     }
   ]
 }
