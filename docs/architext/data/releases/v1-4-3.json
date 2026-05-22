@@ -1,0 +1,118 @@
+{
+  "id": "v1-4-3",
+  "version": "1.4.3",
+  "name": "Architext 1.4.3 Serve Lifecycle Controls",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Architext 1.4.3 adds explicit local serve lifecycle controls for foreground, background, browser launch, status, and stop workflows.",
+  "targetDate": "2026-05-22",
+  "lastUpdated": "2026-05-22T00:00:00.000Z",
+  "updateSource": "Release planning",
+  "scope": {
+    "required": [
+      {
+        "id": "serve-lifecycle-controls",
+        "title": "Serve lifecycle controls",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Add explicit serve modes for foreground and background execution, browser launch controls, clickable URL output, status inspection, and server stop behavior.",
+        "priority": "high",
+        "source": "roadmap",
+        "dateAdded": "2026-05-22T00:00:00.000Z",
+        "workstreamId": "serve-lifecycle",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/RELEASE_1_4_3_SUCCESS_CRITERIA.md serve lifecycle section",
+          "src/adapters/cli/serve-lifecycle.mjs",
+          "src/adapters/cli/command-line.mjs serve options",
+          "test/serve-lifecycle.test.mjs",
+          "npm test",
+          "npm run validate",
+          "npm run build"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": [
+      {
+        "id": "serve-default-background",
+        "title": "Default background serve",
+        "kind": "feature",
+        "status": "cut",
+        "summary": "Changing the default serve mode to background is intentionally out of scope for 1.4.3 so existing blocking serve scripts remain compatible.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-22T00:00:00.000Z",
+        "workstreamId": "serve-lifecycle",
+        "dependsOn": []
+      }
+    ]
+  },
+  "workstreams": [
+    {
+      "id": "serve-lifecycle",
+      "name": "Serve Lifecycle",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Make local viewer server ownership explicit without creating unmanaged detached processes.",
+      "progress": 100,
+      "itemIds": [
+        "serve-lifecycle-controls",
+        "serve-default-background"
+      ],
+      "evidence": [
+        "docs/architecture/RELEASE_1_4_3_SUCCESS_CRITERIA.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "scope-selected",
+      "label": "1.4.3 scope selected",
+      "status": "complete",
+      "targetWindow": "Release implementation",
+      "order": 1,
+      "itemIds": [
+        "serve-lifecycle-controls"
+      ]
+    },
+    {
+      "id": "implementation-complete",
+      "label": "Serve lifecycle implementation complete",
+      "status": "complete",
+      "targetWindow": "Release implementation",
+      "order": 2,
+      "itemIds": [
+        "serve-lifecycle-controls"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "success-criteria",
+      "label": "1.4.3 success criteria",
+      "kind": "document",
+      "status": "complete",
+      "href": "docs/architecture/RELEASE_1_4_3_SUCCESS_CRITERIA.md"
+    },
+    {
+      "id": "serve-lifecycle-tests",
+      "label": "Serve lifecycle test coverage",
+      "kind": "test",
+      "status": "complete",
+      "href": "node --test test/serve-lifecycle.test.mjs test/cli.test.mjs"
+    },
+    {
+      "id": "release-gate",
+      "label": "Release gate",
+      "kind": "test",
+      "status": "complete",
+      "href": "npm run release:check"
+    }
+  ]
+}
