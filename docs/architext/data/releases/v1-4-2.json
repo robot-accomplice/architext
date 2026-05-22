@@ -1,0 +1,142 @@
+{
+  "id": "v1-4-2",
+  "version": "1.4.2",
+  "name": "Architext 1.4.2 Sync Choice Reuse",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Architext 1.4.2 shipped repository-level sync choice reuse and PDF self-data alignment.",
+  "targetDate": "2026-05-22",
+  "releasedAt": "2026-05-22T00:00:00.000Z",
+  "lastUpdated": "2026-05-22T00:00:00.000Z",
+  "updateSource": "Release planning",
+  "scope": {
+    "required": [
+      {
+        "id": "remember-sync-choices",
+        "title": "Remember sync choices",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Persist repository-level sync choices from interactive runs, offer to reuse them on later syncs, support --quiet defaults, and support --prompt forced prompting.",
+        "priority": "high",
+        "source": "roadmap",
+        "dateAdded": "2026-05-21T00:00:00.000Z",
+        "workstreamId": "sync-choice-reuse",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/RELEASE_1_4_2_SUCCESS_CRITERIA.md sync choice reuse section",
+          "src/adapters/cli/architext-cli.mjs sync choice policy",
+          "src/adapters/cli/command-line.mjs --quiet and --prompt options",
+          "test/cli.test.mjs sync choice reuse coverage",
+          "npm test",
+          "npm run validate"
+        ]
+      },
+      {
+        "id": "pdf-self-data-alignment",
+        "title": "PDF self-data alignment",
+        "kind": "documentation",
+        "status": "complete",
+        "summary": "Update Architext's self-hosted architecture data so PDF export is represented as the shipped browser print pathway rather than a planned CLI artifact.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-22T00:00:00.000Z",
+        "workstreamId": "pdf-self-data",
+        "dependsOn": [
+          "remember-sync-choices"
+        ],
+        "evidence": [
+          "docs/architecture/RELEASE_1_4_2_SUCCESS_CRITERIA.md PDF self-data alignment section",
+          "ROADMAP.md PDF export hardening section",
+          "docs/architext/data/nodes.json PDF export node",
+          "docs/architext/data/flows.json PDF export flow",
+          "docs/architext/data/risks.json PDF fidelity risk",
+          "npm run validate"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "sync-choice-reuse",
+      "name": "Sync Choice Reuse",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Store repository-local sync decisions and reuse them only when the user accepts reuse or runs a non-interactive default path.",
+      "progress": 100,
+      "itemIds": [
+        "remember-sync-choices"
+      ],
+      "evidence": [
+        "docs/architecture/RELEASE_1_4_2_SUCCESS_CRITERIA.md",
+        "test/cli.test.mjs"
+      ]
+    },
+    {
+      "id": "pdf-self-data",
+      "name": "PDF Self-Data",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Align the bundled Architext architecture data with the browser-native PDF export path that shipped in 1.4.0.",
+      "progress": 100,
+      "itemIds": [
+        "pdf-self-data-alignment"
+      ],
+      "evidence": [
+        "docs/architext/data/nodes.json",
+        "docs/architext/data/flows.json",
+        "docs/architext/data/risks.json"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "scope-selected",
+      "label": "1.4.2 scope selected",
+      "status": "complete",
+      "targetWindow": "Release implementation",
+      "order": 1,
+      "itemIds": [
+        "remember-sync-choices",
+        "pdf-self-data-alignment"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "success-criteria",
+      "label": "1.4.2 success criteria",
+      "kind": "document",
+      "status": "complete",
+      "href": "docs/architecture/RELEASE_1_4_2_SUCCESS_CRITERIA.md"
+    },
+    {
+      "id": "cli-tests",
+      "label": "Sync choice reuse CLI coverage",
+      "kind": "test",
+      "status": "complete",
+      "href": "node --test test/cli.test.mjs"
+    },
+    {
+      "id": "self-data-validation",
+      "label": "Self-data validation",
+      "kind": "test",
+      "status": "complete",
+      "href": "npm run validate"
+    },
+    {
+      "id": "release-gate",
+      "label": "Release gate",
+      "kind": "test",
+      "status": "complete",
+      "href": "npm run release:check"
+    }
+  ]
+}

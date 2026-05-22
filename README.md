@@ -3,7 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-2ff801)](LICENSE)
 [![CI](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/%40robotaccomplice%2Farchitext?color=00dbe9)](https://www.npmjs.com/package/@robotaccomplice/architext)
-![SemVer](https://img.shields.io/badge/semver-1.4.1-fed639)
+![SemVer](https://img.shields.io/badge/semver-1.4.2-fed639)
 ![Node 20+](https://img.shields.io/badge/node-%3E%3D20-00dbe9)
 ![Global CLI](https://img.shields.io/badge/global%20CLI-yes-2ff801)
 ![Target Repos](https://img.shields.io/badge/target%20repos-data--only-2ff801)
@@ -140,6 +140,18 @@ Install it globally:
 npm install -g @robotaccomplice/architext
 ```
 
+Use the scoped package name exactly. The unscoped `architext` npm package is a
+different project and is not maintained by Robot Accomplice; installing it can
+leave you with an unrelated `0.0.7` CLI.
+
+If `architext --version` reports `0.0.7`, remove the unrelated package and
+install the scoped package:
+
+```sh
+npm uninstall -g architext
+npm install -g @robotaccomplice/architext
+```
+
 From a local Architext clone during development, install the current checkout:
 
 ```sh
@@ -205,10 +217,16 @@ Run non-interactively:
 architext sync . --yes --branch current --append-agents --root-scripts
 ```
 
+After `sync` records repository-level prompt answers, later interactive syncs
+offer to reuse those answers. Use `--prompt` to force the prompts again, or
+`--quiet` to select the default sync choices without asking.
+
 Useful options:
 
 - pass `[path]` after the command to operate on a repository other than the
   current directory.
+- `--quiet` selects default sync choices without interactive prompts.
+- `--prompt` bypasses saved sync choices and asks the normal sync prompts.
 - `--dry-run` shows intended changes without writing files.
 - `--branch new --branch-name <name>` creates a branch before writing.
 - `--branch current` writes to the current branch.
@@ -537,6 +555,9 @@ npm install -g @robotaccomplice/architext
 architext sync
 architext serve
 ```
+
+The package name is scoped. Do not install the unscoped `architext` npm package;
+it is a different project and can install an unrelated `0.0.7` binary.
 
 ## Repository Status
 

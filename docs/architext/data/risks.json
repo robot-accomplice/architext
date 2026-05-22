@@ -71,9 +71,9 @@
       "title": "PDF export loses diagram fidelity",
       "category": "technical",
       "severity": "medium",
-      "status": "open",
-      "summary": "PDF export may crop large diagrams, hide overflow-only content, flatten interactive details, or diverge from the browser-rendered viewer.",
-      "mitigations": ["Define export scope and page layout before implementation", "Use visual regression fixtures for oversized diagrams", "Report route warnings and clipped content during export"],
+      "status": "mitigating",
+      "summary": "The browser-native PDF export path may still crop large diagrams, hide overflow-only content, flatten interactive details, or depend on browser page settings.",
+      "mitigations": ["Use print-specific CSS to preserve the active diagram artifact", "Cover the viewer PDF control in browser UAT", "Keep CLI/headless generated artifacts and clipping diagnostics as explicit future hardening work"],
       "relatedNodes": ["pdf-export", "viewer-runtime", "diagram-planner"],
       "relatedFlows": ["pdf-export"]
     }

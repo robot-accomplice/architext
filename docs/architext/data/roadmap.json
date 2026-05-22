@@ -214,12 +214,14 @@
       "title": "Automated verification harness",
       "summary": "Create a release-grade automated unit, integration, browser, and UAT harness that exercises core user journeys before publication.",
       "kind": "test",
-      "status": "planned",
+      "status": "complete",
       "priority": "critical",
       "section": "CI And Release Gates",
       "dateAdded": "2026-05-21T08:30:00.000Z",
       "evidence": [
-        "docs/architecture/ARCHITECTURE_PLAN.md automated verification harness section"
+        "docs/architecture/ARCHITECTURE_PLAN.md automated verification harness section",
+        "scripts/uat-harness.mjs",
+        "npm run test:uat"
       ],
       "targetReleaseId": "v1-4-1"
     },
@@ -228,22 +230,51 @@
       "title": "Rules editor action placement",
       "summary": "Move newly added rule action buttons below the rule form and use highlighted action colors so save/cancel/delete controls are visually obvious and spatially attached to the form.",
       "kind": "bug-fix",
-      "status": "planned",
+      "status": "complete",
       "priority": "high",
       "section": "Rules",
       "targetReleaseId": "v1-4-1",
-      "dateAdded": "2026-05-21T13:00:00.000Z"
+      "dateAdded": "2026-05-21T13:00:00.000Z",
+      "evidence": [
+        "docs/architext/src/main.tsx RulesWorkspace action footer",
+        "docs/architext/src/styles.css rule editor action styles",
+        "npm test"
+      ]
     },
     {
       "id": "agent-rule-migration",
       "title": "Agent instruction rule migration",
       "summary": "Offer a doctor/sync migration that extracts project rules from AGENTS.md, CLAUDE.md, Cursor rule files, and legacy .cursorrules into docs/architext/data/rules.json, then replaces tool-specific files with model-agnostic pointers.",
       "kind": "feature",
-      "status": "planned",
+      "status": "complete",
       "priority": "high",
       "section": "Rules",
       "targetReleaseId": "v1-4-1",
-      "dateAdded": "2026-05-21T13:30:00.000Z"
+      "dateAdded": "2026-05-21T13:30:00.000Z",
+      "evidence": [
+        "docs/architecture/RELEASE_1_4_1_SUCCESS_CRITERIA.md agent instruction rule migration section",
+        "src/domain/lifecycle/instruction-rule-migration.mjs",
+        "test/cli.test.mjs doctor and sync migrate model-specific instruction rules into Rules data"
+      ]
+    },
+    {
+      "id": "remember-sync-choices",
+      "title": "Remember sync choices",
+      "summary": "Persist repository-level sync choices from the first interactive run and provide an explicit forget/reset option so users can rerun sync without repeated prompts while still being able to discard stale choices.",
+      "kind": "feature",
+      "status": "complete",
+      "priority": "high",
+      "section": "CLI Lifecycle Refactor",
+      "dateAdded": "2026-05-21T00:00:00.000Z",
+      "targetReleaseId": "v1-4-2",
+      "evidence": [
+        "docs/architecture/RELEASE_1_4_2_SUCCESS_CRITERIA.md sync choice reuse section",
+        "src/adapters/cli/architext-cli.mjs sync choice policy",
+        "src/adapters/cli/command-line.mjs --quiet and --prompt options",
+        "test/cli.test.mjs sync choice reuse coverage",
+        "npm test",
+        "npm run validate"
+      ]
     }
   ]
 }

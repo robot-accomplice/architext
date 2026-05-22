@@ -231,12 +231,14 @@ must run both before package dry-run and packed CLI smoke testing.
 
 Before a release is cut, the local release ceremony must also refresh the
 README-facing screenshot set from the current self-hosted viewer and audit
-README text and badges for stale feature/version language. When the maintainer
-also controls a public site that mentions Architext, that site should be checked
-for stale version numbers or capability descriptions as a local maintainer step;
-the Architext repository must not depend on external project checkouts to pass
-its formal lifecycle. These are documentation verification steps, not package
-publication instructions.
+README text and badges for stale feature/version language. Public installation
+instructions must name the scoped npm package, `@robotaccomplice/architext`, and
+must not imply that the unscoped `architext` npm package belongs to this
+project. When the maintainer also controls a public site that mentions
+Architext, that site should be checked for stale version numbers or capability
+descriptions as a local maintainer step; the Architext repository must not
+depend on external project checkouts to pass its formal lifecycle. These are
+documentation verification steps, not package publication instructions.
 
 ### `manifest.json`
 
