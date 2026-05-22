@@ -3,7 +3,7 @@ import path from "node:path";
 export const metadataFile = ".architext.json";
 export const legacyMetadataFile = ".architext-install.json";
 export const instructionFiles = ["AGENTS.md", "CLAUDE.md"];
-export const generatedIgnores = ["docs/architext/dist/"];
+export const generatedIgnores = ["docs/architext/dist/", "docs/architext/.architext-write.lock/"];
 export const copiedInstallEntries = [
   "AGENTS_APPENDIX.md",
   "LLM_ARCHITEXT.md",

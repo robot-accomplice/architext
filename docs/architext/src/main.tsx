@@ -75,6 +75,22 @@ const routingStyleLabels: Record<RoutingStyle, string> = {
   straight: "Straight"
 };
 
+type RecoveryResult = {
+  ok?: boolean;
+  mode?: string;
+  output?: string;
+  error?: string;
+  reload?: boolean;
+  repairs?: Array<{ summary?: string; file?: string; category?: string }>;
+  validation?: { ok?: boolean; output?: string };
+  status?: {
+    installed?: boolean;
+    needsMigration?: boolean;
+    doctorRepairs?: Array<{ summary?: string; file?: string; category?: string }>;
+    validation?: { ok?: boolean; output?: string };
+  };
+};
+
 function progressBarStyle(value?: number): React.CSSProperties {
   return { "--progress-fill": progressFill(value) } as React.CSSProperties;
 }
@@ -264,6 +280,7 @@ function RulesWorkspace({
   const selectedCategoryLabel = selectedCategory === "all" ? "All Rules" : selectedCategory;
   const [draft, setDraft] = useState<RuleItem | null>(selectedRule);
   const [message, setMessage] = useState("");
+  const [pendingAction, setPendingAction] = useState(false);
   const [dragRuleId, setDragRuleId] = useState<Id | null>(null);
   const draftIsNew = Boolean(draft && !rules.some((rule) => rule.id === draft.id));
   const draftEditProtected = !draftIsNew && selectedRule?.protection.edit;
@@ -285,10 +302,16 @@ function RulesWorkspace({
   useEffect(() => () => onEditingChange(false), [onEditingChange]);
 
   const sendRuleAction = async (payload: object) => {
+    if (pendingAction) return;
     setMessage("");
-    await postRulesAction(fetch, payload);
-    await onRulesChanged();
-    setMessage("Rules updated.");
+    setPendingAction(true);
+    try {
+      await postRulesAction(fetch, payload);
+      await onRulesChanged();
+      setMessage("Rules updated.");
+    } finally {
+      setPendingAction(false);
+    }
   };
 
   const createRuleDraft = (category = selectedCategory === "all" ? "Architecture" : selectedCategory) => {
@@ -466,15 +489,15 @@ function RulesWorkspace({
           </label>
           {message ? <p className="rule-editor-message">{message}</p> : null}
           <div className="rule-editor-actions rule-editor-actions-footer">
-            <button type="button" className="secondary-action" onClick={() => moveSelectedRule("up")} disabled={draftCannotMove}>Move up</button>
-            <button type="button" className="secondary-action" onClick={() => moveSelectedRule("down")} disabled={draftCannotMove}>Move down</button>
+            <button type="button" className="secondary-action" onClick={() => moveSelectedRule("up")} disabled={draftCannotMove || pendingAction}>Move up</button>
+            <button type="button" className="secondary-action" onClick={() => moveSelectedRule("down")} disabled={draftCannotMove || pendingAction}>Move down</button>
             <button type="button" className="quiet-action" onClick={() => {
               setDraft(selectedRule);
               setMessage("");
               onEditingChange(false);
-            }}>Cancel</button>
-            <button type="button" className="danger-action" onClick={deleteSelectedRule} disabled={draftCannotDelete}>Delete</button>
-            <button type="button" className="primary-action" onClick={saveDraft} disabled={draftEditProtected}>Save rule</button>
+            }} disabled={pendingAction}>Cancel</button>
+            <button type="button" className="danger-action" onClick={deleteSelectedRule} disabled={draftCannotDelete || pendingAction}>Delete</button>
+            <button type="button" className="primary-action" onClick={saveDraft} disabled={draftEditProtected || pendingAction}>Save rule</button>
           </div>
         </div>
       ) : null}
@@ -868,12 +891,13 @@ function ReleaseTrendChart({
   const [inspectedReleaseId, setInspectedReleaseId] = useState<Id | null>(null);
   const sorted = [...releases].sort((a, b) => (a.releasedAt ?? a.targetDate ?? a.targetWindow ?? "").localeCompare(b.releasedAt ?? b.targetDate ?? b.targetWindow ?? ""));
   const width = 1200;
-  const height = 160;
+  const height = 196;
   const padTop = 22;
   const padRight = 8;
-  const padBottom = 46;
+  const padBottom = 74;
   const padLeft = 30;
   const baseline = height - padBottom;
+  const xLabelY = baseline + 16;
   const maxCount = Math.max(1, ...sorted.flatMap((release) => [release.counts.features, release.counts.bugFixes]));
   const markerReleaseId = inspectedReleaseId ?? activeReleaseId;
   const markerIndex = Math.max(0, sorted.findIndex((release) => release.id === markerReleaseId));
@@ -924,7 +948,7 @@ function ReleaseTrendChart({
             >
               <title>{`${release.name} · ${releaseDateLabel} · ${release.counts.features} features · ${release.counts.bugFixes} bug fixes · select from the release list`}</title>
               <circle className={`${release.id === activeReleaseId ? "active" : ""} ${releaseTone(release.posture)}`} cx={xFor(index)} cy={yFor(release.counts.features)} r="3.5" />
-              <text className="release-chart-x-label" x={xFor(index)} y={height - 8} textAnchor="end" transform={`rotate(-65 ${xFor(index)} ${height - 8})`}>{release.version}</text>
+              <text className="release-chart-x-label" x={xFor(index)} y={xLabelY} textAnchor="end" transform={`rotate(-65 ${xFor(index)} ${xLabelY})`}>{release.version}</text>
             </g>
           );
         })}
@@ -1071,10 +1095,120 @@ function releasePathDetailSelection(detail: ReleaseDetail | null, selection: Sel
   return null;
 }
 
+function shortDiagnosticLine(text: string) {
+  const line = text.split(/\r?\n/).map((entry) => entry.trim()).find(Boolean) ?? "No diagnostic output.";
+  return line.length > 140 ? `${line.slice(0, 137)}...` : line;
+}
+
+function recoveryDetailsText(error: string, result: RecoveryResult | null) {
+  if (!result) return error;
+  const primary = result.error
+    ?? result.output
+    ?? result.validation?.output
+    ?? result.status?.validation?.output
+    ?? error;
+  const responseJson = JSON.stringify(result, null, 2);
+  return `${primary}\n\nRecovery response:\n${responseJson}`;
+}
+
+function RecoveryShell({
+  error,
+  busy,
+  result,
+  onAction
+}: {
+  error: string;
+  busy: string | null;
+  result: RecoveryResult | null;
+  onAction: (action: "reload" | "status" | "doctor-dry-run" | "doctor-apply" | "sync-repair") => void;
+}) {
+  const repairs = result?.repairs ?? result?.status?.doctorRepairs ?? [];
+  const diagnostic = result?.error
+    ?? result?.output
+    ?? result?.validation?.output
+    ?? result?.status?.validation?.output
+    ?? error;
+  const details = recoveryDetailsText(error, result);
+  const shortDiagnostic = shortDiagnosticLine(diagnostic);
+  const resultLabel = result
+    ? `${(result.mode ?? "status").replaceAll("-", " ").toUpperCase()}: ${result.ok ? "COMPLETE" : "NEEDS ATTENTION"}`
+    : null;
+  const resultSummary = result?.error && result.mode === "status"
+    ? `Status check found invalid data: ${shortDiagnostic}`
+    : result?.error
+      ? `Action failed: ${shortDiagnostic}`
+      : result?.validation?.ok === false || result?.status?.validation?.ok === false || result?.ok === false
+    ? `Validation is still failing: ${shortDiagnostic}`
+    : result?.reload
+      ? "Validation passed. Reloading data."
+      : result
+        ? "Recovery action completed."
+        : null;
+
+  return (
+    <div className="app recovery-app">
+      <header className="topbar">
+        <div>
+          <p className="eyebrow">Architext / {__ARCHITEXT_VERSION__}</p>
+          <div className="project-title-line">
+            <h1>Recovery</h1>
+            <p>Target data could not produce a valid architecture model.</p>
+          </div>
+        </div>
+        <div className="topbar-actions">
+          <button type="button" onClick={() => onAction("reload")} disabled={Boolean(busy)}>
+            RELOAD
+          </button>
+        </div>
+      </header>
+      <main className="recovery-shell">
+        <section className="recovery-panel" aria-live="polite" aria-busy={Boolean(busy)}>
+          <p className="eyebrow">Data Health</p>
+          <h2>Architext is running in recovery mode</h2>
+          <p>
+            The served viewer is available, but the current data failed loading
+            or validation. Use the constrained repair actions below; they reuse
+            Architext doctor and sync behavior.
+          </p>
+          <div className="recovery-actions">
+            <button type="button" onClick={() => onAction("status")} disabled={Boolean(busy)}>CHECK STATUS</button>
+            <button type="button" onClick={() => onAction("doctor-dry-run")} disabled={Boolean(busy)}>DOCTOR DRY RUN</button>
+            <button type="button" onClick={() => onAction("doctor-apply")} disabled={Boolean(busy)}>APPLY DOCTOR</button>
+            <button type="button" onClick={() => onAction("sync-repair")} disabled={Boolean(busy)}>SYNC REPAIR</button>
+          </div>
+          {resultLabel ? (
+            <div className="recovery-result">
+              <strong>{resultLabel}</strong>
+              {resultSummary ? <span>{resultSummary}</span> : null}
+            </div>
+          ) : null}
+          {repairs.length ? (
+            <div className="recovery-repairs">
+              <strong>Repair candidates</strong>
+              <ul>
+                {repairs.map((repair, index) => (
+                  <li key={`${repair.category ?? "repair"}-${index}`}>{repair.summary ?? repair.file ?? "Repair"}</li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <details className="recovery-details">
+            <summary>DETAILS</summary>
+            <pre>{details}</pre>
+          </details>
+        </section>
+      </main>
+    </div>
+  );
+}
+
 function App() {
   const [model, setModel] = useState<Model | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [recoveryBusy, setRecoveryBusy] = useState<string | null>(null);
+  const [recoveryResult, setRecoveryResult] = useState<RecoveryResult | null>(null);
   const [dataNotice, setDataNotice] = useState<string | null>(null);
+  const [dataIssue, setDataIssue] = useState<{ message: string; waiting: boolean } | null>(null);
   const [navCollapsed, setNavCollapsed] = useState(() => readBooleanPreference(localStorage, "architext-left-collapsed"));
   const [rightCollapsed, setRightCollapsed] = useState(() => readBooleanPreference(localStorage, "architext-right-collapsed"));
   const [query, setQuery] = useState("");
@@ -1118,6 +1252,56 @@ function App() {
     }
     setActiveReleaseId(loaded.releases?.index.currentReleaseId ?? "");
     setReleaseDetailsById(new Map((loaded.releases?.details ?? []).map((detail) => [detail.id, detail])));
+    setError(null);
+    setRecoveryResult(null);
+  };
+
+  const reloadFromRecovery = async () => {
+    setRecoveryBusy("Reloading architecture data...");
+    try {
+      const loaded = await loadArchitectureModel();
+      applyLoadedModel(loaded, !model);
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : String(loadError);
+      setError(message);
+      setRecoveryResult({ error: message });
+    } finally {
+      setRecoveryBusy(null);
+    }
+  };
+
+  const requestRecoveryAction = async (action: "reload" | "status" | "doctor-dry-run" | "doctor-apply" | "sync-repair") => {
+    if (action === "reload") {
+      await reloadFromRecovery();
+      return;
+    }
+
+    const labels = {
+      status: "Checking Architext status...",
+      "doctor-dry-run": "Checking deterministic doctor repairs...",
+      "doctor-apply": "Applying deterministic doctor repairs...",
+      "sync-repair": "Running constrained sync repair..."
+    };
+    setRecoveryBusy(labels[action]);
+    try {
+      const response = action === "status"
+        ? await fetch("/api/status")
+        : await fetch(action === "sync-repair" ? "/api/sync-repair" : "/api/doctor", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(action === "doctor-apply" ? { apply: true } : action === "doctor-dry-run" ? { apply: false } : {})
+        });
+      const text = await response.text();
+      const payload = text ? JSON.parse(text) as RecoveryResult : {};
+      payload.mode = payload.mode ?? action;
+      if (!response.ok && !payload.error) payload.error = `Recovery request failed: ${response.status} ${response.statusText}`;
+      setRecoveryResult(payload);
+      if (payload.reload && payload.ok) await reloadFromRecovery();
+    } catch (recoveryError) {
+      setRecoveryResult({ mode: action, error: recoveryError instanceof Error ? recoveryError.message : String(recoveryError) });
+    } finally {
+      setRecoveryBusy(null);
+    }
   };
 
   useEffect(() => {
@@ -1137,6 +1321,7 @@ function App() {
       try {
         const loaded = await loadArchitectureModel();
         applyLoadedModel(loaded, false);
+        setDataIssue(null);
         setDataNotice("Architext data refreshed.");
       } catch (loadError) {
         setDataNotice(loadError instanceof Error ? loadError.message : String(loadError));
@@ -1144,17 +1329,9 @@ function App() {
     },
     onInvalid: async (payload: { output?: string }) => {
       const message = payload.output ?? "The JSON data was updated and left in an invalid state.";
-      const refreshAnyway = window.confirm(`The JSON data was updated and left in an invalid state. Refresh anyway?\n\n${message}`);
-      if (!refreshAnyway) {
-        setDataNotice("Architext data changed but did not validate. Keeping the last known good model.");
-        return;
-      }
-      try {
-        const loaded = await loadArchitectureModel();
-        applyLoadedModel(loaded, false);
-      } catch (loadError) {
-        setError(loadError instanceof Error ? loadError.message : String(loadError));
-      }
+      setDataIssue({ message, waiting: true });
+      setDataNotice(null);
+      setRecoveryResult({ validation: { ok: false, output: message }, reload: false });
     }
   }), [releasePlanningDirty, rulesEditorDirty]);
 
@@ -1185,6 +1362,18 @@ function App() {
   const reloadArchitectureData = async () => {
     const loaded = await loadArchitectureModel();
     applyLoadedModel(loaded, false);
+  };
+
+  const reloadInvalidDataNow = async () => {
+    try {
+      await reloadArchitectureData();
+      setDataIssue(null);
+      setDataNotice("Architext data refreshed.");
+    } catch (loadError) {
+      const message = loadError instanceof Error ? loadError.message : String(loadError);
+      setDataIssue({ message, waiting: true });
+      setDataNotice(null);
+    }
   };
 
   useEffect(() => {
@@ -1231,12 +1420,7 @@ function App() {
   }, []);
 
   if (error) {
-    return (
-      <main className="fatal">
-        <h1>Architext failed to load</h1>
-        <pre>{error}</pre>
-      </main>
-    );
+    return <RecoveryShell error={error} busy={recoveryBusy} result={recoveryResult} onAction={requestRecoveryAction} />;
   }
 
   if (!model) {
@@ -1445,9 +1629,26 @@ function App() {
           </div>
         </div>
       </header>
-      {dataNotice ? (
+      {dataNotice && !dataIssue ? (
         <div className="data-refresh-notice" role="status">
-          {dataNotice}
+          <span>{dataNotice}</span>
+        </div>
+      ) : null}
+      {dataIssue ? (
+        <div className="data-issue-backdrop" role="presentation">
+          <section className="data-issue-dialog" role="dialog" aria-modal="true" aria-labelledby="data-issue-title" aria-describedby="data-issue-description">
+            <p className="eyebrow">Data Health</p>
+            <h2 id="data-issue-title">Architext data is invalid</h2>
+            <p id="data-issue-description">Wait keeps checking in the background and refreshes this viewer when validation passes. Now tries to reload immediately.</p>
+            <details className="data-issue-details">
+              <summary>DETAILS</summary>
+              <pre>{dataIssue.message}</pre>
+            </details>
+            <div className="data-issue-actions">
+              <button type="button" onClick={() => setDataIssue(null)}>WAIT</button>
+              <button type="button" className="primary-action" onClick={reloadInvalidDataNow}>REFRESH NOW</button>
+            </div>
+          </section>
         </div>
       ) : null}
 
