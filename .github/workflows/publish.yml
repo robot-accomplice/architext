@@ -1,11 +1,13 @@
 name: Publish to npm
 
 on:
+  release:
+    types: [published]
   workflow_dispatch:
     inputs:
       version:
         description: Version to publish, without the leading v.
-        required: true
+        required: false
         type: string
       dry_run:
         description: Run npm publish in dry-run mode.
@@ -25,10 +27,31 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Resolve release version
+        id: release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "release" ]; then
+            tag="${{ github.event.release.tag_name }}"
+            dry_run="false"
+          else
+            tag="v${{ inputs.version }}"
+            dry_run="${{ inputs.dry_run }}"
+          fi
+          if [[ ! "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "Release tag must be vX.Y.Z; got $tag" >&2
+            exit 1
+          fi
+          version="${tag#v}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "dry_run=$dry_run" >> "$GITHUB_OUTPUT"
+
       - name: Check out released tag
         uses: actions/checkout@v6
         with:
-          ref: v${{ inputs.version }}
+          ref: ${{ steps.release.outputs.tag }}
 
       - name: Set up Node
         uses: actions/setup-node@v6
@@ -45,7 +68,7 @@ jobs:
         run: |
           set -euo pipefail
           actual="$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')"
-          test "$actual" = "${{ inputs.version }}"
+          test "$actual" = "${{ steps.release.outputs.version }}"
 
       - name: Install package dependencies
         run: npm ci
@@ -60,9 +83,25 @@ jobs:
         run: npm run release:check
 
       - name: Dry-run publish
-        if: ${{ inputs.dry_run == 'true' }}
+        if: ${{ steps.release.outputs.dry_run == 'true' }}
         run: npm publish --access public --provenance --dry-run
 
       - name: Publish
-        if: ${{ inputs.dry_run == 'false' }}
+        if: ${{ steps.release.outputs.dry_run == 'false' }}
         run: npm publish --access public --provenance
+
+      - name: Verify published package
+        if: ${{ steps.release.outputs.dry_run == 'false' }}
+        run: npm view "@robotaccomplice/architext@${{ steps.release.outputs.version }}" version
+
+      - name: Smoke-test published CLI
+        if: ${{ steps.release.outputs.dry_run == 'false' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          prefix="$(mktemp -d)"
+          target="$(mktemp -d)"
+          npm install -g --prefix "$prefix" "@robotaccomplice/architext@${{ steps.release.outputs.version }}"
+          "$prefix/bin/architext" --version
+          "$prefix/bin/architext" sync "$target" --yes --branch none
+          "$prefix/bin/architext" validate "$target"

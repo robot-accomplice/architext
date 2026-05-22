@@ -23,7 +23,7 @@ test("target layout centralizes data-only repository paths", () => {
 
 test("target layout exposes lifecycle-managed repository conventions", () => {
   assert.deepEqual(instructionFiles, ["AGENTS.md", "CLAUDE.md"]);
-  assert.deepEqual(generatedIgnores, ["docs/architext/dist/"]);
+  assert.deepEqual(generatedIgnores, ["docs/architext/dist/", "docs/architext/.architext-write.lock/"]);
   assert.equal(rootScripts.architext, "architext serve .");
   assert.equal(rootScripts["architext:validate"], "architext validate .");
 });

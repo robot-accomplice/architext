@@ -5,7 +5,14 @@ async function fetchJson(fetcher, path) {
   if (!response.ok) {
     throw new Error(`Failed to load ${path}: ${response.status} ${response.statusText}`);
   }
-  return response.json();
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    const snippet = text.length > 1200 ? `${text.slice(0, 1200)}\n...` : text;
+    throw new Error(`Failed to parse ${path}: ${reason}\n\nOffending JSON:\n${snippet}`);
+  }
 }
 
 export async function loadArchitectureModel(fetcher = fetch) {

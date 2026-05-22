@@ -10,6 +10,7 @@ import { parseArgs, usage } from "./command-line.mjs";
 import { assertDirectory, git, gitAvailable, readJson, run, tryRun, writeJson } from "./runtime.mjs";
 import { runServeLifecycle } from "./serve-lifecycle.mjs";
 import { printStatus } from "./terminal-presenter.mjs";
+import { withTargetWriteLock } from "./write-lock.mjs";
 import { createDataWatchHub } from "../http/data-watch-hub.mjs";
 import { approveReleasePlanRequest as approveReleasePlanApiRequest } from "../http/release-planning-api.mjs";
 import { updateRulesRequest as updateRulesApiRequest } from "../http/rules-api.mjs";
@@ -887,7 +888,7 @@ async function runDoctor(target, options, version) {
       console.log("No doctor repairs applied.");
       return;
     }
-    const repairs = await applyDoctorRepairs(target, status, false);
+    const repairs = await withTargetWriteLock(target, () => applyDoctorRepairs(target, status, false));
     console.log("Applied doctor repairs:");
     repairs.forEach((repair) => console.log(`- ${repair.file}: ${repair.summary}`));
     const validation = options.skipValidate ? { ok: true, output: "Validation skipped." } : await validateTarget(target);
@@ -944,68 +945,73 @@ async function syncTarget(target, options, version) {
       }
     }
 
-    if (installing) {
-      console.log(`${options.dryRun ? "Would write" : "Writing"} starter data to ${dataDir(target)}`);
-      if (!options.dryRun) await writeStarterData(target, version);
-    } else {
-      console.log("Preserving target-owned docs/architext/data/**/*.json");
-    }
+    const performWrites = async () => {
+      if (installing) {
+        console.log(`${options.dryRun ? "Would write" : "Writing"} starter data to ${dataDir(target)}`);
+        if (!options.dryRun) await writeStarterData(target, version);
+      } else {
+        console.log("Preserving target-owned docs/architext/data/**/*.json");
+      }
 
-    const removed = migrating ? await removeCopiedInstallFiles(target, options.dryRun) : [];
-    if (removed.length) {
-      console.log(`${options.dryRun ? "Would remove" : "Removed"} copied package-owned files:`);
-      removed.forEach((item) => console.log(`- ${item}`));
-    }
+      const removed = migrating ? await removeCopiedInstallFiles(target, options.dryRun) : [];
+      if (removed.length) {
+        console.log(`${options.dryRun ? "Would remove" : "Removed"} copied package-owned files:`);
+        removed.forEach((item) => console.log(`- ${item}`));
+      }
 
-    if (!installing && doctorRepairsSelected) {
-      const repairs = await applyDoctorRepairs(target, status, options.dryRun, { skipInstructionRules: options.noAgents });
-      console.log(`${options.dryRun ? "Would apply" : "Applied"} doctor repairs:`);
-      repairs.forEach((repair) => console.log(`- ${repair.file}: ${repair.summary}`));
-    } else if (!installing && doctorRepairAvailable) {
-      console.log("Skipped doctor repairs.");
-    }
+      if (!installing && doctorRepairsSelected) {
+        const repairs = await applyDoctorRepairs(target, status, options.dryRun, { skipInstructionRules: options.noAgents });
+        console.log(`${options.dryRun ? "Would apply" : "Applied"} doctor repairs:`);
+        repairs.forEach((repair) => console.log(`- ${repair.file}: ${repair.summary}`));
+      } else if (!installing && doctorRepairAvailable) {
+        console.log("Skipped doctor repairs.");
+      }
 
-    const managedInstructions = [];
-    for (const fileName of syncChoices.instructionFiles) {
-      const result = await upsertInstructionFile({ target, fileName, dryRun: options.dryRun });
-      console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
-      if (result.changed) managedInstructions.push(fileName);
-    }
+      const managedInstructions = [];
+      for (const fileName of syncChoices.instructionFiles) {
+        const result = await upsertInstructionFile({ target, fileName, dryRun: options.dryRun });
+        console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
+        if (result.changed) managedInstructions.push(fileName);
+      }
 
-    let gitignoreManaged = false;
-    if (syncChoices.manageGitignore) {
-      const result = await upsertGitignore({ target, dryRun: options.dryRun });
-      console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
-      gitignoreManaged = result.changed || result.reason === "already present";
-    }
+      let gitignoreManaged = false;
+      if (syncChoices.manageGitignore) {
+        const result = await upsertGitignore({ target, dryRun: options.dryRun });
+        console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
+        gitignoreManaged = result.changed || result.reason === "already present";
+      }
 
-    let rootScriptsManaged = false;
-    if (syncChoices.manageRootScripts) {
-      const result = await upsertRootScripts({ target, dryRun: options.dryRun });
-      console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination} with ${result.missing.length} scripts` : `Skipped ${result.destination}: ${result.reason}`);
-      rootScriptsManaged = result.changed || result.reason === "already present";
-    }
+      let rootScriptsManaged = false;
+      if (syncChoices.manageRootScripts) {
+        const result = await upsertRootScripts({ target, dryRun: options.dryRun });
+        console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination} with ${result.missing.length} scripts` : `Skipped ${result.destination}: ${result.reason}`);
+        rootScriptsManaged = result.changed || result.reason === "already present";
+      }
 
-    const validation = options.skipValidate || (options.dryRun && installing)
-      ? null
-      : await validateTarget(target);
-    if (validation) console.log(`Validation: ${validation.ok ? "passed" : "failed"}`);
+      const validation = options.skipValidate || (options.dryRun && installing)
+        ? null
+        : await validateTarget(target);
+      if (validation) console.log(`Validation: ${validation.ok ? "passed" : "failed"}`);
 
-    if (!options.dryRun) {
-      await writeMetadata(target, {
-        source: "architext-cli",
-        cliVersion: version,
-        operation: installing ? "install" : migrating ? "migrate" : "sync",
-        dataPolicy: installing ? "starter-written" : "preserved",
-        copiedInstallMigrated: migrating,
-        instructionFiles: Object.fromEntries(instructionFiles.map((fileName) => [fileName, syncChoices.instructionFiles.includes(fileName)])),
-        managedInstructions,
-        gitignoreManaged,
-        rootScriptsManaged,
-        syncChoices: persistedSyncChoices(syncChoices),
-        lastValidation: validation ? { ok: validation.ok, at: new Date().toISOString() } : undefined
-      });
-    }
+      if (!options.dryRun) {
+        await writeMetadata(target, {
+          source: "architext-cli",
+          cliVersion: version,
+          operation: installing ? "install" : migrating ? "migrate" : "sync",
+          dataPolicy: installing ? "starter-written" : "preserved",
+          copiedInstallMigrated: migrating,
+          instructionFiles: Object.fromEntries(instructionFiles.map((fileName) => [fileName, syncChoices.instructionFiles.includes(fileName)])),
+          managedInstructions,
+          gitignoreManaged,
+          rootScriptsManaged,
+          syncChoices: persistedSyncChoices(syncChoices),
+          lastValidation: validation ? { ok: validation.ok, at: new Date().toISOString() } : undefined
+        });
+      }
+    };
+
+    if (options.dryRun) await performWrites();
+    else await withTargetWriteLock(target, performWrites);
   } finally {
     rl.close();
   }
@@ -1148,7 +1154,8 @@ async function requestJson(request) {
 }
 
 async function approveReleasePlanRequest(target, payload) {
-  return approveReleasePlanApiRequest({
+  const action = payload.action ?? (payload.dryRun ? "preview" : "approve");
+  const request = () => approveReleasePlanApiRequest({
     target,
     payload,
     dataDir,
@@ -1156,17 +1163,126 @@ async function approveReleasePlanRequest(target, payload) {
     writeJson,
     validateTarget
   });
+  return action === "preview" || payload.dryRun
+    ? request()
+    : withTargetWriteLock(target, request);
 }
 
 async function updateRulesRequest(target, payload) {
-  return updateRulesApiRequest({
+  return withTargetWriteLock(target, () => updateRulesApiRequest({
     target,
     payload,
     dataDir,
     readJson,
     writeJson,
     validateTarget
+  }));
+}
+
+async function statusApiRequest(target, version) {
+  const status = await collectStatus(target, version, { runValidation: true });
+  return {
+    ok: status.installed && !status.needsMigration && status.validation?.ok !== false,
+    status
+  };
+}
+
+async function malformedJsonDiagnostic(target) {
+  const root = dataDir(target);
+  const files = [];
+  async function collect(dir) {
+    const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
+    for (const entry of entries) {
+      const file = path.join(dir, entry.name);
+      if (entry.isDirectory()) await collect(file);
+      else if (entry.isFile() && entry.name.endsWith(".json")) files.push(file);
+    }
+  }
+  await collect(root);
+  for (const file of files.sort()) {
+    const text = await readFile(file, "utf8").catch(() => null);
+    if (text === null) continue;
+    try {
+      JSON.parse(text);
+    } catch {
+      const relative = path.relative(root, file);
+      const snippet = text.length > 1200 ? `${text.slice(0, 1200)}\n...` : text;
+      return `Offending JSON in docs/architext/data/${relative}:\n${snippet}`;
+    }
+  }
+  return "";
+}
+
+async function doctorApiRequest(target, payload, version) {
+  const status = await collectStatus(target, version, { runValidation: true });
+  if (!payload.apply) {
+    return {
+      ok: true,
+      mode: "dry-run",
+      status,
+      repairs: status.doctorRepairs,
+      validation: status.validation,
+      reload: false
+    };
+  }
+  if (!status.installed || status.needsMigration) {
+    return {
+      ok: false,
+      mode: "apply",
+      status,
+      repairs: [],
+      validation: status.validation,
+      reload: false,
+      output: "Run sync before doctor repairs."
+    };
+  }
+  const repairs = await withTargetWriteLock(target, async () => {
+    const lockedStatus = await collectStatus(target, version, { runValidation: true });
+    if (!lockedStatus.installed || lockedStatus.needsMigration) {
+      throw new Error("Run sync before doctor repairs.");
+    }
+    return lockedStatus.doctorRepairs.length
+      ? applyDoctorRepairs(target, lockedStatus, false)
+      : [];
   });
+  const validation = await validateTarget(target);
+  return {
+    ok: validation.ok,
+    mode: "apply",
+    status,
+    repairs,
+    validation,
+    reload: validation.ok
+  };
+}
+
+async function captureConsoleOutput(callback) {
+  const originalLog = console.log;
+  const lines = [];
+  console.log = (...args) => lines.push(args.join(" "));
+  try {
+    const result = await callback();
+    return { result, output: lines.join("\n") };
+  } finally {
+    console.log = originalLog;
+  }
+}
+
+async function syncRepairApiRequest(target, version) {
+  const { output: syncOutput } = await captureConsoleOutput(() => syncTarget(target, {
+    quiet: true,
+    branch: "none",
+    noAgents: true,
+    noGitignore: true,
+    noRootScripts: true
+  }, version));
+  const validation = await validateTarget(target);
+  return {
+    ok: validation.ok,
+    output: syncOutput,
+    validation,
+    reload: validation.ok
+  };
 }
 
 async function createViewerServer({ target, host, port }) {
@@ -1192,6 +1308,38 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
       const url = new URL(request.url || "/", "http://127.0.0.1");
       if (url.pathname === "/api/data-events" && request.method === "GET") {
         watchHub.attach(response);
+        return;
+      }
+
+      if (url.pathname === "/api/status" && request.method === "GET") {
+        try {
+          sendJson(response, 200, await statusApiRequest(target, await packageVersion()));
+        } catch (error) {
+          const diagnostic = await malformedJsonDiagnostic(target);
+          sendJson(response, 200, { ok: false, mode: "status", error: [error.message, diagnostic].filter(Boolean).join("\n\n"), reload: false });
+        }
+        return;
+      }
+
+      if (url.pathname === "/api/doctor" && request.method === "POST") {
+        try {
+          const result = await doctorApiRequest(target, await requestJson(request), await packageVersion());
+          sendJson(response, 200, result);
+        } catch (error) {
+          const diagnostic = await malformedJsonDiagnostic(target);
+          sendJson(response, 200, { ok: false, mode: "doctor", error: [error.message, diagnostic].filter(Boolean).join("\n\n"), reload: false });
+        }
+        return;
+      }
+
+      if (url.pathname === "/api/sync-repair" && request.method === "POST") {
+        try {
+          const result = await syncRepairApiRequest(target, await packageVersion());
+          sendJson(response, 200, result);
+        } catch (error) {
+          const diagnostic = await malformedJsonDiagnostic(target);
+          sendJson(response, 200, { ok: false, mode: "sync-repair", error: [error.message, diagnostic].filter(Boolean).join("\n\n"), reload: false });
+        }
         return;
       }
 
