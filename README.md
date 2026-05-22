@@ -385,17 +385,31 @@ Use explicit lifecycle switches when you want a different behavior:
 architext serve --open
 architext serve --background
 architext serve --background --open
+architext --list
+architext serve --list
 architext serve --status
 architext serve --stop
+architext serve --stop --instance <id>
+architext serve --refresh --instance <id>
+architext --check-updates
 architext serve --host 127.0.0.1 --port 4517
 ```
 
 `--background` starts a detached local viewer server, waits until it is
 reachable, prints the URL, and returns control to the shell. `--status` reports
-the recorded background server for the target repository. `--stop` stops it.
-`--open` launches the system browser after the viewer is reachable. The command
-always prints a plain local URL so terminals that auto-link URLs remain enough
-even when browser launch is unavailable.
+the recorded background server for the target repository. `--list` reports all
+running background servers and their stable instance ids. `--stop --instance
+<id>` stops a specific listed server without relying on the current directory.
+`--refresh`, `--update`, and `--restart` sync the instance target with the
+current Architext package and then relaunch the same target on the same host and
+port. If sync fails, the existing server is left running.
+
+`--check-updates` checks npm for a newer Architext package, prompts before
+installing it globally, and then prompts to refresh none, one, or all running
+background instances using the newly installed `architext` command. `--open`
+launches the system browser after the viewer is reachable. The command always
+prints a plain local URL so terminals that auto-link URLs remain enough even
+when browser launch is unavailable.
 
 Serve lifecycle options:
 
@@ -407,8 +421,14 @@ Serve lifecycle options:
 | `--no-open` | Suppress browser launch when combining options or future aliases. |
 | `--host <host>` | Bind to a specific host. Defaults to `127.0.0.1`. |
 | `--port <port>` | Bind to a specific port. Defaults to `4317`. |
+| `--list` | List all reachable background servers and remove stale records. |
+| `--instance <id>` | Target a listed background server for status, stop, or refresh. |
 | `--status` | Show the recorded background server for this target and verify that it is reachable. |
 | `--stop` | Stop the recorded background server for this target and remove stale runtime state. |
+| `--restart` | Sync and relaunch a recorded background server. |
+| `--refresh` | Alias for `--restart`. |
+| `--update` | Alias for `--restart`; use `--check-updates` for package installation. |
+| `--check-updates` | Check npm for a newer package, install after confirmation, then refresh selected running instances. |
 
 Background server state is local runtime state, not project architecture data.
 It is not written into `docs/architext/data/*.json` and should not be committed.

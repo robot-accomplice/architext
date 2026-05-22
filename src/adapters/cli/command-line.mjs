@@ -44,6 +44,12 @@ Options:
   --prompt                   Force sync prompts instead of offering saved answers.
   --foreground               Run serve in the current terminal until interrupted.
   --background               Run serve detached and return control after startup.
+  --list                     List all recorded background serve instances.
+  --instance <id>            Target a listed background serve instance.
+  --restart                  Sync and restart a recorded background serve instance.
+  --refresh                  Alias for --restart.
+  --update                   Alias for --restart. Use --check-updates for package updates.
+  --check-updates            Check npm for a newer Architext package.
   --open                     Open the local viewer in the system browser.
   --no-open                  Do not open the system browser.
   --host <host>              Serve bind host. Defaults to 127.0.0.1.
@@ -74,8 +80,12 @@ Examples:
   architext serve --open
   architext serve --background
   architext serve --background --open
+  architext --list
+  architext serve --list
   architext serve --status
   architext serve --stop
+  architext serve --restart --instance <id>
+  architext --check-updates
   architext serve --host 127.0.0.1 --port 4517
   architext --version
   architext validate .
@@ -109,6 +119,10 @@ export function parseArgs(argv) {
     prompt: false,
     foreground: false,
     background: false,
+    serveList: false,
+    serveRestart: false,
+    serveInstance: "",
+    checkUpdates: false,
     open: false,
     noOpen: false,
     host: "127.0.0.1",
@@ -145,6 +159,20 @@ export function parseArgs(argv) {
     } else if (arg === "--background") {
       assertServeCommand(options.command, arg);
       options.background = true;
+    } else if (arg === "--list") {
+      options.command = "serve";
+      options.serveList = true;
+    } else if (arg === "--instance") {
+      assertServeCommand(options.command, arg);
+      const value = rest[++index];
+      if (!value) throw new Error("--instance requires a value");
+      options.serveInstance = value;
+    } else if (arg === "--restart" || arg === "--refresh" || arg === "--update") {
+      assertServeCommand(options.command, arg);
+      options.serveRestart = true;
+    } else if (arg === "--check-updates") {
+      options.command = "version";
+      options.checkUpdates = true;
     } else if (arg === "--open") {
       assertServeCommand(options.command, arg);
       options.open = true;
@@ -194,9 +222,13 @@ function validateOptions(options) {
   if (options.command !== "serve") return;
   if (options.foreground && options.background) throw new Error("--foreground and --background cannot be used together");
   if (options.open && options.noOpen) throw new Error("--open and --no-open cannot be used together");
-  if (options.serveStatus && options.serveStop) throw new Error("--status and --stop cannot be used together");
-  if ((options.serveStatus || options.serveStop) && (options.foreground || options.background || options.open || options.noOpen)) {
-    throw new Error("--status and --stop cannot be combined with serve startup options");
+  const lifecycleOptions = [options.serveStatus, options.serveStop, options.serveList, options.serveRestart].filter(Boolean).length;
+  if (lifecycleOptions > 1) throw new Error("--status, --stop, --list, and --restart cannot be used together");
+  if (lifecycleOptions && (options.foreground || options.background || options.open || options.noOpen)) {
+    throw new Error("--status, --stop, --list, and --restart cannot be combined with serve startup options");
+  }
+  if (options.serveInstance && !(options.serveStatus || options.serveStop || options.serveList || options.serveRestart)) {
+    throw new Error("--instance requires --status, --stop, --list, or --restart");
   }
   if (!options.host) throw new Error("--host requires a value");
   if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65535) {

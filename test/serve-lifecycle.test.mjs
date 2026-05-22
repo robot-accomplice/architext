@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:http";
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -86,6 +86,10 @@ test("serve options parse lifecycle controls without changing foreground default
       port: 4517,
       serveStatus: false,
       serveStop: false,
+      serveList: false,
+      serveRestart: false,
+      serveInstance: "",
+      checkUpdates: false,
       json: false,
       dryRun: false,
       force: false,
@@ -111,13 +115,32 @@ test("serve options parse lifecycle controls without changing foreground default
   assert.equal(defaults.open, false);
   assert.equal(defaults.host, "127.0.0.1");
   assert.equal(defaults.port, 4317);
+
+  const globalList = parseArgs(["--list"]);
+  assert.equal(globalList.command, "serve");
+  assert.equal(globalList.serveList, true);
+
+  const restartByInstance = parseArgs(["serve", "--restart", "--instance", "abc123"]);
+  assert.equal(restartByInstance.serveRestart, true);
+  assert.equal(restartByInstance.serveInstance, "abc123");
+
+  assert.equal(parseArgs(["serve", "--refresh"]).serveRestart, true);
+  assert.equal(parseArgs(["serve", "--update"]).serveRestart, true);
+
+  const checkUpdates = parseArgs(["--check-updates"]);
+  assert.equal(checkUpdates.command, "version");
+  assert.equal(checkUpdates.checkUpdates, true);
 });
 
 test("serve options fail loudly for conflicting lifecycle controls", () => {
   assert.throws(() => parseArgs(["serve", "--foreground", "--background"]), /cannot be used together/);
   assert.throws(() => parseArgs(["serve", "--open", "--no-open"]), /cannot be used together/);
   assert.throws(() => parseArgs(["serve", "--status", "--stop"]), /cannot be used together/);
+  assert.throws(() => parseArgs(["serve", "--list", "--stop"]), /cannot be used together/);
+  assert.throws(() => parseArgs(["serve", "--restart", "--background"]), /cannot be combined with serve startup options/);
   assert.throws(() => parseArgs(["serve", "--status", "--background"]), /cannot be combined with serve startup options/);
+  assert.throws(() => parseArgs(["serve", "--instance"]), /--instance requires a value/);
+  assert.throws(() => parseArgs(["serve", "--instance", "abc"]), /--instance requires --status, --stop, --list, or --restart/);
   assert.throws(() => parseArgs(["serve", "--host"]), /--host requires a value/);
   assert.throws(() => parseArgs(["serve", "--port", "0"]), /--port must be an integer/);
   assert.throws(() => parseArgs(["serve", "--port", "abc"]), /--port must be an integer/);
@@ -167,6 +190,82 @@ test("serve background records status and can be stopped", async () => {
 
       const afterStop = run(["serve", target, "--status"]);
       assert.match(afterStop, /No recorded Architext background server|Removed stale Architext background server record/);
+    } finally {
+      try {
+        run(["serve", target, "--stop"]);
+      } catch {
+        // Best-effort cleanup for failures before the stop assertion.
+      }
+      await rm(target, { recursive: true, force: true });
+    }
+  });
+});
+
+test("serve list shows all instances and stop can target one instance", async () => {
+  await withViewerDist(async () => {
+    const first = await createServeTarget();
+    const second = await createServeTarget();
+    const firstPort = await freePort();
+    const secondPort = await freePort();
+    try {
+      run(["serve", first, "--background", "--host", "127.0.0.1", "--port", String(firstPort), "--no-open"]);
+      run(["serve", second, "--background", "--host", "127.0.0.1", "--port", String(secondPort), "--no-open"]);
+
+      const listed = JSON.parse(run(["--list", "--json"]));
+      const firstInstance = listed.instances.find((instance) => instance.target === path.resolve(first));
+      const secondInstance = listed.instances.find((instance) => instance.target === path.resolve(second));
+      assert.ok(firstInstance?.id);
+      assert.ok(secondInstance?.id);
+      assert.equal(firstInstance.url, `http://127.0.0.1:${firstPort}/`);
+      assert.equal(secondInstance.url, `http://127.0.0.1:${secondPort}/`);
+
+      const textList = run(["serve", "--list"]);
+      assert.match(textList, new RegExp(firstInstance.id));
+      assert.match(textList, new RegExp(secondInstance.id));
+
+      const stopped = run(["serve", "--stop", "--instance", firstInstance.id]);
+      assert.match(stopped, new RegExp(`Stopped Architext background server .*${firstInstance.id}`));
+
+      const afterStop = JSON.parse(run(["serve", "--list", "--json"]));
+      assert.equal(afterStop.instances.some((instance) => instance.id === firstInstance.id), false);
+      assert.equal(afterStop.instances.some((instance) => instance.id === secondInstance.id), true);
+      await waitForHttpOk(`http://127.0.0.1:${secondPort}/`);
+    } finally {
+      for (const target of [first, second]) {
+        try {
+          run(["serve", target, "--stop"]);
+        } catch {
+          // Best-effort cleanup for failures before the stop assertion.
+        }
+        await rm(target, { recursive: true, force: true });
+      }
+    }
+  });
+});
+
+test("serve refresh syncs and restarts a targeted instance", async () => {
+  await withViewerDist(async () => {
+    const target = await mkdtemp(path.join(tmpdir(), "architext-serve-refresh-"));
+    const port = await freePort();
+    try {
+      run(["sync", target, "--yes", "--branch", "none"]);
+      const manifestPath = path.join(target, "docs", "architext", "data", "manifest.json");
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+      await writeFile(manifestPath, `${JSON.stringify({ ...manifest, schemaVersion: "0.1.0" }, null, 2)}\n`);
+
+      run(["serve", target, "--background", "--host", "127.0.0.1", "--port", String(port), "--no-open"]);
+      const before = JSON.parse(run(["serve", "--list", "--json"])).instances.find((instance) => instance.target === path.resolve(target));
+      assert.ok(before?.id);
+
+      const refreshed = run(["serve", "--refresh", "--instance", before.id]);
+      assert.match(refreshed, /Syncing Architext target before restart/);
+      assert.match(refreshed, new RegExp(`Restarted Architext background server .*${before.id}`));
+
+      const after = JSON.parse(run(["serve", "--list", "--json"])).instances.find((instance) => instance.id === before.id);
+      assert.equal(after.url, `http://127.0.0.1:${port}/`);
+      assert.notEqual(after.pid, before.pid);
+      assert.equal(JSON.parse(await readFile(manifestPath, "utf8")).schemaVersion, "1.4.0");
+      await waitForHttpOk(`http://127.0.0.1:${port}/`);
     } finally {
       try {
         run(["serve", target, "--stop"]);

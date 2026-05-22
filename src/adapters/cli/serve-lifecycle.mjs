@@ -1,5 +1,5 @@
 import { closeSync, openSync } from "node:fs";
-import { mkdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
@@ -20,8 +20,23 @@ function serveStatePath(target) {
   return path.join(serveRuntimeDir, `${serveStateKey(target)}.json`);
 }
 
+function serveStatePathById(id) {
+  return path.join(serveRuntimeDir, `${id}.json`);
+}
+
 async function readServeState(target) {
   const statePath = serveStatePath(target);
+  try {
+    return await readJson(statePath);
+  } catch {
+    await rm(statePath, { force: true });
+    return null;
+  }
+}
+
+async function readServeStateById(id) {
+  if (!/^[a-f0-9]{24}$/.test(id)) return null;
+  const statePath = serveStatePathById(id);
   try {
     return await readJson(statePath);
   } catch {
@@ -37,6 +52,10 @@ async function writeServeState(target, state) {
 
 async function removeServeState(target) {
   await rm(serveStatePath(target), { force: true });
+}
+
+async function removeServeStateById(id) {
+  await rm(serveStatePathById(id), { force: true });
 }
 
 function pidExists(pid) {
@@ -116,6 +135,46 @@ async function staleServeState(state) {
   return !(await urlReachable(state.url));
 }
 
+async function readServeInstances({ cleanupStale = true } = {}) {
+  const entries = await readdir(serveRuntimeDir, { withFileTypes: true }).catch(() => []);
+  const instances = [];
+  for (const entry of entries) {
+    if (!entry.isFile() || !entry.name.endsWith(".json")) continue;
+    const id = entry.name.slice(0, -".json".length);
+    const state = await readServeStateById(id);
+    if (!state) continue;
+    const stale = await staleServeState(state);
+    if (stale) {
+      if (cleanupStale) await removeServeStateById(id);
+      continue;
+    }
+    instances.push({ id, ...state, status: "running" });
+  }
+  return instances.sort((left, right) => left.startedAt.localeCompare(right.startedAt) || left.id.localeCompare(right.id));
+}
+
+function knownInstanceError(id, instances) {
+  const known = instances.length ? ` Known instances: ${instances.map((instance) => instance.id).join(", ")}` : " No running instances are recorded.";
+  return new Error(`Unknown Architext background server instance: ${id}.${known}`);
+}
+
+async function resolveInstance(options, target) {
+  if (options.serveInstance) {
+    const state = await readServeStateById(options.serveInstance);
+    const instances = await readServeInstances();
+    const instance = state && instances.find((candidate) => candidate.id === options.serveInstance);
+    if (!instance) throw knownInstanceError(options.serveInstance, instances);
+    return instance;
+  }
+  const state = await readServeState(target);
+  if (!state) return null;
+  if (await staleServeState(state)) {
+    await removeServeState(target);
+    return null;
+  }
+  return { id: serveStateKey(target), ...state, status: "running" };
+}
+
 async function serveBackground({ target, options, cliEntryPath }) {
   const existing = await readServeState(target);
   if (existing && !(await staleServeState(existing))) {
@@ -179,30 +238,20 @@ async function serveBackground({ target, options, cliEntryPath }) {
   }
 }
 
-async function serveStatus(target) {
-  const state = await readServeState(target);
+async function serveStatus(target, options) {
+  const state = await resolveInstance(options, target);
   if (!state) {
     console.log(`No recorded Architext background server for ${target}`);
     return;
   }
-  const reachable = !(await staleServeState(state));
-  if (!reachable) {
-    await removeServeState(target);
-    console.log(`Removed stale Architext background server record for ${target}`);
-    return;
-  }
   console.log(`Architext is serving ${state.target}`);
+  console.log(`ID: ${state.id}`);
   console.log(`PID: ${state.pid}`);
   console.log(`Open ${formatServeLink(state.url)}`);
   console.log(`Logs: ${state.logPath}`);
 }
 
-async function stopServe(target) {
-  const state = await readServeState(target);
-  if (!state) {
-    console.log(`No recorded Architext background server for ${target}`);
-    return;
-  }
+async function stopState(state) {
   if (pidExists(state.pid)) {
     process.kill(state.pid, "SIGTERM");
     const stopped = await new Promise((resolve) => {
@@ -216,17 +265,82 @@ async function stopServe(target) {
     });
     if (!stopped) console.error(`Architext server ${state.pid} did not stop after SIGTERM`);
   }
-  await removeServeState(target);
-  console.log(`Stopped Architext background server for ${target}`);
+  await removeServeStateById(state.id);
 }
 
-export async function runServeLifecycle({ target, options, createViewerServer, cliEntryPath }) {
+async function stopServe(target, options) {
+  const state = await resolveInstance(options, target);
+  if (!state) {
+    console.log(`No recorded Architext background server for ${target}`);
+    return;
+  }
+  await stopState(state);
+  console.log(`Stopped Architext background server ${state.id} for ${state.target}`);
+}
+
+async function listServeInstances(options) {
+  const instances = await readServeInstances();
+  const filtered = options.serveInstance
+    ? instances.filter((instance) => instance.id === options.serveInstance)
+    : instances;
+  if (options.serveInstance && filtered.length === 0) throw knownInstanceError(options.serveInstance, instances);
+  if (options.json) {
+    console.log(JSON.stringify({ instances: filtered }, null, 2));
+    return;
+  }
+  if (filtered.length === 0) {
+    console.log("No recorded Architext background servers are running.");
+    return;
+  }
+  console.log("Architext background servers:");
+  for (const instance of filtered) {
+    console.log(`${instance.id}  ${instance.pid}  ${instance.url}  ${instance.target}`);
+    console.log(`  Logs: ${instance.logPath}`);
+    console.log(`  Started: ${instance.startedAt}`);
+  }
+}
+
+async function restartServe(target, options, cliEntryPath, refreshTarget) {
+  const state = await resolveInstance(options, target);
+  if (!state) {
+    console.log(`No recorded Architext background server for ${target}`);
+    return;
+  }
+  if (!refreshTarget) throw new Error("Serve refresh is not configured.");
+  console.log(`Syncing Architext target before restart: ${state.target}`);
+  await refreshTarget(state.target);
+  await stopState(state);
+  await serveBackground({
+    target: state.target,
+    options: {
+      ...options,
+      host: state.host,
+      port: state.port,
+      background: true,
+      open: false,
+      noOpen: true,
+      serveRestart: false
+    },
+    cliEntryPath
+  });
+  console.log(`Restarted Architext background server ${state.id} for ${state.target}`);
+}
+
+export async function runServeLifecycle({ target, options, createViewerServer, cliEntryPath, refreshTarget }) {
+  if (options.serveList) {
+    await listServeInstances(options);
+    return;
+  }
   if (options.serveStatus) {
-    await serveStatus(target);
+    await serveStatus(target, options);
     return;
   }
   if (options.serveStop) {
-    await stopServe(target);
+    await stopServe(target, options);
+    return;
+  }
+  if (options.serveRestart) {
+    await restartServe(target, options, cliEntryPath, refreshTarget);
     return;
   }
   if (options.background) {

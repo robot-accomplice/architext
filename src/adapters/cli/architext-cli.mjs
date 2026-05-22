@@ -10,6 +10,7 @@ import { parseArgs, usage } from "./command-line.mjs";
 import { assertDirectory, git, gitAvailable, readJson, run, tryRun, writeJson } from "./runtime.mjs";
 import { runServeLifecycle } from "./serve-lifecycle.mjs";
 import { printStatus } from "./terminal-presenter.mjs";
+import { runPackageUpdateCheck } from "./update-check.mjs";
 import { withTargetWriteLock } from "./write-lock.mjs";
 import { createDataWatchHub } from "../http/data-watch-hub.mjs";
 import { approveReleasePlanRequest as approveReleasePlanApiRequest } from "../http/release-planning-api.mjs";
@@ -1392,7 +1393,18 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
 function commandHandlers(version) {
   return createCommandHandlers({
     sync: (target, options) => syncTarget(target, options, version),
-    serve: (target, options) => runServeLifecycle({ target, options, createViewerServer, cliEntryPath }),
+    serve: (target, options) => runServeLifecycle({
+      target,
+      options,
+      createViewerServer,
+      cliEntryPath,
+      refreshTarget: (refreshTarget) => syncTarget(refreshTarget, {
+        ...options,
+        quiet: true,
+        prompt: false,
+        branch: "none"
+      }, version)
+    }),
     validate: async (target) => {
       const validation = await validateTarget(target);
       console.log(validation.output);
@@ -1424,6 +1436,17 @@ export async function main() {
   }
 
   const version = await packageVersion();
+  if (options.checkUpdates) {
+    await runPackageUpdateCheck({
+      currentVersion: version,
+      options,
+      cwd: packageRoot,
+      runCommand: run,
+      tryRunCommand: tryRun
+    });
+    return;
+  }
+
   if (options.command === "version") {
     console.log(version);
     return;
