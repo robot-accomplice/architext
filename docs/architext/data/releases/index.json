@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-4-4",
+  "currentReleaseId": "v1-4-5",
   "releases": [
     {
       "id": "v1-1-2",
@@ -156,25 +156,25 @@
       "file": "v1-4-0.json"
     },
     {
-      "id": "v1-4-4",
-      "version": "1.4.4",
-      "name": "Architext 1.4.4 Resilient UI Repair",
+      "id": "v1-4-5",
+      "version": "1.4.5",
+      "name": "Architext 1.4.5 Serve Instance Management",
       "status": "implementing",
-      "posture": "release-candidate",
+      "posture": "on-track",
       "targetDate": "2026-05-22",
-      "lastUpdated": "2026-05-22T14:00:00.000Z",
-      "summary": "Architext 1.4.4 keeps the served UI useful when target data is invalid and lets users run safe doctor/sync recovery actions from the browser.",
+      "lastUpdated": "2026-05-22T16:10:00.000Z",
+      "summary": "Architext 1.4.5 makes background serve instances discoverable, addressable, restartable after CLI upgrades, and easier to update from npm.",
       "counts": {
-        "features": 6,
-        "bugFixes": 1,
-        "workstreams": 5,
+        "features": 4,
+        "bugFixes": 0,
+        "workstreams": 3,
         "blockers": 0,
-        "complete": 6,
+        "complete": 3,
         "inProgress": 0,
         "planned": 0,
         "stretch": 0
       },
-      "file": "v1-4-4.json"
+      "file": "v1-4-5.json"
     },
     {
       "id": "v1-4-1",
@@ -241,6 +241,28 @@
         "stretch": 0
       },
       "file": "v1-4-3.json"
+    },
+    {
+      "id": "v1-4-4",
+      "version": "1.4.4",
+      "name": "Architext 1.4.4 Resilient UI Repair",
+      "status": "completed",
+      "posture": "shipped",
+      "targetDate": "2026-05-22",
+      "releasedAt": "2026-05-22T15:24:00.000Z",
+      "lastUpdated": "2026-05-22T15:24:00.000Z",
+      "summary": "Architext 1.4.4 keeps the served UI useful when target data is invalid and lets users run safe doctor/sync recovery actions from the browser.",
+      "counts": {
+        "features": 6,
+        "bugFixes": 1,
+        "workstreams": 5,
+        "blockers": 0,
+        "complete": 6,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-4.json"
     }
   ]
 }
