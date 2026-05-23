@@ -2,12 +2,12 @@
   "id": "v1-4-5",
   "version": "1.4.5",
   "name": "Architext 1.4.5 Serve Instance Management",
-  "status": "implementing",
-  "posture": "release-candidate",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Architext 1.4.5 makes background serve instances discoverable, addressable, restartable after CLI upgrades, and easier to update from npm.",
   "targetDate": "2026-05-22",
-  "lastUpdated": "2026-05-22T16:45:00.000Z",
-  "updateSource": "1.4.5 release gate passed",
+  "lastUpdated": "2026-05-22T16:25:00.000Z",
+  "updateSource": "npm publish and release verification",
   "scope": {
     "required": [
       {
@@ -236,6 +236,27 @@
       "label": "npm run release:check",
       "kind": "test",
       "status": "complete"
+    },
+    {
+      "id": "github-release-1-4-5",
+      "label": "GitHub release v1.4.5",
+      "href": "https://github.com/robot-accomplice/architext/releases/tag/v1.4.5",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "npm-package-1-4-5",
+      "label": "npm package @robotaccomplice/architext@1.4.5",
+      "href": "https://www.npmjs.com/package/@robotaccomplice/architext/v/1.4.5",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "published-cli-smoke-1-4-5",
+      "label": "Published CLI smoke test",
+      "kind": "test",
+      "status": "complete"
     }
-  ]
+  ],
+  "releasedAt": "2026-05-22T16:22:53.649Z"
 }
