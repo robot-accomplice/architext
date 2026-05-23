@@ -92,7 +92,17 @@ jobs:
 
       - name: Verify published package
         if: ${{ steps.release.outputs.dry_run == 'false' }}
-        run: npm view "@robotaccomplice/architext@${{ steps.release.outputs.version }}" version
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in {1..12}; do
+            if npm view "@robotaccomplice/architext@${{ steps.release.outputs.version }}" version; then
+              exit 0
+            fi
+            echo "Package is not visible from npm yet; retrying in 10 seconds ($attempt/12)."
+            sleep 10
+          done
+          npm view "@robotaccomplice/architext@${{ steps.release.outputs.version }}" version
 
       - name: Smoke-test published CLI
         if: ${{ steps.release.outputs.dry_run == 'false' }}
