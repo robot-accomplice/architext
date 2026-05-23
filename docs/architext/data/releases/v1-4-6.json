@@ -2,12 +2,13 @@
   "id": "v1-4-6",
   "version": "1.4.6",
   "name": "Architext 1.4.6 Ownership Language",
-  "status": "implementing",
-  "posture": "release-candidate",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Architext 1.4.6 clarifies target repository ownership in CLI help and README docs, and frames the checked-in Architext data as the real self-hosted architecture model.",
   "targetDate": "2026-05-23",
-  "lastUpdated": "2026-05-23T15:23:02.000Z",
-  "updateSource": "Ownership help correction",
+  "lastUpdated": "2026-05-23T16:59:36.000Z",
+  "updateSource": "1.4.6 release ceremony",
+  "releasedAt": "2026-05-23T16:59:36.000Z",
   "scope": {
     "required": [
       {
@@ -145,6 +146,26 @@
       "id": "package-version-1-4-6",
       "label": "package.json version 1.4.6",
       "href": "package.json",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "release-check-1-4-6",
+      "label": "npm run release:check",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "github-release-1-4-6",
+      "label": "GitHub release v1.4.6",
+      "href": "https://github.com/robot-accomplice/architext/releases/tag/v1.4.6",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "npm-package-1-4-6",
+      "label": "npm package @robotaccomplice/architext@1.4.6",
+      "href": "https://www.npmjs.com/package/@robotaccomplice/architext/v/1.4.6",
       "kind": "document",
       "status": "complete"
     }
