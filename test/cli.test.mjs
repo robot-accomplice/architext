@@ -414,7 +414,11 @@ test("--help documents path defaults and common commands", () => {
   assert.match(output, /architext serve --stop/);
   assert.match(output, /architext serve --host 127\.0\.0\.1 --port 4517/);
   assert.match(output, /architext sync \. --dry-run/);
-  assert.match(output, /Do not copy or edit package-owned viewer/);
+  assert.match(output, /Target repos should commit only project-owned Architext state/);
+  assert.match(output, /optional AGENTS\.md, CLAUDE\.md, Cursor rule, or \.cursorrules pointers/);
+  assert.match(output, /Do not copy or edit package-owned viewer, schema, tool, package, Vite,/);
+  assert.match(output, /TypeScript, public asset, README, or generated dependency files/);
+  assert.match(output, /project rules into docs\/architext\/data\/rules\.json/);
 });
 
 test("version command and flag print the package version", () => {

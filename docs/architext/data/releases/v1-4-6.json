@@ -1,0 +1,173 @@
+{
+  "id": "v1-4-6",
+  "version": "1.4.6",
+  "name": "Architext 1.4.6 Ownership Language",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Architext 1.4.6 clarifies target repository ownership in CLI help and README docs, and frames the checked-in Architext data as the real self-hosted architecture model.",
+  "targetDate": "2026-05-23",
+  "lastUpdated": "2026-05-23T16:59:36.000Z",
+  "updateSource": "1.4.6 release ceremony",
+  "releasedAt": "2026-05-23T16:59:36.000Z",
+  "scope": {
+    "required": [
+      {
+        "id": "target-ownership-help",
+        "title": "Target ownership help",
+        "kind": "documentation",
+        "status": "complete",
+        "summary": "Update architext --help so target repositories commit only project-owned Architext state and do not copy package-owned viewer, schema, tool, package, Vite, TypeScript, public asset, README, or dependency files.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-23T15:23:02.000Z",
+        "workstreamId": "ownership-language",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/RELEASE_1_4_6_SUCCESS_CRITERIA.md",
+          "src/adapters/cli/command-line.mjs",
+          "test/cli.test.mjs",
+          "node --test test/cli.test.mjs"
+        ]
+      },
+      {
+        "id": "self-model-language",
+        "title": "Self-model language",
+        "kind": "documentation",
+        "status": "complete",
+        "summary": "Remove sample-data framing from README and architecture docs because the checked-in Architext data describes the real Architext project.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-23T15:23:02.000Z",
+        "workstreamId": "ownership-language",
+        "dependsOn": [
+          "target-ownership-help"
+        ],
+        "evidence": [
+          "README.md",
+          "docs/architecture/ARCHITECTURE_PLAN.md",
+          "rg \"\\bdemo\\b|\\bDemo\\b\" README.md docs/architecture/ARCHITECTURE_PLAN.md docs/architext/data -S"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": [
+      {
+        "id": "runtime-behavior-change",
+        "title": "Runtime behavior change",
+        "kind": "chore",
+        "status": "cut",
+        "summary": "1.4.6 is limited to documentation, help text, release framing, and package metadata.",
+        "priority": "low",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-23T15:23:02.000Z",
+        "workstreamId": "ownership-language",
+        "dependsOn": []
+      }
+    ]
+  },
+  "workstreams": [
+    {
+      "id": "ownership-language",
+      "name": "Ownership Language",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Align CLI help, README wording, architecture data, and release truth around the real target ownership boundary.",
+      "progress": 100,
+      "itemIds": [
+        "target-ownership-help",
+        "self-model-language",
+        "runtime-behavior-change"
+      ],
+      "evidence": [
+        "docs/architecture/RELEASE_1_4_6_SUCCESS_CRITERIA.md",
+        "test/cli.test.mjs",
+        "node tools/architext-adopt.mjs validate ."
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "architecture-approved",
+      "label": "1.4.6 architecture approved",
+      "status": "complete",
+      "targetWindow": "Release framing",
+      "order": 1,
+      "itemIds": [
+        "target-ownership-help",
+        "self-model-language"
+      ]
+    },
+    {
+      "id": "docs-and-help-aligned",
+      "label": "Docs and help aligned",
+      "status": "complete",
+      "targetWindow": "Implementation",
+      "order": 2,
+      "itemIds": [
+        "target-ownership-help",
+        "self-model-language"
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "self-model-language-follows-ownership",
+      "from": "self-model-language",
+      "to": "target-ownership-help",
+      "summary": "The README framing depends on the same target ownership boundary described in CLI help."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "release-1-4-6-success-criteria",
+      "label": "1.4.6 success criteria",
+      "href": "docs/architecture/RELEASE_1_4_6_SUCCESS_CRITERIA.md",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "cli-help-test",
+      "label": "node --test test/cli.test.mjs",
+      "href": "test/cli.test.mjs",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "release-truth-validation",
+      "label": "node tools/architext-adopt.mjs validate .",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "package-version-1-4-6",
+      "label": "package.json version 1.4.6",
+      "href": "package.json",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "release-check-1-4-6",
+      "label": "npm run release:check",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "github-release-1-4-6",
+      "label": "GitHub release v1.4.6",
+      "href": "https://github.com/robot-accomplice/architext/releases/tag/v1.4.6",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "npm-package-1-4-6",
+      "label": "npm package @robotaccomplice/architext@1.4.6",
+      "href": "https://www.npmjs.com/package/@robotaccomplice/architext/v/1.4.6",
+      "kind": "document",
+      "status": "complete"
+    }
+  ]
+}

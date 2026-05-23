@@ -112,9 +112,9 @@ The viewer uses a dense engineering layout:
 
 Diagram space, legibility, and fast inspection matter more than branding.
 
-## Current Demo
+## Current Architecture Model
 
-The repository demo documents Architext itself: global CLI lifecycle,
+The repository data documents Architext itself: global CLI lifecycle,
 package-owned viewer runtime, data-only target repositories, migrations,
 validation, release tracking, rules, and release packaging.
 
@@ -275,7 +275,7 @@ repositories during migration. The project-owned files are preserved:
 ```text
 docs/architext/data/*.json
 docs/architext/.architext.json
-AGENTS.md and/or CLAUDE.md Architext section, when present
+optional AGENTS.md, CLAUDE.md, Cursor rule, or .cursorrules pointers
 ```
 
 Preview a legacy migration first:
@@ -331,7 +331,8 @@ architext --version
 Use `doctor` when something looks wrong. It reports the installed version,
 whether an upgrade is needed, validation status, missing ignore rules, missing
 AGENTS/CLAUDE appendix sections, root script status, accidentally tracked
-generated artifacts, model-specific instruction rules that can be migrated into
+generated artifacts, model-specific `AGENTS.md`, `CLAUDE.md`, Cursor rule, and
+`.cursorrules` project rules that can be migrated into
 `docs/architext/data/rules.json`, and deterministic repairs. Run `doctor --yes`
 to apply available repairs.
 
@@ -617,7 +618,8 @@ it is a different project and can install an unrelated `0.0.7` binary.
 ## Repository Status
 
 This repository now includes the working local viewer, schemas, validation
-tooling, global CLI lifecycle script, and the self-hosted Architext demo model.
+tooling, global CLI lifecycle script, and the self-hosted Architext architecture
+model.
 
 Core documents:
 

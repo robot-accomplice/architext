@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-4-5",
+  "currentReleaseId": "v1-4-6",
   "releases": [
     {
       "id": "v1-1-2",
@@ -264,6 +264,28 @@
         "stretch": 0
       },
       "file": "v1-4-5.json"
+    },
+    {
+      "id": "v1-4-6",
+      "version": "1.4.6",
+      "name": "Architext 1.4.6 Ownership Language",
+      "status": "completed",
+      "posture": "shipped",
+      "targetDate": "2026-05-23",
+      "releasedAt": "2026-05-23T16:59:36.000Z",
+      "lastUpdated": "2026-05-23T16:59:36.000Z",
+      "summary": "Architext 1.4.6 clarifies target repository ownership in CLI help and README docs, and frames the checked-in Architext data as the real self-hosted architecture model.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 0,
+        "workstreams": 1,
+        "blockers": 0,
+        "complete": 2,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-6.json"
     }
   ]
 }
