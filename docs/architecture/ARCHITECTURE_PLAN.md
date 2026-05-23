@@ -545,7 +545,7 @@ acceptance standard for C4 renderer work and for target-repository C4 data.
 Each view should be generated from the same JSON model. C4 views are projections
 over nodes, flows, and relationships, not separate hand-maintained diagrams.
 
-The first demo previously mislabeled lane-grouped views as C4 views. That is
+The first Architext self-model previously mislabeled lane-grouped views as C4 views. That is
 not acceptable. C4 levels are semantic zoom levels, not alternate column
 groupings:
 
