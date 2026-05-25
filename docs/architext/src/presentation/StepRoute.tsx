@@ -1,4 +1,5 @@
 import React from "react";
+import { stepRouteLabelClassName, stepRouteMarkerClassName } from "./stepRouteModel.js";
 
 type StepRouteProps = {
   className: string;
@@ -39,8 +40,8 @@ export function StepRoute({
         <line className={lineClassName} x1={x1} y1={y1} x2={x2} y2={y2} markerEnd={markerEnd} />
       )}
       <g className="route-step-pill">
-        <rect className={`route-step-marker ${markerClassName}`.trim()} x={labelX - 12} y={labelY - 10} width="24" height="20" rx="10" />
-        <text className={`route-step-label ${labelClassName}`.trim()} x={labelX} y={labelY + 4}>{label}</text>
+        <rect className={stepRouteMarkerClassName(markerClassName)} x={labelX - 12} y={labelY - 10} width="24" height="20" rx="10" />
+        <text className={stepRouteLabelClassName(labelClassName)} x={labelX} y={labelY + 4}>{label}</text>
       </g>
     </g>
   );

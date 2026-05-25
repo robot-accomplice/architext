@@ -22,6 +22,7 @@ import { postRulesAction } from "./presentation/rulesClient.js";
 import { useUnsavedEditorGuard } from "./presentation/unsavedEditorGuard.js";
 import { dataRefreshNoticeForDirtyEditors } from "./presentation/releasePlanningModel.js";
 import { StepRoute } from "./presentation/StepRoute.js";
+import { stepRouteClassName } from "./presentation/stepRouteModel.js";
 import {
   progressFill,
   progressTone,
@@ -2501,7 +2502,7 @@ function SystemMap({
                 }}
               >
                 <StepRoute
-                  className="flow-step-route"
+                  className={stepRouteClassName("flow")}
                   lineClassName="flow-line"
                   markerClassName="flow-step-dot"
                   labelClassName="flow-step-label"
@@ -3010,7 +3011,7 @@ function SequenceDiagram({
                 }}
               >
                 <StepRoute
-                  className="sequence-step-route"
+                  className={stepRouteClassName("sequence")}
                   lineClassName="sequence-line"
                   markerClassName="sequence-step-dot"
                   labelClassName="sequence-step-label"
