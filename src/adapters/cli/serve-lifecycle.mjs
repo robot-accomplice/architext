@@ -1,12 +1,14 @@
 import { closeSync, openSync } from "node:fs";
-import { mkdir, readdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { isLoopbackHost } from "./command-line.mjs";
 import { readJson, writeJson } from "./runtime.mjs";
 
 const serveRuntimeDir = path.join(tmpdir(), "architext-serve");
+const serveLockStaleMs = 30000;
 
 function serveUrl(options) {
   return `http://${options.host}:${options.port}/`;
@@ -18,6 +20,10 @@ function serveStateKey(target) {
 
 function serveStatePath(target) {
   return path.join(serveRuntimeDir, `${serveStateKey(target)}.json`);
+}
+
+function serveLockPath(target) {
+  return path.join(serveRuntimeDir, `${serveStateKey(target)}.lock`);
 }
 
 function serveStatePathById(id) {
@@ -58,6 +64,34 @@ async function removeServeStateById(id) {
   await rm(serveStatePathById(id), { force: true });
 }
 
+async function withServeStateLock(target, callback, { timeoutMs = 5000, pollMs = 50 } = {}) {
+  await mkdir(serveRuntimeDir, { recursive: true });
+  const lockPath = serveLockPath(target);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    let acquired = false;
+    try {
+      await mkdir(lockPath);
+      acquired = true;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const lockStat = await stat(lockPath).catch(() => null);
+      if (lockStat && Date.now() - lockStat.mtimeMs > serveLockStaleMs) {
+        await rm(lockPath, { recursive: true, force: true });
+        continue;
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+    if (!acquired) continue;
+    try {
+      return await callback();
+    } finally {
+      await rm(lockPath, { recursive: true, force: true });
+    }
+  }
+  throw new Error(`Timed out waiting for Architext serve lifecycle lock: ${lockPath}`);
+}
+
 function pidExists(pid) {
   if (!pid || !Number.isInteger(pid)) return false;
   try {
@@ -68,7 +102,17 @@ function pidExists(pid) {
   }
 }
 
+export function isLoopbackServeUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" && isLoopbackHost(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
 async function urlReachable(url) {
+  if (!isLoopbackServeUrl(url)) return false;
   try {
     const response = await fetch(url, { method: "GET" });
     return response.ok;
@@ -176,66 +220,70 @@ async function resolveInstance(options, target) {
 }
 
 async function serveBackground({ target, options, cliEntryPath }) {
-  const existing = await readServeState(target);
-  if (existing && !(await staleServeState(existing))) {
-    console.log(`Architext is already serving ${existing.target}`);
-    console.log(`Open ${formatServeLink(existing.url)}`);
+  return withServeStateLock(target, async () => {
+    const existing = await readServeState(target);
+    if (existing && !(await staleServeState(existing))) {
+      console.log(`Architext is already serving ${existing.target}`);
+      console.log(`Open ${formatServeLink(existing.url)}`);
+      if (options.open && !options.noOpen) {
+        const opened = await openSystemBrowser(existing.url);
+        if (!opened.ok) console.error(`Browser launch failed: ${opened.message}`);
+      }
+      return;
+    }
+    if (existing) await removeServeState(target);
+
+    const logPath = path.join(serveRuntimeDir, `${serveStateKey(target)}.log`);
+    const logFd = openSync(logPath, "a");
+    let child;
+    try {
+      child = spawn(process.execPath, [
+        cliEntryPath,
+        "serve",
+        target,
+        "--foreground",
+        "--host",
+        options.host,
+        "--port",
+        String(options.port),
+        "--no-open"
+      ], {
+        detached: true,
+        stdio: ["ignore", logFd, logFd]
+      });
+      child.unref();
+    } finally {
+      closeSync(logFd);
+    }
+
+    const url = serveUrl(options);
+    if (!(await waitForUrl(url))) {
+      if (pidExists(child.pid)) {
+        try {
+          process.kill(child.pid, "SIGTERM");
+        } catch {
+          // The child may have exited between the liveness check and signal.
+        }
+      }
+      throw new Error(`Architext background serve did not become reachable at ${url}. Check ${logPath}`);
+    }
+
+    await writeServeState(target, {
+      target: path.resolve(target),
+      pid: child.pid,
+      host: options.host,
+      port: options.port,
+      url,
+      logPath,
+      startedAt: new Date().toISOString()
+    });
+    console.log(`Serving Architext for ${target} in the background`);
+    console.log(`Open ${formatServeLink(url)}`);
     if (options.open && !options.noOpen) {
-      const opened = await openSystemBrowser(existing.url);
+      const opened = await openSystemBrowser(url);
       if (!opened.ok) console.error(`Browser launch failed: ${opened.message}`);
     }
-    return;
-  }
-  if (existing) await removeServeState(target);
-
-  await mkdir(serveRuntimeDir, { recursive: true });
-  const logPath = path.join(serveRuntimeDir, `${serveStateKey(target)}.log`);
-  const logFd = openSync(logPath, "a");
-  const child = spawn(process.execPath, [
-    cliEntryPath,
-    "serve",
-    target,
-    "--foreground",
-    "--host",
-    options.host,
-    "--port",
-    String(options.port),
-    "--no-open"
-  ], {
-    detached: true,
-    stdio: ["ignore", logFd, logFd]
   });
-  child.unref();
-
-  const url = serveUrl(options);
-  if (!(await waitForUrl(url))) {
-    if (pidExists(child.pid)) {
-      try {
-        process.kill(child.pid, "SIGTERM");
-      } catch {
-        // The child may have exited between the liveness check and signal.
-      }
-    }
-    closeSync(logFd);
-    throw new Error(`Architext background serve did not become reachable at ${url}. Check ${logPath}`);
-  }
-
-  await writeServeState(target, {
-    target: path.resolve(target),
-    pid: child.pid,
-    host: options.host,
-    port: options.port,
-    url,
-    logPath,
-    startedAt: new Date().toISOString()
-  });
-  closeSync(logFd);
-  console.log(`Serving Architext for ${target} in the background`);
-  console.log(`Open ${formatServeLink(url)}`);
-  if (options.open && !options.noOpen) {
-    const opened = await openSystemBrowser(url);
-    if (!opened.ok) console.error(`Browser launch failed: ${opened.message}`);
-  }
 }
 
 async function serveStatus(target, options) {
