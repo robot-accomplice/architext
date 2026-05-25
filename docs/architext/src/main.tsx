@@ -5,6 +5,7 @@ import { c4LayoutFor } from "./routing/c4Layout.js";
 import { relationshipLabel } from "./routing/relationshipLabels.js";
 import { plannedCanvasFallback, usePlannedDiagram } from "./routing/usePlannedDiagram.js";
 import { loadArchitectureModel, loadReleaseDetail } from "./adapters/fetchArchitectureData.js";
+import { mutationFetch } from "./adapters/mutationAuth.js";
 import { subscribeToDataEvents } from "./adapters/dataEvents.js";
 import { isSelectedStep, orderSelectedLast, selectedFlowIdForSelection, selectedStepIdForSelection } from "./presentation/stepSelection.js";
 import { diagramLayoutFor } from "./presentation/diagramLayout.js";
@@ -307,7 +308,7 @@ function RulesWorkspace({
     setMessage("");
     setPendingAction(true);
     try {
-      await postRulesAction(fetch, payload);
+      await postRulesAction(mutationFetch, payload);
       await onRulesChanged();
       setMessage("Rules updated.");
     } finally {
@@ -1287,7 +1288,7 @@ function App() {
     try {
       const response = action === "status"
         ? await fetch("/api/status")
-        : await fetch(action === "sync-repair" ? "/api/sync-repair" : "/api/doctor", {
+        : await mutationFetch(action === "sync-repair" ? "/api/sync-repair" : "/api/doctor", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(action === "doctor-apply" ? { apply: true } : action === "doctor-dry-run" ? { apply: false } : {})

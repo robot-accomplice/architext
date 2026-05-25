@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 const knownCommands = new Set([
   "install",
   "upgrade",
@@ -53,6 +55,7 @@ Options:
   --open                     Open the local viewer in the system browser.
   --no-open                  Do not open the system browser.
   --host <host>              Serve bind host. Defaults to 127.0.0.1.
+                              Must be localhost, 127.0.0.0/8, or ::1.
   --port <port>              Serve bind port. Defaults to 4317.
   --status                   Show the recorded background serve process.
   --stop                     Stop the recorded background serve process.
@@ -234,9 +237,19 @@ function validateOptions(options) {
     throw new Error("--instance requires --status, --stop, --list, or --restart");
   }
   if (!options.host) throw new Error("--host requires a value");
+  if (!isLoopbackHost(options.host)) {
+    throw new Error("--host must be a loopback address: localhost, 127.0.0.1, or ::1");
+  }
   if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65535) {
     throw new Error("--port must be an integer between 1 and 65535");
   }
+}
+
+export function isLoopbackHost(host) {
+  const normalized = host.toLowerCase().replace(/^\[(.*)\]$/, "$1");
+  if (normalized === "localhost" || normalized === "::1") return true;
+  if (isIP(normalized) === 4) return normalized.startsWith("127.");
+  return false;
 }
 
 function assertServeCommand(command, arg) {
