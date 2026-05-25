@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   activeReleaseBlockersForItem,
+  formatReleaseDate,
   progressFill,
   progressTone,
   releaseItems,
@@ -70,4 +71,10 @@ test("release truth presentation colors progress by completion state", () => {
   assert.equal(progressTone(100), "healthy");
   assert.equal(progressFill(0), "var(--line-strong)");
   assert.match(progressFill(73), /var\(--green\) 73%/);
+});
+
+test("release truth presentation formats stored release dates for display", () => {
+  assert.equal(formatReleaseDate("2026-05-25T12:30:00.000Z"), "2026-05-25");
+  assert.equal(formatReleaseDate("2026-05-25"), "2026-05-25");
+  assert.equal(formatReleaseDate(), "");
 });

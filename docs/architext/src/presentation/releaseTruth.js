@@ -56,6 +56,11 @@ export function progressFill(value) {
   return `color-mix(in srgb, var(--green) ${progress}%, var(--yellow))`;
 }
 
+export function formatReleaseDate(value) {
+  if (!value) return "";
+  return value.includes("T") ? value.slice(0, 10) : value;
+}
+
 export function releaseLineState(status, blocked = false) {
   if (status === "complete") return "Complete";
   if (status === "deferred" || status === "cut") return "Deferred";
