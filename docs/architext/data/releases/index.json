@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-4-9",
+  "currentReleaseId": "v1-4-10",
   "releases": [
     {
       "id": "v1-1-2",
@@ -352,6 +352,28 @@
         "stretch": 0
       },
       "file": "v1-4-9.json"
+    },
+    {
+      "id": "v1-4-10",
+      "version": "1.4.10",
+      "name": "Architext 1.4.10 Viewer Interaction Corrections",
+      "status": "completed",
+      "posture": "shipped",
+      "targetDate": "2026-05-25",
+      "releasedAt": "2026-05-25T16:55:00.000Z",
+      "lastUpdated": "2026-05-25T16:55:00.000Z",
+      "summary": "Architext 1.4.10 makes foreground serve processes discoverable, keeps diagram legends above contained canvases, and enforces compatible Flow View and Flow selections.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 3,
+        "workstreams": 2,
+        "blockers": 0,
+        "complete": 3,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-10.json"
     }
   ]
 }
