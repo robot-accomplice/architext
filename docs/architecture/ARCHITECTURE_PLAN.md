@@ -493,6 +493,17 @@ Workflow diagrams are Flows projections over ordered work or use-case paths.
 They reuse the selected flow, shared route planner, step-pill rendering, and
 bottom step summary from the normal Flow map. They must not fork a
 workflow-specific router or duplicate flow facts into view data.
+Flow projection views and selected flows have a hard compatibility invariant:
+the selected view must contain every endpoint node used by the selected flow's
+steps. The UI should not offer incompatible flow/view pairs, and changing either
+side of the pair must repair the other side to the nearest compatible choice
+instead of rendering a partial or misleading diagram.
+When a broad overview such as a system map and a narrower authored projection
+can both render the selected flow, flow selection should prefer the narrower
+authored projection so detailed sequence/flow paths do not float across an
+overview canvas.
+Sequence diagrams do not use a separate Flow View projection; they are a
+selected-flow artifact and should title, filter, and render from that flow.
 Selected flow steps should use one shared standout selection color across the
 route line, arrowhead, route marker, and bottom step card so a stage selection
 reads as one highlighted path. A rendered flow should expose one primary

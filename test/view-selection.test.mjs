@@ -1,6 +1,18 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { defaultViewForMode, hashForMode, modeForHash, modeForView, viewBelongsToMode, viewTypesForMode } from "../docs/architext/src/presentation/viewSelection.js";
+import {
+  compatibleFlowsForView,
+  compatibleFlowViewsForFlow,
+  defaultFlowForView,
+  defaultViewForFlow,
+  defaultViewForMode,
+  flowCompatibleWithView,
+  hashForMode,
+  modeForHash,
+  modeForView,
+  viewBelongsToMode,
+  viewTypesForMode
+} from "../docs/architext/src/presentation/viewSelection.js";
 
 const views = [
   { id: "system", type: "system-map" },
@@ -49,4 +61,63 @@ test("view selection supports direct hash links for top-level modes", () => {
   assert.equal(modeForHash("#datarisks"), "data-risks");
   assert.equal(hashForMode("release-truth"), "#releasetruth");
   assert.equal(hashForMode("rules"), "#rules");
+});
+
+const flowViews = [
+  {
+    id: "all",
+    type: "system-map",
+    lanes: [{ nodeIds: ["actor", "api", "db", "queue"] }]
+  },
+  {
+    id: "runtime",
+    type: "workflow",
+    lanes: [{ nodeIds: ["actor", "api", "db"] }]
+  },
+  {
+    id: "data-only",
+    type: "dataflow",
+    lanes: [{ nodeIds: ["api", "db"] }]
+  },
+  {
+    id: "sequence",
+    type: "sequence",
+    lanes: [{ nodeIds: ["actor", "api", "db", "queue"] }]
+  }
+];
+
+const selectableFlows = [
+  {
+    id: "request",
+    steps: [
+      { from: "actor", to: "api" },
+      { from: "api", to: "db" }
+    ]
+  },
+  {
+    id: "async",
+    steps: [
+      { from: "api", to: "queue" }
+    ]
+  }
+];
+
+test("flow view compatibility requires every selected flow endpoint", () => {
+  assert.equal(flowCompatibleWithView(selectableFlows[0], flowViews[1]), true);
+  assert.equal(flowCompatibleWithView(selectableFlows[1], flowViews[1]), false);
+});
+
+test("flow projection choices are filtered to compatible flow/view pairs", () => {
+  assert.deepEqual(compatibleFlowViewsForFlow(flowViews, selectableFlows[1]).map((view) => view.id), ["all"]);
+  assert.deepEqual(compatibleFlowsForView(selectableFlows, flowViews[1]).map((flow) => flow.id), ["request"]);
+});
+
+test("view and flow defaults repair incompatible selected pairs", () => {
+  assert.equal(defaultViewForFlow("flows", flowViews[1], flowViews, selectableFlows[1], flowViews[0]).id, "all");
+  assert.equal(defaultViewForFlow("sequence", flowViews[3], flowViews, selectableFlows[1], flowViews[0]).id, "sequence");
+  assert.equal(defaultFlowForView(flowViews[1], selectableFlows[1], selectableFlows, selectableFlows[0]).id, "request");
+});
+
+test("flow selection prefers narrower authored projections over broad system maps", () => {
+  assert.equal(defaultViewForFlow("flows", flowViews[0], flowViews, selectableFlows[0], flowViews[0]).id, "runtime");
 });
