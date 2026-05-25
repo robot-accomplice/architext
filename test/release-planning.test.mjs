@@ -101,6 +101,63 @@ test("buildReleasePlan accepts ad hoc items without summaries", () => {
   assert.equal(plan.scope.planned[0].summary, "Release planning polish");
 });
 
+test("buildReleasePlan requires an explicit clock value", () => {
+  assert.throws(() => buildReleasePlan({
+    releaseIndex: { releases: [{ version: "1.2.0" }] },
+    roadmapItems: [],
+    selectedRoadmapItemIds: [],
+    adHocItems: [],
+    projectName: "Architext"
+  }), /requires an explicit now timestamp/);
+});
+
+test("buildReleasePlan fails loudly for unknown selected roadmap items", () => {
+  assert.throws(() => buildReleasePlan({
+    releaseIndex: { releases: [{ version: "1.2.0" }] },
+    roadmapItems: [{
+      id: "known",
+      title: "Known",
+      summary: "Known item.",
+      kind: "feature",
+      status: "planned",
+      priority: "medium",
+      section: "Planning"
+    }],
+    selectedRoadmapItemIds: ["known", "missing"],
+    adHocItems: [],
+    projectName: "Architext",
+    now: "2026-05-18T06:05:00.000Z"
+  }), /selectedRoadmapItemIds references unknown id "missing"/);
+});
+
+test("buildReleasePlan copies mutable roadmap arrays", () => {
+  const roadmapItem = {
+    id: "evidence",
+    title: "Evidence",
+    summary: "Carry evidence.",
+    kind: "test",
+    status: "planned",
+    priority: "medium",
+    section: "Planning",
+    dependsOn: ["source"],
+    evidence: ["before"]
+  };
+  const plan = buildReleasePlan({
+    releaseIndex: { releases: [{ version: "1.2.0" }] },
+    roadmapItems: [roadmapItem],
+    selectedRoadmapItemIds: ["evidence"],
+    adHocItems: [],
+    projectName: "Architext",
+    now: "2026-05-18T06:05:00.000Z"
+  });
+
+  plan.scope.planned[0].dependsOn.push("generated");
+  plan.scope.planned[0].evidence.push("after");
+
+  assert.deepEqual(roadmapItem.dependsOn, ["source"]);
+  assert.deepEqual(roadmapItem.evidence, ["before"]);
+});
+
 test("buildReleasePlan requires ad hoc kind and priority", () => {
   const base = {
     releaseIndex: { releases: [{ version: "1.2.0" }] },
@@ -246,7 +303,8 @@ test("buildReleasePlan rejects roadmap items already committed to another releas
     }],
     selectedRoadmapItemIds: ["kanban"],
     projectName: "Architext",
-    version: "1.3.0"
+    version: "1.3.0",
+    now: "2026-05-18T06:05:00.000Z"
   }), /already committed/);
 });
 

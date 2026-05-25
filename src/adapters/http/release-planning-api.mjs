@@ -127,7 +127,8 @@ export async function approveReleasePlanRequest({
     adHocItems: payload.adHocItems ?? [],
     projectName: manifest.project.name,
     version: payload.version,
-    theme: payload.theme
+    theme: payload.theme,
+    now: new Date().toISOString()
   }));
   const planned = action === "save-draft"
     ? saveReleasePlanDraft({ releaseIndex, roadmap, releaseDetail })
