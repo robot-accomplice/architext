@@ -2294,9 +2294,12 @@ function SystemMap({
   onSelectRelationship: (relationship: Relationship) => void;
   onSelectNode: (id: Id) => void;
 }) {
-  const visibleNodeIds = new Set(view.lanes.flatMap((lane) => lane.nodeIds));
-  const flowNodeIds = new Set(activeFlow ? activeFlow.steps.flatMap((step) => [step.from, step.to]) : Array.from(visibleNodeIds));
-  const structuralRelationships = Array.from(visibleNodeIds).flatMap((nodeId) => {
+  const visibleNodeIds = useMemo(() => new Set(view.lanes.flatMap((lane) => lane.nodeIds)), [view]);
+  const flowNodeIds = useMemo(
+    () => new Set(activeFlow ? activeFlow.steps.flatMap((step) => [step.from, step.to]) : Array.from(visibleNodeIds)),
+    [activeFlow, visibleNodeIds]
+  );
+  const structuralRelationships = useMemo(() => Array.from(visibleNodeIds).flatMap((nodeId) => {
     const node = nodesById.get(nodeId);
     return (node?.dependencies ?? [])
       .filter((dependencyId) => visibleNodeIds.has(dependencyId))
@@ -2313,9 +2316,9 @@ function SystemMap({
           toType: to?.type
         };
       });
-  });
+  }), [nodesById, visibleNodeIds]);
 
-  const flowRelationships = activeFlow?.steps.map((step, index) => {
+  const flowRelationships = useMemo(() => activeFlow?.steps.map((step, index) => {
     const from = nodesById.get(step.from);
     const to = nodesById.get(step.to);
     return {
@@ -2329,7 +2332,7 @@ function SystemMap({
       flowId: activeFlow.id,
       displayIndex: index + 1
     };
-  }) ?? [];
+  }) ?? [], [activeFlow, nodesById]);
 
   const layout = diagramLayoutFor(view, showStructuralConnections ? structuralRelationships.length : flowRelationships.length);
   const {
@@ -2345,7 +2348,7 @@ function SystemMap({
     canvasExtraHeight
   } = layout;
 
-  const planInput = {
+  const planInput = useMemo(() => ({
     view,
     relationships: showStructuralConnections ? structuralRelationships : flowRelationships,
     visibleNodeIds,
@@ -2360,9 +2363,26 @@ function SystemMap({
     canvasExtraWidth,
     canvasExtraHeight,
     style: routingStyle
-  };
+  }), [
+    view,
+    showStructuralConnections,
+    structuralRelationships,
+    flowRelationships,
+    visibleNodeIds,
+    nodeWidth,
+    nodeHeight,
+    laneWidth,
+    rowGap,
+    marginX,
+    marginY,
+    minCanvasWidth,
+    minCanvasHeight,
+    canvasExtraWidth,
+    canvasExtraHeight,
+    routingStyle
+  ]);
   const planningState = usePlannedDiagram(planInput);
-  const fallbackCanvas = plannedCanvasFallback(planInput);
+  const fallbackCanvas = useMemo(() => plannedCanvasFallback(planInput), [planInput]);
   const plan = planningState.plan;
 
   if (planningState.error) {
@@ -2668,19 +2688,19 @@ function C4Diagram({
     canvasExtraHeight,
     boundaryLabel
   } = layout;
-  const rawNodeIds = view.lanes.flatMap((lane) => lane.nodeIds);
-  const allNodeIds = Array.from(new Set(rawNodeIds));
-  const duplicateNodeIds = Array.from(
+  const rawNodeIds = useMemo(() => view.lanes.flatMap((lane) => lane.nodeIds), [view]);
+  const allNodeIds = useMemo(() => Array.from(new Set(rawNodeIds)), [rawNodeIds]);
+  const duplicateNodeIds = useMemo(() => Array.from(
     rawNodeIds.reduce((counts, nodeId) => counts.set(nodeId, (counts.get(nodeId) ?? 0) + 1), new Map<Id, number>())
-  ).filter(([, count]) => count > 1).map(([nodeId]) => nodeId);
-  const documentWarnings = duplicateNodeIds.map((nodeId) => ({
+  ).filter(([, count]) => count > 1).map(([nodeId]) => nodeId), [rawNodeIds]);
+  const documentWarnings = useMemo(() => duplicateNodeIds.map((nodeId) => ({
     code: "duplicate-c4-node",
     nodeId,
     viewId: view.id,
     message: `${nodeId} appears more than once in ${view.name}; rendered once.`
-  }));
-  const visibleNodeIds = new Set(allNodeIds);
-  const relationships = allNodeIds.flatMap((nodeId) => {
+  })), [duplicateNodeIds, view.id, view.name]);
+  const visibleNodeIds = useMemo(() => new Set(allNodeIds), [allNodeIds]);
+  const relationships = useMemo(() => allNodeIds.flatMap((nodeId) => {
     const node = nodesById.get(nodeId);
     return (node?.dependencies ?? [])
       .filter((dependencyId) => visibleNodeIds.has(dependencyId))
@@ -2697,8 +2717,8 @@ function C4Diagram({
           toType: to?.type
         };
       });
-  });
-  const planInput = {
+  }), [allNodeIds, nodesById, visibleNodeIds]);
+  const planInput = useMemo(() => ({
     view,
     relationships,
     visibleNodeIds,
@@ -2713,9 +2733,24 @@ function C4Diagram({
     canvasExtraWidth,
     canvasExtraHeight,
     style: routingStyle
-  };
+  }), [
+    view,
+    relationships,
+    visibleNodeIds,
+    nodeWidth,
+    nodeHeight,
+    laneWidth,
+    rowGap,
+    marginX,
+    marginY,
+    minCanvasWidth,
+    minCanvasHeight,
+    canvasExtraWidth,
+    canvasExtraHeight,
+    routingStyle
+  ]);
   const planningState = usePlannedDiagram(planInput);
-  const fallbackCanvas = plannedCanvasFallback(planInput);
+  const fallbackCanvas = useMemo(() => plannedCanvasFallback(planInput), [planInput]);
   const plan = planningState.plan;
 
   if (planningState.error) {

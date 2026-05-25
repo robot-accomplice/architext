@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { planDiagram } from "./planDiagram.js";
 
 const ROUTING_LOADING_DELAY_MS = 1000;
@@ -61,7 +61,7 @@ function attachPlanHelpers(plan) {
  * @returns {PlannedDiagramState}
  */
 export function usePlannedDiagram(input) {
-  const key = planInputKey(input);
+  const key = useMemo(() => planInputKey(input), [input]);
   /** @type {[PlannedDiagramState, import("react").Dispatch<import("react").SetStateAction<PlannedDiagramState>>]} */
   const [state, setState] = useState({
     key: "",
