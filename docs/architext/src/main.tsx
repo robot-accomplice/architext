@@ -41,7 +41,18 @@ import {
   releaseStatusLabels
 } from "./presentation/releaseTruth.js";
 import { modeShowsOrderedFlow, modeUsesStructuralRelationships } from "./presentation/viewModes.js";
-import { defaultViewForMode, hashForMode, modeForHash, modeForView, modeLabels, viewBelongsToMode, viewTypesForMode } from "./presentation/viewSelection.js";
+import {
+  compatibleFlowsForView,
+  compatibleFlowViewsForFlow,
+  defaultFlowForView,
+  defaultViewForFlow,
+  defaultViewForMode,
+  hashForMode,
+  modeForHash,
+  modeForView,
+  modeLabels,
+  viewBelongsToMode
+} from "./presentation/viewSelection.js";
 import { readBooleanPreference, readDebugRouting, readRoutingStylePreference, writeBooleanPreference, writeRoutingStylePreference } from "./adapters/browserPreferences.js";
 import type {
   ArchNode,
@@ -1152,9 +1163,10 @@ function App() {
   const activeFlow = flowsById.get(activeFlowId) ?? model.flows[0];
   const fallbackView = model.views[0];
   const selectedView = viewsById.get(activeViewId);
-  const activeView = viewBelongsToMode(selectedView, activeMode)
+  const modeView = viewBelongsToMode(selectedView, activeMode)
     ? selectedView
     : defaultViewForMode(activeMode, model.views, fallbackView);
+  const activeView = defaultViewForFlow(activeMode, modeView, model.views, activeFlow, fallbackView) as View;
   const isC4View = activeMode === "c4";
   const isSequenceView = activeMode === "sequence";
   const isReleaseTruthView = activeMode === "release-truth";
@@ -1179,7 +1191,8 @@ function App() {
     ? model.rules?.find((rule) => rule.id === selection.id) ?? null
     : null;
 
-  const filteredFlows = model.flows.filter((flow) => {
+  const visibleFlows = activeMode === "flows" ? compatibleFlowsForView(model.flows, activeView) as Flow[] : model.flows;
+  const filteredFlows = visibleFlows.filter((flow) => {
     const text = [flow.name, flow.summary, flow.status, flow.trigger, ...flow.knownGaps].join(" ").toLowerCase();
     return text.includes(query.toLowerCase());
   });
@@ -1269,6 +1282,14 @@ function App() {
     window.history.replaceState(null, "", hashForMode(nextMode));
     setActiveMode(nextMode);
     setActiveViewId(viewId);
+    if (nextMode === "flows") {
+      const nextFlow = defaultFlowForView(view, activeFlow, model.flows, model.flows[0]) as Flow;
+      if (nextFlow?.id && nextFlow.id !== activeFlow.id) {
+        setActiveFlowId(nextFlow.id);
+        setSelection({ kind: "flow", id: nextFlow.id });
+        return;
+      }
+    }
     if (nextMode === "c4") {
       const firstNodeId = view.lanes.flatMap((lane) => lane.nodeIds)[0];
       if (firstNodeId) setSelection({ kind: "node", id: firstNodeId });
@@ -1399,6 +1420,11 @@ function App() {
             onRiskFilterChange={setRiskFilter}
             onSelectFlow={(flowId) => {
               if (!confirmEditorNavigationOrStay()) return;
+              const nextFlow = flowsById.get(flowId);
+              if (nextFlow && activeMode === "flows") {
+                const nextView = defaultViewForFlow(activeMode, activeView, model.views, nextFlow, fallbackView) as View;
+                if (nextView?.id && nextView.id !== activeView.id) setActiveViewId(nextView.id);
+              }
               setActiveFlowId(flowId);
               setSelection({ kind: "flow", id: flowId });
             }}
@@ -1478,8 +1504,8 @@ function App() {
           <>
             <section className="diagram-header">
               <div className="diagram-title-line">
-                <h2 title={activeView.name}>{activeView.name}</h2>
-                <p title={activeView.summary}>{activeView.summary}</p>
+                <h2 title={isSequenceView ? activeFlow.name : activeView.name}>{isSequenceView ? activeFlow.name : activeView.name}</h2>
+                <p title={isSequenceView ? activeFlow.summary : activeView.summary}>{isSequenceView ? activeFlow.summary : activeView.summary}</p>
               </div>
               <DiagramControls
                 transform={diagramTransform}
@@ -1876,8 +1902,7 @@ function LeftPanel({
     );
   }
 
-  const flowProjectionTypes = new Set(viewTypesForMode("flows"));
-  const flowViews = views.filter((view) => flowProjectionTypes.has(view.type));
+  const flowViews = compatibleFlowViewsForFlow(views, activeFlow) as View[];
 
   return (
     <>
