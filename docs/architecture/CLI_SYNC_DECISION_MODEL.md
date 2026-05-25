@@ -10,7 +10,8 @@ Sync has two kinds of logic:
 - adapter work: prompts, filesystem writes, git commands, validation, locks, and
   terminal output;
 - decision work: operation classification, whether a write is needed, whether
-  validation should run, persisted choice shaping, and metadata patch shaping.
+  validation should run, sync-choice normalization, persisted choice shaping,
+  and metadata patch shaping.
 
 The decision work is pure and belongs in a small CLI sync model module with
 direct tests. The adapter imports that model and remains responsible for
@@ -22,6 +23,8 @@ does not move prompts, write execution, or subprocess flows yet.
 ## Verification
 
 - Install, migrate, and no-op sync states derive stable operation labels.
+- Saved and explicit sync choices normalize against the supported instruction
+  file list.
 - Write decisions include selected doctor repairs, force, instruction files,
   `.gitignore`, and root script management.
 - Metadata patches preserve the existing sync metadata contract.
