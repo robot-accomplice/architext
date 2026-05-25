@@ -244,7 +244,7 @@ const doctorRepairHandlers = {
 
 function slugify(value) {
   const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return slug || "target-project";
+  return slug.slice(0, 64).replace(/-+$/g, "") || "target-project";
 }
 
 async function writeStarterReleaseData(targetDataDir) {
