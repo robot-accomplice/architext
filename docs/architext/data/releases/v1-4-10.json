@@ -1,0 +1,159 @@
+{
+  "id": "v1-4-10",
+  "version": "1.4.10",
+  "name": "Architext 1.4.10 Viewer Interaction Corrections",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Architext 1.4.10 makes foreground serve processes discoverable, keeps diagram legends above contained canvases, and enforces compatible Flow View and Flow selections.",
+  "targetDate": "2026-05-25",
+  "lastUpdated": "2026-05-25T16:55:00.000Z",
+  "updateSource": "1.4.10 release ceremony",
+  "releasedAt": "2026-05-25T16:55:00.000Z",
+  "scope": {
+    "required": [
+      {
+        "id": "foreground-serve-instance-discovery",
+        "title": "Foreground serve instance discovery",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Foreground serve processes now write live runtime state so architext --list reports the viewer instances users can actually see.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T16:55:00.000Z",
+        "workstreamId": "serve-lifecycle",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/SERVE_LIFECYCLE_STATE_HARDENING.md",
+          "src/adapters/cli/serve-lifecycle.mjs",
+          "test/serve-lifecycle.test.mjs",
+          "GitHub PR #72"
+        ]
+      },
+      {
+        "id": "diagram-legend-overlay-layering",
+        "title": "Diagram legend overlay layering",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Diagram header-owned legend overlays now render above the contained canvas viewport instead of appearing behind or clipped by diagram content.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T16:55:00.000Z",
+        "workstreamId": "viewer-presentation",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/ARCHITECTURE_PLAN.md",
+          "docs/architext/src/styles.css",
+          "test/pdf-export-ui.test.mjs",
+          "GitHub PR #73"
+        ]
+      },
+      {
+        "id": "flow-view-compatibility",
+        "title": "Flow View and Flow compatibility",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Flow Views and Flows now enforce endpoint compatibility, repair invalid selections, prefer narrower authored projections over broad overviews, and title Sequence diagrams from the selected flow.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T16:55:00.000Z",
+        "workstreamId": "viewer-presentation",
+        "dependsOn": [
+          "diagram-legend-overlay-layering"
+        ],
+        "evidence": [
+          "docs/architecture/ARCHITECTURE_PLAN.md",
+          "docs/architext/src/presentation/viewSelection.js",
+          "docs/architext/src/main.tsx",
+          "test/view-selection.test.mjs",
+          "GitHub PR #74"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "serve-lifecycle",
+      "name": "Serve Lifecycle",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Keep local serve instance discovery aligned with live viewer processes.",
+      "progress": 100,
+      "itemIds": [
+        "foreground-serve-instance-discovery"
+      ],
+      "evidence": [
+        "test/serve-lifecycle.test.mjs",
+        "architext --list --json"
+      ]
+    },
+    {
+      "id": "viewer-presentation",
+      "name": "Viewer Presentation",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Keep diagram controls and selected-flow projections coherent on real project data.",
+      "progress": 100,
+      "itemIds": [
+        "diagram-legend-overlay-layering",
+        "flow-view-compatibility"
+      ],
+      "evidence": [
+        "test/pdf-export-ui.test.mjs",
+        "test/view-selection.test.mjs",
+        "Roboticus browser verification",
+        "npm run verify"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "live-viewer-state-corrected",
+      "label": "Live viewer state corrected",
+      "status": "complete",
+      "targetWindow": "Patch release",
+      "order": 1,
+      "itemIds": [
+        "foreground-serve-instance-discovery",
+        "diagram-legend-overlay-layering",
+        "flow-view-compatibility"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-1-4-10-success-criteria",
+      "label": "1.4.10 success criteria",
+      "href": "docs/architecture/RELEASE_1_4_10_SUCCESS_CRITERIA.md",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "release-1-4-10-view-selection-tests",
+      "label": "node --test test/view-selection.test.mjs",
+      "href": "test/view-selection.test.mjs",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "release-1-4-10-check",
+      "label": "npm run release:check",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "package-version-1-4-10",
+      "label": "package.json version 1.4.10",
+      "href": "package.json",
+      "kind": "document",
+      "status": "complete"
+    }
+  ]
+}
