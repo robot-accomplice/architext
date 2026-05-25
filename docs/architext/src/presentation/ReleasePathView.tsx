@@ -1,5 +1,7 @@
+import { useState } from "react";
 import type { Id, ReleaseBlocker, ReleaseDetail, ReleaseItem, ReleaseItemStatus, Selection } from "../domain/architectureTypes.js";
 import { Badge } from "./Badge.js";
+import { toggleCollapsedReleasePathMilestone } from "./releasePathState.js";
 import {
   activeReleaseBlockersForItem,
   blockersGroupedByItem,
@@ -28,6 +30,7 @@ export function ReleasePath({
   onSelectItem: (id: Id) => void;
   onSelectMilestone: (id: Id) => void;
 }) {
+  const [collapsedMilestoneIds, setCollapsedMilestoneIds] = useState<Set<Id>>(() => new Set());
   const allItems = releaseItems(detail);
   const itemsById = byId(allItems);
   const workstreamsById = byId(detail.workstreams);
@@ -53,23 +56,26 @@ export function ReleasePath({
       {milestones.map((milestone) => {
         const milestoneItems = milestone.itemIds.map((itemId) => itemsById.get(itemId)).filter((item): item is ReleaseItem => Boolean(item));
         const blockedItems = milestoneItems.filter((item) => item.status === "blocked" || activeReleaseBlockersForItem(item, blockersByItemId.get(item.id) ?? []).length > 0);
+        const collapsed = collapsedMilestoneIds.has(milestone.id);
         const pathNumber = milestone.status === "deferred" || milestone.status === "cut" ? 0 : milestone.order;
         return (
-          <article className={`release-path-step ${releaseTone(milestone.status)}`} key={milestone.id}>
+          <article className={`release-path-step ${releaseTone(milestone.status)} ${collapsed ? "collapsed" : ""}`} key={milestone.id}>
             <div className="release-path-marker">
               <span>{pathNumber}</span>
             </div>
             <div className="release-path-body">
               <ReleasePathMilestoneLine
                 blockedItems={blockedItems}
+                collapsed={collapsed}
                 itemCount={milestoneItems.length}
                 label={milestone.label}
                 onSelect={() => onSelectMilestone(milestone.id)}
+                onToggleCollapsed={() => setCollapsedMilestoneIds((current) => toggleCollapsedReleasePathMilestone(current, milestone.id))}
                 selected={selection?.kind === "release-milestone" && selection.milestoneId === milestone.id}
                 status={milestone.status}
                 timing={milestone.date ?? milestone.targetWindow ?? "No date"}
               />
-              <div className="release-path-subitems">
+              {collapsed ? null : <div className="release-path-subitems">
                 {milestoneItems.length ? milestoneItems.map((item) => {
                   const workstream = item.workstreamId ? workstreamsById.get(item.workstreamId) : undefined;
                   const blockers = activeReleaseBlockersForItem(item, blockersByItemId.get(item.id) ?? []);
@@ -87,7 +93,7 @@ export function ReleasePath({
                 }) : (
                   <p className="muted">No linked release items.</p>
                 )}
-              </div>
+              </div>}
             </div>
           </article>
         );
@@ -98,17 +104,21 @@ export function ReleasePath({
 
 function ReleasePathMilestoneLine({
   blockedItems,
+  collapsed,
   itemCount,
   label,
   onSelect,
+  onToggleCollapsed,
   selected,
   status,
   timing
 }: {
   blockedItems: ReleaseItem[];
+  collapsed: boolean;
   itemCount: number;
   label: string;
   onSelect: () => void;
+  onToggleCollapsed: () => void;
   selected: boolean;
   status: ReleaseItemStatus;
   timing: string;
@@ -116,13 +126,27 @@ function ReleasePathMilestoneLine({
   const lineState = releaseLineState(status, blockedItems.length > 0);
   const blockerText = blockedItems.map((item) => item.title).join(", ");
   return (
-    <button type="button" className={`release-path-coarse-line ${selected ? "active" : ""}`} onClick={onSelect}>
-      <span className={`release-check ${releaseLineCheckClass(lineState)}`} aria-label={lineState} />
-      <Badge tone={releaseBadgeTone(lineState === "Blocked" ? "blocked" : status)}>{lineState}</Badge>
-      <strong>{label}</strong>
-      <span className="release-path-description">{releaseStatusLabels[status]} · {timing} · {itemCount} items</span>
-      {blockerText ? <span className="release-path-blockers">Blocked by: {blockerText}</span> : null}
-    </button>
+    <div className="release-path-coarse-line">
+      <button
+        type="button"
+        className="release-path-collapse"
+        aria-expanded={!collapsed}
+        aria-label={`${collapsed ? "Expand" : "Collapse"} ${label}`}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggleCollapsed();
+        }}
+      >
+        {collapsed ? "+" : "-"}
+      </button>
+      <button type="button" className={`release-path-milestone-select ${selected ? "active" : ""}`} onClick={onSelect}>
+        <span className={`release-check ${releaseLineCheckClass(lineState)}`} aria-label={lineState} />
+        <Badge tone={releaseBadgeTone(lineState === "Blocked" ? "blocked" : status)}>{lineState}</Badge>
+        <strong>{label}</strong>
+        <span className="release-path-description">{releaseStatusLabels[status]} · {timing} · {itemCount} items</span>
+        {blockerText ? <span className="release-path-blockers">Blocked by: {blockerText}</span> : null}
+      </button>
+    </div>
   );
 }
 
