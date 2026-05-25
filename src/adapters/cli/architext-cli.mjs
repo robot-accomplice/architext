@@ -10,6 +10,7 @@ import { createCommandHandlers, routeCommand } from "./command-router.mjs";
 import { isLoopbackHost, parseArgs, usage } from "./command-line.mjs";
 import { assertDirectory, git, gitAvailable, readJson, run, tryRun, writeJson } from "./runtime.mjs";
 import { runServeLifecycle } from "./serve-lifecycle.mjs";
+import { shouldValidateSync, syncMetadataPatch, syncWritePlan } from "./sync-plan.mjs";
 import { printStatus } from "./terminal-presenter.mjs";
 import { runPackageUpdateCheck } from "./update-check.mjs";
 import { withTargetWriteLock } from "./write-lock.mjs";
@@ -738,17 +739,6 @@ function applyExplicitSyncOptions(choices, options) {
   return next;
 }
 
-function persistedSyncChoices(choices) {
-  return {
-    branch: choices.branch,
-    instructionFiles: choices.instructionFiles,
-    manageGitignore: choices.manageGitignore,
-    manageRootScripts: choices.manageRootScripts,
-    applyDoctorRepairs: choices.applyDoctorRepairs,
-    proceedWithChanges: choices.proceedWithChanges
-  };
-}
-
 async function chooseBranchChoice({ target, options, rl }) {
   if (options.dryRun || !gitAvailable(target)) return "none";
   if (options.branch) return options.branch;
@@ -930,10 +920,10 @@ async function syncTarget(target, options, version, logger = console) {
       doctorRepairAvailable,
       rootPackageExists: status.rootPackageExists
     });
-    const doctorRepairsSelected = doctorRepairAvailable && syncChoices.applyDoctorRepairs;
-    const shouldWrite = installing || migrating || doctorRepairsSelected || options.force || syncChoices.instructionFiles.length > 0 || syncChoices.manageGitignore || syncChoices.manageRootScripts;
+    const writePlan = syncWritePlan({ installing, migrating, doctorRepairAvailable, syncChoices, options });
+    const { doctorRepairsSelected, shouldWrite } = writePlan;
 
-    log(`Operation: ${installing ? "install" : migrating ? "migrate" : "sync"}${shouldWrite ? "" : " (current)"}`);
+    log(writePlan.operationLabel);
 
     if (!shouldWrite) {
       log("No lifecycle changes needed.");
@@ -994,25 +984,22 @@ async function syncTarget(target, options, version, logger = console) {
         rootScriptsManaged = result.changed || result.reason === "already present";
       }
 
-      const validation = options.skipValidate || (options.dryRun && installing)
-        ? null
-        : await validateTarget(target);
+      const validation = shouldValidateSync({ options, installing }) ? await validateTarget(target) : null;
       if (validation) log(`Validation: ${validation.ok ? "passed" : "failed"}`);
 
       if (!options.dryRun) {
-        await writeMetadata(target, {
-          source: "architext-cli",
-          cliVersion: version,
-          operation: installing ? "install" : migrating ? "migrate" : "sync",
-          dataPolicy: installing ? "starter-written" : "preserved",
-          copiedInstallMigrated: migrating,
-          instructionFiles: Object.fromEntries(instructionFiles.map((fileName) => [fileName, syncChoices.instructionFiles.includes(fileName)])),
+        await writeMetadata(target, syncMetadataPatch({
+          version,
+          installing,
+          migrating,
+          instructionFiles,
+          syncChoices,
           managedInstructions,
           gitignoreManaged,
           rootScriptsManaged,
-          syncChoices: persistedSyncChoices(syncChoices),
-          lastValidation: validation ? { ok: validation.ok, at: new Date().toISOString() } : undefined
-        });
+          validation,
+          now: new Date().toISOString()
+        }));
       }
     };
 
