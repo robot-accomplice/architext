@@ -59,6 +59,15 @@ export function releaseLineState(status, blocked = false) {
   return "Not Blocked";
 }
 
+export function releaseStatusCanShowBlockers(status) {
+  return !["complete", "deferred", "cut"].includes(status);
+}
+
+export function activeReleaseBlockersForItem(item, blockers = []) {
+  if (!releaseStatusCanShowBlockers(item.status)) return [];
+  return blockers.filter((blocker) => !blocker.status || releaseStatusCanShowBlockers(blocker.status));
+}
+
 export function releaseLineCheckClass(state) {
   if (state === "Complete") return "checked";
   return "";

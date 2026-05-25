@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  activeReleaseBlockersForItem,
   progressFill,
   progressTone,
   releaseItems,
@@ -50,6 +51,17 @@ test("release truth presentation maps status into visual state without UI depend
   assert.equal(releaseLineState("complete"), "Complete");
   assert.equal(releaseLineState("cut"), "Deferred");
   assert.equal(releaseLineCheckClass("Complete"), "checked");
+});
+
+test("release truth presentation suppresses impossible blocker overlays", () => {
+  const activeBlocker = { id: "active", status: "blocked", itemIds: ["contract"] };
+  const retiredBlocker = { id: "retired", status: "complete", itemIds: ["workflow"] };
+
+  assert.deepEqual(activeReleaseBlockersForItem({ id: "contract", status: "complete" }, [activeBlocker]), []);
+  assert.deepEqual(activeReleaseBlockersForItem({ id: "hosted", status: "deferred" }, [activeBlocker]), []);
+  assert.deepEqual(activeReleaseBlockersForItem({ id: "service", status: "cut" }, [activeBlocker]), []);
+  assert.deepEqual(activeReleaseBlockersForItem({ id: "workflow", status: "in-progress" }, [retiredBlocker]), []);
+  assert.deepEqual(activeReleaseBlockersForItem({ id: "workflow", status: "in-progress" }, [activeBlocker]), [activeBlocker]);
 });
 
 test("release truth presentation colors progress by completion state", () => {

@@ -1,0 +1,224 @@
+{
+  "id": "v1-4-7",
+  "version": "1.4.7",
+  "name": "Architext 1.4.7 Release Truth Status Correction",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Architext 1.4.7 prevents completed Release Truth items from appearing blocked in the UI and validates blocker/status exclusivity.",
+  "targetDate": "2026-05-25",
+  "lastUpdated": "2026-05-25T07:29:27.000Z",
+  "updateSource": "1.4.7 release gate",
+  "scope": {
+    "required": [
+      {
+        "id": "release-truth-effective-blockers",
+        "title": "Release Truth effective blockers",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Derive active blockers through one presentation helper so completed, deferred, and cut items never render as blocked in Release Path, Kanban, or detail surfaces.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T07:27:04.000Z",
+        "workstreamId": "release-truth-presentation",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architext/src/presentation/releaseTruth.js",
+          "docs/architext/src/presentation/releaseKanban.js",
+          "docs/architext/src/main.tsx",
+          "test/release-truth-presentation.test.mjs",
+          "test/release-kanban.test.mjs"
+        ]
+      },
+      {
+        "id": "release-truth-blocker-validation",
+        "title": "Release Truth blocker validation",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Reject release details whose blockers reference complete, deferred, or cut items, so invalid Release Truth data fails before it is treated as valid.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T07:27:04.000Z",
+        "workstreamId": "release-truth-validation",
+        "dependsOn": [
+          "release-truth-effective-blockers"
+        ],
+        "evidence": [
+          "src/domain/architecture-model/references.mjs",
+          "test/architecture-references.test.mjs",
+          "docs/architecture/RELEASE_TRUTH_STATUS_INVARIANTS.md"
+        ]
+      },
+      {
+        "id": "release-truth-status-docs",
+        "title": "Release Truth status documentation",
+        "kind": "documentation",
+        "status": "complete",
+        "summary": "Document that completion, deferral, and cutting are mutually exclusive with active blocker references, and teach agents to remove stale blocker item references.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T07:27:04.000Z",
+        "workstreamId": "release-truth-validation",
+        "dependsOn": [
+          "release-truth-blocker-validation"
+        ],
+        "evidence": [
+          "docs/architecture/RELEASE_1_4_7_SUCCESS_CRITERIA.md",
+          "docs/architecture/RELEASE_TRUTH_STATUS_INVARIANTS.md",
+          "docs/architecture/RELEASE_TRUTH_PLAN.md",
+          "docs/architecture/LLM_ARCHITEXT.md",
+          "docs/architecture/AGENTS_APPENDIX.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": [
+      {
+        "id": "release-publication",
+        "title": "Release publication",
+        "kind": "chore",
+        "status": "cut",
+        "summary": "Preparing 1.4.7 does not tag, publish to npm, or create a GitHub release.",
+        "priority": "low",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T07:27:04.000Z",
+        "workstreamId": "release-truth-validation",
+        "dependsOn": []
+      }
+    ]
+  },
+  "workstreams": [
+    {
+      "id": "release-truth-presentation",
+      "name": "Release Truth Presentation",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Keep Release Truth visual state derived from lifecycle status before blocker context is displayed.",
+      "progress": 100,
+      "itemIds": [
+        "release-truth-effective-blockers"
+      ],
+      "evidence": [
+        "test/release-truth-presentation.test.mjs",
+        "test/release-kanban.test.mjs",
+        "browser smoke on #releasetruth"
+      ]
+    },
+    {
+      "id": "release-truth-validation",
+      "name": "Release Truth Validation",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Fail impossible blocker/status combinations during Release Truth reference validation.",
+      "progress": 100,
+      "itemIds": [
+        "release-truth-blocker-validation",
+        "release-truth-status-docs",
+        "release-publication"
+      ],
+      "evidence": [
+        "test/architecture-references.test.mjs",
+        "npm run validate"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "architecture-approved",
+      "label": "1.4.7 architecture approved",
+      "status": "complete",
+      "targetWindow": "Release framing",
+      "order": 1,
+      "itemIds": [
+        "release-truth-effective-blockers",
+        "release-truth-blocker-validation",
+        "release-truth-status-docs"
+      ]
+    },
+    {
+      "id": "release-candidate-ready",
+      "label": "Release candidate ready",
+      "status": "complete",
+      "targetWindow": "Release preparation",
+      "order": 2,
+      "itemIds": [
+        "release-truth-effective-blockers",
+        "release-truth-blocker-validation",
+        "release-truth-status-docs"
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "validation-follows-presentation-rule",
+      "from": "release-truth-blocker-validation",
+      "to": "release-truth-effective-blockers",
+      "summary": "Validation enforces the same status/blocker exclusivity that the viewer uses when deriving effective blockers."
+    },
+    {
+      "id": "docs-follow-validation-rule",
+      "from": "release-truth-status-docs",
+      "to": "release-truth-blocker-validation",
+      "summary": "Agent documentation must describe the invariant that validation enforces."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "release-1-4-7-success-criteria",
+      "label": "1.4.7 success criteria",
+      "href": "docs/architecture/RELEASE_1_4_7_SUCCESS_CRITERIA.md",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "release-truth-status-invariants",
+      "label": "Release Truth status invariants",
+      "href": "docs/architecture/RELEASE_TRUTH_STATUS_INVARIANTS.md",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "release-truth-presentation-tests",
+      "label": "node --test test/release-truth-presentation.test.mjs test/release-kanban.test.mjs",
+      "href": "test/release-truth-presentation.test.mjs",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "release-reference-validation-tests",
+      "label": "node --test test/architecture-references.test.mjs",
+      "href": "test/architecture-references.test.mjs",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "release-truth-validation",
+      "label": "npm run validate",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "browser-release-truth-smoke",
+      "label": "Browser smoke on #releasetruth",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "package-version-1-4-7",
+      "label": "package.json version 1.4.7",
+      "href": "package.json",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "release-check-1-4-7",
+      "label": "npm run release:check",
+      "kind": "test",
+      "status": "complete"
+    }
+  ]
+}
