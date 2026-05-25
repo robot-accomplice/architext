@@ -76,21 +76,18 @@ test("serve handler reads target data files through the package-owned server", a
   }
 });
 
-test("serve handler returns a controlled failure instead of leaking implementation errors", async () => {
+test("serve handler treats malformed data paths as not found", async () => {
   const target = await mkdtemp(path.join(tmpdir(), "architext-serve-"));
-  const originalConsoleError = console.error;
-  console.error = () => {};
   try {
     await withServer(createViewerRequestHandler({ target, watchHub: { attach() {} } }), async (origin) => {
       const response = await fetch(`${origin}/data/%E0%A4%A`);
       const body = await response.text();
 
-      assert.equal(response.status, 500);
-      assert.match(body, /Architext could not serve this request/);
+      assert.equal(response.status, 404);
+      assert.equal(body, "Not found");
       assert.doesNotMatch(body, /URI malformed|stat is not defined|ReferenceError/);
     });
   } finally {
-    console.error = originalConsoleError;
     await rm(target, { recursive: true, force: true });
   }
 });
