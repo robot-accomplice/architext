@@ -88,8 +88,8 @@ function releaseItemFromRoadmap(item, workstreamId, dateAdded, scope = "planned"
     source: "roadmap",
     dateAdded,
     workstreamId,
-    dependsOn: [],
-    evidence: item.evidence ?? []
+    dependsOn: item.dependsOn ? [...item.dependsOn] : [],
+    evidence: item.evidence ? [...item.evidence] : []
   };
 }
 
@@ -111,8 +111,8 @@ function releaseItemFromAdHoc(item, usedItemIds, workstreamId, dateAdded) {
     source: "ad-hoc",
     dateAdded,
     workstreamId,
-    dependsOn: [],
-    evidence: item.evidence ?? []
+    dependsOn: item.dependsOn ? [...item.dependsOn] : [],
+    evidence: item.evidence ? [...item.evidence] : []
   };
 }
 
@@ -235,9 +235,16 @@ export function buildReleasePlan({
   projectName,
   version = nextMinorVersion(releaseIndex),
   theme,
-  now = new Date().toISOString()
+  now
 }) {
+  if (!now) throw new Error("buildReleasePlan requires an explicit now timestamp.");
   const selectedIds = new Set(selectedRoadmapItemIds);
+  const roadmapIds = new Set(roadmapItems.map((item) => item.id));
+  for (const selectedId of selectedIds) {
+    if (!roadmapIds.has(selectedId)) {
+      throw new Error(`selectedRoadmapItemIds references unknown id "${selectedId}"`);
+    }
+  }
   const id = releaseIdForVersion(version);
   const usedItemIds = new Set(roadmapItems.map((item) => item.id));
   const workstreamIds = new Set();

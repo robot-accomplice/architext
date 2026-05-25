@@ -1,3 +1,4 @@
+import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { validateReleaseReferences } from "../../domain/architecture-model/references.mjs";
 import {
@@ -62,6 +63,36 @@ async function writeDeferredTransferMarkers({
   }
 }
 
+function createWriteSet({ writeJson }) {
+  const snapshots = new Map();
+
+  async function capture(file) {
+    if (snapshots.has(file)) return;
+    try {
+      snapshots.set(file, { exists: true, content: await readFile(file, "utf8") });
+    } catch (error) {
+      if (error?.code !== "ENOENT") throw error;
+      snapshots.set(file, { exists: false });
+    }
+  }
+
+  return {
+    async writeJson(file, value) {
+      await capture(file);
+      await writeJson(file, value);
+    },
+    async restore() {
+      for (const [file, snapshot] of [...snapshots.entries()].reverse()) {
+        if (snapshot.exists) {
+          await writeFile(file, snapshot.content, "utf8");
+        } else {
+          await rm(file, { force: true });
+        }
+      }
+    }
+  };
+}
+
 export async function approveReleasePlanRequest({
   target,
   payload,
@@ -96,7 +127,8 @@ export async function approveReleasePlanRequest({
     adHocItems: payload.adHocItems ?? [],
     projectName: manifest.project.name,
     version: payload.version,
-    theme: payload.theme
+    theme: payload.theme,
+    now: new Date().toISOString()
   }));
   const planned = action === "save-draft"
     ? saveReleasePlanDraft({ releaseIndex, roadmap, releaseDetail })
@@ -124,24 +156,31 @@ export async function approveReleasePlanRequest({
     };
   }
 
-  await writeJson(path.join(path.dirname(releaseIndexPath), planned.releaseFile.file), planned.releaseFile.detail);
-  await writeJson(releaseIndexPath, planned.releaseIndex);
-  if (action !== "save-draft") {
-    await writeJson(roadmapPath, planned.roadmap);
-    await writeDeferredTransferMarkers({
-      action,
-      roadmap,
-      releaseIndex,
-      releaseIndexPath,
-      releaseDetail: planned.releaseFile.detail,
-      readJson,
-      writeJson
-    });
-  }
+  const writeSet = createWriteSet({ writeJson });
+  let validation;
+  try {
+    await writeSet.writeJson(path.join(path.dirname(releaseIndexPath), planned.releaseFile.file), planned.releaseFile.detail);
+    await writeSet.writeJson(releaseIndexPath, planned.releaseIndex);
+    if (action !== "save-draft") {
+      await writeSet.writeJson(roadmapPath, planned.roadmap);
+      await writeDeferredTransferMarkers({
+        action,
+        roadmap,
+        releaseIndex,
+        releaseIndexPath,
+        releaseDetail: planned.releaseFile.detail,
+        readJson,
+        writeJson: writeSet.writeJson
+      });
+    }
 
-  const validation = await validateTarget(target);
-  if (!validation.ok) {
-    throw new Error(`Release plan did not validate:\n${validation.output}`);
+    validation = await validateTarget(target);
+    if (!validation.ok) {
+      throw new Error(`Release plan did not validate:\n${validation.output}`);
+    }
+  } catch (error) {
+    await writeSet.restore();
+    throw error;
   }
   return {
     release: planned.releaseIndex.releases.find((release) => release.id === releaseDetail.id),
