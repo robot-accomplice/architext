@@ -63,6 +63,23 @@ test("sync installs data-only Architext into a fresh repository", () => {
   }
 });
 
+test("sync caps generated starter project slugs", async () => {
+  const parent = tempRepo();
+  const target = path.join(parent, "this-is-a-very-long-project-name-that-would-otherwise-produce-unwieldy-generated-architecture-identifiers");
+  try {
+    await mkdir(target, { recursive: true });
+    writeFileSync(path.join(target, "package.json"), "{\"scripts\":{\"test\":\"echo test\"}}\n");
+
+    run(["sync", target, "--yes", "--branch", "none"]);
+
+    const manifest = JSON.parse(readFileSync(path.join(target, "docs", "architext", "data", "manifest.json"), "utf8"));
+    assert.ok(manifest.project.id.length <= 64);
+    assert.doesNotMatch(manifest.project.id, /-$/);
+  } finally {
+    cleanup(parent);
+  }
+});
+
 test("sync migrates copied installs without rewriting architecture data", async () => {
   const target = tempRepo();
   try {
