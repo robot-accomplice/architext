@@ -1,8 +1,9 @@
-import type { Id, ReleaseBlocker, ReleaseDetail, ReleaseItem, Selection } from "../domain/architectureTypes.js";
+import type { Id, ReleaseDetail, ReleaseItem, Selection } from "../domain/architectureTypes.js";
 import { Badge } from "./Badge.js";
 import { releaseKanbanColumns } from "./releaseKanban.js";
 import {
   activeReleaseBlockersForItem,
+  blockersGroupedByItem,
   releaseBadgeTone,
   releaseLineCheckClass,
   releaseLineState,
@@ -11,16 +12,6 @@ import {
 
 function byId<T extends { id: Id }>(items: T[]): Map<Id, T> {
   return new Map(items.map((item) => [item.id, item]));
-}
-
-function blockersGroupedByItem(blockers: ReleaseBlocker[]): Map<Id, ReleaseBlocker[]> {
-  const grouped = new Map<Id, ReleaseBlocker[]>();
-  for (const blocker of blockers) {
-    for (const itemId of blocker.itemIds) {
-      grouped.set(itemId, [...(grouped.get(itemId) ?? []), blocker]);
-    }
-  }
-  return grouped;
 }
 
 export function ReleaseKanban({

@@ -19,6 +19,16 @@ export function releaseItems(detail) {
   ];
 }
 
+export function blockersGroupedByItem(blockers = []) {
+  const grouped = new Map();
+  for (const blocker of blockers) {
+    for (const itemId of blocker.itemIds) {
+      grouped.set(itemId, [...(grouped.get(itemId) ?? []), blocker]);
+    }
+  }
+  return grouped;
+}
+
 export function releaseItemSummaryText(item) {
   return item.summary ?? "";
 }
