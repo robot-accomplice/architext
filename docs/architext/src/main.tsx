@@ -4,7 +4,12 @@ import type { Root } from "react-dom/client";
 import { c4LayoutFor } from "./routing/c4Layout.js";
 import { relationshipLabel } from "./routing/relationshipLabels.js";
 import { plannedCanvasFallback, usePlannedDiagram } from "./routing/usePlannedDiagram.js";
-import { loadArchitectureModel, loadReleaseDetail } from "./adapters/fetchArchitectureData.js";
+import {
+  loadArchitectureModel,
+  loadReleaseDetail,
+  releaseDetailsForSelectedRelease,
+  selectedReleaseIdForReload
+} from "./adapters/fetchArchitectureData.js";
 import { mutationFetch } from "./adapters/mutationAuth.js";
 import { subscribeToDataEvents } from "./adapters/dataEvents.js";
 import { isSelectedStep, orderSelectedLast, selectedFlowIdForSelection, selectedStepIdForSelection } from "./presentation/stepSelection.js";
@@ -15,11 +20,13 @@ import { ReleasePlanningPanel, ReleasePlanningWorkspace } from "./presentation/R
 import { nextRuleCategoryName, orderedRules, ruleCategories, ruleCategoryAccent, ruleCriticalityTone, ruleProtectionLabel } from "./presentation/rules.js";
 import { postRulesAction } from "./presentation/rulesClient.js";
 import { useUnsavedEditorGuard } from "./presentation/unsavedEditorGuard.js";
+import { dataRefreshNoticeForDirtyEditors } from "./presentation/releasePlanningModel.js";
 import { StepRoute } from "./presentation/StepRoute.js";
 import {
   progressFill,
   progressTone,
   activeReleaseBlockersForItem,
+  releaseItemSummaryText,
   releaseBadgeTone,
   releaseItems,
   releaseLineCheckClass,
@@ -875,7 +882,7 @@ function ReleasePathItem({
       <Badge tone={releaseBadgeTone(state === "Blocked" ? primaryBlocker?.severity ?? "blocked" : item.status)}>{state}</Badge>
       <div className="release-path-line-main">
         <strong>{item.title}</strong>
-        <span className="release-path-item-summary">{item.summary}</span>
+        <span className="release-path-item-summary">{releaseItemSummaryText(item)}</span>
         <small>{scope} · {workstreamName} · {releaseStatusLabels[item.status]} · {item.kind}{item.priority ? ` · ${item.priority} priority` : ""}{item.owner ? ` · ${item.owner}` : ""}</small>
       </div>
       {primaryBlocker ? <span className="release-path-blockers">Blocked by: {primaryBlocker.title}</span> : null}
@@ -1316,8 +1323,9 @@ function App() {
 
   useEffect(() => subscribeToDataEvents({
     onValid: async () => {
-      if (releasePlanningDirty || rulesEditorDirty) {
-        setDataNotice("Architext data changed. Save or discard editor changes before refreshing.");
+      const dirtyNotice = dataRefreshNoticeForDirtyEditors({ releasePlanningDirty, rulesEditorDirty });
+      if (dirtyNotice) {
+        setDataNotice(dirtyNotice);
         return;
       }
       try {
@@ -1345,12 +1353,8 @@ function App() {
 
   const reloadReleasePlanningModel = async () => {
     const loaded = await loadArchitectureModel();
-    const selectedReleaseId = activeReleaseId || loaded.releases?.index.currentReleaseId || "";
-    const releaseDetails = new Map((loaded.releases?.details ?? []).map((detail) => [detail.id, detail]));
-    if (loaded.releases && selectedReleaseId && !releaseDetails.has(selectedReleaseId)) {
-      const selectedDetail = await loadReleaseDetail(fetch, loaded.releases, selectedReleaseId);
-      releaseDetails.set(selectedDetail.id, selectedDetail);
-    }
+    const selectedReleaseId = selectedReleaseIdForReload(activeReleaseId, loaded.releases);
+    const releaseDetails = await releaseDetailsForSelectedRelease(fetch, loaded.releases, selectedReleaseId);
     setModel(loaded);
     setActiveReleaseId((current) => {
       const releases: ReleaseSummary[] = loaded.releases?.index.releases ?? [];

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { mutationFetch } from "../adapters/mutationAuth.js";
+import { releasePlanActionDisabled, releasePlanProposalPayload } from "./releasePlanningModel.js";
 import { releaseItems } from "./releaseTruth.js";
 import type {
   Id,
@@ -199,18 +200,9 @@ export function ReleasePlanningPanel({
     onEditingChange(false);
   }, [activeReleaseDetail?.id, activeReleaseSummary?.status, releaseIndex.releases, editableRelease]);
 
-  const proposalPayload = (dryRun: boolean, action: "preview" | "approve" | "save-draft") => ({
-    dryRun,
-    action,
-    version,
-    theme: theme.trim(),
-    selectedRoadmapItemIds: selectedRoadmapIds,
-    itemScopes,
-    adHocItems: adHocItems.map(({ id, persisted, ...item }) => ({
-      ...(persisted ? { id } : {}),
-      ...item
-    }))
-  });
+  const proposalPayload = (dryRun: boolean, action: "preview" | "approve" | "save-draft") => (
+    releasePlanProposalPayload({ dryRun, action, version, theme, selectedRoadmapIds, itemScopes, adHocItems })
+  );
 
   const toggleRoadmapItem = (id: Id) => {
     markEditing();
@@ -434,13 +426,13 @@ export function ReleasePlanningPanel({
       <div className="release-planning-actions">
         <span>{selectedCount} selected items</span>
         {message ? <span className="release-planning-message">{message}</span> : null}
-        <button type="button" onClick={() => submitPlan("preview")} disabled={pending || !version.trim() || selectedCount === 0}>
+        <button type="button" onClick={() => submitPlan("preview")} disabled={releasePlanActionDisabled({ pending, version, selectedCount })}>
           {pending ? "Working..." : "Preview changes"}
         </button>
-        <button type="button" className="primary-action" onClick={() => submitPlan("save-draft")} disabled={pending || !version.trim() || selectedCount === 0}>
+        <button type="button" className="primary-action" onClick={() => submitPlan("save-draft")} disabled={releasePlanActionDisabled({ pending, version, selectedCount })}>
           Save draft
         </button>
-        <button type="button" className="approve-action" onClick={() => submitPlan("approve")} disabled={pending || !version.trim() || selectedCount === 0}>
+        <button type="button" className="approve-action" onClick={() => submitPlan("approve")} disabled={releasePlanActionDisabled({ pending, version, selectedCount })}>
           Approve release plan
         </button>
       </div>
