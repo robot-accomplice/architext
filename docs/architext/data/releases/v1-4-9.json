@@ -1,0 +1,101 @@
+{
+  "id": "v1-4-9",
+  "version": "1.4.9",
+  "name": "Architext 1.4.9 Release Path Milestone Status",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Architext 1.4.9 keeps Release Path milestone status coherent with linked item completion so fully complete milestones no longer display as in progress.",
+  "targetDate": "2026-05-25",
+  "lastUpdated": "2026-05-25T15:24:07.000Z",
+  "updateSource": "1.4.9 release ceremony",
+  "releasedAt": "2026-05-25T15:24:07.000Z",
+  "scope": {
+    "required": [
+      {
+        "id": "release-path-derived-milestone-status",
+        "title": "Derived Release Path milestone status",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Release Path milestone rows now display complete when all linked items are complete, while incomplete blocked milestones still display blocked and empty milestones keep their stored status.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T15:24:07.000Z",
+        "workstreamId": "release-path-presentation",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/COLLAPSIBLE_RELEASE_PATH.md",
+          "docs/architecture/RELEASE_1_4_9_SUCCESS_CRITERIA.md",
+          "docs/architext/src/presentation/releaseTruth.js",
+          "docs/architext/src/presentation/ReleasePathView.tsx",
+          "test/release-truth-presentation.test.mjs",
+          "GitHub PR #70"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "release-path-presentation",
+      "name": "Release Path Presentation",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Keep Release Path milestone headers coherent with linked item state.",
+      "progress": 100,
+      "itemIds": [
+        "release-path-derived-milestone-status"
+      ],
+      "evidence": [
+        "test/release-truth-presentation.test.mjs",
+        "npm run verify"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "milestone-status-corrected",
+      "label": "Milestone status corrected",
+      "status": "complete",
+      "targetWindow": "Patch release",
+      "order": 1,
+      "itemIds": [
+        "release-path-derived-milestone-status"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-1-4-9-success-criteria",
+      "label": "1.4.9 success criteria",
+      "href": "docs/architecture/RELEASE_1_4_9_SUCCESS_CRITERIA.md",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "release-path-status-tests",
+      "label": "node --test test/release-truth-presentation.test.mjs",
+      "href": "test/release-truth-presentation.test.mjs",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "release-1-4-9-check",
+      "label": "npm run release:check",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "package-version-1-4-9",
+      "label": "package.json version 1.4.9",
+      "href": "package.json",
+      "kind": "document",
+      "status": "complete"
+    }
+  ]
+}
