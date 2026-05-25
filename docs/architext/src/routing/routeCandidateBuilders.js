@@ -17,6 +17,9 @@ import { withReadableLabel } from "./routeLabels.js";
 import { createMinHeap } from "./priorityQueue.js";
 import { CORRIDOR_PADDING } from "./routeCorridors.js";
 
+const defaultGridRouteMaxPoints = 1600;
+const defaultGridRouteMaxExpansions = 4000;
+
 function monotonicBacktrackCost(points, fromRect, toRect) {
   const fromCenter = {
     x: fromRect.x + fromRect.width / 2,
@@ -45,6 +48,8 @@ export function createRouteCandidateFactory(context) {
     blockerRects,
     canvasHeight,
     canvasWidth,
+    gridRouteMaxExpansions = defaultGridRouteMaxExpansions,
+    gridRouteMaxPoints = defaultGridRouteMaxPoints,
     rectFor,
     routeQualityFromSamples,
     stats
@@ -83,6 +88,10 @@ export function createRouteCandidateFactory(context) {
         pointIndex.set(key, points.length);
         points.push({ x, y });
       }
+    }
+    if (points.length > gridRouteMaxPoints) {
+      if (stats) stats.gridRouteBudgetBailouts = (stats.gridRouteBudgetBailouts ?? 0) + 1;
+      return null;
     }
 
     const pointKey = (point) => `${Math.round(point.x)},${Math.round(point.y)}`;
@@ -139,6 +148,7 @@ export function createRouteCandidateFactory(context) {
     const queue = createMinHeap();
     distances[startIndex] = 0;
     queue.push({ index: startIndex, distance: 0 });
+    let expansions = 0;
 
     while (queue.size > 0) {
       const nextItem = queue.pop();
@@ -147,6 +157,11 @@ export function createRouteCandidateFactory(context) {
       if (current === endIndex) break;
       if (visited[current]) continue;
       visited[current] = 1;
+      expansions += 1;
+      if (expansions > gridRouteMaxExpansions) {
+        if (stats) stats.gridRouteBudgetBailouts = (stats.gridRouteBudgetBailouts ?? 0) + 1;
+        return null;
+      }
       for (const [next, distance] of neighbors[current]) {
         if (visited[next]) continue;
         const turnPenalty = previous[current] >= 0

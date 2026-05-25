@@ -139,6 +139,8 @@ function routePlannerContext(input) {
     blockerRects,
     canvasHeight: input.canvasHeight,
     canvasWidth: input.canvasWidth,
+    gridRouteMaxExpansions: input.gridRouteMaxExpansions,
+    gridRouteMaxPoints: input.gridRouteMaxPoints,
     rectFor,
     routeQualityFromSamples,
     stats
