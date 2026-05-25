@@ -15,7 +15,30 @@ function applyRulesAction(document, payload) {
   return handler(document, payload);
 }
 
+async function withoutTargetWriteLock(_target, callback) {
+  return callback();
+}
+
 export async function updateRulesRequest({
+  target,
+  payload,
+  dataDir,
+  readJson,
+  writeJson,
+  validateTarget,
+  withTargetWriteLock = withoutTargetWriteLock
+}) {
+  return withTargetWriteLock(target, () => updateRulesRequestUnlocked({
+    target,
+    payload,
+    dataDir,
+    readJson,
+    writeJson,
+    validateTarget
+  }));
+}
+
+async function updateRulesRequestUnlocked({
   target,
   payload,
   dataDir,
