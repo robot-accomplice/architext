@@ -102,6 +102,23 @@ async function staleLock(lockDir, staleMs, now) {
   return age >= staleMs;
 }
 
+async function reclaimStaleLock(lockDir, staleMs, now) {
+  const reclaimMarker = path.join(lockDir, ".reclaiming");
+  try {
+    await mkdir(reclaimMarker);
+  } catch (error) {
+    if (error?.code === "ENOENT") return false;
+    if (error?.code === "EEXIST") return false;
+    throw error;
+  }
+  if (await staleLock(lockDir, staleMs, now)) {
+    await rm(lockDir, { recursive: true, force: true });
+    return true;
+  }
+  await rm(reclaimMarker, { recursive: true, force: true });
+  return false;
+}
+
 async function acquireLock(target, { pollMs, timeoutMs, staleMs, now }) {
   const lockDir = writeLockPath(target);
   const deadline = now() + timeoutMs;
@@ -110,16 +127,21 @@ async function acquireLock(target, { pollMs, timeoutMs, staleMs, now }) {
   while (now() <= deadline) {
     try {
       await mkdir(lockDir);
-      await writeFile(path.join(lockDir, "owner.json"), `${JSON.stringify({
-        pid: process.pid,
-        createdAt: new Date(now()).toISOString(),
-        createdAtMs: now()
-      }, null, 2)}\n`, "utf8");
+      try {
+        await writeFile(path.join(lockDir, "owner.json"), `${JSON.stringify({
+          pid: process.pid,
+          createdAt: new Date(now()).toISOString(),
+          createdAtMs: now()
+        }, null, 2)}\n`, "utf8");
+      } catch (error) {
+        await rm(lockDir, { recursive: true, force: true });
+        throw error;
+      }
       return lockDir;
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
       if (await staleLock(lockDir, staleMs, now)) {
-        await rm(lockDir, { recursive: true, force: true });
+        await reclaimStaleLock(lockDir, staleMs, now);
         continue;
       }
       await sleep(pollMs);
