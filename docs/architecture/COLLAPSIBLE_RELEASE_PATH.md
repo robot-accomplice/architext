@@ -18,8 +18,7 @@ Each Release Path milestone keeps its summary row visible when collapsed:
 - path number;
 - release status;
 - milestone label;
-- timing;
-- item count;
+- timing and item count, including `X/Y complete`;
 - active blocker summary.
 
 Collapsed milestones hide only their item rows. Selection remains unchanged: the

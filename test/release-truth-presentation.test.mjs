@@ -9,6 +9,7 @@ import {
   releaseItems,
   releaseLineCheckClass,
   releaseLineState,
+  releasePathCompletionText,
   releaseProgress,
   releaseScopeByItemId,
   releaseTone
@@ -75,6 +76,14 @@ test("release truth presentation groups blockers by release item", () => {
   assert.deepEqual(grouped.get("camera").map((blocker) => blocker.id), ["blocked-media"]);
   assert.deepEqual(grouped.get("voice").map((blocker) => blocker.id), ["blocked-media"]);
   assert.deepEqual(grouped.get("browser").map((blocker) => blocker.id), ["blocked-web"]);
+});
+
+test("release truth presentation summarizes release path milestone completion", () => {
+  assert.equal(releasePathCompletionText([
+    { id: "done", status: "complete" },
+    { id: "blocked", status: "blocked" },
+    { id: "deferred", status: "deferred" }
+  ]), "1/3 complete");
 });
 
 test("release truth presentation colors progress by completion state", () => {

@@ -33,6 +33,11 @@ export function releaseItemSummaryText(item) {
   return item.summary ?? "";
 }
 
+export function releasePathCompletionText(items = []) {
+  const completeCount = items.filter((item) => item.status === "complete").length;
+  return `${completeCount}/${items.length} complete`;
+}
+
 export function releaseProgress(detail) {
   const required = detail?.scope.required ?? [];
   if (required.length === 0) return 0;
