@@ -792,7 +792,7 @@ async function handleBranch({ target, options, version, branchChoice }) {
   if (branchChoice !== "new") throw new Error("--branch must be current, new, or none");
   const branchName = options.branchName || `architext/data-only-${version.replaceAll(".", "-")}`;
   git(target, ["checkout", "-b", branchName]);
-  console.log(`Created and switched to branch ${branchName}`);
+  return branchName;
 }
 
 async function chooseInstructionFiles(options, rl) {
@@ -902,7 +902,8 @@ async function runDoctor(target, options, version) {
   }
 }
 
-async function syncTarget(target, options, version) {
+async function syncTarget(target, options, version, logger = console) {
+  const log = (...args) => logger.log(...args);
   assertSyncPromptOptions(options);
   const status = await collectStatus(target, version, { runValidation: !options.skipValidate });
   const installing = !status.installed || options.overwriteData;
@@ -912,11 +913,11 @@ async function syncTarget(target, options, version) {
     : status.doctorRepairs;
   const doctorRepairAvailable = Boolean(effectiveDoctorRepairs.length);
 
-  console.log(`Target: ${target}`);
-  console.log(`Architext CLI: ${version}`);
-  printStatus(status, { verbose: true });
+  log(`Target: ${target}`);
+  log(`Architext CLI: ${version}`);
+  printStatus(status, { verbose: true }, logger);
   if (migrating) {
-    console.log(`Copied install detected: ${status.copiedInstallPaths.length} package-owned paths`);
+    log(`Copied install detected: ${status.copiedInstallPaths.length} package-owned paths`);
   }
 
   const rl = createInterface({ input, output });
@@ -932,69 +933,71 @@ async function syncTarget(target, options, version) {
     const doctorRepairsSelected = doctorRepairAvailable && syncChoices.applyDoctorRepairs;
     const shouldWrite = installing || migrating || doctorRepairsSelected || options.force || syncChoices.instructionFiles.length > 0 || syncChoices.manageGitignore || syncChoices.manageRootScripts;
 
-    console.log(`Operation: ${installing ? "install" : migrating ? "migrate" : "sync"}${shouldWrite ? "" : " (current)"}`);
+    log(`Operation: ${installing ? "install" : migrating ? "migrate" : "sync"}${shouldWrite ? "" : " (current)"}`);
 
     if (!shouldWrite) {
-      console.log("No lifecycle changes needed.");
+      log("No lifecycle changes needed.");
       return;
     }
 
-    await handleBranch({ target, options, version, branchChoice: syncChoices.branch });
     if (!nonInteractiveSync(options) && syncChoices.promptBeforeProceed && !options.dryRun) {
       const proceed = syncChoices.proceedWithChanges && await promptYesNo(rl, "Proceed with selected Architext changes in this branch?", true);
       if (!proceed) {
-        console.log("Aborted.");
+        log("Aborted.");
         return;
       }
     }
 
     const performWrites = async () => {
+      const branchName = await handleBranch({ target, options, version, branchChoice: syncChoices.branch });
+      if (branchName) log(`Created and switched to branch ${branchName}`);
+
       if (installing) {
-        console.log(`${options.dryRun ? "Would write" : "Writing"} starter data to ${dataDir(target)}`);
+        log(`${options.dryRun ? "Would write" : "Writing"} starter data to ${dataDir(target)}`);
         if (!options.dryRun) await writeStarterData(target, version);
       } else {
-        console.log("Preserving target-owned docs/architext/data/**/*.json");
+        log("Preserving target-owned docs/architext/data/**/*.json");
       }
 
       const removed = migrating ? await removeCopiedInstallFiles(target, options.dryRun) : [];
       if (removed.length) {
-        console.log(`${options.dryRun ? "Would remove" : "Removed"} copied package-owned files:`);
-        removed.forEach((item) => console.log(`- ${item}`));
+        log(`${options.dryRun ? "Would remove" : "Removed"} copied package-owned files:`);
+        removed.forEach((item) => log(`- ${item}`));
       }
 
       if (!installing && doctorRepairsSelected) {
         const repairs = await applyDoctorRepairs(target, status, options.dryRun, { skipInstructionRules: options.noAgents });
-        console.log(`${options.dryRun ? "Would apply" : "Applied"} doctor repairs:`);
-        repairs.forEach((repair) => console.log(`- ${repair.file}: ${repair.summary}`));
+        log(`${options.dryRun ? "Would apply" : "Applied"} doctor repairs:`);
+        repairs.forEach((repair) => log(`- ${repair.file}: ${repair.summary}`));
       } else if (!installing && doctorRepairAvailable) {
-        console.log("Skipped doctor repairs.");
+        log("Skipped doctor repairs.");
       }
 
       const managedInstructions = [];
       for (const fileName of syncChoices.instructionFiles) {
         const result = await upsertInstructionFile({ target, fileName, dryRun: options.dryRun });
-        console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
+        log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
         if (result.changed) managedInstructions.push(fileName);
       }
 
       let gitignoreManaged = false;
       if (syncChoices.manageGitignore) {
         const result = await upsertGitignore({ target, dryRun: options.dryRun });
-        console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
+        log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
         gitignoreManaged = result.changed || result.reason === "already present";
       }
 
       let rootScriptsManaged = false;
       if (syncChoices.manageRootScripts) {
         const result = await upsertRootScripts({ target, dryRun: options.dryRun });
-        console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination} with ${result.missing.length} scripts` : `Skipped ${result.destination}: ${result.reason}`);
+        log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination} with ${result.missing.length} scripts` : `Skipped ${result.destination}: ${result.reason}`);
         rootScriptsManaged = result.changed || result.reason === "already present";
       }
 
       const validation = options.skipValidate || (options.dryRun && installing)
         ? null
         : await validateTarget(target);
-      if (validation) console.log(`Validation: ${validation.ok ? "passed" : "failed"}`);
+      if (validation) log(`Validation: ${validation.ok ? "passed" : "failed"}`);
 
       if (!options.dryRun) {
         await writeMetadata(target, {
@@ -1301,30 +1304,20 @@ async function doctorApiRequest(target, payload, version) {
   };
 }
 
-async function captureConsoleOutput(callback) {
-  const originalLog = console.log;
-  const lines = [];
-  console.log = (...args) => lines.push(args.join(" "));
-  try {
-    const result = await callback();
-    return { result, output: lines.join("\n") };
-  } finally {
-    console.log = originalLog;
-  }
-}
-
 async function syncRepairApiRequest(target, version) {
-  const { output: syncOutput } = await captureConsoleOutput(() => syncTarget(target, {
+  const lines = [];
+  const logger = { log: (...args) => lines.push(args.join(" ")) };
+  await syncTarget(target, {
     quiet: true,
     branch: "none",
     noAgents: true,
     noGitignore: true,
     noRootScripts: true
-  }, version));
+  }, version, logger);
   const validation = await validateTarget(target);
   return {
     ok: validation.ok,
-    output: syncOutput,
+    output: lines.join("\n"),
     validation,
     reload: validation.ok
   };

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { statusLines } from "../src/adapters/cli/terminal-presenter.mjs";
+import { printStatus, statusLines } from "../src/adapters/cli/terminal-presenter.mjs";
 
 test("terminal status presenter formats repository health without collecting it", () => {
   const lines = statusLines({
@@ -53,5 +53,24 @@ test("terminal status presenter formats repository health without collecting it"
     "- AGENTS.md: current Architext section",
     "Root scripts:",
     "- architext: ok"
+  ]);
+});
+
+test("terminal status presenter writes to an injected logger", () => {
+  const lines = [];
+  printStatus({
+    target: "/tmp/repo",
+    installed: true,
+    cliVersion: "1.2.3",
+    copiedInstallDetected: false,
+    gitignoreMissing: [],
+    trackedGenerated: [],
+    doctorRepairs: []
+  }, { verbose: false }, { log: (line) => lines.push(line) });
+
+  assert.deepEqual(lines.slice(0, 3), [
+    "Target: /tmp/repo",
+    "Architext data: installed",
+    "CLI: 1.2.3"
   ]);
 });

@@ -79,6 +79,6 @@ export function statusLines(status, { verbose = false } = {}) {
   return lines;
 }
 
-export function printStatus(status, options) {
-  for (const line of statusLines(status, options)) console.log(line);
+export function printStatus(status, options, logger = console) {
+  for (const line of statusLines(status, options)) logger.log(line);
 }
