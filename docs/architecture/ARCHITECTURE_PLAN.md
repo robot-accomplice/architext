@@ -477,6 +477,11 @@ should remain a single grouped row at desktop widths; orphaned one-tab rows read
 as broken navigation. If a viewport or future clamp forces truncation, the full
 title or summary must remain available through a tooltip.
 
+Header-owned overlays, including the diagram legend, belong to the diagram
+header stacking layer and must render above the contained canvas viewport. The
+canvas may isolate its internal paint and scroll behavior, but it must not cover
+or clip header controls that intentionally open downward.
+
 Flows must be visible as lines between boxes, not only as a textual list of
 steps. A selected flow should draw directional edges between involved nodes,
 with numbered step markers or labels where legible. The textual ordered step

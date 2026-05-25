@@ -1921,6 +1921,8 @@ select:disabled {
 }
 
 .diagram-header {
+  position: relative;
+  z-index: 40;
   display: grid;
   grid-template-columns: minmax(0, 1fr) max-content max-content;
   align-items: flex-start;
@@ -1928,7 +1930,7 @@ select:disabled {
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
   border-bottom: 1px solid var(--line);
   background: var(--surface);
 }
@@ -2014,7 +2016,7 @@ select:disabled {
 
 .legend > div {
   position: absolute;
-  z-index: 15;
+  z-index: 45;
   right: 0;
   top: calc(100% + 4px);
   display: grid;

@@ -92,3 +92,15 @@ test("PDF export print styles preserve the active diagram artifact", () => {
   assert.equal(diagramViewport?.declarations.height, "auto");
   assert.equal(diagramViewport?.declarations.overflow, "visible");
 });
+
+test("diagram legend renders above the contained canvas viewport", () => {
+  const styleSource = readFileSync(new URL("../docs/architext/src/styles.css", import.meta.url), "utf8");
+  const diagramHeader = cssBlock(styleSource, ".diagram-header {");
+  const legendPanel = cssBlock(styleSource, ".legend > div {");
+
+  assert.match(diagramHeader, /position:\s*relative/);
+  assert.match(diagramHeader, /z-index:\s*40/);
+  assert.match(diagramHeader, /overflow:\s*visible/);
+  assert.match(legendPanel, /position:\s*absolute/);
+  assert.match(legendPanel, /z-index:\s*45/);
+});
