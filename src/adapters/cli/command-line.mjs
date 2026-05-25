@@ -46,8 +46,8 @@ Options:
   --prompt                   Force sync prompts instead of offering saved answers.
   --foreground               Run serve in the current terminal until interrupted.
   --background               Run serve detached and return control after startup.
-  --list                     List all recorded background serve instances.
-  --instance <id>            Target a listed background serve instance.
+  --list                     List all recorded live serve instances.
+  --instance <id>            Target a listed serve instance.
   --restart                  Sync and restart a recorded background serve instance.
   --refresh                  Alias for --restart.
   --update                   Alias for --restart. Use --check-updates for package updates.
@@ -57,8 +57,8 @@ Options:
   --host <host>              Serve bind host. Defaults to 127.0.0.1.
                               Must be localhost, 127.0.0.0/8, or ::1.
   --port <port>              Serve bind port. Defaults to 4317.
-  --status                   Show the recorded background serve process.
-  --stop                     Stop the recorded background serve process.
+  --status                   Show the recorded serve process.
+  --stop                     Stop the recorded serve process.
   --json                     Machine-readable status/doctor output.
   --dry-run                  Show intended changes without writing files.
   --force                    Rerun lifecycle management even when current.
