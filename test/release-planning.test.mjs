@@ -906,3 +906,100 @@ test("release planning API marks source release items when deferred scope moves 
     await rm(target, { recursive: true, force: true });
   }
 });
+
+test("release planning API restores the write set when validation rejects approval", async () => {
+  const target = await mkdtemp(path.join(os.tmpdir(), "architext-release-plan-rollback-"));
+  try {
+    const targetDataDir = dataDir(target);
+    const releaseIndexPath = path.join(targetDataDir, "releases", "index.json");
+    const roadmapPath = path.join(targetDataDir, "roadmap.json");
+    const sourceReleasePath = path.join(targetDataDir, "releases", "v1-2-0.json");
+    const nextReleasePath = path.join(targetDataDir, "releases", "v1-3-0.json");
+    await mkdir(path.join(targetDataDir, "releases"), { recursive: true });
+    await writeJson(path.join(targetDataDir, "manifest.json"), {
+      project: { id: "fixture", name: "Fixture" },
+      files: {
+        releases: "releases/index.json",
+        roadmap: "roadmap.json"
+      }
+    });
+    await writeJson(releaseIndexPath, {
+      currentReleaseId: "v1-2-0",
+      releases: [{
+        id: "v1-2-0",
+        version: "1.2.0",
+        file: "v1-2-0.json"
+      }]
+    });
+    await writeJson(sourceReleasePath, {
+      id: "v1-2-0",
+      version: "1.2.0",
+      name: "Fixture 1.2.0",
+      status: "completed",
+      posture: "shipped",
+      summary: "Prior release.",
+      releasedAt: "2026-05-01T00:00:00.000Z",
+      lastUpdated: "2026-05-01T00:00:00.000Z",
+      scope: {
+        required: [],
+        planned: [],
+        stretch: [],
+        deferred: [{
+          id: "pdf-export",
+          title: "PDF export",
+          summary: "Export active views.",
+          kind: "feature",
+          status: "deferred",
+          source: "roadmap"
+        }],
+        outOfScope: []
+      },
+      workstreams: [],
+      blockers: [],
+      milestones: [],
+      dependencies: [],
+      evidence: []
+    });
+    await writeJson(roadmapPath, {
+      items: [{
+        id: "pdf-export",
+        title: "PDF export",
+        summary: "Export active views.",
+        kind: "feature",
+        status: "deferred",
+        priority: "low",
+        section: "Export",
+        targetReleaseId: "v1-2-0"
+      }]
+    });
+
+    const beforeIndex = await readFile(releaseIndexPath, "utf8");
+    const beforeRoadmap = await readFile(roadmapPath, "utf8");
+    const beforeSourceRelease = await readFile(sourceReleasePath, "utf8");
+
+    await assert.rejects(
+      approveReleasePlanRequest({
+        target,
+        payload: {
+          dryRun: false,
+          version: "1.3.0",
+          selectedRoadmapItemIds: ["pdf-export"],
+          itemScopes: { "pdf-export": "planned" },
+          adHocItems: []
+        },
+        dataDir,
+        readJson,
+        writeJson,
+        validateTarget: async () => ({ ok: false, output: "validation failed" })
+      }),
+      /Release plan did not validate/
+    );
+
+    assert.equal(await readFile(releaseIndexPath, "utf8"), beforeIndex);
+    assert.equal(await readFile(roadmapPath, "utf8"), beforeRoadmap);
+    assert.equal(await readFile(sourceReleasePath, "utf8"), beforeSourceRelease);
+    assert.equal(existsSync(nextReleasePath), false);
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
