@@ -10,7 +10,14 @@ import { createCommandHandlers, routeCommand } from "./command-router.mjs";
 import { isLoopbackHost, parseArgs, usage } from "./command-line.mjs";
 import { assertDirectory, git, gitAvailable, readJson, run, tryRun, writeJson } from "./runtime.mjs";
 import { runServeLifecycle } from "./serve-lifecycle.mjs";
-import { shouldValidateSync, syncMetadataPatch, syncWritePlan } from "./sync-plan.mjs";
+import {
+  applyExplicitSyncOptions,
+  defaultSyncChoices,
+  rememberedSyncChoices,
+  shouldValidateSync,
+  syncMetadataPatch,
+  syncWritePlan
+} from "./sync-plan.mjs";
 import { printStatus } from "./terminal-presenter.mjs";
 import { runPackageUpdateCheck } from "./update-check.mjs";
 import { withTargetWriteLock } from "./write-lock.mjs";
@@ -697,48 +704,6 @@ function assertSyncPromptOptions(options) {
   }
 }
 
-function normalizeInstructionFiles(files) {
-  return instructionFiles.filter((fileName) => files?.includes(fileName));
-}
-
-function defaultSyncChoices(rootPackageExists) {
-  return {
-    branch: "current",
-    instructionFiles,
-    manageGitignore: true,
-    manageRootScripts: rootPackageExists,
-    applyDoctorRepairs: true,
-    proceedWithChanges: true,
-    promptBeforeProceed: false
-  };
-}
-
-function rememberedSyncChoices(metadata) {
-  const choices = metadata?.syncChoices;
-  if (!choices || typeof choices !== "object") return null;
-  return {
-    branch: ["current", "new", "none"].includes(choices.branch) ? choices.branch : "current",
-    instructionFiles: normalizeInstructionFiles(choices.instructionFiles),
-    manageGitignore: Boolean(choices.manageGitignore),
-    manageRootScripts: Boolean(choices.manageRootScripts),
-    applyDoctorRepairs: choices.applyDoctorRepairs !== false,
-    proceedWithChanges: choices.proceedWithChanges !== false,
-    promptBeforeProceed: false
-  };
-}
-
-function applyExplicitSyncOptions(choices, options) {
-  const next = { ...choices };
-  if (options.branch) next.branch = options.branch;
-  if (options.noAgents) next.instructionFiles = [];
-  else if (options.appendAgents) next.instructionFiles = instructionFiles;
-  if (options.noGitignore) next.manageGitignore = false;
-  else if (options.updateGitignore) next.manageGitignore = true;
-  if (options.noRootScripts) next.manageRootScripts = false;
-  else if (options.rootScripts) next.manageRootScripts = true;
-  return next;
-}
-
 async function chooseBranchChoice({ target, options, rl }) {
   if (options.dryRun || !gitAvailable(target)) return "none";
   if (options.branch) return options.branch;
@@ -761,16 +726,16 @@ async function promptSyncChoices({ target, options, rl, doctorRepairAvailable })
     applyDoctorRepairs: await chooseApplyDoctorRepairs(options, rl, doctorRepairAvailable),
     proceedWithChanges: true,
     promptBeforeProceed: true
-  }, options);
+  }, options, { instructionFiles });
 }
 
 async function selectSyncChoices({ target, options, rl, metadata, doctorRepairAvailable, rootPackageExists }) {
-  const defaults = applyExplicitSyncOptions(defaultSyncChoices(rootPackageExists), options);
+  const defaults = applyExplicitSyncOptions(defaultSyncChoices({ rootPackageExists, instructionFiles }), options, { instructionFiles });
   if (nonInteractiveSync(options)) return defaults;
 
-  const savedChoices = options.prompt ? null : rememberedSyncChoices(metadata);
+  const savedChoices = options.prompt ? null : rememberedSyncChoices(metadata, { instructionFiles });
   if (savedChoices && await promptYesNo(rl, "Reuse saved sync choices from the last run?", true)) {
-    return applyExplicitSyncOptions({ ...defaults, ...savedChoices }, options);
+    return applyExplicitSyncOptions({ ...defaults, ...savedChoices }, options, { instructionFiles });
   }
 
   return promptSyncChoices({ target, options, rl, doctorRepairAvailable });

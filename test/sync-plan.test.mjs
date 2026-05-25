@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  applyExplicitSyncOptions,
+  defaultSyncChoices,
+  rememberedSyncChoices,
   persistedSyncChoices,
   shouldValidateSync,
   syncMetadataPatch,
@@ -23,6 +26,72 @@ const baseOptions = {
   dryRun: false,
   skipValidate: false
 };
+
+const validInstructionFiles = ["AGENTS.md", "CLAUDE.md"];
+
+test("sync choices normalize defaults, saved metadata, and explicit options", () => {
+  assert.deepEqual(defaultSyncChoices({
+    rootPackageExists: true,
+    instructionFiles: validInstructionFiles
+  }), {
+    branch: "current",
+    instructionFiles: validInstructionFiles,
+    manageGitignore: true,
+    manageRootScripts: true,
+    applyDoctorRepairs: true,
+    proceedWithChanges: true,
+    promptBeforeProceed: false
+  });
+
+  assert.deepEqual(rememberedSyncChoices({
+    syncChoices: {
+      branch: "unsafe",
+      instructionFiles: ["CLAUDE.md", "unknown.md"],
+      manageGitignore: 0,
+      manageRootScripts: 1,
+      applyDoctorRepairs: false,
+      proceedWithChanges: false,
+      promptBeforeProceed: true
+    }
+  }, { instructionFiles: validInstructionFiles }), {
+    branch: "current",
+    instructionFiles: ["CLAUDE.md"],
+    manageGitignore: false,
+    manageRootScripts: true,
+    applyDoctorRepairs: false,
+    proceedWithChanges: false,
+    promptBeforeProceed: false
+  });
+
+  assert.deepEqual(applyExplicitSyncOptions(baseChoices, {
+    branch: "new",
+    appendAgents: true,
+    updateGitignore: true,
+    rootScripts: true
+  }, { instructionFiles: validInstructionFiles }), {
+    ...baseChoices,
+    branch: "new",
+    instructionFiles: validInstructionFiles,
+    manageGitignore: true,
+    manageRootScripts: true
+  });
+
+  assert.deepEqual(applyExplicitSyncOptions({
+    ...baseChoices,
+    instructionFiles: validInstructionFiles,
+    manageGitignore: true,
+    manageRootScripts: true
+  }, {
+    noAgents: true,
+    noGitignore: true,
+    noRootScripts: true
+  }, { instructionFiles: validInstructionFiles }), {
+    ...baseChoices,
+    instructionFiles: [],
+    manageGitignore: false,
+    manageRootScripts: false
+  });
+});
 
 test("sync operation classifies install before migrate before sync", () => {
   assert.equal(syncOperation({ installing: true, migrating: true }), "install");
