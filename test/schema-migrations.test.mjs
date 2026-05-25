@@ -31,3 +31,19 @@ test("schema migration planning refuses newer target data", () => {
   assert.equal(plan.pending[0].kind, "unsupported");
   assert.match(plan.pending[0].summary, /install a newer Architext CLI before migrating/);
 });
+
+test("schema migration planning rejects malformed equal versions", () => {
+  const plan = schemaMigrationPlan({ currentVersion: "x", targetVersion: "x" });
+
+  assert.equal(plan.upToDate, false);
+  assert.equal(plan.pending[0].kind, "invalid");
+  assert.match(plan.pending[0].summary, /schemaVersion must be semantic version/);
+});
+
+test("schema migration planning rejects malformed target versions", () => {
+  const plan = schemaMigrationPlan({ currentVersion: "1.4.0", targetVersion: "next" });
+
+  assert.equal(plan.upToDate, false);
+  assert.equal(plan.pending[0].kind, "invalid");
+  assert.match(plan.pending[0].summary, /CLI schema version next is invalid/);
+});

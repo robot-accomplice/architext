@@ -11,7 +11,7 @@ function parseVersion(version) {
 function compareVersions(left, right) {
   const parsedLeft = parseVersion(left);
   const parsedRight = parseVersion(right);
-  if (!parsedLeft || !parsedRight) return String(left ?? "").localeCompare(String(right ?? ""));
+  if (!parsedLeft || !parsedRight) return 0;
   for (const key of ["major", "minor", "patch"]) {
     if (parsedLeft[key] !== parsedRight[key]) return parsedLeft[key] - parsedRight[key];
   }
@@ -29,6 +29,38 @@ function migrationKind(fromVersion, toVersion) {
 export function schemaMigrationPlan({ currentVersion, targetVersion }) {
   const current = currentVersion || "";
   const target = targetVersion || "";
+  const currentParsed = parseVersion(current);
+  const targetParsed = parseVersion(target);
+  if (current && !currentParsed) {
+    return {
+      currentVersion: current,
+      targetVersion: target,
+      pending: [{
+        id: "schema-version-invalid-current",
+        kind: "invalid",
+        file: "docs/architext/data/manifest.json",
+        fromVersion: current,
+        toVersion: target,
+        summary: `target schemaVersion must be semantic version x.y.z; got ${current}`
+      }],
+      upToDate: false
+    };
+  }
+  if (target && !targetParsed) {
+    return {
+      currentVersion: current,
+      targetVersion: target,
+      pending: [{
+        id: "schema-version-invalid-target",
+        kind: "invalid",
+        file: "docs/architext/data/manifest.json",
+        fromVersion: current,
+        toVersion: target,
+        summary: `CLI schema version ${target} is invalid; expected semantic version x.y.z`
+      }],
+      upToDate: false
+    };
+  }
   if (!target || current === target) {
     return {
       currentVersion: current,

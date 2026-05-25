@@ -52,6 +52,17 @@ test("architecture reference validation reports unknown ids with context", () =>
   ]);
 });
 
+test("architecture reference validation reports malformed arrays instead of throwing", () => {
+  assert.deepEqual(validateArchitectureReferences(minimalModel({
+    nodes: [{ id: "actor" }],
+    flows: [{ id: "flow", steps: [{ id: "step" }] }],
+    views: [{ id: "main", lanes: [{ id: "lane" }] }]
+  })), [
+    "flow flow step step.from is required",
+    "flow flow step step.to is required"
+  ]);
+});
+
 test("release reference validation accepts index/detail item references", () => {
   const detail = {
     id: "v1-2-0",
