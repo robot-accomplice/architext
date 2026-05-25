@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-4-6",
+  "currentReleaseId": "v1-4-7",
   "releases": [
     {
       "id": "v1-1-2",
@@ -286,6 +286,27 @@
         "stretch": 0
       },
       "file": "v1-4-6.json"
+    },
+    {
+      "id": "v1-4-7",
+      "version": "1.4.7",
+      "name": "Architext 1.4.7 Release Truth Status Correction",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-05-25",
+      "lastUpdated": "2026-05-25T07:29:27.000Z",
+      "summary": "Architext 1.4.7 prevents completed Release Truth items from appearing blocked in the UI and validates blocker/status exclusivity.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 2,
+        "workstreams": 2,
+        "blockers": 0,
+        "complete": 3,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-7.json"
     }
   ]
 }

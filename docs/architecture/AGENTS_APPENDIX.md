@@ -24,6 +24,8 @@ change, update Release Truth data under `docs/architext/data/releases/`.
 Release Truth is the reviewed release source of truth: completed work,
 deferrals, reprioritization, blockers, dependencies, and next actions belong in
 the release detail file, with `releases/index.json` refreshed from those facts.
+Do not leave completed, deferred, or cut release items in active blocker
+`itemIds`; completion and blocking are mutually exclusive lifecycle facts.
 Keep Release Path labels concise and put long context in the selected release
 item's detail data.
 

@@ -39,6 +39,8 @@ complete.
 - Treat Release Truth as the reviewed release source of truth. If you complete,
   defer, add, remove, reprioritize, or block release work, update the release
   detail file and ensure `releases/index.json` is regenerated from those facts.
+- Do not leave completed, deferred, or cut release items in active blocker
+  `itemIds`. Completion and blocking are mutually exclusive lifecycle facts.
 - Keep Release Path rows concise. Put rationale, blocker explanation,
   dependency detail, evidence, and next actions in the selected release item's
   detail data instead of duplicating long prose in labels or summaries.
