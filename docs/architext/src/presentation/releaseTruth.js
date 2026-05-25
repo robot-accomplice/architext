@@ -38,6 +38,16 @@ export function releasePathCompletionText(items = []) {
   return `${completeCount}/${items.length} complete`;
 }
 
+/**
+ * @param {{ status: import("../domain/architectureTypes.js").ReleaseItemStatus, items?: Array<{ status: import("../domain/architectureTypes.js").ReleaseItemStatus }>, blockedItems?: Array<unknown> }} input
+ * @returns {import("../domain/architectureTypes.js").ReleaseItemStatus}
+ */
+export function releasePathMilestoneStatus({ status, items = [], blockedItems = [] }) {
+  if (items.length > 0 && items.every((item) => item.status === "complete")) return "complete";
+  if (blockedItems.length > 0) return "blocked";
+  return status;
+}
+
 export function releaseProgress(detail) {
   const required = detail?.scope.required ?? [];
   if (required.length === 0) return 0;

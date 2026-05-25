@@ -11,6 +11,7 @@ import {
   releaseLineCheckClass,
   releaseLineState,
   releasePathCompletionText,
+  releasePathMilestoneStatus,
   releaseScopeByItemId,
   releaseStatusLabels,
   releaseTone
@@ -57,10 +58,11 @@ export function ReleasePath({
       {milestones.map((milestone) => {
         const milestoneItems = milestone.itemIds.map((itemId) => itemsById.get(itemId)).filter((item): item is ReleaseItem => Boolean(item));
         const blockedItems = milestoneItems.filter((item) => item.status === "blocked" || activeReleaseBlockersForItem(item, blockersByItemId.get(item.id) ?? []).length > 0);
+        const milestoneStatus = releasePathMilestoneStatus({ status: milestone.status, items: milestoneItems, blockedItems });
         const collapsed = collapsedMilestoneIds.has(milestone.id);
-        const pathNumber = milestone.status === "deferred" || milestone.status === "cut" ? 0 : milestone.order;
+        const pathNumber = milestoneStatus === "deferred" || milestoneStatus === "cut" ? 0 : milestone.order;
         return (
-          <article className={`release-path-step ${releaseTone(milestone.status)} ${collapsed ? "collapsed" : ""}`} key={milestone.id}>
+          <article className={`release-path-step ${releaseTone(milestoneStatus)} ${collapsed ? "collapsed" : ""}`} key={milestone.id}>
             <div className="release-path-marker">
               <span>{pathNumber}</span>
             </div>
@@ -74,7 +76,7 @@ export function ReleasePath({
                 onSelect={() => onSelectMilestone(milestone.id)}
                 onToggleCollapsed={() => setCollapsedMilestoneIds((current) => toggleCollapsedReleasePathMilestone(current, milestone.id))}
                 selected={selection?.kind === "release-milestone" && selection.milestoneId === milestone.id}
-                status={milestone.status}
+                status={milestoneStatus}
                 timing={milestone.date ?? milestone.targetWindow ?? "No date"}
               />
               {collapsed ? null : <div className="release-path-subitems">
