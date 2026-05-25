@@ -19,6 +19,10 @@ export function releaseItems(detail) {
   ];
 }
 
+export function releaseItemSummaryText(item) {
+  return item.summary ?? "";
+}
+
 export function releaseProgress(detail) {
   const required = detail?.scope.required ?? [];
   if (required.length === 0) return 0;
