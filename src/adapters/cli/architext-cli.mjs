@@ -1125,7 +1125,12 @@ const contentTypes = {
 };
 
 function safeJoin(root, requestPath) {
-  const decoded = decodeURIComponent(requestPath);
+  let decoded;
+  try {
+    decoded = decodeURIComponent(requestPath);
+  } catch {
+    return "";
+  }
   const resolved = path.resolve(root, decoded.replace(/^\/+/, ""));
   if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) return "";
   return resolved;
