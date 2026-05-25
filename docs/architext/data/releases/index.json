@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-4-7",
+  "currentReleaseId": "v1-4-8",
   "releases": [
     {
       "id": "v1-1-2",
@@ -308,6 +308,28 @@
         "stretch": 0
       },
       "file": "v1-4-7.json"
+    },
+    {
+      "id": "v1-4-8",
+      "version": "1.4.8",
+      "name": "Architext 1.4.8 Audit Hardening and Release Path UX",
+      "status": "completed",
+      "posture": "shipped",
+      "targetDate": "2026-05-25",
+      "releasedAt": "2026-05-25T14:51:06.000Z",
+      "lastUpdated": "2026-05-25T14:51:06.000Z",
+      "summary": "Architext 1.4.8 hardens local write boundaries, serializes dashboard write paths, improves release safety checks, and lets Release Path milestones collapse with compact completion counts.",
+      "counts": {
+        "features": 2,
+        "bugFixes": 7,
+        "workstreams": 4,
+        "blockers": 0,
+        "complete": 12,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-8.json"
     }
   ]
 }
