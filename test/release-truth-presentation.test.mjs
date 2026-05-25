@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   activeReleaseBlockersForItem,
+  blockersGroupedByItem,
   formatReleaseDate,
   progressFill,
   progressTone,
@@ -63,6 +64,17 @@ test("release truth presentation suppresses impossible blocker overlays", () => 
   assert.deepEqual(activeReleaseBlockersForItem({ id: "service", status: "cut" }, [activeBlocker]), []);
   assert.deepEqual(activeReleaseBlockersForItem({ id: "workflow", status: "in-progress" }, [retiredBlocker]), []);
   assert.deepEqual(activeReleaseBlockersForItem({ id: "workflow", status: "in-progress" }, [activeBlocker]), [activeBlocker]);
+});
+
+test("release truth presentation groups blockers by release item", () => {
+  const grouped = blockersGroupedByItem([
+    { id: "blocked-media", itemIds: ["camera", "voice"] },
+    { id: "blocked-web", itemIds: ["browser"] }
+  ]);
+
+  assert.deepEqual(grouped.get("camera").map((blocker) => blocker.id), ["blocked-media"]);
+  assert.deepEqual(grouped.get("voice").map((blocker) => blocker.id), ["blocked-media"]);
+  assert.deepEqual(grouped.get("browser").map((blocker) => blocker.id), ["blocked-web"]);
 });
 
 test("release truth presentation colors progress by completion state", () => {
