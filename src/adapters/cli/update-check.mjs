@@ -5,23 +5,51 @@ const defaultPackageName = "@robotaccomplice/architext";
 const defaultExecutable = "architext";
 
 function versionParts(version) {
-  return version
+  const [core, prerelease = ""] = version
     .replace(/^v/, "")
-    .split("-", 1)[0]
-    .split(".")
-    .map((part) => Number(part))
-    .concat([0, 0, 0])
-    .slice(0, 3);
+    .split("+", 1)[0]
+    .split("-", 2);
+  return {
+    core: core
+      .split(".")
+      .map((part) => Number(part))
+      .concat([0, 0, 0])
+      .slice(0, 3),
+    prerelease: prerelease ? prerelease.split(".") : []
+  };
+}
+
+function comparePrereleaseIdentifiers(left, right) {
+  const leftNumber = /^\d+$/.test(left) ? Number(left) : null;
+  const rightNumber = /^\d+$/.test(right) ? Number(right) : null;
+  if (leftNumber !== null && rightNumber !== null) return Math.sign(leftNumber - rightNumber);
+  if (leftNumber !== null) return -1;
+  if (rightNumber !== null) return 1;
+  return left.localeCompare(right);
+}
+
+function comparePrerelease(left, right) {
+  if (!left.length && !right.length) return 0;
+  if (!left.length) return 1;
+  if (!right.length) return -1;
+  const length = Math.max(left.length, right.length);
+  for (let index = 0; index < length; index += 1) {
+    if (left[index] === undefined) return -1;
+    if (right[index] === undefined) return 1;
+    const comparison = comparePrereleaseIdentifiers(left[index], right[index]);
+    if (comparison !== 0) return comparison;
+  }
+  return 0;
 }
 
 export function compareVersions(left, right) {
   const leftParts = versionParts(left);
   const rightParts = versionParts(right);
   for (let index = 0; index < 3; index += 1) {
-    if (leftParts[index] > rightParts[index]) return 1;
-    if (leftParts[index] < rightParts[index]) return -1;
+    if (leftParts.core[index] > rightParts.core[index]) return 1;
+    if (leftParts.core[index] < rightParts.core[index]) return -1;
   }
-  return 0;
+  return comparePrerelease(leftParts.prerelease, rightParts.prerelease);
 }
 
 export function parseRefreshSelection(answer, instances) {
