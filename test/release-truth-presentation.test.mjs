@@ -10,6 +10,7 @@ import {
   releaseLineCheckClass,
   releaseLineState,
   releasePathCompletionText,
+  releasePathMilestoneStatus,
   releaseProgress,
   releaseScopeByItemId,
   releaseTone
@@ -84,6 +85,32 @@ test("release truth presentation summarizes release path milestone completion", 
     { id: "blocked", status: "blocked" },
     { id: "deferred", status: "deferred" }
   ]), "1/3 complete");
+});
+
+test("release truth presentation derives completed milestone state from linked items", () => {
+  assert.equal(releasePathMilestoneStatus({
+    status: "in-progress",
+    items: [
+      { id: "proof-1", status: "complete" },
+      { id: "proof-2", status: "complete" }
+    ],
+    blockedItems: []
+  }), "complete");
+});
+
+test("release truth presentation keeps incomplete milestone blockers visible", () => {
+  assert.equal(releasePathMilestoneStatus({
+    status: "in-progress",
+    items: [
+      { id: "proof-1", status: "complete" },
+      { id: "proof-2", status: "in-progress" }
+    ],
+    blockedItems: [{ id: "proof-2", status: "in-progress" }]
+  }), "blocked");
+});
+
+test("release truth presentation keeps stored status for empty milestones", () => {
+  assert.equal(releasePathMilestoneStatus({ status: "in-progress", items: [], blockedItems: [] }), "in-progress");
 });
 
 test("release truth presentation colors progress by completion state", () => {

@@ -21,6 +21,12 @@ Each Release Path milestone keeps its summary row visible when collapsed:
 - timing and item count, including `X/Y complete`;
 - active blocker summary.
 
+Milestone display state is derived from linked item state before rendering. If
+every linked item is complete, the milestone row displays as complete even when
+the stored milestone status is stale. Active blockers still display as blocked
+for incomplete milestones. Milestones without linked items keep their stored
+status.
+
 Collapsed milestones hide only their item rows. Selection remains unchanged: the
 milestone row can still be selected while the item rows are hidden, and expanding
 the milestone restores the same item list.
