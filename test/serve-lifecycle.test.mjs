@@ -6,7 +6,7 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { browserOpenCommand } from "../src/adapters/cli/serve-lifecycle.mjs";
+import { browserOpenCommand, isLoopbackServeUrl } from "../src/adapters/cli/serve-lifecycle.mjs";
 import { parseArgs } from "../src/adapters/cli/command-line.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
@@ -166,6 +166,15 @@ test("browser opener uses platform-native launch commands", () => {
     args: ["/c", "start", "", "http://127.0.0.1:4317/"]
   });
   assert.equal(browserOpenCommand("aix", "http://127.0.0.1:4317/"), null);
+});
+
+test("serve lifecycle only probes loopback HTTP instance URLs", () => {
+  assert.equal(isLoopbackServeUrl("http://127.0.0.1:4317/"), true);
+  assert.equal(isLoopbackServeUrl("http://localhost:4317/"), true);
+  assert.equal(isLoopbackServeUrl("http://[::1]:4317/"), true);
+  assert.equal(isLoopbackServeUrl("http://192.168.1.10:4317/"), false);
+  assert.equal(isLoopbackServeUrl("https://127.0.0.1:4317/"), false);
+  assert.equal(isLoopbackServeUrl("not a url"), false);
 });
 
 test("serve background records status and can be stopped", async () => {
