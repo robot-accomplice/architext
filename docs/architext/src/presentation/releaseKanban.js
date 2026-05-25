@@ -1,3 +1,5 @@
+import { releaseStatusCanShowBlockers } from "./releaseTruth.js";
+
 const columnDefinitions = [
   { id: "planned", label: "Planned" },
   { id: "ready", label: "Ready" },
@@ -19,7 +21,9 @@ function releaseItems(detail) {
 }
 
 function blockerItemIds(blockers) {
-  return new Set(blockers.flatMap((blocker) => blocker.itemIds));
+  return new Set(blockers
+    .filter((blocker) => !blocker.status || releaseStatusCanShowBlockers(blocker.status))
+    .flatMap((blocker) => blocker.itemIds));
 }
 
 function incompleteDependencyIds(items) {
@@ -33,7 +37,7 @@ export function releaseKanbanColumns(detail) {
   const columns = new Map(columnDefinitions.map((column) => [column.id, { ...column, items: [] }]));
 
   for (const item of items) {
-    const hasBlocker = item.status === "blocked" || blockedItemIds.has(item.id);
+    const hasBlocker = item.status === "blocked" || (releaseStatusCanShowBlockers(item.status) && blockedItemIds.has(item.id));
     const hasUnresolvedDependency = (item.dependsOn ?? []).some((dependencyId) => incompleteDependencies.has(dependencyId));
     const columnId = kanbanColumnForItem(item.status, hasBlocker, hasUnresolvedDependency);
     columns.get(columnId)?.items.push(item);

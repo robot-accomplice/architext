@@ -18,6 +18,7 @@ import { StepRoute } from "./presentation/StepRoute.js";
 import {
   progressFill,
   progressTone,
+  activeReleaseBlockersForItem,
   releaseBadgeTone,
   releaseItems,
   releaseLineCheckClass,
@@ -709,7 +710,7 @@ function ReleasePath({
       <div className="release-path">
       {milestones.map((milestone) => {
         const milestoneItems = milestone.itemIds.map((itemId) => itemsById.get(itemId)).filter((item): item is ReleaseItem => Boolean(item));
-        const blockedItems = milestoneItems.filter((item) => item.status === "blocked" || (blockersByItemId.get(item.id)?.length ?? 0) > 0);
+        const blockedItems = milestoneItems.filter((item) => item.status === "blocked" || activeReleaseBlockersForItem(item, blockersByItemId.get(item.id) ?? []).length > 0);
         const pathNumber = milestone.status === "deferred" || milestone.status === "cut" ? 0 : milestone.order;
         return (
           <article className={`release-path-step ${releaseTone(milestone.status)}`} key={milestone.id}>
@@ -729,7 +730,7 @@ function ReleasePath({
               <div className="release-path-subitems">
                 {milestoneItems.length ? milestoneItems.map((item) => {
                   const workstream = item.workstreamId ? workstreamsById.get(item.workstreamId) : undefined;
-                  const blockers = blockersByItemId.get(item.id) ?? [];
+                  const blockers = activeReleaseBlockersForItem(item, blockersByItemId.get(item.id) ?? []);
                   return (
                     <ReleasePathItem
                       blockers={blockers}
@@ -777,7 +778,7 @@ function ReleaseKanban({
           </header>
           <div className="release-kanban-cards">
             {column.items.length ? column.items.map((item) => {
-              const blockers = blockersByItemId.get(item.id) ?? [];
+              const blockers = activeReleaseBlockersForItem(item, blockersByItemId.get(item.id) ?? []);
               const blocked = item.status === "blocked" || blockers.length > 0;
               const workstream = item.workstreamId ? workstreamsById.get(item.workstreamId) : undefined;
               return (
@@ -1064,7 +1065,7 @@ function releasePathDetailSelection(detail: ReleaseDetail | null, selection: Sel
   if (selection.kind === "release-item") {
     const item = itemsById.get(selection.itemId);
     if (!item) return null;
-    const blockers = blockersByItemId.get(item.id) ?? [];
+    const blockers = activeReleaseBlockersForItem(item, blockersByItemId.get(item.id) ?? []);
     const dependencyIds = new Set([...(item.dependsOn ?? []), ...detail.dependencies.filter((dependency) => dependency.from === item.id).map((dependency) => dependency.to)]);
     const dependencies = detail.dependencies.filter((dependency) => dependency.from === item.id || dependencyIds.has(dependency.id) || dependencyIds.has(dependency.to));
     const evidenceIds = new Set(item.evidence ?? []);
@@ -1088,7 +1089,7 @@ function releasePathDetailSelection(detail: ReleaseDetail | null, selection: Sel
       kind: "milestone" as const,
       milestone,
       items: milestoneItems,
-      blockers: milestoneItems.filter((item) => item.status === "blocked" || (blockersByItemId.get(item.id)?.length ?? 0) > 0)
+      blockers: milestoneItems.filter((item) => item.status === "blocked" || activeReleaseBlockersForItem(item, blockersByItemId.get(item.id) ?? []).length > 0)
     };
   }
 

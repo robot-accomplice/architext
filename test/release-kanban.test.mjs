@@ -17,7 +17,10 @@ test("release kanban projects release truth items without creating a second task
       deferred: [{ id: "deferred-item", status: "deferred" }],
       outOfScope: []
     },
-    blockers: [{ itemIds: ["blocked-item"] }]
+    blockers: [
+      { status: "blocked", itemIds: ["contract", "blocked-item"] },
+      { status: "complete", itemIds: ["active-item"] }
+    ]
   });
 
   const idsByColumn = new Map(columns.map((column) => [column.id, column.items.map((item) => item.id)]));

@@ -90,6 +90,50 @@ test("release reference validation accepts index/detail item references", () => 
   })), []);
 });
 
+test("release reference validation rejects blockers for inactive item statuses", () => {
+  const detail = {
+    id: "v1-2-0",
+    version: "1.2.0",
+    name: "Release Truth",
+    status: "implementing",
+    posture: "on-track",
+    summary: "Track release posture and history.",
+    targetWindow: "next",
+    lastUpdated: "2026-05-16T12:00:00.000Z",
+    scope: {
+      required: [
+        { id: "done", title: "Done", kind: "test", status: "complete", summary: "Already complete." },
+        { id: "deferred-work", title: "Deferred", kind: "feature", status: "deferred", summary: "Moved later." },
+        { id: "cut-work", title: "Cut", kind: "chore", status: "cut", summary: "Out of scope." },
+        { id: "blocked-work", title: "Blocked", kind: "bug-fix", status: "planned", summary: "Still active." }
+      ],
+      planned: [],
+      stretch: [],
+      deferred: [],
+      outOfScope: []
+    },
+    workstreams: [],
+    blockers: [{ id: "release-gate", itemIds: ["done", "deferred-work", "cut-work", "blocked-work"] }],
+    milestones: [],
+    dependencies: [],
+    evidence: []
+  };
+
+  assert.deepEqual(validateArchitectureReferences(minimalModel({
+    releases: {
+      index: {
+        currentReleaseId: "v1-2-0",
+        releases: [releaseSummaryFromDetail(detail, "v1-2-0.json")]
+      },
+      details: [detail]
+    }
+  })), [
+    'release v1-2-0 blocker release-gate.itemIds references complete item "done"',
+    'release v1-2-0 blocker release-gate.itemIds references deferred item "deferred-work"',
+    'release v1-2-0 blocker release-gate.itemIds references cut item "cut-work"'
+  ]);
+});
+
 test("release reference validation reports stale generated release history", () => {
   const detail = {
     id: "v1-2-0",

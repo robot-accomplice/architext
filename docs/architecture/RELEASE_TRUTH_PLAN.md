@@ -266,6 +266,7 @@ Validation should cover:
 - item dependencies reference existing release items
 - milestones reference existing release items
 - blockers reference existing items or external dependencies
+- blockers do not reference `complete`, `deferred`, or `cut` items
 - historical counts are non-negative integers
 - completed entries include `releasedAt`
 - planned/implementing entries include target date or target window

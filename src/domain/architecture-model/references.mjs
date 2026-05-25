@@ -62,6 +62,10 @@ function allReleaseItems(detail) {
   ];
 }
 
+function releaseItemCanBeBlocked(status) {
+  return !["complete", "deferred", "cut"].includes(status);
+}
+
 export function validateReleaseReferences(releases, errors = [], options = {}) {
   const requireAllDetails = options.requireAllDetails ?? true;
   const releaseIds = new Set(releases.index.releases.map((release) => release.id));
@@ -97,6 +101,7 @@ export function validateReleaseReferences(releases, errors = [], options = {}) {
   for (const detail of releases.details) {
     const items = allReleaseItems(detail);
     const itemIds = new Set(items.map((item) => item.id));
+    const itemsById = new Map(items.map((item) => [item.id, item]));
     const workstreamIds = new Set(detail.workstreams.map((workstream) => workstream.id));
 
     if (detail.status === "completed" && !detail.releasedAt) {
@@ -116,7 +121,13 @@ export function validateReleaseReferences(releases, errors = [], options = {}) {
     }
 
     for (const blocker of detail.blockers) {
-      for (const itemId of blocker.itemIds) requireKnown(itemId, itemIds, `release ${detail.id} blocker ${blocker.id}.itemIds`);
+      for (const itemId of blocker.itemIds) {
+        requireKnown(itemId, itemIds, `release ${detail.id} blocker ${blocker.id}.itemIds`);
+        const item = itemsById.get(itemId);
+        if (item && !releaseItemCanBeBlocked(item.status)) {
+          errors.push(`release ${detail.id} blocker ${blocker.id}.itemIds references ${item.status} item "${itemId}"`);
+        }
+      }
     }
 
     for (const milestone of detail.milestones) {
