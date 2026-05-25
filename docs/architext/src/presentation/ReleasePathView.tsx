@@ -10,6 +10,7 @@ import {
   releaseItems,
   releaseLineCheckClass,
   releaseLineState,
+  releasePathCompletionText,
   releaseScopeByItemId,
   releaseStatusLabels,
   releaseTone
@@ -67,6 +68,7 @@ export function ReleasePath({
               <ReleasePathMilestoneLine
                 blockedItems={blockedItems}
                 collapsed={collapsed}
+                completionText={releasePathCompletionText(milestoneItems)}
                 itemCount={milestoneItems.length}
                 label={milestone.label}
                 onSelect={() => onSelectMilestone(milestone.id)}
@@ -105,6 +107,7 @@ export function ReleasePath({
 function ReleasePathMilestoneLine({
   blockedItems,
   collapsed,
+  completionText,
   itemCount,
   label,
   onSelect,
@@ -115,6 +118,7 @@ function ReleasePathMilestoneLine({
 }: {
   blockedItems: ReleaseItem[];
   collapsed: boolean;
+  completionText: string;
   itemCount: number;
   label: string;
   onSelect: () => void;
@@ -143,7 +147,7 @@ function ReleasePathMilestoneLine({
         <span className={`release-check ${releaseLineCheckClass(lineState)}`} aria-label={lineState} />
         <Badge tone={releaseBadgeTone(lineState === "Blocked" ? "blocked" : status)}>{lineState}</Badge>
         <strong>{label}</strong>
-        <span className="release-path-description">{releaseStatusLabels[status]} · {timing} · {itemCount} items</span>
+        <span className="release-path-description">{releaseStatusLabels[status]} · {timing} · {completionText} · {itemCount} items</span>
         {blockerText ? <span className="release-path-blockers">Blocked by: {blockerText}</span> : null}
       </button>
     </div>
