@@ -1,12 +1,13 @@
 import { existsSync } from "node:fs";
 import { copyFile, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import path from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
 import { createCommandHandlers, routeCommand } from "./command-router.mjs";
-import { parseArgs, usage } from "./command-line.mjs";
+import { isLoopbackHost, parseArgs, usage } from "./command-line.mjs";
 import { assertDirectory, git, gitAvailable, readJson, run, tryRun, writeJson } from "./runtime.mjs";
 import { runServeLifecycle } from "./serve-lifecycle.mjs";
 import { printStatus } from "./terminal-presenter.mjs";
@@ -39,6 +40,7 @@ const schemaDir = path.join(viewerDir, "schema");
 const validatorPath = path.join(viewerDir, "tools", "validate-architext.mjs");
 const appendixPath = path.join(viewerDir, "AGENTS_APPENDIX.md");
 const dataSchemaVersion = "1.4.0";
+const mutationTokenHeader = "x-architext-mutation-token";
 
 async function packageVersion() {
   return (await readJson(path.join(packageRoot, "package.json"))).version;
@@ -1137,6 +1139,48 @@ function sendJson(response, status, payload) {
   response.end(`${JSON.stringify(payload, null, 2)}\n`);
 }
 
+function hostParts(hostHeader) {
+  if (!hostHeader) return null;
+  try {
+    const parsed = new URL(`http://${hostHeader}`);
+    return {
+      host: parsed.hostname.toLowerCase().replace(/^\[(.*)\]$/, "$1"),
+      port: parsed.port
+    };
+  } catch {
+    return null;
+  }
+}
+
+function sameOriginLoopbackRequest(request) {
+  const requestHost = hostParts(request.headers.host ?? "");
+  if (!requestHost || !isLoopbackHost(requestHost.host)) return false;
+  const origin = request.headers.origin;
+  if (!origin) return true;
+  try {
+    const originUrl = new URL(origin);
+    const originHost = originUrl.hostname.toLowerCase().replace(/^\[(.*)\]$/, "$1");
+    return isLoopbackHost(originHost)
+      && originHost === requestHost.host
+      && (originUrl.port || "") === requestHost.port;
+  } catch {
+    return false;
+  }
+}
+
+function isMutatingApiRequest(pathname, method) {
+  return method === "POST" && [
+    "/api/doctor",
+    "/api/sync-repair",
+    "/api/release-plans",
+    "/api/rules"
+  ].includes(pathname);
+}
+
+function mutationAuthorized(request, mutationToken) {
+  return Boolean(mutationToken) && request.headers[mutationTokenHeader] === mutationToken;
+}
+
 function sendServerError(response, error, requestPath) {
   console.error(`Architext serve failed for ${requestPath}: ${error.message}`);
   response.writeHead(500, { "content-type": "text/plain; charset=utf-8" });
@@ -1292,8 +1336,9 @@ async function createViewerServer({ target, host, port }) {
   }
   const targetDataDir = dataDir(target);
   const watchHub = createDataWatchHub({ target, dataDir, validateTarget });
+  const mutationToken = randomBytes(32).toString("base64url");
   watchHub.start();
-  const server = createServer(createViewerRequestHandler({ target, targetDataDir, watchHub }));
+  const server = createServer(createViewerRequestHandler({ target, targetDataDir, watchHub, mutationToken }));
 
   await new Promise((resolve, reject) => {
     server.once("error", reject);
@@ -1303,12 +1348,25 @@ async function createViewerServer({ target, host, port }) {
   return server;
 }
 
-export function createViewerRequestHandler({ target, targetDataDir = dataDir(target), watchHub }) {
+export function createViewerRequestHandler({ target, targetDataDir = dataDir(target), watchHub, mutationToken = randomBytes(32).toString("base64url") }) {
   return async function viewerRequestHandler(request, response) {
     try {
       const url = new URL(request.url || "/", "http://127.0.0.1");
+      if (!sameOriginLoopbackRequest(request)) {
+        sendJson(response, 403, { error: "Architext serve accepts requests only from its loopback origin." });
+        return;
+      }
+      if (isMutatingApiRequest(url.pathname, request.method) && !mutationAuthorized(request, mutationToken)) {
+        sendJson(response, 403, { error: "Architext write request is not authorized." });
+        return;
+      }
       if (url.pathname === "/api/data-events" && request.method === "GET") {
         watchHub.attach(response);
+        return;
+      }
+
+      if (url.pathname === "/api/session" && request.method === "GET") {
+        sendJson(response, 200, { mutationToken });
         return;
       }
 

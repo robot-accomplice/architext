@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { mutationFetch } from "../adapters/mutationAuth.js";
 import { releaseItems } from "./releaseTruth.js";
 import type {
   Id,
@@ -270,7 +271,7 @@ export function ReleasePlanningPanel({
     setPending(true);
     setMessage("");
     try {
-      const response = await fetch("/api/release-plans", {
+      const response = await mutationFetch("/api/release-plans", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(proposalPayload(dryRun, action))

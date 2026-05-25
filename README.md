@@ -420,7 +420,7 @@ Serve lifecycle options:
 | `--background` | Start a detached local viewer server and return control after the URL is reachable. |
 | `--open` | Launch the system browser after the local viewer is reachable. |
 | `--no-open` | Suppress browser launch when combining options or future aliases. |
-| `--host <host>` | Bind to a specific host. Defaults to `127.0.0.1`. |
+| `--host <host>` | Bind to a loopback host (`localhost`, `127.0.0.1`, or `::1`). Defaults to `127.0.0.1`. |
 | `--port <port>` | Bind to a specific port. Defaults to `4317`. |
 | `--list` | List all reachable background servers and remove stale records. |
 | `--instance <id>` | Target a listed background server for status, stop, or refresh. |

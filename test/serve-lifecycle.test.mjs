@@ -142,9 +142,14 @@ test("serve options fail loudly for conflicting lifecycle controls", () => {
   assert.throws(() => parseArgs(["serve", "--instance"]), /--instance requires a value/);
   assert.throws(() => parseArgs(["serve", "--instance", "abc"]), /--instance requires --status, --stop, --list, or --restart/);
   assert.throws(() => parseArgs(["serve", "--host"]), /--host requires a value/);
+  assert.throws(() => parseArgs(["serve", "--host", "0.0.0.0"]), /--host must be a loopback address/);
+  assert.throws(() => parseArgs(["serve", "--host", "192.168.1.10"]), /--host must be a loopback address/);
   assert.throws(() => parseArgs(["serve", "--port", "0"]), /--port must be an integer/);
   assert.throws(() => parseArgs(["serve", "--port", "abc"]), /--port must be an integer/);
   assert.throws(() => parseArgs(["sync", "--open"]), /--open is only valid for architext serve/);
+
+  assert.equal(parseArgs(["serve", "--host", "localhost"]).host, "localhost");
+  assert.equal(parseArgs(["serve", "--host", "::1"]).host, "::1");
 });
 
 test("browser opener uses platform-native launch commands", () => {
