@@ -93,9 +93,39 @@ function createWriteSet({ writeJson }) {
   };
 }
 
+async function withoutTargetWriteLock(_target, callback) {
+  return callback();
+}
+
 export async function approveReleasePlanRequest({
   target,
   payload,
+  dataDir,
+  readJson,
+  writeJson,
+  validateTarget,
+  withTargetWriteLock = withoutTargetWriteLock
+}) {
+  const action = payload.action ?? (payload.dryRun ? "preview" : "approve");
+  if (!["preview", "approve", "save-draft"].includes(action)) {
+    throw new Error(`Unknown release planning action "${action}"`);
+  }
+  const request = () => approveReleasePlanRequestUnlocked({
+    target,
+    payload,
+    action,
+    dataDir,
+    readJson,
+    writeJson,
+    validateTarget
+  });
+  return action === "preview" ? request() : withTargetWriteLock(target, request);
+}
+
+async function approveReleasePlanRequestUnlocked({
+  target,
+  payload,
+  action,
   dataDir,
   readJson,
   writeJson,
@@ -111,10 +141,6 @@ export async function approveReleasePlanRequest({
   const roadmap = await readJson(roadmapPath);
   const releaseIndex = await readJson(releaseIndexPath);
 
-  const action = payload.action ?? (payload.dryRun ? "preview" : "approve");
-  if (!["preview", "approve", "save-draft"].includes(action)) {
-    throw new Error(`Unknown release planning action "${action}"`);
-  }
   const existingReleaseDetail = await readReleaseDetailForVersion({ payload, releaseIndex, releaseIndexPath, readJson });
   const selectedCount = (payload.selectedRoadmapItemIds ?? []).length + (payload.adHocItems ?? []).length;
   const releaseDetail = action === "approve" && selectedCount === 0 && existingReleaseDetail

@@ -521,6 +521,7 @@ test("release planning API previews without writing target repository files", as
       }]
     });
 
+    const lockedTargets = [];
     const result = await approveReleasePlanRequest({
       target,
       payload: {
@@ -533,9 +534,14 @@ test("release planning API previews without writing target repository files", as
       dataDir,
       readJson,
       writeJson,
-      validateTarget: async () => ({ ok: true, output: "should not run for dry run" })
+      validateTarget: async () => ({ ok: true, output: "should not run for dry run" }),
+      withTargetWriteLock: async (lockedTarget, callback) => {
+        lockedTargets.push(lockedTarget);
+        return callback();
+      }
     });
 
+    assert.deepEqual(lockedTargets, []);
     assert.equal(result.release.id, "v1-3-0");
     assert.equal(result.changes.releaseFile.action, "create");
     assert.equal(result.changes.roadmap.retarget, 1);
@@ -577,6 +583,7 @@ test("release planning API writes approved plans and validates the target", asyn
     });
 
     let validatedTarget = null;
+    const lockedTargets = [];
     const result = await approveReleasePlanRequest({
       target,
       payload: {
@@ -598,6 +605,10 @@ test("release planning API writes approved plans and validates the target", asyn
       validateTarget: async (value) => {
         validatedTarget = value;
         return { ok: true, output: "validation passed" };
+      },
+      withTargetWriteLock: async (lockedTarget, callback) => {
+        lockedTargets.push(lockedTarget);
+        return callback();
       }
     });
 
@@ -607,6 +618,7 @@ test("release planning API writes approved plans and validates the target", asyn
 
     assert.equal(result.validation.output, "validation passed");
     assert.equal(validatedTarget, target);
+    assert.deepEqual(lockedTargets, [target]);
     assert.equal(releaseIndex.currentReleaseId, "v1-3-0");
     assert.equal(releaseIndex.releases.at(-1).counts.features, 2);
     assert.deepEqual(roadmap.items.map((item) => item.targetReleaseId), ["v1-3-0", "v1-3-0"]);

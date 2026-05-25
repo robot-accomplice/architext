@@ -1207,29 +1207,27 @@ async function requestJson(request) {
 }
 
 async function approveReleasePlanRequest(target, payload) {
-  const action = payload.action ?? (payload.dryRun ? "preview" : "approve");
-  const request = () => approveReleasePlanApiRequest({
+  return approveReleasePlanApiRequest({
     target,
     payload,
     dataDir,
     readJson,
     writeJson,
-    validateTarget
+    validateTarget,
+    withTargetWriteLock
   });
-  return action === "preview" || payload.dryRun
-    ? request()
-    : withTargetWriteLock(target, request);
 }
 
 async function updateRulesRequest(target, payload) {
-  return withTargetWriteLock(target, () => updateRulesApiRequest({
+  return updateRulesApiRequest({
     target,
     payload,
     dataDir,
     readJson,
     writeJson,
-    validateTarget
-  }));
+    validateTarget,
+    withTargetWriteLock
+  });
 }
 
 async function statusApiRequest(target, version) {
