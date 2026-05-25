@@ -64,6 +64,13 @@ async function removeServeStateById(id) {
   await rm(serveStatePathById(id), { force: true });
 }
 
+async function removeServeStateIfOwned(target, expected) {
+  const state = await readServeState(target);
+  if (state?.pid === expected.pid && state?.mode === expected.mode) {
+    await removeServeState(target);
+  }
+}
+
 async function withServeStateLock(target, callback, { timeoutMs = 5000, pollMs = 50 } = {}) {
   await mkdir(serveRuntimeDir, { recursive: true });
   const lockPath = serveLockPath(target);
@@ -163,8 +170,21 @@ function formatServeLink(url) {
 }
 
 async function serveForeground({ target, options, createViewerServer }) {
-  await createViewerServer({ target, host: options.host, port: options.port });
+  const server = await createViewerServer({ target, host: options.host, port: options.port });
   const url = serveUrl(options);
+  const state = {
+    target: path.resolve(target),
+    pid: process.pid,
+    host: options.host,
+    port: options.port,
+    url,
+    mode: "foreground",
+    startedAt: new Date().toISOString()
+  };
+  await writeServeState(target, state);
+  server.once("close", () => {
+    void removeServeStateIfOwned(target, state);
+  });
   console.log(`Serving Architext for ${target}`);
   console.log(`Open ${formatServeLink(url)}`);
   if (options.open && !options.noOpen) {
@@ -199,7 +219,7 @@ async function readServeInstances({ cleanupStale = true } = {}) {
 
 function knownInstanceError(id, instances) {
   const known = instances.length ? ` Known instances: ${instances.map((instance) => instance.id).join(", ")}` : " No running instances are recorded.";
-  return new Error(`Unknown Architext background server instance: ${id}.${known}`);
+  return new Error(`Unknown Architext serve instance: ${id}.${known}`);
 }
 
 async function resolveInstance(options, target) {
@@ -275,6 +295,7 @@ async function serveBackground({ target, options, cliEntryPath }) {
       port: options.port,
       url,
       logPath,
+      mode: "background",
       startedAt: new Date().toISOString()
     });
     console.log(`Serving Architext for ${target} in the background`);
@@ -289,14 +310,15 @@ async function serveBackground({ target, options, cliEntryPath }) {
 async function serveStatus(target, options) {
   const state = await resolveInstance(options, target);
   if (!state) {
-    console.log(`No recorded Architext background server for ${target}`);
+    console.log(`No recorded Architext serve instance for ${target}`);
     return;
   }
   console.log(`Architext is serving ${state.target}`);
   console.log(`ID: ${state.id}`);
   console.log(`PID: ${state.pid}`);
   console.log(`Open ${formatServeLink(state.url)}`);
-  console.log(`Logs: ${state.logPath}`);
+  console.log(`Mode: ${state.mode ?? "background"}`);
+  if (state.logPath) console.log(`Logs: ${state.logPath}`);
 }
 
 async function stopState(state) {
@@ -319,11 +341,11 @@ async function stopState(state) {
 async function stopServe(target, options) {
   const state = await resolveInstance(options, target);
   if (!state) {
-    console.log(`No recorded Architext background server for ${target}`);
+    console.log(`No recorded Architext serve instance for ${target}`);
     return;
   }
   await stopState(state);
-  console.log(`Stopped Architext background server ${state.id} for ${state.target}`);
+  console.log(`Stopped Architext serve instance ${state.id} for ${state.target}`);
 }
 
 async function listServeInstances(options) {
@@ -337,13 +359,13 @@ async function listServeInstances(options) {
     return;
   }
   if (filtered.length === 0) {
-    console.log("No recorded Architext background servers are running.");
+    console.log("No recorded Architext serve instances are running.");
     return;
   }
-  console.log("Architext background servers:");
+  console.log("Architext serve instances:");
   for (const instance of filtered) {
-    console.log(`${instance.id}  ${instance.pid}  ${instance.url}  ${instance.target}`);
-    console.log(`  Logs: ${instance.logPath}`);
+    console.log(`${instance.id}  ${instance.pid}  ${instance.mode ?? "background"}  ${instance.url}  ${instance.target}`);
+    if (instance.logPath) console.log(`  Logs: ${instance.logPath}`);
     console.log(`  Started: ${instance.startedAt}`);
   }
 }
@@ -351,8 +373,11 @@ async function listServeInstances(options) {
 async function restartServe(target, options, cliEntryPath, refreshTarget) {
   const state = await resolveInstance(options, target);
   if (!state) {
-    console.log(`No recorded Architext background server for ${target}`);
+    console.log(`No recorded Architext serve instance for ${target}`);
     return;
+  }
+  if (state.mode === "foreground") {
+    throw new Error("Foreground serve instances cannot be restarted; stop the owning terminal process and start serve again.");
   }
   if (!refreshTarget) throw new Error("Serve refresh is not configured.");
   console.log(`Syncing Architext target before restart: ${state.target}`);

@@ -37,12 +37,12 @@ architext validate /path/to/project
 `architext serve` runs in the foreground by default for script compatibility.
 Use `architext serve --background` to start a detached local viewer server,
 `architext serve --open` to launch the system browser, `architext serve
---status` to inspect a recorded background server, and `architext serve --stop`
+--status` to inspect a recorded serve process, and `architext serve --stop`
 to stop it.
 
 Additional serve controls are `--foreground`, `--no-open`, `--host <host>`, and
-`--port <port>`. Background server state is local runtime state and is not part
-of target-owned Architext JSON data.
+`--port <port>`. Serve process state is local runtime state and is not part of
+target-owned Architext JSON data.
 
 If you are developing Architext itself, use the local npm scripts:
 

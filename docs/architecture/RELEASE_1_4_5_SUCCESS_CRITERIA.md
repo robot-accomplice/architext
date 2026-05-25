@@ -7,7 +7,7 @@ management unless Release Truth is explicitly extended.
 ## Architecture
 
 Architext 1.4.5 improves the local serve lifecycle contract introduced in
-1.4.3. The current lifecycle stores one background server record per target
+1.4.3. The current lifecycle stores one serve process record per target
 repository, keyed by a target-path hash in the local runtime directory. That is
 enough when the user already remembers the target repository. It is not enough
 when multiple local viewers are running and the user needs to discover or stop a
@@ -15,10 +15,10 @@ specific instance.
 
 The systemic fix is to make the runtime registry discoverable and addressable:
 
-- `architext --list` lists all recorded background serve instances without
+- `architext --list` lists all recorded serve instances without
   requiring a target path.
-- Listed instances include a stable instance id, target path, PID, URL, log
-  path, start time, and liveness state.
+- Listed instances include a stable instance id, target path, PID, URL, mode,
+  start time, liveness state, and log path when the process has one.
 - Stale records are detected with the same PID and URL reachability checks used
   by target-scoped `serve --status`.
 - Users can stop a specific listed instance by id rather than by remembering
@@ -111,7 +111,8 @@ the package; `--check-updates` owns package-version discovery and installation.
     newly installed CLI,
   - JSON list output.
 - Existing foreground, background, target-scoped status, and target-scoped stop
-  tests continue to pass unchanged.
+  tests continue to pass; foreground serve processes are now discoverable while
+  they are alive.
 - `npm run release:check` passes before release.
 
 ## Out of Scope

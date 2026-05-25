@@ -68,6 +68,16 @@ async function waitForHttpOk(url, timeoutMs = 5000) {
   throw new Error(`Timed out waiting for ${url}`);
 }
 
+async function waitForText(readText, pattern, timeoutMs = 5000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const text = readText();
+    if (pattern.test(text)) return text;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return readText();
+}
+
 test("serve options parse lifecycle controls without changing foreground defaults", () => {
   assert.deepEqual(
     parseArgs(["serve", "/tmp/repo", "--background", "--open", "--host", "127.0.0.1", "--port", "4517"]),
@@ -200,10 +210,10 @@ test("serve background records status and can be stopped", async () => {
       assert.match(status, /Logs:/);
 
       const stopped = run(["serve", target, "--stop"]);
-      assert.match(stopped, /Stopped Architext background server/);
+      assert.match(stopped, /Stopped Architext serve instance/);
 
       const afterStop = run(["serve", target, "--status"]);
-      assert.match(afterStop, /No recorded Architext background server|Removed stale Architext background server record/);
+      assert.match(afterStop, /No recorded Architext serve instance/);
     } finally {
       try {
         run(["serve", target, "--stop"]);
@@ -238,7 +248,7 @@ test("serve list shows all instances and stop can target one instance", async ()
       assert.match(textList, new RegExp(secondInstance.id));
 
       const stopped = run(["serve", "--stop", "--instance", firstInstance.id]);
-      assert.match(stopped, new RegExp(`Stopped Architext background server .*${firstInstance.id}`));
+      assert.match(stopped, new RegExp(`Stopped Architext serve instance .*${firstInstance.id}`));
 
       const afterStop = JSON.parse(run(["serve", "--list", "--json"]));
       assert.equal(afterStop.instances.some((instance) => instance.id === firstInstance.id), false);
@@ -291,11 +301,11 @@ test("serve refresh syncs and restarts a targeted instance", async () => {
   });
 });
 
-test("serve status and stop are safe when no background server is recorded", async () => {
+test("serve status and stop are safe when no serve instance is recorded", async () => {
   const target = await createServeTarget();
   try {
-    assert.match(run(["serve", target, "--status"]), /No recorded Architext background server/);
-    assert.match(run(["serve", target, "--stop"]), /No recorded Architext background server/);
+    assert.match(run(["serve", target, "--status"]), /No recorded Architext serve instance/);
+    assert.match(run(["serve", target, "--stop"]), /No recorded Architext serve instance/);
   } finally {
     await rm(target, { recursive: true, force: true });
   }
@@ -321,8 +331,67 @@ test("serve foreground remains an explicit blocking server path", async () => {
       const response = await waitForHttpOk(`http://127.0.0.1:${port}/`);
       assert.equal(response.status, 200);
       assert.equal(child.exitCode, null);
+      output = await waitForText(() => output, /Serving Architext/);
       assert.match(output, /Serving Architext/);
       assert.match(output, new RegExp(`http://127\\.0\\.0\\.1:${port}/`));
+    } finally {
+      child.kill("SIGTERM");
+      await new Promise((resolve) => child.once("exit", resolve));
+      await rm(target, { recursive: true, force: true });
+    }
+  });
+});
+
+test("serve list discovers live foreground instances", async () => {
+  await withViewerDist(async () => {
+    const target = await createServeTarget();
+    const port = await freePort();
+    const child = spawn(process.execPath, [cli, "serve", target, "--foreground", "--port", String(port), "--no-open"], {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+
+    try {
+      await waitForHttpOk(`http://127.0.0.1:${port}/`);
+
+      const listed = JSON.parse(run(["--list", "--json"]));
+      const instance = listed.instances.find((candidate) => candidate.target === path.resolve(target));
+      assert.ok(instance?.id);
+      assert.equal(instance.mode, "foreground");
+      assert.equal(instance.url, `http://127.0.0.1:${port}/`);
+      assert.equal(instance.pid, child.pid);
+
+      const textList = run(["serve", "--list"]);
+      assert.match(textList, new RegExp(instance.id));
+      assert.match(textList, /foreground/);
+    } finally {
+      child.kill("SIGTERM");
+      await new Promise((resolve) => child.once("exit", resolve));
+      await rm(target, { recursive: true, force: true });
+    }
+  });
+});
+
+test("serve refresh refuses foreground instances", async () => {
+  await withViewerDist(async () => {
+    const target = await createServeTarget();
+    const port = await freePort();
+    const child = spawn(process.execPath, [cli, "serve", target, "--foreground", "--port", String(port), "--no-open"], {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+
+    try {
+      await waitForHttpOk(`http://127.0.0.1:${port}/`);
+      const listed = JSON.parse(run(["--list", "--json"]));
+      const instance = listed.instances.find((candidate) => candidate.target === path.resolve(target));
+      assert.ok(instance?.id);
+
+      assert.throws(
+        () => run(["serve", "--refresh", "--instance", instance.id]),
+        /Foreground serve instances cannot be restarted/
+      );
+      await waitForHttpOk(`http://127.0.0.1:${port}/`);
     } finally {
       child.kill("SIGTERM");
       await new Promise((resolve) => child.once("exit", resolve));

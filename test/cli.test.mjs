@@ -418,8 +418,8 @@ test("--help documents path defaults and common commands", () => {
   assert.match(output, /--no-open\s+Do not open the system browser/);
   assert.match(output, /--host <host>\s+Serve bind host\. Defaults to 127\.0\.0\.1/);
   assert.match(output, /--port <port>\s+Serve bind port\. Defaults to 4317/);
-  assert.match(output, /--status\s+Show the recorded background serve process/);
-  assert.match(output, /--stop\s+Stop the recorded background serve process/);
+  assert.match(output, /--status\s+Show the recorded serve process/);
+  assert.match(output, /--stop\s+Stop the recorded serve process/);
   assert.match(output, /\[path\] is optional and defaults to the current directory/);
   assert.match(output, /version\s+Print the Architext package version/);
   assert.match(output, /architext serve/);
