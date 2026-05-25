@@ -21,6 +21,7 @@ import { nextRuleCategoryName, orderedRules, ruleCategories, ruleCategoryAccent,
 import { postRulesAction } from "./presentation/rulesClient.js";
 import { useUnsavedEditorGuard } from "./presentation/unsavedEditorGuard.js";
 import { dataRefreshNoticeForDirtyEditors } from "./presentation/releasePlanningModel.js";
+import { pdfExportControlLabel, requestPdfExport } from "./presentation/pdfExportModel.js";
 import { StepRoute } from "./presentation/StepRoute.js";
 import { stepRouteClassName } from "./presentation/stepRouteModel.js";
 import {
@@ -1601,12 +1602,11 @@ function App() {
   };
 
   const exportActiveViewPdf = () => {
-    if (typeof window.print !== "function") {
-      setDataNotice("PDF export is unavailable in this browser.");
-      return;
-    }
-    setDataNotice("Use the browser print dialog to save this view as PDF.");
-    window.requestAnimationFrame(() => window.print());
+    const result = requestPdfExport({
+      print: window.print,
+      requestAnimationFrame: window.requestAnimationFrame.bind(window)
+    });
+    setDataNotice(result.message);
   };
 
   return (
@@ -2267,7 +2267,7 @@ function DiagramControls({
       <button type="button" onClick={onFit}>Fit</button>
       <button type="button" onClick={onReset}>Reset</button>
       <button type="button" onClick={onToggleFocus}>{transform.focused ? "Exit focus" : "Focus"}</button>
-      <button type="button" onClick={onExportPdf}>PDF</button>
+      <button type="button" onClick={onExportPdf}>{pdfExportControlLabel}</button>
     </div>
   );
 }
