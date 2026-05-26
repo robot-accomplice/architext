@@ -137,6 +137,16 @@ async function waitForUrl(url, timeoutMs = 5000) {
   return false;
 }
 
+async function waitForChildServeState(target, pid, timeoutMs = 5000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const state = await readServeState(target);
+    if (state?.pid === pid && await urlReachable(state.url)) return state;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return null;
+}
+
 export function browserOpenCommand(platform, url) {
   if (platform === "darwin") return { command: "open", args: [url] };
   if (platform === "win32") return { command: "cmd", args: ["/c", "start", "", url] };
@@ -170,13 +180,13 @@ function formatServeLink(url) {
 }
 
 async function serveForeground({ target, options, createViewerServer }) {
-  const server = await createViewerServer({ target, host: options.host, port: options.port });
-  const url = serveUrl(options);
+  const { server, port } = await createViewerServer({ target, host: options.host, port: options.port });
+  const url = serveUrl({ ...options, port });
   const state = {
     target: path.resolve(target),
     pid: process.pid,
     host: options.host,
-    port: options.port,
+    port,
     url,
     mode: "foreground",
     startedAt: new Date().toISOString()
@@ -276,8 +286,8 @@ async function serveBackground({ target, options, cliEntryPath }) {
       closeSync(logFd);
     }
 
-    const url = serveUrl(options);
-    if (!(await waitForUrl(url))) {
+    const childState = await waitForChildServeState(target, child.pid);
+    if (!childState) {
       if (pidExists(child.pid)) {
         try {
           process.kill(child.pid, "SIGTERM");
@@ -285,23 +295,24 @@ async function serveBackground({ target, options, cliEntryPath }) {
           // The child may have exited between the liveness check and signal.
         }
       }
+      const url = serveUrl(options);
       throw new Error(`Architext background serve did not become reachable at ${url}. Check ${logPath}`);
     }
 
     await writeServeState(target, {
       target: path.resolve(target),
       pid: child.pid,
-      host: options.host,
-      port: options.port,
-      url,
+      host: childState.host,
+      port: childState.port,
+      url: childState.url,
       logPath,
       mode: "background",
       startedAt: new Date().toISOString()
     });
     console.log(`Serving Architext for ${target} in the background`);
-    console.log(`Open ${formatServeLink(url)}`);
+    console.log(`Open ${formatServeLink(childState.url)}`);
     if (options.open && !options.noOpen) {
-      const opened = await openSystemBrowser(url);
+      const opened = await openSystemBrowser(childState.url);
       if (!opened.ok) console.error(`Browser launch failed: ${opened.message}`);
     }
   });

@@ -49,6 +49,7 @@ const validatorPath = path.join(viewerDir, "tools", "validate-architext.mjs");
 const appendixPath = path.join(viewerDir, "AGENTS_APPENDIX.md");
 const dataSchemaVersion = "1.4.0";
 const mutationTokenHeader = "x-architext-mutation-token";
+const servePortSearchLimit = 50;
 
 async function packageVersion() {
   return (await readJson(path.join(packageRoot, "package.json"))).version;
@@ -996,6 +997,8 @@ Rules:
 - Update only docs/architext/data/**/*.json unless the Architext package itself is being changed.
 - Treat manifest.schemaVersion as the Architext data schema contract version, not the installed CLI/package version. Update it only when the data contract changes or when architext doctor/sync applies a schema repair.
 - Reuse stable IDs, create nodes before references, keep flows ordered, and prefer source-path-backed claims.
+- Keep flow diagrams free of orphaned elements; every rendered node, edge, marker, and label must be traceable to the selected flow, a selected supporting relationship, or an explicit context relationship shown in the projection. Remove disconnected context, connect it with a labeled relationship, or split it into a separate view.
+- For sequence diagrams, create explicit return paths and group outbound plus return messages inside loops, retries, optional branches, and transaction or consistency blocks when the flow requires them.
 - Keep Release Truth data current when release scope, blockers, milestones, evidence, target dates, dependencies, or posture changes.
 - Treat Release Truth as reviewed release state, not a planning scratchpad: update detail files for completed, deferred, blocked, reprioritized, or newly scoped work, then refresh the generated release index from those facts.
 - Keep Release Path labels concise; put rationale, blocker explanation, evidence, dependencies, and next actions in detail data for the selected release item.
@@ -1278,22 +1281,49 @@ async function syncRepairApiRequest(target, version) {
   };
 }
 
+function listenOnPort(server, host, port) {
+  return new Promise((resolve, reject) => {
+    function onError(error) {
+      server.off("listening", onListening);
+      if (error?.code === "EADDRINUSE") {
+        resolve(false);
+        return;
+      }
+      reject(error);
+    }
+    function onListening() {
+      server.off("error", onError);
+      resolve(true);
+    }
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, host);
+  });
+}
+
 async function createViewerServer({ target, host, port }) {
   if (!existsSync(path.join(viewerDistDir, "index.html"))) {
     throw new Error("Package viewer assets are missing. Run npm run build before serving Architext.");
   }
   const targetDataDir = dataDir(target);
-  const watchHub = createDataWatchHub({ target, dataDir, validateTarget });
   const mutationToken = randomBytes(32).toString("base64url");
-  watchHub.start();
-  const server = createServer(createViewerRequestHandler({ target, targetDataDir, watchHub, mutationToken }));
+  const lastPort = Math.min(65535, port + servePortSearchLimit - 1);
 
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(port, host, resolve);
-  });
-  server.once("close", () => watchHub.close());
-  return server;
+  for (let candidatePort = port; candidatePort <= lastPort; candidatePort += 1) {
+    const watchHub = createDataWatchHub({ target, dataDir, validateTarget });
+    const server = createServer(createViewerRequestHandler({ target, targetDataDir, watchHub, mutationToken }));
+    const listening = await listenOnPort(server, host, candidatePort);
+    if (!listening) {
+      server.close();
+      watchHub.close();
+      continue;
+    }
+    watchHub.start();
+    server.once("close", () => watchHub.close());
+    return { server, port: candidatePort };
+  }
+
+  throw new Error(`No available loopback port found from ${port} through ${lastPort}.`);
 }
 
 export function createViewerRequestHandler({ target, targetDataDir = dataDir(target), watchHub, mutationToken = randomBytes(32).toString("base64url") }) {

@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-4-10",
+  "currentReleaseId": "v1-4-11",
   "releases": [
     {
       "id": "v1-1-2",
@@ -374,6 +374,27 @@
         "stretch": 0
       },
       "file": "v1-4-10.json"
+    },
+    {
+      "id": "v1-4-11",
+      "version": "1.4.11",
+      "name": "Architext 1.4.11 Diagram Instruction and Serve Port Corrections",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-05-26",
+      "lastUpdated": "2026-05-26T12:45:00.000Z",
+      "summary": "Architext 1.4.11 strengthens diagram-maintenance instructions and restores automatic serve port fallback when the preferred loopback port is occupied.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 1,
+        "workstreams": 2,
+        "blockers": 0,
+        "complete": 2,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-11.json"
     }
   ]
 }

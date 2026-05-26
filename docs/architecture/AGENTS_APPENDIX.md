@@ -47,6 +47,17 @@ When ordered work or use-case paths deserve a dedicated Flows projection, add a
 existing nodes and ordered flows; do not duplicate flow facts or invent
 workflow-specific routing rules.
 
+Keep flow diagrams free of orphaned elements. Every rendered node, edge, marker,
+and label must be traceable to the selected flow, a selected supporting
+relationship, or an explicit context relationship shown in the projection.
+Remove disconnected context, connect it with a labeled relationship, or split it
+into a separate view; do not leave loose boxes, endpoints, markers, or labels
+for the reader to interpret. For sequence diagrams, create explicit return paths
+for request/response, command/result, event/acknowledgement, and failure-return
+interactions when the flow requires them. Use loops, retries, optional branches,
+and transaction or consistency blocks to group outbound and return messages
+together instead of leaving return behavior implied.
+
 For source extraction work, produce a reviewable draft of proposed JSON changes
 with source paths and confidence notes before editing data files. Never replace
 validation with extracted claims.
