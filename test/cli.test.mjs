@@ -279,6 +279,11 @@ test("prompt includes Release Truth maintenance rules for agents", () => {
   assert.match(output, /roadmap\.json for release planning source items/);
   assert.match(output, /source: "roadmap"/);
   assert.match(output, /source: "ad-hoc"/);
+  assert.match(output, /Keep flow diagrams free of orphaned elements/);
+  assert.match(output, /every rendered node, edge, marker, and label must be traceable/);
+  assert.match(output, /Remove disconnected context, connect it with a labeled relationship, or split it into a separate view/);
+  assert.match(output, /For sequence diagrams, create explicit return paths/);
+  assert.match(output, /outbound plus return messages inside loops, retries, optional branches, and transaction or consistency blocks/);
   assert.match(output, /Build C4 drilldown chains with explicit scopeNodeId metadata/);
   assert.match(output, /leave actors and external dependencies without child views/);
 });
@@ -312,6 +317,11 @@ test("managed agent instructions include Release Truth source-of-truth rules", (
       assert.match(instructions, /docs\/architext\/data\/rules\.json/);
       assert.match(instructions, /protection\.edit/);
       assert.match(instructions, /criticality` and `order/);
+      assert.match(instructions, /Keep flow diagrams free of orphaned elements/);
+      assert.match(instructions, /Every rendered node, edge, marker,\s+and label must be traceable/);
+      assert.match(instructions, /Remove disconnected context, connect it with a labeled relationship, or split it\s+into a separate view/);
+      assert.match(instructions, /create explicit return\s+paths\s+for request\/response, command\/result, event\/acknowledgement, and\s+failure-return\s+interactions/);
+      assert.match(instructions, /transaction or consistency blocks to group outbound and\s+return messages\s+together/);
       assert.match(instructions, /C4 drilldown/);
       assert.match(instructions, /scopeNodeId/);
       assert.match(instructions, /Do not represent unreviewed planning proposals as current Release Truth facts/);
@@ -417,7 +427,7 @@ test("--help documents path defaults and common commands", () => {
   assert.match(output, /--open\s+Open the local viewer in the system browser/);
   assert.match(output, /--no-open\s+Do not open the system browser/);
   assert.match(output, /--host <host>\s+Serve bind host\. Defaults to 127\.0\.0\.1/);
-  assert.match(output, /--port <port>\s+Serve bind port\. Defaults to 4317/);
+  assert.match(output, /--port <port>\s+Preferred serve port\. Defaults to 4317; startup advances if occupied/);
   assert.match(output, /--status\s+Show the recorded serve process/);
   assert.match(output, /--stop\s+Stop the recorded serve process/);
   assert.match(output, /\[path\] is optional and defaults to the current directory/);

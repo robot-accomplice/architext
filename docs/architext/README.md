@@ -41,8 +41,9 @@ Use `architext serve --background` to start a detached local viewer server,
 to stop it.
 
 Additional serve controls are `--foreground`, `--no-open`, `--host <host>`, and
-`--port <port>`. Serve process state is local runtime state and is not part of
-target-owned Architext JSON data.
+`--port <port>`. The port is a preferred starting port; startup advances to the
+next available loopback port when it is occupied. Serve process state is local
+runtime state and is not part of target-owned Architext JSON data.
 
 If you are developing Architext itself, use the local npm scripts:
 

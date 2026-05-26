@@ -367,7 +367,7 @@ From a project that has adopted Architext:
 architext serve
 ```
 
-Then open:
+Then open the printed URL:
 
 ```text
 http://127.0.0.1:4317/
@@ -378,6 +378,9 @@ avoids browser-specific restrictions around fetching local JSON files.
 
 The running site must not fetch framework code, stylesheets, fonts, or assets
 from remote URLs.
+
+The default preferred port is `4317`. If that port is already occupied, serve
+startup advances to the next available loopback port and prints the actual URL.
 
 By default, `serve` stays in the foreground and keeps the terminal attached.
 Use explicit lifecycle switches when you want a different behavior:
@@ -421,7 +424,7 @@ Serve lifecycle options:
 | `--open` | Launch the system browser after the local viewer is reachable. |
 | `--no-open` | Suppress browser launch when combining options or future aliases. |
 | `--host <host>` | Bind to a loopback host (`localhost`, `127.0.0.1`, or `::1`). Defaults to `127.0.0.1`. |
-| `--port <port>` | Bind to a specific port. Defaults to `4317`. |
+| `--port <port>` | Preferred starting port. Defaults to `4317`; startup advances to the next available loopback port when occupied. |
 | `--list` | List all reachable foreground and background serve processes and remove stale records. |
 | `--instance <id>` | Target a listed serve instance for status, stop, or refresh. |
 | `--status` | Show the recorded serve process for this target and verify that it is reachable. |

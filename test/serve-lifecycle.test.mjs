@@ -54,6 +54,27 @@ async function freePort() {
   return port;
 }
 
+async function occupyPort(port) {
+  const server = createServer((_request, response) => {
+    response.end("occupied");
+  });
+  await new Promise((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", resolve);
+  });
+  return server;
+}
+
+function closeServer(server) {
+  return new Promise((resolve) => server.close(resolve));
+}
+
+function servedUrl(output) {
+  const match = output.match(/http:\/\/127\.0\.0\.1:(\d+)\//);
+  assert.ok(match, `Expected serve output to contain a local URL:\n${output}`);
+  return { url: match[0], port: Number(match[1]) };
+}
+
 async function waitForHttpOk(url, timeoutMs = 5000) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
@@ -225,6 +246,33 @@ test("serve background records status and can be stopped", async () => {
   });
 });
 
+test("serve background advances to the next available port when the preferred port is occupied", async () => {
+  await withViewerDist(async () => {
+    const target = await createServeTarget();
+    const occupiedPort = await freePort();
+    const blocker = await occupyPort(occupiedPort);
+    try {
+      const output = run(["serve", target, "--background", "--host", "127.0.0.1", "--port", String(occupiedPort), "--no-open"]);
+      const served = servedUrl(output);
+      assert.notEqual(served.port, occupiedPort);
+
+      const response = await waitForHttpOk(served.url);
+      assert.equal(response.status, 200);
+
+      const status = run(["serve", target, "--status"]);
+      assert.match(status, new RegExp(`http://127\\.0\\.0\\.1:${served.port}/`));
+    } finally {
+      try {
+        run(["serve", target, "--stop"]);
+      } catch {
+        // Best-effort cleanup for failures before the stop assertion.
+      }
+      await closeServer(blocker);
+      await rm(target, { recursive: true, force: true });
+    }
+  });
+});
+
 test("serve list shows all instances and stop can target one instance", async () => {
   await withViewerDist(async () => {
     const first = await createServeTarget();
@@ -337,6 +385,40 @@ test("serve foreground remains an explicit blocking server path", async () => {
     } finally {
       child.kill("SIGTERM");
       await new Promise((resolve) => child.once("exit", resolve));
+      await rm(target, { recursive: true, force: true });
+    }
+  });
+});
+
+test("serve foreground advances to the next available port when the preferred port is occupied", async () => {
+  await withViewerDist(async () => {
+    const target = await createServeTarget();
+    const occupiedPort = await freePort();
+    const blocker = await occupyPort(occupiedPort);
+    const child = spawn(process.execPath, [cli, "serve", target, "--foreground", "--port", String(occupiedPort), "--no-open"], {
+      cwd: repoRoot,
+      stdio: ["ignore", "pipe", "pipe"]
+    });
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      output += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      output += chunk.toString();
+    });
+
+    try {
+      output = await waitForText(() => output, /Open http:\/\/127\.0\.0\.1:\d+\//);
+      const served = servedUrl(output);
+      assert.notEqual(served.port, occupiedPort);
+
+      const response = await waitForHttpOk(served.url);
+      assert.equal(response.status, 200);
+      assert.equal(child.exitCode, null);
+    } finally {
+      child.kill("SIGTERM");
+      await new Promise((resolve) => child.once("exit", resolve));
+      await closeServer(blocker);
       await rm(target, { recursive: true, force: true });
     }
   });

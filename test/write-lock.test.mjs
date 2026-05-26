@@ -44,7 +44,7 @@ test("withTargetWriteLock times out behind an active lock", async () => {
   })}\n`, "utf8");
 
   await assert.rejects(
-    withTargetWriteLock(target, async () => {}, { settleMs: 5, pollMs: 5, timeoutMs: 40, staleMs: 10000 }),
+    withTargetWriteLock(target, async () => {}, { settleMs: 5, pollMs: 5, timeoutMs: 500, staleMs: 10000 }),
     /Timed out waiting for Architext write lock/
   );
 });

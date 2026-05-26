@@ -56,7 +56,7 @@ Options:
   --no-open                  Do not open the system browser.
   --host <host>              Serve bind host. Defaults to 127.0.0.1.
                               Must be localhost, 127.0.0.0/8, or ::1.
-  --port <port>              Serve bind port. Defaults to 4317.
+  --port <port>              Preferred serve port. Defaults to 4317; startup advances if occupied.
   --status                   Show the recorded serve process.
   --stop                     Stop the recorded serve process.
   --json                     Machine-readable status/doctor output.

@@ -5,6 +5,12 @@ Architext uses a target-scoped directory lock at
 writes. Creating the lock directory is the ownership boundary: only the process
 that successfully creates that directory may write while the lock is held.
 
+Before and after lock acquisition, Architext waits for repository-owned JSON
+data writes to settle so it does not validate or overwrite half-written files.
+Tests that target lock contention must leave enough timeout budget for the
+settle probe before the lock acquisition loop begins; otherwise they are
+asserting scheduler timing instead of lock behavior.
+
 ## Stale Lock Reclamation
 
 Stale lock recovery must also be atomic. A process must not delete the lock path
