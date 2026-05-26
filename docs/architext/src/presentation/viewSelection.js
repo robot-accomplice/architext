@@ -69,3 +69,41 @@ export function defaultViewForMode(mode, views, fallback) {
   const types = viewTypesForMode(mode);
   return views.find((view) => types.includes(view.type)) ?? fallback;
 }
+
+export function flowEndpointIds(flow) {
+  return new Set(flow?.steps?.flatMap((step) => [step.from, step.to]) ?? []);
+}
+
+export function viewNodeIds(view) {
+  return new Set(view?.lanes?.flatMap((lane) => lane.nodeIds ?? []) ?? []);
+}
+
+export function flowCompatibleWithView(flow, view) {
+  const endpointIds = flowEndpointIds(flow);
+  if (endpointIds.size === 0) return Boolean(flow && view);
+  const nodeIds = viewNodeIds(view);
+  return Array.from(endpointIds).every((id) => nodeIds.has(id));
+}
+
+export function compatibleFlowViewsForFlow(views, flow) {
+  const flowProjectionTypes = new Set(viewTypesForMode("flows"));
+  return views.filter((view) => flowProjectionTypes.has(view.type) && flowCompatibleWithView(flow, view));
+}
+
+export function compatibleFlowsForView(flows, view) {
+  return flows.filter((flow) => flowCompatibleWithView(flow, view));
+}
+
+export function defaultViewForFlow(mode, currentView, views, flow, fallback) {
+  if (mode !== "flows") return currentView ?? defaultViewForMode(mode, views, fallback);
+  const compatibleViews = compatibleFlowViewsForFlow(views, flow);
+  const authoredProjection = compatibleViews.find((view) => view.type !== "system-map");
+  if (currentView?.type === "system-map" && authoredProjection) return authoredProjection;
+  if (flowCompatibleWithView(flow, currentView)) return currentView;
+  return authoredProjection ?? compatibleViews[0] ?? defaultViewForMode(mode, views, fallback);
+}
+
+export function defaultFlowForView(view, currentFlow, flows, fallback) {
+  if (flowCompatibleWithView(currentFlow, view)) return currentFlow;
+  return compatibleFlowsForView(flows, view)[0] ?? fallback;
+}

@@ -44,7 +44,7 @@ test("withTargetWriteLock times out behind an active lock", async () => {
   })}\n`, "utf8");
 
   await assert.rejects(
-    withTargetWriteLock(target, async () => {}, { settleMs: 5, pollMs: 5, timeoutMs: 40, staleMs: 10000 }),
+    withTargetWriteLock(target, async () => {}, { settleMs: 5, pollMs: 5, timeoutMs: 500, staleMs: 10000 }),
     /Timed out waiting for Architext write lock/
   );
 });
@@ -63,4 +63,29 @@ test("withTargetWriteLock recovers stale locks", async () => {
   }, { settleMs: 5, pollMs: 5, timeoutMs: 500, staleMs: 1 });
 
   assert.equal(ran, true);
+});
+
+test("withTargetWriteLock serializes contenders after stale lock recovery", async () => {
+  const target = await createTarget();
+  await mkdir(writeLockPath(target), { recursive: true });
+  await writeFile(path.join(writeLockPath(target), "owner.json"), `${JSON.stringify({
+    pid: 99999999,
+    createdAtMs: Date.now() - 10000
+  })}\n`, "utf8");
+
+  let active = 0;
+  let maxActive = 0;
+  let completed = 0;
+  const contenders = Array.from({ length: 8 }, () => withTargetWriteLock(target, async () => {
+    active += 1;
+    maxActive = Math.max(maxActive, active);
+    await new Promise((resolve) => setTimeout(resolve, 15));
+    active -= 1;
+    completed += 1;
+  }, { settleMs: 5, pollMs: 1, timeoutMs: 1000, staleMs: 50 }));
+
+  await Promise.all(contenders);
+
+  assert.equal(completed, 8);
+  assert.equal(maxActive, 1);
 });

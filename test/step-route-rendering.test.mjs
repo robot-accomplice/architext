@@ -1,14 +1,21 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
-import path from "node:path";
 import test from "node:test";
+import {
+  stepRouteClassName,
+  stepRouteLabelClassName,
+  stepRouteMarkerClassName
+} from "../docs/architext/src/presentation/stepRouteModel.js";
 
-const mainSource = readFileSync(path.resolve(import.meta.dirname, "../docs/architext/src/main.tsx"), "utf8");
+test("flow and sequence step routes share the same presentation model", () => {
+  assert.equal(stepRouteClassName("flow"), "flow-step-route");
+  assert.equal(stepRouteClassName("sequence"), "sequence-step-route");
 
-test("flow and sequence render step lines through the shared StepRoute primitive", () => {
-  assert.match(mainSource, /import \{ StepRoute \} from "\.\/presentation\/StepRoute\.js";/);
-  assert.match(mainSource, /className="flow-step-route"/);
-  assert.match(mainSource, /className="sequence-step-route"/);
-  assert.doesNotMatch(mainSource, /<rect className="route-step-marker/);
-  assert.doesNotMatch(mainSource, /<text className="route-step-label/);
+  assert.equal(stepRouteMarkerClassName(), "route-step-marker");
+  assert.equal(stepRouteMarkerClassName("selected"), "route-step-marker selected");
+  assert.equal(stepRouteLabelClassName(), "route-step-label");
+  assert.equal(stepRouteLabelClassName("selected"), "route-step-label selected");
+});
+
+test("step route presentation model fails loudly for unknown route kinds", () => {
+  assert.throws(() => stepRouteClassName("deployment"), /Unknown step route kind "deployment"/);
 });

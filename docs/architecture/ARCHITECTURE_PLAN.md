@@ -55,6 +55,12 @@ follows the file list in the manifest to load the remaining JSON files.
 This avoids browser lock-in. A direct `file://` page with sibling JSON files is
 not a sound baseline because browser security rules differ.
 
+Serve startup should treat the configured port as the preferred starting port,
+not a manual recovery burden. If the default port is occupied, foreground and
+background serve should advance to the next available loopback port, record the
+effective port in serve state, and print the actual URL. Lifecycle commands that
+target an already recorded instance continue to use the recorded host and port.
+
 The viewer may use a frontend framework internally. Dependencies must be
 installed locally and bundled or served from local project files. The running
 site must not pull code, styles, fonts, schemas, or assets from remote URLs.
@@ -477,6 +483,11 @@ should remain a single grouped row at desktop widths; orphaned one-tab rows read
 as broken navigation. If a viewport or future clamp forces truncation, the full
 title or summary must remain available through a tooltip.
 
+Header-owned overlays, including the diagram legend, belong to the diagram
+header stacking layer and must render above the contained canvas viewport. The
+canvas may isolate its internal paint and scroll behavior, but it must not cover
+or clip header controls that intentionally open downward.
+
 Flows must be visible as lines between boxes, not only as a textual list of
 steps. A selected flow should draw directional edges between involved nodes,
 with numbered step markers or labels where legible. The textual ordered step
@@ -488,6 +499,32 @@ Workflow diagrams are Flows projections over ordered work or use-case paths.
 They reuse the selected flow, shared route planner, step-pill rendering, and
 bottom step summary from the normal Flow map. They must not fork a
 workflow-specific router or duplicate flow facts into view data.
+Flow projection views and selected flows have a hard compatibility invariant:
+the selected view must contain every endpoint node used by the selected flow's
+steps. The UI should not offer incompatible flow/view pairs, and changing either
+side of the pair must repair the other side to the nearest compatible choice
+instead of rendering a partial or misleading diagram.
+Flow diagrams must not contain orphaned elements. Every rendered node, edge,
+marker, and label must be traceable to the selected flow, a selected supporting
+relationship, or an explicit context relationship shown in the projection. A
+node with no visible path into the flow, a detached marker, a label without a
+route, or an endpoint that is not present in the projection is a documentation
+defect, not harmless context. If the diagram needs ambient context, connect it
+with an explicit relationship and label why it is present; otherwise remove it
+from the projection or create a separate view. Do not leave disconnected canvas
+residue for the reader to interpret.
+When a broad overview such as a system map and a narrower authored projection
+can both render the selected flow, flow selection should prefer the narrower
+authored projection so detailed sequence/flow paths do not float across an
+overview canvas.
+Sequence diagrams do not use a separate Flow View projection; they are a
+selected-flow artifact and should title, filter, and render from that flow.
+Sequence diagrams must preserve return paths as first-class architecture, not
+as implied behavior. Request/response, command/result, event/acknowledgement,
+and failure-return legs should be paired when the source flow contains or
+requires them. Loops, retries, optional branches, and transaction/consistency
+blocks should group the outbound and return messages they govern so a reader can
+follow the complete interaction without guessing where control or data returns.
 Selected flow steps should use one shared standout selection color across the
 route line, arrowhead, route marker, and bottom step card so a stage selection
 reads as one highlighted path. A rendered flow should expose one primary

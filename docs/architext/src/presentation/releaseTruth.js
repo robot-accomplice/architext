@@ -19,6 +19,35 @@ export function releaseItems(detail) {
   ];
 }
 
+export function blockersGroupedByItem(blockers = []) {
+  const grouped = new Map();
+  for (const blocker of blockers) {
+    for (const itemId of blocker.itemIds) {
+      grouped.set(itemId, [...(grouped.get(itemId) ?? []), blocker]);
+    }
+  }
+  return grouped;
+}
+
+export function releaseItemSummaryText(item) {
+  return item.summary ?? "";
+}
+
+export function releasePathCompletionText(items = []) {
+  const completeCount = items.filter((item) => item.status === "complete").length;
+  return `${completeCount}/${items.length} complete`;
+}
+
+/**
+ * @param {{ status: import("../domain/architectureTypes.js").ReleaseItemStatus, items?: Array<{ status: import("../domain/architectureTypes.js").ReleaseItemStatus }>, blockedItems?: Array<unknown> }} input
+ * @returns {import("../domain/architectureTypes.js").ReleaseItemStatus}
+ */
+export function releasePathMilestoneStatus({ status, items = [], blockedItems = [] }) {
+  if (items.length > 0 && items.every((item) => item.status === "complete")) return "complete";
+  if (blockedItems.length > 0) return "blocked";
+  return status;
+}
+
 export function releaseProgress(detail) {
   const required = detail?.scope.required ?? [];
   if (required.length === 0) return 0;
@@ -50,6 +79,11 @@ export function progressFill(value) {
   const progress = Math.max(0, Math.min(100, value ?? 0));
   if (progress <= 0) return "var(--line-strong)";
   return `color-mix(in srgb, var(--green) ${progress}%, var(--yellow))`;
+}
+
+export function formatReleaseDate(value) {
+  if (!value) return "";
+  return value.includes("T") ? value.slice(0, 10) : value;
 }
 
 export function releaseLineState(status, blocked = false) {

@@ -2,12 +2,32 @@ import { releaseSummaryFromDetail } from "./release-history.mjs";
 
 export function validateArchitectureReferences(model) {
   const errors = [];
-  const nodeIds = new Set(model.nodes.map((node) => node.id));
-  const flowIds = new Set(model.flows.map((flow) => flow.id));
-  const dataIds = new Set(model.dataClasses.map((item) => item.id));
-  const decisionIds = new Set(model.decisions.map((item) => item.id));
-  const riskIds = new Set(model.risks.map((item) => item.id));
-  const viewIds = new Set(model.views.map((item) => item.id));
+  const arrayField = (owner, field, required = false) => {
+    const value = owner?.[field];
+    if (Array.isArray(value)) return value;
+    if (value === undefined && !required) return [];
+    errors.push(`${field} must be an array`);
+    return [];
+  };
+  const nestedArray = (owner, field, context) => {
+    const value = owner?.[field];
+    if (Array.isArray(value)) return value;
+    if (value === undefined) return [];
+    errors.push(`${context}.${field} must be an array`);
+    return [];
+  };
+  const nodes = arrayField(model, "nodes", true);
+  const flows = arrayField(model, "flows", true);
+  const dataClasses = arrayField(model, "dataClasses", true);
+  const decisions = arrayField(model, "decisions", true);
+  const risks = arrayField(model, "risks", true);
+  const views = arrayField(model, "views", true);
+  const nodeIds = new Set(nodes.map((node) => node.id));
+  const flowIds = new Set(flows.map((flow) => flow.id));
+  const dataIds = new Set(dataClasses.map((item) => item.id));
+  const decisionIds = new Set(decisions.map((item) => item.id));
+  const riskIds = new Set(risks.map((item) => item.id));
+  const viewIds = new Set(views.map((item) => item.id));
 
   const requireKnown = (id, known, context) => {
     if (!known.has(id)) errors.push(`${context} references unknown id "${id}"`);
@@ -15,27 +35,29 @@ export function validateArchitectureReferences(model) {
 
   requireKnown(model.manifest.defaultViewId, viewIds, "manifest.defaultViewId");
 
-  for (const node of model.nodes) {
-    for (const id of node.dependencies) requireKnown(id, nodeIds, `node ${node.id}.dependencies`);
-    for (const id of node.dataHandled) requireKnown(id, dataIds, `node ${node.id}.dataHandled`);
-    for (const id of node.relatedFlows) requireKnown(id, flowIds, `node ${node.id}.relatedFlows`);
-    for (const id of node.relatedDecisions) requireKnown(id, decisionIds, `node ${node.id}.relatedDecisions`);
-    for (const id of node.knownRisks) requireKnown(id, riskIds, `node ${node.id}.knownRisks`);
+  for (const node of nodes) {
+    for (const id of nestedArray(node, "dependencies", `node ${node.id}`)) requireKnown(id, nodeIds, `node ${node.id}.dependencies`);
+    for (const id of nestedArray(node, "dataHandled", `node ${node.id}`)) requireKnown(id, dataIds, `node ${node.id}.dataHandled`);
+    for (const id of nestedArray(node, "relatedFlows", `node ${node.id}`)) requireKnown(id, flowIds, `node ${node.id}.relatedFlows`);
+    for (const id of nestedArray(node, "relatedDecisions", `node ${node.id}`)) requireKnown(id, decisionIds, `node ${node.id}.relatedDecisions`);
+    for (const id of nestedArray(node, "knownRisks", `node ${node.id}`)) requireKnown(id, riskIds, `node ${node.id}.knownRisks`);
   }
 
-  for (const flow of model.flows) {
-    for (const id of flow.actors) requireKnown(id, nodeIds, `flow ${flow.id}.actors`);
-    for (const step of flow.steps) {
-      requireKnown(step.from, nodeIds, `flow ${flow.id} step ${step.id}.from`);
-      requireKnown(step.to, nodeIds, `flow ${flow.id} step ${step.id}.to`);
-      for (const id of step.data) requireKnown(id, dataIds, `flow ${flow.id} step ${step.id}.data`);
+  for (const flow of flows) {
+    for (const id of nestedArray(flow, "actors", `flow ${flow.id}`)) requireKnown(id, nodeIds, `flow ${flow.id}.actors`);
+    for (const step of nestedArray(flow, "steps", `flow ${flow.id}`)) {
+      if (!step.from) errors.push(`flow ${flow.id} step ${step.id}.from is required`);
+      else requireKnown(step.from, nodeIds, `flow ${flow.id} step ${step.id}.from`);
+      if (!step.to) errors.push(`flow ${flow.id} step ${step.id}.to is required`);
+      else requireKnown(step.to, nodeIds, `flow ${flow.id} step ${step.id}.to`);
+      for (const id of nestedArray(step, "data", `flow ${flow.id} step ${step.id}`)) requireKnown(id, dataIds, `flow ${flow.id} step ${step.id}.data`);
     }
   }
 
-  for (const view of model.views) {
+  for (const view of views) {
     if (view.scopeNodeId) requireKnown(view.scopeNodeId, nodeIds, `view ${view.id}.scopeNodeId`);
-    for (const lane of view.lanes) {
-      for (const id of lane.nodeIds) requireKnown(id, nodeIds, `view ${view.id} lane ${lane.id}`);
+    for (const lane of nestedArray(view, "lanes", `view ${view.id}`)) {
+      for (const id of nestedArray(lane, "nodeIds", `view ${view.id} lane ${lane.id}`)) requireKnown(id, nodeIds, `view ${view.id} lane ${lane.id}`);
     }
   }
 

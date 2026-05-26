@@ -1,0 +1,442 @@
+{
+  "id": "v1-4-8",
+  "version": "1.4.8",
+  "name": "Architext 1.4.8 Audit Hardening and Release Path UX",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Architext 1.4.8 hardens local write boundaries, serializes dashboard write paths, improves release safety checks, and lets Release Path milestones collapse with compact completion counts.",
+  "targetDate": "2026-05-25",
+  "lastUpdated": "2026-05-25T14:51:06.000Z",
+  "updateSource": "1.4.8 release ceremony",
+  "releasedAt": "2026-05-25T14:51:06.000Z",
+  "scope": {
+    "required": [
+      {
+        "id": "local-write-trust-boundary",
+        "title": "Local write trust boundary",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Mutating dashboard requests now require the server token and reject cross-origin, non-loopback, and unsafe remote-host write attempts before touching target files.",
+        "priority": "critical",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T14:51:06.000Z",
+        "workstreamId": "local-trust-boundary",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/HTTP_WRITE_SECURITY.md",
+          "src/adapters/cli/architext-cli.mjs",
+          "test/serve-handler.test.mjs",
+          "GitHub PR #42"
+        ]
+      },
+      {
+        "id": "write-lock-and-http-serialization",
+        "title": "Write lock and HTTP serialization",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Stale lock reclamation is atomic and dashboard rules/release-planning write handlers serialize through the target write lock.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T14:51:06.000Z",
+        "workstreamId": "write-integrity",
+        "dependsOn": [
+          "local-write-trust-boundary"
+        ],
+        "evidence": [
+          "docs/architecture/WRITE_LOCK_STALE_RECLAIM.md",
+          "docs/architecture/HTTP_WRITE_HANDLER_LOCKING.md",
+          "src/adapters/cli/write-lock.mjs",
+          "test/write-lock.test.mjs",
+          "test/rules-api.test.mjs",
+          "GitHub PR #43",
+          "GitHub PR #58"
+        ]
+      },
+      {
+        "id": "release-planning-transactional-writes",
+        "title": "Release planning transactional writes",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Release-plan approval restores every touched file when validation rejects the candidate write set.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T14:51:06.000Z",
+        "workstreamId": "write-integrity",
+        "dependsOn": [
+          "write-lock-and-http-serialization"
+        ],
+        "evidence": [
+          "src/adapters/http/release-planning-api.mjs",
+          "test/release-planning.test.mjs",
+          "GitHub PR #44"
+        ]
+      },
+      {
+        "id": "serve-lifecycle-hardening",
+        "title": "Serve lifecycle hardening",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Serve lifecycle probes only loopback instance URLs and hardens background spawn/state handling against stale or competing local instances.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T14:51:06.000Z",
+        "workstreamId": "local-trust-boundary",
+        "dependsOn": [
+          "local-write-trust-boundary"
+        ],
+        "evidence": [
+          "src/adapters/cli/serve-lifecycle.mjs",
+          "test/serve-lifecycle.test.mjs",
+          "GitHub PR #50"
+        ]
+      },
+      {
+        "id": "release-planning-input-invariants",
+        "title": "Release planning input invariants",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Release planning now fails loudly for unknown selected roadmap item IDs and uses an explicit clock for deterministic plans.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T14:51:06.000Z",
+        "workstreamId": "write-integrity",
+        "dependsOn": [
+          "release-planning-transactional-writes"
+        ],
+        "evidence": [
+          "src/domain/architecture-model/release-planning.mjs",
+          "test/release-planning.test.mjs",
+          "GitHub PR #48"
+        ]
+      },
+      {
+        "id": "route-endpoint-centering",
+        "title": "Single-route endpoint centering",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Single routes on a node side attach to the side centerpoint instead of drifting away from the center when no competing connectors exist.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T14:51:06.000Z",
+        "workstreamId": "presentation",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/ROUTE_SINGLE_SIDE_CENTERING.md",
+          "docs/architext/src/routing",
+          "test/routing.test.mjs",
+          "GitHub PR #54"
+        ]
+      },
+      {
+        "id": "frontend-plan-memoization",
+        "title": "Frontend plan memoization",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Relationship and planned-diagram inputs are memoized so selection and zoom changes avoid unnecessary recomputation.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T14:51:06.000Z",
+        "workstreamId": "presentation",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/FRONTEND_PLAN_MEMOIZATION.md",
+          "docs/architext/src/main.tsx",
+          "test/planned-diagram-key.test.mjs",
+          "GitHub PR #53"
+        ]
+      },
+      {
+        "id": "ui-behavior-test-contracts",
+        "title": "UI behavior test contracts",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Source-regex UI tests were replaced with model/helper contracts for release planning, step routes, and PDF export behavior.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T14:51:06.000Z",
+        "workstreamId": "safety-net",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/RELEASE_PLANNING_UI_BEHAVIOR_TESTS.md",
+          "docs/architecture/STEP_ROUTE_PRESENTATION_MODEL.md",
+          "docs/architecture/PDF_EXPORT_PRESENTATION_CONTRACT.md",
+          "test/release-planning-ui.test.mjs",
+          "test/step-route-rendering.test.mjs",
+          "test/pdf-export-ui.test.mjs",
+          "GitHub PR #59",
+          "GitHub PR #60",
+          "GitHub PR #61"
+        ]
+      },
+      {
+        "id": "cli-sync-model-extraction",
+        "title": "CLI sync model extraction",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "CLI sync operation and choice derivation moved into focused helpers with direct unit coverage.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T14:51:06.000Z",
+        "workstreamId": "safety-net",
+        "dependsOn": [
+          "ui-behavior-test-contracts"
+        ],
+        "evidence": [
+          "docs/architecture/CLI_SYNC_DECISION_MODEL.md",
+          "src/adapters/cli/sync-plan.mjs",
+          "test/sync-plan.test.mjs",
+          "GitHub PR #62",
+          "GitHub PR #63"
+        ]
+      },
+      {
+        "id": "release-truth-component-extraction",
+        "title": "Release Truth component extraction",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Release Trend, Kanban, and Path views were extracted from main.tsx into focused presentation components.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T14:51:06.000Z",
+        "workstreamId": "presentation",
+        "dependsOn": [
+          "ui-behavior-test-contracts"
+        ],
+        "evidence": [
+          "docs/architecture/RELEASE_TREND_CHART_COMPONENT.md",
+          "docs/architecture/RELEASE_KANBAN_COMPONENT.md",
+          "docs/architecture/RELEASE_PATH_COMPONENT.md",
+          "docs/architext/src/presentation/ReleaseTrendChart.tsx",
+          "docs/architext/src/presentation/ReleaseKanbanView.tsx",
+          "docs/architext/src/presentation/ReleasePathView.tsx",
+          "GitHub PR #64",
+          "GitHub PR #65",
+          "GitHub PR #66"
+        ]
+      },
+      {
+        "id": "collapsible-release-path",
+        "title": "Collapsible Release Path milestones",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Release Path milestones can collapse so completed schedule groups no longer dominate the page while their summary row remains visible.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T14:51:06.000Z",
+        "workstreamId": "presentation",
+        "dependsOn": [
+          "release-truth-component-extraction"
+        ],
+        "evidence": [
+          "docs/architecture/COLLAPSIBLE_RELEASE_PATH.md",
+          "docs/architext/src/presentation/ReleasePathView.tsx",
+          "docs/architext/src/presentation/releasePathState.js",
+          "test/release-path-state.test.mjs",
+          "GitHub PR #67"
+        ]
+      },
+      {
+        "id": "release-path-completion-counts",
+        "title": "Release Path completion counts",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Release Path milestone metadata includes compact X/Y complete counts without adding a heavier title-bar layout.",
+        "priority": "low",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-25T14:51:06.000Z",
+        "workstreamId": "presentation",
+        "dependsOn": [
+          "collapsible-release-path"
+        ],
+        "evidence": [
+          "docs/architext/src/presentation/releaseTruth.js",
+          "test/release-truth-presentation.test.mjs",
+          "browser verification on #releasetruth",
+          "GitHub PR #68"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "local-trust-boundary",
+      "name": "Local Trust Boundary",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Make the local dashboard trust boundary explicit for write APIs and lifecycle probes.",
+      "progress": 100,
+      "itemIds": [
+        "local-write-trust-boundary",
+        "serve-lifecycle-hardening"
+      ],
+      "evidence": [
+        "test/serve-handler.test.mjs",
+        "test/serve-lifecycle.test.mjs"
+      ]
+    },
+    {
+      "id": "write-integrity",
+      "name": "Write Integrity",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Serialize and rollback dashboard write paths that touch target repository data.",
+      "progress": 100,
+      "itemIds": [
+        "write-lock-and-http-serialization",
+        "release-planning-transactional-writes",
+        "release-planning-input-invariants"
+      ],
+      "evidence": [
+        "test/write-lock.test.mjs",
+        "test/rules-api.test.mjs",
+        "test/release-planning.test.mjs"
+      ]
+    },
+    {
+      "id": "safety-net",
+      "name": "Safety Net",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Move brittle or missing safety checks into direct tests and focused helpers.",
+      "progress": 100,
+      "itemIds": [
+        "ui-behavior-test-contracts",
+        "cli-sync-model-extraction"
+      ],
+      "evidence": [
+        "test/*.test.mjs",
+        "npm run verify"
+      ]
+    },
+    {
+      "id": "presentation",
+      "name": "Presentation",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Improve route endpoint placement, Release Truth maintainability, and Release Path reading ergonomics.",
+      "progress": 100,
+      "itemIds": [
+        "route-endpoint-centering",
+        "frontend-plan-memoization",
+        "release-truth-component-extraction",
+        "collapsible-release-path",
+        "release-path-completion-counts"
+      ],
+      "evidence": [
+        "test/routing.test.mjs",
+        "test/release-truth-presentation.test.mjs",
+        "browser verification on #releasetruth"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "audit-hardening-complete",
+      "label": "Audit hardening complete",
+      "status": "complete",
+      "targetWindow": "Before release",
+      "order": 1,
+      "itemIds": [
+        "local-write-trust-boundary",
+        "write-lock-and-http-serialization",
+        "release-planning-transactional-writes",
+        "serve-lifecycle-hardening",
+        "release-planning-input-invariants"
+      ]
+    },
+    {
+      "id": "presentation-corrections-complete",
+      "label": "Presentation corrections complete",
+      "status": "complete",
+      "targetWindow": "Before release",
+      "order": 2,
+      "itemIds": [
+        "route-endpoint-centering",
+        "frontend-plan-memoization",
+        "release-truth-component-extraction",
+        "collapsible-release-path",
+        "release-path-completion-counts"
+      ]
+    },
+    {
+      "id": "release-candidate-ready",
+      "label": "Release candidate ready",
+      "status": "complete",
+      "targetWindow": "Release ceremony",
+      "order": 3,
+      "itemIds": [
+        "ui-behavior-test-contracts",
+        "cli-sync-model-extraction"
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "http-locking-follows-trust-boundary",
+      "from": "write-lock-and-http-serialization",
+      "to": "local-write-trust-boundary",
+      "summary": "Write serialization assumes mutating requests have already crossed the local trust boundary."
+    },
+    {
+      "id": "collapsible-path-follows-component-extraction",
+      "from": "collapsible-release-path",
+      "to": "release-truth-component-extraction",
+      "summary": "Collapse state belongs in the extracted Release Path component rather than main.tsx."
+    },
+    {
+      "id": "counts-follow-collapse",
+      "from": "release-path-completion-counts",
+      "to": "collapsible-release-path",
+      "summary": "Collapsed milestone rows need compact completion metadata while child rows are hidden."
+    }
+  ],
+  "evidence": [
+    {
+      "id": "release-1-4-8-success-criteria",
+      "label": "1.4.8 success criteria",
+      "href": "docs/architecture/RELEASE_1_4_8_SUCCESS_CRITERIA.md",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "release-1-4-8-verify",
+      "label": "npm run verify",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "release-1-4-8-uat",
+      "label": "npm run test:uat",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "release-1-4-8-pack",
+      "label": "npm pack --dry-run",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "release-1-4-8-smoke-pack",
+      "label": "npm run smoke:pack",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "package-version-1-4-8",
+      "label": "package.json version 1.4.8",
+      "href": "package.json",
+      "kind": "document",
+      "status": "complete"
+    }
+  ]
+}

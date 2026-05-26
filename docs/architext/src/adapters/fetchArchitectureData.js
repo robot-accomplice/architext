@@ -64,6 +64,19 @@ export async function loadReleaseDetail(fetcher = fetch, releaseModel, releaseId
   return fetchJson(fetcher, `/data/${releaseModel.detailBasePath}${summary.file}`);
 }
 
+export function selectedReleaseIdForReload(activeReleaseId, releaseModel) {
+  return activeReleaseId || releaseModel?.index.currentReleaseId || "";
+}
+
+export async function releaseDetailsForSelectedRelease(fetcher = fetch, releaseModel, selectedReleaseId) {
+  const releaseDetails = new Map((releaseModel?.details ?? []).map((detail) => [detail.id, detail]));
+  if (releaseModel && selectedReleaseId && !releaseDetails.has(selectedReleaseId)) {
+    const selectedDetail = await loadReleaseDetail(fetcher, releaseModel, selectedReleaseId);
+    releaseDetails.set(selectedDetail.id, selectedDetail);
+  }
+  return releaseDetails;
+}
+
 async function loadReleaseModel(fetcher, base, indexPath) {
   const index = await fetchJson(fetcher, base + indexPath);
   const current = index.releases.find((release) => release.id === index.currentReleaseId);

@@ -1,14 +1,23 @@
 import { existsSync } from "node:fs";
 import { copyFile, cp, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
+import { randomBytes } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import path from "node:path";
 import { stdin as input, stdout as output } from "node:process";
 import { fileURLToPath } from "node:url";
 import { createCommandHandlers, routeCommand } from "./command-router.mjs";
-import { parseArgs, usage } from "./command-line.mjs";
+import { isLoopbackHost, parseArgs, usage } from "./command-line.mjs";
 import { assertDirectory, git, gitAvailable, readJson, run, tryRun, writeJson } from "./runtime.mjs";
 import { runServeLifecycle } from "./serve-lifecycle.mjs";
+import {
+  applyExplicitSyncOptions,
+  defaultSyncChoices,
+  rememberedSyncChoices,
+  shouldValidateSync,
+  syncMetadataPatch,
+  syncWritePlan
+} from "./sync-plan.mjs";
 import { printStatus } from "./terminal-presenter.mjs";
 import { runPackageUpdateCheck } from "./update-check.mjs";
 import { withTargetWriteLock } from "./write-lock.mjs";
@@ -39,6 +48,8 @@ const schemaDir = path.join(viewerDir, "schema");
 const validatorPath = path.join(viewerDir, "tools", "validate-architext.mjs");
 const appendixPath = path.join(viewerDir, "AGENTS_APPENDIX.md");
 const dataSchemaVersion = "1.4.0";
+const mutationTokenHeader = "x-architext-mutation-token";
+const servePortSearchLimit = 50;
 
 async function packageVersion() {
   return (await readJson(path.join(packageRoot, "package.json"))).version;
@@ -242,7 +253,7 @@ const doctorRepairHandlers = {
 
 function slugify(value) {
   const slug = value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
-  return slug || "target-project";
+  return slug.slice(0, 64).replace(/-+$/g, "") || "target-project";
 }
 
 async function writeStarterReleaseData(targetDataDir) {
@@ -694,59 +705,6 @@ function assertSyncPromptOptions(options) {
   }
 }
 
-function normalizeInstructionFiles(files) {
-  return instructionFiles.filter((fileName) => files?.includes(fileName));
-}
-
-function defaultSyncChoices(rootPackageExists) {
-  return {
-    branch: "current",
-    instructionFiles,
-    manageGitignore: true,
-    manageRootScripts: rootPackageExists,
-    applyDoctorRepairs: true,
-    proceedWithChanges: true,
-    promptBeforeProceed: false
-  };
-}
-
-function rememberedSyncChoices(metadata) {
-  const choices = metadata?.syncChoices;
-  if (!choices || typeof choices !== "object") return null;
-  return {
-    branch: ["current", "new", "none"].includes(choices.branch) ? choices.branch : "current",
-    instructionFiles: normalizeInstructionFiles(choices.instructionFiles),
-    manageGitignore: Boolean(choices.manageGitignore),
-    manageRootScripts: Boolean(choices.manageRootScripts),
-    applyDoctorRepairs: choices.applyDoctorRepairs !== false,
-    proceedWithChanges: choices.proceedWithChanges !== false,
-    promptBeforeProceed: false
-  };
-}
-
-function applyExplicitSyncOptions(choices, options) {
-  const next = { ...choices };
-  if (options.branch) next.branch = options.branch;
-  if (options.noAgents) next.instructionFiles = [];
-  else if (options.appendAgents) next.instructionFiles = instructionFiles;
-  if (options.noGitignore) next.manageGitignore = false;
-  else if (options.updateGitignore) next.manageGitignore = true;
-  if (options.noRootScripts) next.manageRootScripts = false;
-  else if (options.rootScripts) next.manageRootScripts = true;
-  return next;
-}
-
-function persistedSyncChoices(choices) {
-  return {
-    branch: choices.branch,
-    instructionFiles: choices.instructionFiles,
-    manageGitignore: choices.manageGitignore,
-    manageRootScripts: choices.manageRootScripts,
-    applyDoctorRepairs: choices.applyDoctorRepairs,
-    proceedWithChanges: choices.proceedWithChanges
-  };
-}
-
 async function chooseBranchChoice({ target, options, rl }) {
   if (options.dryRun || !gitAvailable(target)) return "none";
   if (options.branch) return options.branch;
@@ -769,16 +727,16 @@ async function promptSyncChoices({ target, options, rl, doctorRepairAvailable })
     applyDoctorRepairs: await chooseApplyDoctorRepairs(options, rl, doctorRepairAvailable),
     proceedWithChanges: true,
     promptBeforeProceed: true
-  }, options);
+  }, options, { instructionFiles });
 }
 
 async function selectSyncChoices({ target, options, rl, metadata, doctorRepairAvailable, rootPackageExists }) {
-  const defaults = applyExplicitSyncOptions(defaultSyncChoices(rootPackageExists), options);
+  const defaults = applyExplicitSyncOptions(defaultSyncChoices({ rootPackageExists, instructionFiles }), options, { instructionFiles });
   if (nonInteractiveSync(options)) return defaults;
 
-  const savedChoices = options.prompt ? null : rememberedSyncChoices(metadata);
+  const savedChoices = options.prompt ? null : rememberedSyncChoices(metadata, { instructionFiles });
   if (savedChoices && await promptYesNo(rl, "Reuse saved sync choices from the last run?", true)) {
-    return applyExplicitSyncOptions({ ...defaults, ...savedChoices }, options);
+    return applyExplicitSyncOptions({ ...defaults, ...savedChoices }, options, { instructionFiles });
   }
 
   return promptSyncChoices({ target, options, rl, doctorRepairAvailable });
@@ -790,7 +748,7 @@ async function handleBranch({ target, options, version, branchChoice }) {
   if (branchChoice !== "new") throw new Error("--branch must be current, new, or none");
   const branchName = options.branchName || `architext/data-only-${version.replaceAll(".", "-")}`;
   git(target, ["checkout", "-b", branchName]);
-  console.log(`Created and switched to branch ${branchName}`);
+  return branchName;
 }
 
 async function chooseInstructionFiles(options, rl) {
@@ -900,7 +858,8 @@ async function runDoctor(target, options, version) {
   }
 }
 
-async function syncTarget(target, options, version) {
+async function syncTarget(target, options, version, logger = console) {
+  const log = (...args) => logger.log(...args);
   assertSyncPromptOptions(options);
   const status = await collectStatus(target, version, { runValidation: !options.skipValidate });
   const installing = !status.installed || options.overwriteData;
@@ -910,11 +869,11 @@ async function syncTarget(target, options, version) {
     : status.doctorRepairs;
   const doctorRepairAvailable = Boolean(effectiveDoctorRepairs.length);
 
-  console.log(`Target: ${target}`);
-  console.log(`Architext CLI: ${version}`);
-  printStatus(status, { verbose: true });
+  log(`Target: ${target}`);
+  log(`Architext CLI: ${version}`);
+  printStatus(status, { verbose: true }, logger);
   if (migrating) {
-    console.log(`Copied install detected: ${status.copiedInstallPaths.length} package-owned paths`);
+    log(`Copied install detected: ${status.copiedInstallPaths.length} package-owned paths`);
   }
 
   const rl = createInterface({ input, output });
@@ -927,87 +886,86 @@ async function syncTarget(target, options, version) {
       doctorRepairAvailable,
       rootPackageExists: status.rootPackageExists
     });
-    const doctorRepairsSelected = doctorRepairAvailable && syncChoices.applyDoctorRepairs;
-    const shouldWrite = installing || migrating || doctorRepairsSelected || options.force || syncChoices.instructionFiles.length > 0 || syncChoices.manageGitignore || syncChoices.manageRootScripts;
+    const writePlan = syncWritePlan({ installing, migrating, doctorRepairAvailable, syncChoices, options });
+    const { doctorRepairsSelected, shouldWrite } = writePlan;
 
-    console.log(`Operation: ${installing ? "install" : migrating ? "migrate" : "sync"}${shouldWrite ? "" : " (current)"}`);
+    log(writePlan.operationLabel);
 
     if (!shouldWrite) {
-      console.log("No lifecycle changes needed.");
+      log("No lifecycle changes needed.");
       return;
     }
 
-    await handleBranch({ target, options, version, branchChoice: syncChoices.branch });
     if (!nonInteractiveSync(options) && syncChoices.promptBeforeProceed && !options.dryRun) {
       const proceed = syncChoices.proceedWithChanges && await promptYesNo(rl, "Proceed with selected Architext changes in this branch?", true);
       if (!proceed) {
-        console.log("Aborted.");
+        log("Aborted.");
         return;
       }
     }
 
     const performWrites = async () => {
+      const branchName = await handleBranch({ target, options, version, branchChoice: syncChoices.branch });
+      if (branchName) log(`Created and switched to branch ${branchName}`);
+
       if (installing) {
-        console.log(`${options.dryRun ? "Would write" : "Writing"} starter data to ${dataDir(target)}`);
+        log(`${options.dryRun ? "Would write" : "Writing"} starter data to ${dataDir(target)}`);
         if (!options.dryRun) await writeStarterData(target, version);
       } else {
-        console.log("Preserving target-owned docs/architext/data/**/*.json");
+        log("Preserving target-owned docs/architext/data/**/*.json");
       }
 
       const removed = migrating ? await removeCopiedInstallFiles(target, options.dryRun) : [];
       if (removed.length) {
-        console.log(`${options.dryRun ? "Would remove" : "Removed"} copied package-owned files:`);
-        removed.forEach((item) => console.log(`- ${item}`));
+        log(`${options.dryRun ? "Would remove" : "Removed"} copied package-owned files:`);
+        removed.forEach((item) => log(`- ${item}`));
       }
 
       if (!installing && doctorRepairsSelected) {
         const repairs = await applyDoctorRepairs(target, status, options.dryRun, { skipInstructionRules: options.noAgents });
-        console.log(`${options.dryRun ? "Would apply" : "Applied"} doctor repairs:`);
-        repairs.forEach((repair) => console.log(`- ${repair.file}: ${repair.summary}`));
+        log(`${options.dryRun ? "Would apply" : "Applied"} doctor repairs:`);
+        repairs.forEach((repair) => log(`- ${repair.file}: ${repair.summary}`));
       } else if (!installing && doctorRepairAvailable) {
-        console.log("Skipped doctor repairs.");
+        log("Skipped doctor repairs.");
       }
 
       const managedInstructions = [];
       for (const fileName of syncChoices.instructionFiles) {
         const result = await upsertInstructionFile({ target, fileName, dryRun: options.dryRun });
-        console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
+        log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
         if (result.changed) managedInstructions.push(fileName);
       }
 
       let gitignoreManaged = false;
       if (syncChoices.manageGitignore) {
         const result = await upsertGitignore({ target, dryRun: options.dryRun });
-        console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
+        log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination}` : `Skipped ${result.destination}: ${result.reason}`);
         gitignoreManaged = result.changed || result.reason === "already present";
       }
 
       let rootScriptsManaged = false;
       if (syncChoices.manageRootScripts) {
         const result = await upsertRootScripts({ target, dryRun: options.dryRun });
-        console.log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination} with ${result.missing.length} scripts` : `Skipped ${result.destination}: ${result.reason}`);
+        log(result.changed ? `${options.dryRun ? "Would update" : "Updated"} ${result.destination} with ${result.missing.length} scripts` : `Skipped ${result.destination}: ${result.reason}`);
         rootScriptsManaged = result.changed || result.reason === "already present";
       }
 
-      const validation = options.skipValidate || (options.dryRun && installing)
-        ? null
-        : await validateTarget(target);
-      if (validation) console.log(`Validation: ${validation.ok ? "passed" : "failed"}`);
+      const validation = shouldValidateSync({ options, installing }) ? await validateTarget(target) : null;
+      if (validation) log(`Validation: ${validation.ok ? "passed" : "failed"}`);
 
       if (!options.dryRun) {
-        await writeMetadata(target, {
-          source: "architext-cli",
-          cliVersion: version,
-          operation: installing ? "install" : migrating ? "migrate" : "sync",
-          dataPolicy: installing ? "starter-written" : "preserved",
-          copiedInstallMigrated: migrating,
-          instructionFiles: Object.fromEntries(instructionFiles.map((fileName) => [fileName, syncChoices.instructionFiles.includes(fileName)])),
+        await writeMetadata(target, syncMetadataPatch({
+          version,
+          installing,
+          migrating,
+          instructionFiles,
+          syncChoices,
           managedInstructions,
           gitignoreManaged,
           rootScriptsManaged,
-          syncChoices: persistedSyncChoices(syncChoices),
-          lastValidation: validation ? { ok: validation.ok, at: new Date().toISOString() } : undefined
-        });
+          validation,
+          now: new Date().toISOString()
+        }));
       }
     };
 
@@ -1039,6 +997,8 @@ Rules:
 - Update only docs/architext/data/**/*.json unless the Architext package itself is being changed.
 - Treat manifest.schemaVersion as the Architext data schema contract version, not the installed CLI/package version. Update it only when the data contract changes or when architext doctor/sync applies a schema repair.
 - Reuse stable IDs, create nodes before references, keep flows ordered, and prefer source-path-backed claims.
+- Keep flow diagrams free of orphaned elements; every rendered node, edge, marker, and label must be traceable to the selected flow, a selected supporting relationship, or an explicit context relationship shown in the projection. Remove disconnected context, connect it with a labeled relationship, or split it into a separate view.
+- For sequence diagrams, create explicit return paths and group outbound plus return messages inside loops, retries, optional branches, and transaction or consistency blocks when the flow requires them.
 - Keep Release Truth data current when release scope, blockers, milestones, evidence, target dates, dependencies, or posture changes.
 - Treat Release Truth as reviewed release state, not a planning scratchpad: update detail files for completed, deferred, blocked, reprioritized, or newly scoped work, then refresh the generated release index from those facts.
 - Keep Release Path labels concise; put rationale, blocker explanation, evidence, dependencies, and next actions in detail data for the selected release item.
@@ -1120,7 +1080,12 @@ const contentTypes = {
 };
 
 function safeJoin(root, requestPath) {
-  const decoded = decodeURIComponent(requestPath);
+  let decoded;
+  try {
+    decoded = decodeURIComponent(requestPath);
+  } catch {
+    return "";
+  }
   const resolved = path.resolve(root, decoded.replace(/^\/+/, ""));
   if (resolved !== root && !resolved.startsWith(`${root}${path.sep}`)) return "";
   return resolved;
@@ -1135,6 +1100,48 @@ async function sendFile(response, file) {
 function sendJson(response, status, payload) {
   response.writeHead(status, { "content-type": "application/json; charset=utf-8" });
   response.end(`${JSON.stringify(payload, null, 2)}\n`);
+}
+
+function hostParts(hostHeader) {
+  if (!hostHeader) return null;
+  try {
+    const parsed = new URL(`http://${hostHeader}`);
+    return {
+      host: parsed.hostname.toLowerCase().replace(/^\[(.*)\]$/, "$1"),
+      port: parsed.port
+    };
+  } catch {
+    return null;
+  }
+}
+
+function sameOriginLoopbackRequest(request) {
+  const requestHost = hostParts(request.headers.host ?? "");
+  if (!requestHost || !isLoopbackHost(requestHost.host)) return false;
+  const origin = request.headers.origin;
+  if (!origin) return true;
+  try {
+    const originUrl = new URL(origin);
+    const originHost = originUrl.hostname.toLowerCase().replace(/^\[(.*)\]$/, "$1");
+    return isLoopbackHost(originHost)
+      && originHost === requestHost.host
+      && (originUrl.port || "") === requestHost.port;
+  } catch {
+    return false;
+  }
+}
+
+function isMutatingApiRequest(pathname, method) {
+  return method === "POST" && [
+    "/api/doctor",
+    "/api/sync-repair",
+    "/api/release-plans",
+    "/api/rules"
+  ].includes(pathname);
+}
+
+function mutationAuthorized(request, mutationToken) {
+  return Boolean(mutationToken) && request.headers[mutationTokenHeader] === mutationToken;
 }
 
 function sendServerError(response, error, requestPath) {
@@ -1155,29 +1162,27 @@ async function requestJson(request) {
 }
 
 async function approveReleasePlanRequest(target, payload) {
-  const action = payload.action ?? (payload.dryRun ? "preview" : "approve");
-  const request = () => approveReleasePlanApiRequest({
+  return approveReleasePlanApiRequest({
     target,
     payload,
     dataDir,
     readJson,
     writeJson,
-    validateTarget
+    validateTarget,
+    withTargetWriteLock
   });
-  return action === "preview" || payload.dryRun
-    ? request()
-    : withTargetWriteLock(target, request);
 }
 
 async function updateRulesRequest(target, payload) {
-  return withTargetWriteLock(target, () => updateRulesApiRequest({
+  return updateRulesApiRequest({
     target,
     payload,
     dataDir,
     readJson,
     writeJson,
-    validateTarget
-  }));
+    validateTarget,
+    withTargetWriteLock
+  });
 }
 
 async function statusApiRequest(target, version) {
@@ -1257,33 +1262,43 @@ async function doctorApiRequest(target, payload, version) {
   };
 }
 
-async function captureConsoleOutput(callback) {
-  const originalLog = console.log;
-  const lines = [];
-  console.log = (...args) => lines.push(args.join(" "));
-  try {
-    const result = await callback();
-    return { result, output: lines.join("\n") };
-  } finally {
-    console.log = originalLog;
-  }
-}
-
 async function syncRepairApiRequest(target, version) {
-  const { output: syncOutput } = await captureConsoleOutput(() => syncTarget(target, {
+  const lines = [];
+  const logger = { log: (...args) => lines.push(args.join(" ")) };
+  await syncTarget(target, {
     quiet: true,
     branch: "none",
     noAgents: true,
     noGitignore: true,
     noRootScripts: true
-  }, version));
+  }, version, logger);
   const validation = await validateTarget(target);
   return {
     ok: validation.ok,
-    output: syncOutput,
+    output: lines.join("\n"),
     validation,
     reload: validation.ok
   };
+}
+
+function listenOnPort(server, host, port) {
+  return new Promise((resolve, reject) => {
+    function onError(error) {
+      server.off("listening", onListening);
+      if (error?.code === "EADDRINUSE") {
+        resolve(false);
+        return;
+      }
+      reject(error);
+    }
+    function onListening() {
+      server.off("error", onError);
+      resolve(true);
+    }
+    server.once("error", onError);
+    server.once("listening", onListening);
+    server.listen(port, host);
+  });
 }
 
 async function createViewerServer({ target, host, port }) {
@@ -1291,24 +1306,45 @@ async function createViewerServer({ target, host, port }) {
     throw new Error("Package viewer assets are missing. Run npm run build before serving Architext.");
   }
   const targetDataDir = dataDir(target);
-  const watchHub = createDataWatchHub({ target, dataDir, validateTarget });
-  watchHub.start();
-  const server = createServer(createViewerRequestHandler({ target, targetDataDir, watchHub }));
+  const mutationToken = randomBytes(32).toString("base64url");
+  const lastPort = Math.min(65535, port + servePortSearchLimit - 1);
 
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(port, host, resolve);
-  });
-  server.once("close", () => watchHub.close());
-  return server;
+  for (let candidatePort = port; candidatePort <= lastPort; candidatePort += 1) {
+    const watchHub = createDataWatchHub({ target, dataDir, validateTarget });
+    const server = createServer(createViewerRequestHandler({ target, targetDataDir, watchHub, mutationToken }));
+    const listening = await listenOnPort(server, host, candidatePort);
+    if (!listening) {
+      server.close();
+      watchHub.close();
+      continue;
+    }
+    watchHub.start();
+    server.once("close", () => watchHub.close());
+    return { server, port: candidatePort };
+  }
+
+  throw new Error(`No available loopback port found from ${port} through ${lastPort}.`);
 }
 
-export function createViewerRequestHandler({ target, targetDataDir = dataDir(target), watchHub }) {
+export function createViewerRequestHandler({ target, targetDataDir = dataDir(target), watchHub, mutationToken = randomBytes(32).toString("base64url") }) {
   return async function viewerRequestHandler(request, response) {
     try {
       const url = new URL(request.url || "/", "http://127.0.0.1");
+      if (!sameOriginLoopbackRequest(request)) {
+        sendJson(response, 403, { error: "Architext serve accepts requests only from its loopback origin." });
+        return;
+      }
+      if (isMutatingApiRequest(url.pathname, request.method) && !mutationAuthorized(request, mutationToken)) {
+        sendJson(response, 403, { error: "Architext write request is not authorized." });
+        return;
+      }
       if (url.pathname === "/api/data-events" && request.method === "GET") {
         watchHub.attach(response);
+        return;
+      }
+
+      if (url.pathname === "/api/session" && request.method === "GET") {
+        sendJson(response, 200, { mutationToken });
         return;
       }
 

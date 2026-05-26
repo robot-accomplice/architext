@@ -306,6 +306,50 @@ test("routeEdges avoids non-endpoint node bodies when a blocker is between endpo
   assert.equal(routeIntersectsRect(route, input.nodeRects.get("blocker"), 0), false);
 });
 
+test("routeEdges falls back when grid routing exceeds its budget", () => {
+  const nodeRects = new Map([
+    ["source", { x: 20, y: 200, width: 80, height: 40 }],
+    ["target", { x: 900, y: 200, width: 80, height: 40 }]
+  ]);
+  const laneIndexByNode = new Map([
+    ["source", 0],
+    ["target", 9]
+  ]);
+  const rowIndexByNode = new Map([
+    ["source", 0],
+    ["target", 0]
+  ]);
+  for (let index = 0; index < 80; index += 1) {
+    const id = `blocker-${index}`;
+    nodeRects.set(id, {
+      x: 130 + (index % 12) * 60,
+      y: 40 + Math.floor(index / 12) * 50,
+      width: 42,
+      height: 32
+    });
+    laneIndexByNode.set(id, 1 + (index % 8));
+    rowIndexByNode.set(id, Math.floor(index / 8));
+  }
+  const stats = {};
+  const input = {
+    relationships: [{ id: "budgeted-route", from: "source", to: "target" }],
+    visibleNodeIds: new Set(nodeRects.keys()),
+    nodeRects,
+    laneIndexByNode,
+    rowIndexByNode,
+    canvasWidth: 1000,
+    canvasHeight: 500,
+    marginY: 76,
+    gridRouteMaxPoints: 1,
+    stats
+  };
+
+  const route = routeEdges(input).get("budgeted-route");
+
+  assertFiniteRoute(route);
+  assert.ok(stats.gridRouteBudgetBailouts > 0);
+});
+
 test("routeEdges creates distinct label positions for repeated edge pairs", () => {
   const input = baseInput({
     relationships: [

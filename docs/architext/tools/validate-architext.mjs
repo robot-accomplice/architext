@@ -50,7 +50,14 @@ const releaseSchemaFiles = {
 };
 
 function readJson(filePath) {
-  return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  try {
+    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      throw new Error(`Invalid JSON in ${filePath}: ${error.message}`);
+    }
+    throw error;
+  }
 }
 
 function requireUnique(items, label, errors) {
@@ -119,73 +126,78 @@ function validateReferences(model, errors) {
   }
 }
 
-const ajv = new Ajv2020({ allErrors: true, strict: true });
-addFormats(ajv);
+function main() {
+  const options = parseArgs(process.argv.slice(2));
+  const dataDir = options.dataDir;
+  const schemaDir = options.schemaDir;
+  const ajv = new Ajv2020({ allErrors: true, strict: true });
+  addFormats(ajv);
 
-const schemas = Object.fromEntries(
-  Object.entries(schemaFiles).map(([key, file]) => [key, readJson(path.join(schemaDir, file))])
-);
-const releaseSchemas = Object.fromEntries(
-  Object.entries(releaseSchemaFiles).map(([key, file]) => [key, readJson(path.join(schemaDir, file))])
-);
+  const schemas = Object.fromEntries(
+    Object.entries(schemaFiles).map(([key, file]) => [key, readJson(path.join(schemaDir, file))])
+  );
+  const releaseSchemas = Object.fromEntries(
+    Object.entries(releaseSchemaFiles).map(([key, file]) => [key, readJson(path.join(schemaDir, file))])
+  );
 
-for (const schema of [...Object.values(schemas), ...Object.values(releaseSchemas)]) {
-  ajv.addSchema(schema);
-}
+  for (const schema of [...Object.values(schemas), ...Object.values(releaseSchemas)]) {
+    ajv.addSchema(schema);
+  }
 
-const manifest = readJson(path.join(dataDir, "manifest.json"));
-const releases = manifest.files.releases ? readReleases(dataDir, manifest.files.releases) : null;
-const roadmap = manifest.files.roadmap ? readJson(path.join(dataDir, manifest.files.roadmap)) : null;
-const rules = manifest.files.rules ? readJson(path.join(dataDir, manifest.files.rules)) : null;
-const model = {
-  manifest,
-  nodes: readJson(path.join(dataDir, manifest.files.nodes)),
-  flows: readJson(path.join(dataDir, manifest.files.flows)),
-  views: readJson(path.join(dataDir, manifest.files.views)),
-  dataClassification: readJson(path.join(dataDir, manifest.files.dataClassification)),
-  decisions: readJson(path.join(dataDir, manifest.files.decisions)),
-  risks: readJson(path.join(dataDir, manifest.files.risks)),
-  glossary: readJson(path.join(dataDir, manifest.files.glossary)),
-  ...(rules ? { rules } : {}),
-  ...(roadmap ? { roadmap } : {}),
-  ...(releases ? { releases } : {})
-};
+  const manifest = readJson(path.join(dataDir, "manifest.json"));
+  const releases = manifest.files.releases ? readReleases(dataDir, manifest.files.releases) : null;
+  const roadmap = manifest.files.roadmap ? readJson(path.join(dataDir, manifest.files.roadmap)) : null;
+  const rules = manifest.files.rules ? readJson(path.join(dataDir, manifest.files.rules)) : null;
+  const model = {
+    manifest,
+    nodes: readJson(path.join(dataDir, manifest.files.nodes)),
+    flows: readJson(path.join(dataDir, manifest.files.flows)),
+    views: readJson(path.join(dataDir, manifest.files.views)),
+    dataClassification: readJson(path.join(dataDir, manifest.files.dataClassification)),
+    decisions: readJson(path.join(dataDir, manifest.files.decisions)),
+    risks: readJson(path.join(dataDir, manifest.files.risks)),
+    glossary: readJson(path.join(dataDir, manifest.files.glossary)),
+    ...(rules ? { rules } : {}),
+    ...(roadmap ? { roadmap } : {}),
+    ...(releases ? { releases } : {})
+  };
 
-const errors = [];
+  const errors = [];
 
-for (const [key, schema] of Object.entries(schemas)) {
-  if (key === "roadmap" && !model.roadmap) continue;
-  if (key === "rules" && !model.rules) continue;
-  const validate = ajv.getSchema(schema.$id);
-  const value = key === "dataClassification" ? model.dataClassification : model[key];
-  if (!validate(value)) {
-    for (const error of validate.errors ?? []) {
-      errors.push(`${key}${error.instancePath}: ${error.message}`);
+  for (const [key, schema] of Object.entries(schemas)) {
+    if (key === "roadmap" && !model.roadmap) continue;
+    if (key === "rules" && !model.rules) continue;
+    const validate = ajv.getSchema(schema.$id);
+    const value = key === "dataClassification" ? model.dataClassification : model[key];
+    if (!validate(value)) {
+      for (const error of validate.errors ?? []) {
+        errors.push(`${key}${error.instancePath}: ${error.message}`);
+      }
     }
   }
+
+  requireUnique(model.nodes.nodes, "nodes", errors);
+  requireUnique(model.flows.flows, "flows", errors);
+  requireUnique(model.views.views, "views", errors);
+  requireUnique(model.dataClassification.classes, "dataClassification.classes", errors);
+  requireUnique(model.decisions.decisions, "decisions", errors);
+  requireUnique(model.risks.risks, "risks", errors);
+  if (model.roadmap) requireUnique(model.roadmap.items, "roadmap.items", errors);
+  if (model.rules) requireUnique(model.rules.rules, "rules", errors);
+  validateReferences(model, errors);
+
+  if (model.releases) {
+    validateReleaseData(model.releases, errors, ajv, releaseSchemas);
+  }
+
+  if (errors.length > 0) {
+    console.error("Architext validation failed:");
+    for (const error of errors) console.error(`- ${error}`);
+    process.exit(1);
+  }
+
+  console.log("Architext validation passed.");
 }
-
-requireUnique(model.nodes.nodes, "nodes", errors);
-requireUnique(model.flows.flows, "flows", errors);
-requireUnique(model.views.views, "views", errors);
-requireUnique(model.dataClassification.classes, "dataClassification.classes", errors);
-requireUnique(model.decisions.decisions, "decisions", errors);
-requireUnique(model.risks.risks, "risks", errors);
-if (model.roadmap) requireUnique(model.roadmap.items, "roadmap.items", errors);
-if (model.rules) requireUnique(model.rules.rules, "rules", errors);
-validateReferences(model, errors);
-
-if (model.releases) {
-  validateReleaseData(model.releases, errors);
-}
-
-if (errors.length > 0) {
-  console.error("Architext validation failed:");
-  for (const error of errors) console.error(`- ${error}`);
-  process.exit(1);
-}
-
-console.log("Architext validation passed.");
 
 function readReleases(baseDir, indexFile) {
   const indexPath = path.join(baseDir, indexFile);
@@ -197,7 +209,7 @@ function readReleases(baseDir, indexFile) {
   };
 }
 
-function validateReleaseData(releases, errors) {
+function validateReleaseData(releases, errors, ajv, releaseSchemas) {
   const releaseIndexSchema = ajv.getSchema(releaseSchemas.releaseIndex.$id);
   if (!releaseIndexSchema(releases.index)) {
     for (const error of releaseIndexSchema.errors ?? []) {
@@ -217,4 +229,12 @@ function validateReleaseData(releases, errors) {
   requireUnique(releases.index.releases, "releases.index", errors);
   requireUnique(releases.details, "releases.details", errors);
   validateReleaseReferences(releases, errors);
+}
+
+try {
+  main();
+} catch (error) {
+  console.error("Architext validation failed:");
+  console.error(`- ${error.message}`);
+  process.exit(1);
 }

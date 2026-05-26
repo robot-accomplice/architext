@@ -1,12 +1,14 @@
 import { closeSync, openSync } from "node:fs";
-import { mkdir, readdir, rm } from "node:fs/promises";
+import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { isLoopbackHost } from "./command-line.mjs";
 import { readJson, writeJson } from "./runtime.mjs";
 
 const serveRuntimeDir = path.join(tmpdir(), "architext-serve");
+const serveLockStaleMs = 30000;
 
 function serveUrl(options) {
   return `http://${options.host}:${options.port}/`;
@@ -18,6 +20,10 @@ function serveStateKey(target) {
 
 function serveStatePath(target) {
   return path.join(serveRuntimeDir, `${serveStateKey(target)}.json`);
+}
+
+function serveLockPath(target) {
+  return path.join(serveRuntimeDir, `${serveStateKey(target)}.lock`);
 }
 
 function serveStatePathById(id) {
@@ -58,6 +64,41 @@ async function removeServeStateById(id) {
   await rm(serveStatePathById(id), { force: true });
 }
 
+async function removeServeStateIfOwned(target, expected) {
+  const state = await readServeState(target);
+  if (state?.pid === expected.pid && state?.mode === expected.mode) {
+    await removeServeState(target);
+  }
+}
+
+async function withServeStateLock(target, callback, { timeoutMs = 5000, pollMs = 50 } = {}) {
+  await mkdir(serveRuntimeDir, { recursive: true });
+  const lockPath = serveLockPath(target);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() <= deadline) {
+    let acquired = false;
+    try {
+      await mkdir(lockPath);
+      acquired = true;
+    } catch (error) {
+      if (error?.code !== "EEXIST") throw error;
+      const lockStat = await stat(lockPath).catch(() => null);
+      if (lockStat && Date.now() - lockStat.mtimeMs > serveLockStaleMs) {
+        await rm(lockPath, { recursive: true, force: true });
+        continue;
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
+    }
+    if (!acquired) continue;
+    try {
+      return await callback();
+    } finally {
+      await rm(lockPath, { recursive: true, force: true });
+    }
+  }
+  throw new Error(`Timed out waiting for Architext serve lifecycle lock: ${lockPath}`);
+}
+
 function pidExists(pid) {
   if (!pid || !Number.isInteger(pid)) return false;
   try {
@@ -68,7 +109,17 @@ function pidExists(pid) {
   }
 }
 
+export function isLoopbackServeUrl(url) {
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" && isLoopbackHost(parsed.hostname);
+  } catch {
+    return false;
+  }
+}
+
 async function urlReachable(url) {
+  if (!isLoopbackServeUrl(url)) return false;
   try {
     const response = await fetch(url, { method: "GET" });
     return response.ok;
@@ -84,6 +135,16 @@ async function waitForUrl(url, timeoutMs = 5000) {
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   return false;
+}
+
+async function waitForChildServeState(target, pid, timeoutMs = 5000) {
+  const started = Date.now();
+  while (Date.now() - started < timeoutMs) {
+    const state = await readServeState(target);
+    if (state?.pid === pid && await urlReachable(state.url)) return state;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  return null;
 }
 
 export function browserOpenCommand(platform, url) {
@@ -119,8 +180,21 @@ function formatServeLink(url) {
 }
 
 async function serveForeground({ target, options, createViewerServer }) {
-  await createViewerServer({ target, host: options.host, port: options.port });
-  const url = serveUrl(options);
+  const { server, port } = await createViewerServer({ target, host: options.host, port: options.port });
+  const url = serveUrl({ ...options, port });
+  const state = {
+    target: path.resolve(target),
+    pid: process.pid,
+    host: options.host,
+    port,
+    url,
+    mode: "foreground",
+    startedAt: new Date().toISOString()
+  };
+  await writeServeState(target, state);
+  server.once("close", () => {
+    void removeServeStateIfOwned(target, state);
+  });
   console.log(`Serving Architext for ${target}`);
   console.log(`Open ${formatServeLink(url)}`);
   if (options.open && !options.noOpen) {
@@ -155,7 +229,7 @@ async function readServeInstances({ cleanupStale = true } = {}) {
 
 function knownInstanceError(id, instances) {
   const known = instances.length ? ` Known instances: ${instances.map((instance) => instance.id).join(", ")}` : " No running instances are recorded.";
-  return new Error(`Unknown Architext background server instance: ${id}.${known}`);
+  return new Error(`Unknown Architext serve instance: ${id}.${known}`);
 }
 
 async function resolveInstance(options, target) {
@@ -176,79 +250,86 @@ async function resolveInstance(options, target) {
 }
 
 async function serveBackground({ target, options, cliEntryPath }) {
-  const existing = await readServeState(target);
-  if (existing && !(await staleServeState(existing))) {
-    console.log(`Architext is already serving ${existing.target}`);
-    console.log(`Open ${formatServeLink(existing.url)}`);
+  return withServeStateLock(target, async () => {
+    const existing = await readServeState(target);
+    if (existing && !(await staleServeState(existing))) {
+      console.log(`Architext is already serving ${existing.target}`);
+      console.log(`Open ${formatServeLink(existing.url)}`);
+      if (options.open && !options.noOpen) {
+        const opened = await openSystemBrowser(existing.url);
+        if (!opened.ok) console.error(`Browser launch failed: ${opened.message}`);
+      }
+      return;
+    }
+    if (existing) await removeServeState(target);
+
+    const logPath = path.join(serveRuntimeDir, `${serveStateKey(target)}.log`);
+    const logFd = openSync(logPath, "a");
+    let child;
+    try {
+      child = spawn(process.execPath, [
+        cliEntryPath,
+        "serve",
+        target,
+        "--foreground",
+        "--host",
+        options.host,
+        "--port",
+        String(options.port),
+        "--no-open"
+      ], {
+        detached: true,
+        stdio: ["ignore", logFd, logFd]
+      });
+      child.unref();
+    } finally {
+      closeSync(logFd);
+    }
+
+    const childState = await waitForChildServeState(target, child.pid);
+    if (!childState) {
+      if (pidExists(child.pid)) {
+        try {
+          process.kill(child.pid, "SIGTERM");
+        } catch {
+          // The child may have exited between the liveness check and signal.
+        }
+      }
+      const url = serveUrl(options);
+      throw new Error(`Architext background serve did not become reachable at ${url}. Check ${logPath}`);
+    }
+
+    await writeServeState(target, {
+      target: path.resolve(target),
+      pid: child.pid,
+      host: childState.host,
+      port: childState.port,
+      url: childState.url,
+      logPath,
+      mode: "background",
+      startedAt: new Date().toISOString()
+    });
+    console.log(`Serving Architext for ${target} in the background`);
+    console.log(`Open ${formatServeLink(childState.url)}`);
     if (options.open && !options.noOpen) {
-      const opened = await openSystemBrowser(existing.url);
+      const opened = await openSystemBrowser(childState.url);
       if (!opened.ok) console.error(`Browser launch failed: ${opened.message}`);
     }
-    return;
-  }
-  if (existing) await removeServeState(target);
-
-  await mkdir(serveRuntimeDir, { recursive: true });
-  const logPath = path.join(serveRuntimeDir, `${serveStateKey(target)}.log`);
-  const logFd = openSync(logPath, "a");
-  const child = spawn(process.execPath, [
-    cliEntryPath,
-    "serve",
-    target,
-    "--foreground",
-    "--host",
-    options.host,
-    "--port",
-    String(options.port),
-    "--no-open"
-  ], {
-    detached: true,
-    stdio: ["ignore", logFd, logFd]
   });
-  child.unref();
-
-  const url = serveUrl(options);
-  if (!(await waitForUrl(url))) {
-    if (pidExists(child.pid)) {
-      try {
-        process.kill(child.pid, "SIGTERM");
-      } catch {
-        // The child may have exited between the liveness check and signal.
-      }
-    }
-    closeSync(logFd);
-    throw new Error(`Architext background serve did not become reachable at ${url}. Check ${logPath}`);
-  }
-
-  await writeServeState(target, {
-    target: path.resolve(target),
-    pid: child.pid,
-    host: options.host,
-    port: options.port,
-    url,
-    logPath,
-    startedAt: new Date().toISOString()
-  });
-  closeSync(logFd);
-  console.log(`Serving Architext for ${target} in the background`);
-  console.log(`Open ${formatServeLink(url)}`);
-  if (options.open && !options.noOpen) {
-    const opened = await openSystemBrowser(url);
-    if (!opened.ok) console.error(`Browser launch failed: ${opened.message}`);
-  }
 }
 
 async function serveStatus(target, options) {
   const state = await resolveInstance(options, target);
   if (!state) {
-    console.log(`No recorded Architext background server for ${target}`);
+    console.log(`No recorded Architext serve instance for ${target}`);
     return;
   }
   console.log(`Architext is serving ${state.target}`);
   console.log(`ID: ${state.id}`);
   console.log(`PID: ${state.pid}`);
   console.log(`Open ${formatServeLink(state.url)}`);
-  console.log(`Logs: ${state.logPath}`);
+  console.log(`Mode: ${state.mode ?? "background"}`);
+  if (state.logPath) console.log(`Logs: ${state.logPath}`);
 }
 
 async function stopState(state) {
@@ -271,11 +352,11 @@ async function stopState(state) {
 async function stopServe(target, options) {
   const state = await resolveInstance(options, target);
   if (!state) {
-    console.log(`No recorded Architext background server for ${target}`);
+    console.log(`No recorded Architext serve instance for ${target}`);
     return;
   }
   await stopState(state);
-  console.log(`Stopped Architext background server ${state.id} for ${state.target}`);
+  console.log(`Stopped Architext serve instance ${state.id} for ${state.target}`);
 }
 
 async function listServeInstances(options) {
@@ -289,13 +370,13 @@ async function listServeInstances(options) {
     return;
   }
   if (filtered.length === 0) {
-    console.log("No recorded Architext background servers are running.");
+    console.log("No recorded Architext serve instances are running.");
     return;
   }
-  console.log("Architext background servers:");
+  console.log("Architext serve instances:");
   for (const instance of filtered) {
-    console.log(`${instance.id}  ${instance.pid}  ${instance.url}  ${instance.target}`);
-    console.log(`  Logs: ${instance.logPath}`);
+    console.log(`${instance.id}  ${instance.pid}  ${instance.mode ?? "background"}  ${instance.url}  ${instance.target}`);
+    if (instance.logPath) console.log(`  Logs: ${instance.logPath}`);
     console.log(`  Started: ${instance.startedAt}`);
   }
 }
@@ -303,8 +384,11 @@ async function listServeInstances(options) {
 async function restartServe(target, options, cliEntryPath, refreshTarget) {
   const state = await resolveInstance(options, target);
   if (!state) {
-    console.log(`No recorded Architext background server for ${target}`);
+    console.log(`No recorded Architext serve instance for ${target}`);
     return;
+  }
+  if (state.mode === "foreground") {
+    throw new Error("Foreground serve instances cannot be restarted; stop the owning terminal process and start serve again.");
   }
   if (!refreshTarget) throw new Error("Serve refresh is not configured.");
   console.log(`Syncing Architext target before restart: ${state.target}`);

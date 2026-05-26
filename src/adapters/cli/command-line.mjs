@@ -1,3 +1,5 @@
+import { isIP } from "node:net";
+
 const knownCommands = new Set([
   "install",
   "upgrade",
@@ -44,8 +46,8 @@ Options:
   --prompt                   Force sync prompts instead of offering saved answers.
   --foreground               Run serve in the current terminal until interrupted.
   --background               Run serve detached and return control after startup.
-  --list                     List all recorded background serve instances.
-  --instance <id>            Target a listed background serve instance.
+  --list                     List all recorded live serve instances.
+  --instance <id>            Target a listed serve instance.
   --restart                  Sync and restart a recorded background serve instance.
   --refresh                  Alias for --restart.
   --update                   Alias for --restart. Use --check-updates for package updates.
@@ -53,9 +55,10 @@ Options:
   --open                     Open the local viewer in the system browser.
   --no-open                  Do not open the system browser.
   --host <host>              Serve bind host. Defaults to 127.0.0.1.
-  --port <port>              Serve bind port. Defaults to 4317.
-  --status                   Show the recorded background serve process.
-  --stop                     Stop the recorded background serve process.
+                              Must be localhost, 127.0.0.0/8, or ::1.
+  --port <port>              Preferred serve port. Defaults to 4317; startup advances if occupied.
+  --status                   Show the recorded serve process.
+  --stop                     Stop the recorded serve process.
   --json                     Machine-readable status/doctor output.
   --dry-run                  Show intended changes without writing files.
   --force                    Rerun lifecycle management even when current.
@@ -234,9 +237,19 @@ function validateOptions(options) {
     throw new Error("--instance requires --status, --stop, --list, or --restart");
   }
   if (!options.host) throw new Error("--host requires a value");
+  if (!isLoopbackHost(options.host)) {
+    throw new Error("--host must be a loopback address: localhost, 127.0.0.1, or ::1");
+  }
   if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65535) {
     throw new Error("--port must be an integer between 1 and 65535");
   }
+}
+
+export function isLoopbackHost(host) {
+  const normalized = host.toLowerCase().replace(/^\[(.*)\]$/, "$1");
+  if (normalized === "localhost" || normalized === "::1") return true;
+  if (isIP(normalized) === 4) return normalized.startsWith("127.");
+  return false;
 }
 
 function assertServeCommand(command, arg) {

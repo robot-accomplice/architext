@@ -23,10 +23,21 @@ complete.
 - Reuse existing IDs for existing concepts.
 - Create new nodes before referencing them from flows or views.
 - Keep flows ordered.
+- Keep flow diagrams free of orphaned elements. Every rendered node, edge,
+  marker, and label must be traceable to the selected flow, a selected
+  supporting relationship, or an explicit context relationship shown in the
+  projection. Remove disconnected context, connect it with a labeled
+  relationship, or split it into a separate view; do not leave loose boxes,
+  endpoints, markers, or labels for the reader to interpret.
 - Use a `workflow` view in `docs/architext/data/views.json` when ordered work
   or use-case paths need a dedicated Flows projection. Workflow views should
   reference existing nodes and selected flows instead of duplicating flow facts
   or inventing workflow-specific routing rules.
+- For sequence diagrams, create explicit return paths for request/response,
+  command/result, event/acknowledgement, and failure-return interactions when
+  the flow requires them. Use loops, retries, optional branches, and
+  transaction or consistency blocks to group outbound and return messages
+  together instead of leaving return behavior implied.
 - Update data classification whenever data movement changes.
 - Update risks when adding external dependencies, persistence, async
   processing, sensitive data handling, trust boundary crossings, or operational

@@ -7,6 +7,11 @@ test("package update version comparison uses semantic version precedence", () =>
   assert.equal(compareVersions("1.4.4", "1.4.4"), 0);
   assert.equal(compareVersions("1.4.3", "1.4.4"), -1);
   assert.equal(compareVersions("v2.0.0", "1.9.9"), 1);
+  assert.equal(compareVersions("1.4.5", "1.4.5-beta.2"), 1);
+  assert.equal(compareVersions("1.4.5-beta.10", "1.4.5-beta.2"), 1);
+  assert.equal(compareVersions("1.4.5-beta.2", "1.4.5-beta.10"), -1);
+  assert.equal(compareVersions("1.4.5-alpha.1", "1.4.5-alpha.beta"), -1);
+  assert.equal(compareVersions("1.4.5+build.1", "1.4.5+build.2"), 0);
 });
 
 test("package update refresh selection supports all, none, indexes, and ids", () => {

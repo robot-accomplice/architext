@@ -1,0 +1,143 @@
+{
+  "id": "v1-4-11",
+  "version": "1.4.11",
+  "name": "Architext 1.4.11 Diagram Instruction and Serve Port Corrections",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Architext 1.4.11 strengthens diagram-maintenance instructions and restores automatic serve port fallback when the preferred loopback port is occupied.",
+  "targetDate": "2026-05-26",
+  "lastUpdated": "2026-05-26T12:45:00.000Z",
+  "updateSource": "1.4.11 release gate",
+  "scope": {
+    "required": [
+      {
+        "id": "diagram-instruction-quality",
+        "title": "Diagram instruction quality",
+        "kind": "documentation",
+        "status": "complete",
+        "summary": "Managed Architext instructions now require explicit sequence return paths, loop/retry/optional/transaction grouping, and flow diagrams with every rendered element traceable to selected flow or context relationships.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-26T12:00:00.000Z",
+        "workstreamId": "agent-instructions",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/ARCHITECTURE_PLAN.md",
+          "docs/architext/LLM_ARCHITEXT.md",
+          "docs/architext/AGENTS_APPENDIX.md",
+          "src/adapters/cli/architext-cli.mjs",
+          "test/cli.test.mjs"
+        ]
+      },
+      {
+        "id": "serve-port-fallback",
+        "title": "Serve port fallback",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Foreground and background serve now advance from the preferred port to the next available loopback port instead of failing with EADDRINUSE.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-26T12:00:00.000Z",
+        "workstreamId": "serve-lifecycle",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/ARCHITECTURE_PLAN.md",
+          "README.md",
+          "docs/architext/README.md",
+          "src/adapters/cli/architext-cli.mjs",
+          "src/adapters/cli/serve-lifecycle.mjs",
+          "test/serve-lifecycle.test.mjs"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "agent-instructions",
+      "name": "Agent Instructions",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Keep model-facing diagram maintenance guidance explicit and test-covered.",
+      "progress": 100,
+      "itemIds": [
+        "diagram-instruction-quality"
+      ],
+      "evidence": [
+        "test/cli.test.mjs",
+        "npm run validate"
+      ]
+    },
+    {
+      "id": "serve-lifecycle",
+      "name": "Serve Lifecycle",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Keep local viewer startup self-recovering when the preferred port is occupied.",
+      "progress": 100,
+      "itemIds": [
+        "serve-port-fallback"
+      ],
+      "evidence": [
+        "test/serve-lifecycle.test.mjs",
+        "npm test"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-candidate-ready",
+      "label": "Release candidate ready",
+      "status": "complete",
+      "targetWindow": "Patch release",
+      "order": 1,
+      "itemIds": [
+        "diagram-instruction-quality",
+        "serve-port-fallback"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-1-4-11-success-criteria",
+      "label": "1.4.11 success criteria",
+      "href": "docs/architecture/RELEASE_1_4_11_SUCCESS_CRITERIA.md",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "release-1-4-11-cli-tests",
+      "label": "node --test test/cli.test.mjs",
+      "href": "test/cli.test.mjs",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "release-1-4-11-serve-tests",
+      "label": "node --test test/serve-lifecycle.test.mjs",
+      "href": "test/serve-lifecycle.test.mjs",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "release-1-4-11-check",
+      "label": "npm run release:check",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "package-version-1-4-11",
+      "label": "package.json version 1.4.11",
+      "href": "package.json",
+      "kind": "document",
+      "status": "complete"
+    }
+  ]
+}

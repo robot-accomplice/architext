@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-4-7",
+  "currentReleaseId": "v1-4-11",
   "releases": [
     {
       "id": "v1-1-2",
@@ -308,6 +308,93 @@
         "stretch": 0
       },
       "file": "v1-4-7.json"
+    },
+    {
+      "id": "v1-4-8",
+      "version": "1.4.8",
+      "name": "Architext 1.4.8 Audit Hardening and Release Path UX",
+      "status": "completed",
+      "posture": "shipped",
+      "targetDate": "2026-05-25",
+      "releasedAt": "2026-05-25T14:51:06.000Z",
+      "lastUpdated": "2026-05-25T14:51:06.000Z",
+      "summary": "Architext 1.4.8 hardens local write boundaries, serializes dashboard write paths, improves release safety checks, and lets Release Path milestones collapse with compact completion counts.",
+      "counts": {
+        "features": 2,
+        "bugFixes": 7,
+        "workstreams": 4,
+        "blockers": 0,
+        "complete": 12,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-8.json"
+    },
+    {
+      "id": "v1-4-9",
+      "version": "1.4.9",
+      "name": "Architext 1.4.9 Release Path Milestone Status",
+      "status": "completed",
+      "posture": "shipped",
+      "targetDate": "2026-05-25",
+      "releasedAt": "2026-05-25T15:24:07.000Z",
+      "lastUpdated": "2026-05-25T15:24:07.000Z",
+      "summary": "Architext 1.4.9 keeps Release Path milestone status coherent with linked item completion so fully complete milestones no longer display as in progress.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 1,
+        "workstreams": 1,
+        "blockers": 0,
+        "complete": 1,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-9.json"
+    },
+    {
+      "id": "v1-4-10",
+      "version": "1.4.10",
+      "name": "Architext 1.4.10 Viewer Interaction Corrections",
+      "status": "completed",
+      "posture": "shipped",
+      "targetDate": "2026-05-25",
+      "releasedAt": "2026-05-25T16:55:00.000Z",
+      "lastUpdated": "2026-05-25T16:55:00.000Z",
+      "summary": "Architext 1.4.10 makes foreground serve processes discoverable, keeps diagram legends above contained canvases, and enforces compatible Flow View and Flow selections.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 3,
+        "workstreams": 2,
+        "blockers": 0,
+        "complete": 3,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-10.json"
+    },
+    {
+      "id": "v1-4-11",
+      "version": "1.4.11",
+      "name": "Architext 1.4.11 Diagram Instruction and Serve Port Corrections",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-05-26",
+      "lastUpdated": "2026-05-26T12:45:00.000Z",
+      "summary": "Architext 1.4.11 strengthens diagram-maintenance instructions and restores automatic serve port fallback when the preferred loopback port is occupied.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 1,
+        "workstreams": 2,
+        "blockers": 0,
+        "complete": 2,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-4-11.json"
     }
   ]
 }

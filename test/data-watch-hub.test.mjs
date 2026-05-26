@@ -8,6 +8,7 @@ class ResponseStub extends EventEmitter {
     super();
     this.body = "";
     this.headers = null;
+    this.writeResults = [];
   }
 
   writeHead(status, headers) {
@@ -17,6 +18,7 @@ class ResponseStub extends EventEmitter {
 
   write(value) {
     this.body += value;
+    return this.writeResults.length ? this.writeResults.shift() : true;
   }
 
   end() {
@@ -53,6 +55,50 @@ test("data watch hub debounces json writes and broadcasts validated refresh even
   assert.equal(validateCount, 1);
   assert.match(response.body, /"type":"valid"/);
   assert.match(response.body, /"version":1/);
+});
+
+test("data watch hub rejects clients over the configured cap", () => {
+  const first = new ResponseStub();
+  const second = new ResponseStub();
+  const hub = createDataWatchHub({
+    target: "/tmp/repo",
+    dataDir: (target) => `${target}/docs/architext/data`,
+    validateTarget: async () => ({ ok: true, output: "valid" }),
+    watchFn: () => ({ close() {} }),
+    maxClients: 1
+  });
+
+  hub.attach(first);
+  hub.attach(second);
+
+  assert.equal(first.status, 200);
+  assert.equal(second.status, 503);
+  assert.equal(second.ended, true);
+});
+
+test("data watch hub closes clients that apply write back-pressure", async () => {
+  let timerCallback = null;
+  const response = new ResponseStub();
+  response.writeResults = [true, false];
+  const hub = createDataWatchHub({
+    target: "/tmp/repo",
+    dataDir: (target) => `${target}/docs/architext/data`,
+    validateTarget: async () => ({ ok: true, output: "valid" }),
+    watchFn: () => ({ close() {} }),
+    setTimer: (callback) => {
+      timerCallback = callback;
+      return callback;
+    },
+    clearTimer: () => {
+      timerCallback = null;
+    }
+  });
+
+  hub.attach(response);
+  hub.schedule("flows.json");
+  await timerCallback();
+
+  assert.equal(response.ended, true);
 });
 
 test("data watch hub ignores non-json writes and reports invalid validation state", async () => {

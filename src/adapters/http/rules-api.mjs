@@ -1,7 +1,44 @@
 import path from "node:path";
 import { deleteRule, moveRule, moveRuleBefore, upsertRule } from "../../domain/architecture-model/rules.mjs";
 
+const rulesActionHandlers = {
+  delete: (document, payload) => deleteRule(document, payload.id),
+  move: (document, payload) => moveRule(document, payload.id, payload.direction),
+  "move-before": (document, payload) => moveRuleBefore(document, payload.id, payload.beforeId),
+  update: (document, payload) => upsertRule(document, payload.rule)
+};
+
+function applyRulesAction(document, payload) {
+  const action = payload.action ?? "update";
+  const handler = rulesActionHandlers[action];
+  if (!handler) throw new Error(`Unknown rules action "${action}"`);
+  return handler(document, payload);
+}
+
+async function withoutTargetWriteLock(_target, callback) {
+  return callback();
+}
+
 export async function updateRulesRequest({
+  target,
+  payload,
+  dataDir,
+  readJson,
+  writeJson,
+  validateTarget,
+  withTargetWriteLock = withoutTargetWriteLock
+}) {
+  return withTargetWriteLock(target, () => updateRulesRequestUnlocked({
+    target,
+    payload,
+    dataDir,
+    readJson,
+    writeJson,
+    validateTarget
+  }));
+}
+
+async function updateRulesRequestUnlocked({
   target,
   payload,
   dataDir,
@@ -14,17 +51,7 @@ export async function updateRulesRequest({
   if (!manifest.files?.rules) throw new Error("Rules editing requires manifest.files.rules");
   const rulesPath = path.join(targetDataDir, manifest.files.rules);
   const rulesDocument = await readJson(rulesPath);
-  const action = payload.action ?? "update";
-  const nextDocument = action === "delete"
-    ? deleteRule(rulesDocument, payload.id)
-    : action === "move"
-      ? moveRule(rulesDocument, payload.id, payload.direction)
-      : action === "move-before"
-        ? moveRuleBefore(rulesDocument, payload.id, payload.beforeId)
-      : action === "update"
-        ? upsertRule(rulesDocument, payload.rule)
-        : null;
-  if (!nextDocument) throw new Error(`Unknown rules action "${action}"`);
+  const nextDocument = applyRulesAction(rulesDocument, payload);
   await writeJson(rulesPath, nextDocument);
   const validation = await validateTarget(target);
   if (!validation.ok) {

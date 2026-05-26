@@ -1,6 +1,7 @@
 import { pathToSvgWithHops } from "./routeRendering.js";
 import { createRouteIndex } from "./routeIndex.js";
 import {
+  bendCount,
   boundsForPoints,
   distanceToRect,
   distanceToRectSquared,
@@ -43,6 +44,86 @@ export function routeIntersectsRect(route, rect, padding = 0) {
 
 function renderOrthogonalRoute(route, previousRoutes) {
   return withReadableLabel({ ...route, d: pathToSvgWithHops(route.points, previousRoutes), sampleBounds: boundsForPoints(route.samples), style: "orthogonal" });
+}
+
+function endpointSide(rect, point) {
+  if (point.x === rect.x) return "left";
+  if (point.x === rect.x + rect.width) return "right";
+  if (point.y === rect.y) return "top";
+  if (point.y === rect.y + rect.height) return "bottom";
+  return "";
+}
+
+function sideEndpointKey(nodeId, side) {
+  return `${nodeId}\u0000${side}`;
+}
+
+function sideNeedsPostSelectionCentering(side) {
+  return side === "top" || side === "bottom";
+}
+
+function recenteredEndpointPoints(points, endpointIndex, rect, side) {
+  const nextPoints = points.map((point) => ({ ...point }));
+  const oldAnchor = nextPoints[endpointIndex];
+  const anchor = anchorFor(rect, side);
+  nextPoints[endpointIndex] = anchor;
+  const adjacentIndex = endpointIndex === 0 ? 1 : nextPoints.length - 2;
+  if (nextPoints[adjacentIndex] && nextPoints.length > 2) {
+    const elbowIndex = endpointIndex === 0 ? 2 : nextPoints.length - 3;
+    if (side === "top" || side === "bottom") {
+      nextPoints[adjacentIndex].x = anchor.x;
+      if (nextPoints[elbowIndex]?.x === oldAnchor.x) nextPoints[elbowIndex].x = anchor.x;
+    } else {
+      nextPoints[adjacentIndex].y = anchor.y;
+      if (nextPoints[elbowIndex]?.y === oldAnchor.y) nextPoints[elbowIndex].y = anchor.y;
+    }
+  }
+  return nextPoints;
+}
+
+function routeWithPoints(route, points) {
+  const samples = lineSamples(points);
+  const label = samples[Math.floor(samples.length / 2)] ?? points[Math.floor(points.length / 2)] ?? { x: 0, y: 0 };
+  return {
+    ...route,
+    points,
+    samples,
+    bends: bendCount(points),
+    labelX: label.x,
+    labelY: label.y
+  };
+}
+
+function recenterSingletonSideEndpoints(plannedRawRoutes, input) {
+  const relationshipById = new Map(input.relationships.map((relationship) => [relationship.id, relationship]));
+  const endpointCounts = new Map();
+  for (const [relationshipId, route] of plannedRawRoutes) {
+    const relationship = relationshipById.get(relationshipId);
+    if (!relationship || !route.points?.length) continue;
+    const fromRect = input.nodeRects.get(relationship.from);
+    const toRect = input.nodeRects.get(relationship.to);
+    const startSide = fromRect ? endpointSide(fromRect, route.points[0]) : "";
+    const endSide = toRect ? endpointSide(toRect, route.points.at(-1)) : "";
+    if (sideNeedsPostSelectionCentering(startSide)) endpointCounts.set(sideEndpointKey(relationship.from, startSide), (endpointCounts.get(sideEndpointKey(relationship.from, startSide)) ?? 0) + 1);
+    if (sideNeedsPostSelectionCentering(endSide)) endpointCounts.set(sideEndpointKey(relationship.to, endSide), (endpointCounts.get(sideEndpointKey(relationship.to, endSide)) ?? 0) + 1);
+  }
+
+  return plannedRawRoutes.map(([relationshipId, route]) => {
+    const relationship = relationshipById.get(relationshipId);
+    if (!relationship || !route.points?.length) return [relationshipId, route];
+    let points = route.points;
+    const fromRect = input.nodeRects.get(relationship.from);
+    const startSide = fromRect ? endpointSide(fromRect, points[0]) : "";
+    if (fromRect && sideNeedsPostSelectionCentering(startSide) && endpointCounts.get(sideEndpointKey(relationship.from, startSide)) === 1) {
+      points = recenteredEndpointPoints(points, 0, fromRect, startSide);
+    }
+    const toRect = input.nodeRects.get(relationship.to);
+    const endSide = toRect ? endpointSide(toRect, points.at(-1)) : "";
+    if (toRect && sideNeedsPostSelectionCentering(endSide) && endpointCounts.get(sideEndpointKey(relationship.to, endSide)) === 1) {
+      points = recenteredEndpointPoints(points, points.length - 1, toRect, endSide);
+    }
+    return points === route.points ? [relationshipId, route] : [relationshipId, routeWithPoints(route, points)];
+  });
 }
 
 function routePlannerContext(input) {
@@ -139,6 +220,8 @@ function routePlannerContext(input) {
     blockerRects,
     canvasHeight: input.canvasHeight,
     canvasWidth: input.canvasWidth,
+    gridRouteMaxExpansions: input.gridRouteMaxExpansions,
+    gridRouteMaxPoints: input.gridRouteMaxPoints,
     rectFor,
     routeQualityFromSamples,
     stats
@@ -231,9 +314,12 @@ export function routeEdges(input) {
     setCachedRawRoutes(cacheKey, plannedRawRoutes);
   }
 
+  const displayRawRoutes = style === "orthogonal"
+    ? recenterSingletonSideEndpoints(plannedRawRoutes, input)
+    : plannedRawRoutes;
   const routes = new Map();
   const renderedRoutes = [];
-  for (const [relationshipId, rawRoute] of plannedRawRoutes) {
+  for (const [relationshipId, rawRoute] of displayRawRoutes) {
     const route = style === "orthogonal" ? renderOrthogonalRoute(rawRoute, renderedRoutes) : rawRoute;
     routes.set(relationshipId, route);
     renderedRoutes.push(route);

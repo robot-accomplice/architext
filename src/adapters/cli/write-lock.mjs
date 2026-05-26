@@ -102,6 +102,35 @@ async function staleLock(lockDir, staleMs, now) {
   return age >= staleMs;
 }
 
+async function removeTree(entryPath) {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    try {
+      await rm(entryPath, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (!["ENOTEMPTY", "EBUSY", "EPERM"].includes(error?.code) || attempt === 4) throw error;
+      await sleep((attempt + 1) * 10);
+    }
+  }
+}
+
+async function reclaimStaleLock(lockDir, staleMs, now) {
+  const reclaimMarker = path.join(lockDir, ".reclaiming");
+  try {
+    await mkdir(reclaimMarker);
+  } catch (error) {
+    if (["ENOENT", "ENOTDIR", "EINVAL"].includes(error?.code)) return false;
+    if (error?.code === "EEXIST") return false;
+    throw error;
+  }
+  if (await staleLock(lockDir, staleMs, now)) {
+    await removeTree(lockDir);
+    return true;
+  }
+  await removeTree(reclaimMarker);
+  return false;
+}
+
 async function acquireLock(target, { pollMs, timeoutMs, staleMs, now }) {
   const lockDir = writeLockPath(target);
   const deadline = now() + timeoutMs;
@@ -110,16 +139,21 @@ async function acquireLock(target, { pollMs, timeoutMs, staleMs, now }) {
   while (now() <= deadline) {
     try {
       await mkdir(lockDir);
-      await writeFile(path.join(lockDir, "owner.json"), `${JSON.stringify({
-        pid: process.pid,
-        createdAt: new Date(now()).toISOString(),
-        createdAtMs: now()
-      }, null, 2)}\n`, "utf8");
+      try {
+        await writeFile(path.join(lockDir, "owner.json"), `${JSON.stringify({
+          pid: process.pid,
+          createdAt: new Date(now()).toISOString(),
+          createdAtMs: now()
+        }, null, 2)}\n`, "utf8");
+      } catch (error) {
+        await removeTree(lockDir);
+        throw error;
+      }
       return lockDir;
     } catch (error) {
       if (error?.code !== "EEXIST") throw error;
       if (await staleLock(lockDir, staleMs, now)) {
-        await rm(lockDir, { recursive: true, force: true });
+        await reclaimStaleLock(lockDir, staleMs, now);
         continue;
       }
       await sleep(pollMs);
@@ -145,6 +179,6 @@ export async function withTargetWriteLock(target, callback, options = {}) {
     await waitForDataWritesToSettle({ target, ...settings });
     return await callback();
   } finally {
-    await rm(lockDir, { recursive: true, force: true });
+    await removeTree(lockDir);
   }
 }

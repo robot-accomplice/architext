@@ -102,6 +102,91 @@ test("rules API writes structured rule updates and validates target data", async
   }
 });
 
+test("rules API serializes direct write requests through the target lock", async () => {
+  const target = await mkdtemp(path.join(tmpdir(), "architext-rules-api-lock-"));
+  const targetDataDir = path.join(target, "docs", "architext", "data");
+  try {
+    await mkdir(targetDataDir, { recursive: true });
+    await writeJson(path.join(targetDataDir, "manifest.json"), {
+      files: { rules: "rules.json" }
+    });
+    await writeJson(path.join(targetDataDir, "rules.json"), { rules: [editableRule] });
+
+    const lockedTargets = [];
+    await updateRulesRequest({
+      target,
+      payload: { action: "update", rule: { ...editableRule, summary: "Locked update." } },
+      dataDir: () => targetDataDir,
+      readJson,
+      writeJson,
+      validateTarget: async () => ({ ok: true, output: "valid" }),
+      withTargetWriteLock: async (lockedTarget, callback) => {
+        lockedTargets.push(lockedTarget);
+        return callback();
+      }
+    });
+
+    assert.deepEqual(lockedTargets, [target]);
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test("rules API treats missing action as a legacy update request", async () => {
+  const target = await mkdtemp(path.join(tmpdir(), "architext-rules-api-"));
+  const targetDataDir = path.join(target, "docs", "architext", "data");
+  try {
+    await mkdir(targetDataDir, { recursive: true });
+    await writeJson(path.join(targetDataDir, "manifest.json"), {
+      files: { rules: "rules.json" }
+    });
+    await writeJson(path.join(targetDataDir, "rules.json"), { rules: [editableRule] });
+
+    await updateRulesRequest({
+      target,
+      payload: { rule: { ...editableRule, summary: "Legacy update." } },
+      dataDir: () => targetDataDir,
+      readJson,
+      writeJson,
+      validateTarget: async () => ({ ok: true, output: "valid" })
+    });
+
+    const written = JSON.parse(await readFile(path.join(targetDataDir, "rules.json"), "utf8"));
+    assert.equal(written.rules[0].summary, "Legacy update.");
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test("rules API rejects unknown actions before writing", async () => {
+  const target = await mkdtemp(path.join(tmpdir(), "architext-rules-api-"));
+  const targetDataDir = path.join(target, "docs", "architext", "data");
+  try {
+    await mkdir(targetDataDir, { recursive: true });
+    await writeJson(path.join(targetDataDir, "manifest.json"), {
+      files: { rules: "rules.json" }
+    });
+    await writeJson(path.join(targetDataDir, "rules.json"), { rules: [editableRule] });
+
+    await assert.rejects(
+      updateRulesRequest({
+        target,
+        payload: { action: "replace-everything", rule: { ...editableRule, summary: "Should not write." } },
+        dataDir: () => targetDataDir,
+        readJson,
+        writeJson,
+        validateTarget: async () => ({ ok: true, output: "valid" })
+      }),
+      /Unknown rules action "replace-everything"/
+    );
+
+    const written = JSON.parse(await readFile(path.join(targetDataDir, "rules.json"), "utf8"));
+    assert.equal(written.rules[0].summary, "Editable rule.");
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
 test("rules API supports protected-aware drag reorder actions", async () => {
   const target = await mkdtemp(path.join(tmpdir(), "architext-rules-api-"));
   const targetDataDir = path.join(target, "docs", "architext", "data");

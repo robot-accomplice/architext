@@ -26,6 +26,8 @@ export function routeCacheKey(input) {
     canvasWidth: input.canvasWidth,
     canvasHeight: input.canvasHeight,
     marginY: input.marginY,
+    gridRouteMaxPoints: input.gridRouteMaxPoints,
+    gridRouteMaxExpansions: input.gridRouteMaxExpansions,
     scoreEdgeProximity: Boolean(input.scoreEdgeProximity)
   });
 }

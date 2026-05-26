@@ -367,7 +367,7 @@ From a project that has adopted Architext:
 architext serve
 ```
 
-Then open:
+Then open the printed URL:
 
 ```text
 http://127.0.0.1:4317/
@@ -378,6 +378,9 @@ avoids browser-specific restrictions around fetching local JSON files.
 
 The running site must not fetch framework code, stylesheets, fonts, or assets
 from remote URLs.
+
+The default preferred port is `4317`. If that port is already occupied, serve
+startup advances to the next available loopback port and prints the actual URL.
 
 By default, `serve` stays in the foreground and keeps the terminal attached.
 Use explicit lifecycle switches when you want a different behavior:
@@ -398,12 +401,12 @@ architext serve --host 127.0.0.1 --port 4517
 
 `--background` starts a detached local viewer server, waits until it is
 reachable, prints the URL, and returns control to the shell. `--status` reports
-the recorded background server for the target repository. `--list` reports all
-running background servers and their stable instance ids. `--stop --instance
+the recorded serve process for the target repository. `--list` reports all
+running foreground and background serve processes with stable instance ids. `--stop --instance
 <id>` stops a specific listed server without relying on the current directory.
-`--refresh`, `--update`, and `--restart` sync the instance target with the
-current Architext package and then relaunch the same target on the same host and
-port. If sync fails, the existing server is left running.
+`--refresh`, `--update`, and `--restart` sync a background instance target with
+the current Architext package and then relaunch the same target on the same host
+and port. If sync fails, the existing server is left running.
 
 `--check-updates` checks npm for a newer Architext package, prompts before
 installing it globally, and then prompts to refresh none, one, or all running
@@ -420,19 +423,19 @@ Serve lifecycle options:
 | `--background` | Start a detached local viewer server and return control after the URL is reachable. |
 | `--open` | Launch the system browser after the local viewer is reachable. |
 | `--no-open` | Suppress browser launch when combining options or future aliases. |
-| `--host <host>` | Bind to a specific host. Defaults to `127.0.0.1`. |
-| `--port <port>` | Bind to a specific port. Defaults to `4317`. |
-| `--list` | List all reachable background servers and remove stale records. |
-| `--instance <id>` | Target a listed background server for status, stop, or refresh. |
-| `--status` | Show the recorded background server for this target and verify that it is reachable. |
-| `--stop` | Stop the recorded background server for this target and remove stale runtime state. |
+| `--host <host>` | Bind to a loopback host (`localhost`, `127.0.0.1`, or `::1`). Defaults to `127.0.0.1`. |
+| `--port <port>` | Preferred starting port. Defaults to `4317`; startup advances to the next available loopback port when occupied. |
+| `--list` | List all reachable foreground and background serve processes and remove stale records. |
+| `--instance <id>` | Target a listed serve instance for status, stop, or refresh. |
+| `--status` | Show the recorded serve process for this target and verify that it is reachable. |
+| `--stop` | Stop the recorded serve process for this target and remove stale runtime state. |
 | `--restart` | Sync and relaunch a recorded background server. |
 | `--refresh` | Alias for `--restart`. |
 | `--update` | Alias for `--restart`; use `--check-updates` for package installation. |
 | `--check-updates` | Check npm for a newer package, install after confirmation, then refresh selected running instances. |
 
-Background server state is local runtime state, not project architecture data.
-It is not written into `docs/architext/data/*.json` and should not be committed.
+Serve process state is local runtime state, not project architecture data. It is
+not written into `docs/architext/data/*.json` and should not be committed.
 
 For static usage after a build:
 

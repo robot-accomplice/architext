@@ -4,32 +4,55 @@ import type { Root } from "react-dom/client";
 import { c4LayoutFor } from "./routing/c4Layout.js";
 import { relationshipLabel } from "./routing/relationshipLabels.js";
 import { plannedCanvasFallback, usePlannedDiagram } from "./routing/usePlannedDiagram.js";
-import { loadArchitectureModel, loadReleaseDetail } from "./adapters/fetchArchitectureData.js";
+import {
+  loadArchitectureModel,
+  loadReleaseDetail,
+  releaseDetailsForSelectedRelease,
+  selectedReleaseIdForReload
+} from "./adapters/fetchArchitectureData.js";
+import { mutationFetch } from "./adapters/mutationAuth.js";
 import { subscribeToDataEvents } from "./adapters/dataEvents.js";
 import { isSelectedStep, orderSelectedLast, selectedFlowIdForSelection, selectedStepIdForSelection } from "./presentation/stepSelection.js";
+import { Badge } from "./presentation/Badge.js";
 import { diagramLayoutFor } from "./presentation/diagramLayout.js";
 import { c4DrilldownUnavailableReason, childC4ViewForNode } from "./presentation/c4Drilldown.js";
-import { releaseKanbanColumns } from "./presentation/releaseKanban.js";
+import { ReleaseKanban } from "./presentation/ReleaseKanbanView.js";
+import { ReleasePath } from "./presentation/ReleasePathView.js";
 import { ReleasePlanningPanel, ReleasePlanningWorkspace } from "./presentation/ReleasePlanning.js";
+import { ReleaseTrendChart } from "./presentation/ReleaseTrendChart.js";
 import { nextRuleCategoryName, orderedRules, ruleCategories, ruleCategoryAccent, ruleCriticalityTone, ruleProtectionLabel } from "./presentation/rules.js";
 import { postRulesAction } from "./presentation/rulesClient.js";
 import { useUnsavedEditorGuard } from "./presentation/unsavedEditorGuard.js";
+import { dataRefreshNoticeForDirtyEditors } from "./presentation/releasePlanningModel.js";
+import { pdfExportControlLabel, requestPdfExport } from "./presentation/pdfExportModel.js";
 import { StepRoute } from "./presentation/StepRoute.js";
+import { stepRouteClassName } from "./presentation/stepRouteModel.js";
 import {
   progressFill,
   progressTone,
   activeReleaseBlockersForItem,
+  blockersGroupedByItem,
+  formatReleaseDate,
   releaseBadgeTone,
   releaseItems,
-  releaseLineCheckClass,
   releaseLineState,
   releaseProgress,
   releaseScopeByItemId,
-  releaseStatusLabels,
-  releaseTone
+  releaseStatusLabels
 } from "./presentation/releaseTruth.js";
 import { modeShowsOrderedFlow, modeUsesStructuralRelationships } from "./presentation/viewModes.js";
-import { defaultViewForMode, hashForMode, modeForHash, modeForView, modeLabels, viewBelongsToMode, viewTypesForMode } from "./presentation/viewSelection.js";
+import {
+  compatibleFlowsForView,
+  compatibleFlowViewsForFlow,
+  defaultFlowForView,
+  defaultViewForFlow,
+  defaultViewForMode,
+  hashForMode,
+  modeForHash,
+  modeForView,
+  modeLabels,
+  viewBelongsToMode
+} from "./presentation/viewSelection.js";
 import { readBooleanPreference, readDebugRouting, readRoutingStylePreference, writeBooleanPreference, writeRoutingStylePreference } from "./adapters/browserPreferences.js";
 import type {
   ArchNode,
@@ -42,10 +65,8 @@ import type {
   Mode,
   Model,
   NodeType,
-  ReleaseBlocker,
   ReleaseDetail,
   ReleaseItem,
-  ReleaseItemStatus,
   ReleaseModel,
   ReleaseSummary,
   Relationship,
@@ -98,10 +119,6 @@ function progressBarStyle(value?: number): React.CSSProperties {
 
 function byId<T extends { id: Id }>(items: T[]): Map<Id, T> {
   return new Map(items.map((item) => [item.id, item]));
-}
-
-function Badge({ children, tone, title }: { children: React.ReactNode; tone?: string; title?: string }) {
-  return <span className={`badge ${tone ?? ""}`} title={title}>{children}</span>;
 }
 
 function releaseStateLabel(value: string) {
@@ -232,11 +249,6 @@ function OptionalFieldList({ title, items }: { title: string; items: string[] })
   return <FieldList title={title} items={items} />;
 }
 
-function formatReleaseDate(value?: string) {
-  if (!value) return "";
-  return value.includes("T") ? value.slice(0, 10) : value;
-}
-
 function slugifyRuleId(value: string) {
   return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "") || "new-rule";
 }
@@ -307,7 +319,7 @@ function RulesWorkspace({
     setMessage("");
     setPendingAction(true);
     try {
-      await postRulesAction(fetch, payload);
+      await postRulesAction(mutationFetch, payload);
       await onRulesChanged();
       setMessage("Rules updated.");
     } finally {
@@ -675,293 +687,6 @@ function ReleaseTruthWorkspace({
   );
 }
 
-function ReleasePath({
-  detail,
-  selection,
-  onSelectItem,
-  onSelectMilestone
-}: {
-  detail: ReleaseDetail;
-  selection: Selection | null;
-  onSelectItem: (id: Id) => void;
-  onSelectMilestone: (id: Id) => void;
-}) {
-  const allItems = releaseItems(detail);
-  const itemsById = byId(allItems);
-  const workstreamsById = byId(detail.workstreams);
-  const blockersByItemId = blockersGroupedByItem(detail.blockers);
-  const linkedItemIds = new Set(detail.milestones.flatMap((milestone) => milestone.itemIds));
-  const unlinkedItems = allItems.filter((item) => !linkedItemIds.has(item.id));
-  const milestones = [
-    ...detail.milestones,
-    ...(unlinkedItems.length > 0 ? [{
-      id: "unlinked-release-scope",
-      label: "Other considered release scope",
-      status: "planned" as ReleaseItemStatus,
-      date: undefined,
-      targetWindow: "Tracked outside explicit milestones",
-      order: Math.max(0, ...detail.milestones.map((milestone) => milestone.order)) + 1,
-      itemIds: unlinkedItems.map((item) => item.id)
-    }] : [])
-  ].sort((a, b) => a.order - b.order);
-  const scopeByItemId = releaseScopeByItemId(detail);
-
-  return (
-      <div className="release-path">
-      {milestones.map((milestone) => {
-        const milestoneItems = milestone.itemIds.map((itemId) => itemsById.get(itemId)).filter((item): item is ReleaseItem => Boolean(item));
-        const blockedItems = milestoneItems.filter((item) => item.status === "blocked" || activeReleaseBlockersForItem(item, blockersByItemId.get(item.id) ?? []).length > 0);
-        const pathNumber = milestone.status === "deferred" || milestone.status === "cut" ? 0 : milestone.order;
-        return (
-          <article className={`release-path-step ${releaseTone(milestone.status)}`} key={milestone.id}>
-            <div className="release-path-marker">
-              <span>{pathNumber}</span>
-            </div>
-            <div className="release-path-body">
-              <ReleasePathMilestoneLine
-                blockedItems={blockedItems}
-                itemCount={milestoneItems.length}
-                label={milestone.label}
-                onSelect={() => onSelectMilestone(milestone.id)}
-                selected={selection?.kind === "release-milestone" && selection.milestoneId === milestone.id}
-                status={milestone.status}
-                timing={milestone.date ?? milestone.targetWindow ?? "No date"}
-              />
-              <div className="release-path-subitems">
-                {milestoneItems.length ? milestoneItems.map((item) => {
-                  const workstream = item.workstreamId ? workstreamsById.get(item.workstreamId) : undefined;
-                  const blockers = activeReleaseBlockersForItem(item, blockersByItemId.get(item.id) ?? []);
-                  return (
-                    <ReleasePathItem
-                      blockers={blockers}
-                      item={item}
-                      key={item.id}
-                      onSelect={() => onSelectItem(item.id)}
-                      selected={selection?.kind === "release-item" && selection.itemId === item.id}
-                      scope={scopeByItemId.get(item.id) ?? "scope"}
-                      workstreamName={workstream?.name ?? "Unassigned"}
-                    />
-                  );
-                }) : (
-                  <p className="muted">No linked release items.</p>
-                )}
-              </div>
-            </div>
-          </article>
-        );
-      })}
-    </div>
-  );
-}
-
-function ReleaseKanban({
-  detail,
-  selection,
-  onSelectItem
-}: {
-  detail: ReleaseDetail;
-  selection: Selection | null;
-  onSelectItem: (id: Id) => void;
-}) {
-  const columns = releaseKanbanColumns(detail) as { id: string; label: string; items: ReleaseItem[] }[];
-  const blockersByItemId = blockersGroupedByItem(detail.blockers);
-  const workstreamsById = byId(detail.workstreams);
-  const scopeByItemId = releaseScopeByItemId(detail);
-
-  return (
-    <div className="release-kanban">
-      {columns.map((column) => (
-        <section className="release-kanban-column" key={column.id}>
-          <header>
-            <strong>{column.label}</strong>
-            <span>{column.items.length}</span>
-          </header>
-          <div className="release-kanban-cards">
-            {column.items.length ? column.items.map((item) => {
-              const blockers = activeReleaseBlockersForItem(item, blockersByItemId.get(item.id) ?? []);
-              const blocked = item.status === "blocked" || blockers.length > 0;
-              const workstream = item.workstreamId ? workstreamsById.get(item.workstreamId) : undefined;
-              return (
-                <button
-                  type="button"
-                  className={`release-kanban-card stage-${column.id} ${selection?.kind === "release-item" && selection.itemId === item.id ? "active" : ""}`}
-                  key={item.id}
-                  onClick={() => onSelectItem(item.id)}
-                >
-                  <span className={`release-check ${releaseLineCheckClass(releaseLineState(item.status, blocked))}`} aria-label={releaseLineState(item.status, blocked)} />
-                  <div>
-                    <strong>{item.title}</strong>
-                    <p>{item.summary}</p>
-                    <small>{scopeByItemId.get(item.id) ?? "scope"} · {workstream?.name ?? "Unassigned"} · {item.kind}{item.priority ? ` · ${item.priority}` : ""}</small>
-                  </div>
-                  <div className="release-card-badges">
-                    <Badge tone={releaseBadgeTone(blocked ? "blocked" : item.status)}>{releaseLineState(item.status, blocked)}</Badge>
-                    {item.dependsOn?.length ? <Badge>{item.dependsOn.length} deps</Badge> : null}
-                  </div>
-                </button>
-              );
-            }) : (
-              <p className="muted">No items.</p>
-            )}
-          </div>
-        </section>
-      ))}
-    </div>
-  );
-}
-
-function ReleasePathMilestoneLine({
-  blockedItems,
-  itemCount,
-  label,
-  onSelect,
-  selected,
-  status,
-  timing
-}: {
-  blockedItems: ReleaseItem[];
-  itemCount: number;
-  label: string;
-  onSelect: () => void;
-  selected: boolean;
-  status: ReleaseItemStatus;
-  timing: string;
-}) {
-  const lineState = releaseLineState(status, blockedItems.length > 0);
-  const blockerText = blockedItems.map((item) => item.title).join(", ");
-  return (
-    <button type="button" className={`release-path-coarse-line ${selected ? "active" : ""}`} onClick={onSelect}>
-      <span className={`release-check ${releaseLineCheckClass(lineState)}`} aria-label={lineState} />
-      <Badge tone={releaseBadgeTone(lineState === "Blocked" ? "blocked" : status)}>{lineState}</Badge>
-      <strong>{label}</strong>
-      <span className="release-path-description">{releaseStatusLabels[status]} · {timing} · {itemCount} items</span>
-      {blockerText ? <span className="release-path-blockers">Blocked by: {blockerText}</span> : null}
-    </button>
-  );
-}
-
-function blockersGroupedByItem(blockers: ReleaseBlocker[]): Map<Id, ReleaseBlocker[]> {
-  const grouped = new Map<Id, ReleaseBlocker[]>();
-  for (const blocker of blockers) {
-    for (const itemId of blocker.itemIds) {
-      grouped.set(itemId, [...(grouped.get(itemId) ?? []), blocker]);
-    }
-  }
-  return grouped;
-}
-
-function ReleasePathItem({
-  item,
-  workstreamName,
-  blockers,
-  onSelect,
-  selected,
-  scope
-}: {
-  item: ReleaseItem;
-  workstreamName: string;
-  blockers: ReleaseBlocker[];
-  onSelect: () => void;
-  selected: boolean;
-  scope: string;
-}) {
-  const primaryBlocker = blockers[0];
-  const lineTone = primaryBlocker ? releaseTone(primaryBlocker.severity) : releaseTone(item.status);
-  const state = releaseLineState(item.status, Boolean(primaryBlocker));
-  return (
-    <button type="button" className={`release-path-line release-path-item ${lineTone} ${selected ? "active" : ""}`} onClick={onSelect}>
-      <span className={`release-check ${releaseLineCheckClass(state)}`} aria-label={state} />
-      <Badge tone={releaseBadgeTone(state === "Blocked" ? primaryBlocker?.severity ?? "blocked" : item.status)}>{state}</Badge>
-      <div className="release-path-line-main">
-        <strong>{item.title}</strong>
-        <span className="release-path-item-summary">{item.summary}</span>
-        <small>{scope} · {workstreamName} · {releaseStatusLabels[item.status]} · {item.kind}{item.priority ? ` · ${item.priority} priority` : ""}{item.owner ? ` · ${item.owner}` : ""}</small>
-      </div>
-      {primaryBlocker ? <span className="release-path-blockers">Blocked by: {primaryBlocker.title}</span> : null}
-    </button>
-  );
-}
-
-function ReleaseTrendChart({
-  releases,
-  activeReleaseId
-}: {
-  releases: ReleaseSummary[];
-  activeReleaseId: Id;
-}) {
-  const [inspectedReleaseId, setInspectedReleaseId] = useState<Id | null>(null);
-  const sorted = [...releases].sort((a, b) => (a.releasedAt ?? a.targetDate ?? a.targetWindow ?? "").localeCompare(b.releasedAt ?? b.targetDate ?? b.targetWindow ?? ""));
-  const width = 1200;
-  const height = 196;
-  const padTop = 22;
-  const padRight = 8;
-  const padBottom = 74;
-  const padLeft = 30;
-  const baseline = height - padBottom;
-  const xLabelY = baseline + 16;
-  const maxCount = Math.max(1, ...sorted.flatMap((release) => [release.counts.features, release.counts.bugFixes]));
-  const markerReleaseId = inspectedReleaseId ?? activeReleaseId;
-  const markerIndex = Math.max(0, sorted.findIndex((release) => release.id === markerReleaseId));
-  const xFor = (index: number) => sorted.length === 1 ? width / 2 : padLeft + (index * (width - padLeft - padRight)) / (sorted.length - 1);
-  const yFor = (count: number) => baseline - (count * (baseline - padTop)) / maxCount;
-  const pathFor = (key: "features" | "bugFixes") => sorted
-    .map((release, index) => `${index === 0 ? "M" : "L"} ${xFor(index)} ${yFor(release.counts[key])}`)
-    .join(" ");
-  const areaFor = (key: "features" | "bugFixes") => {
-    const line = sorted
-      .map((release, index) => `${index === 0 ? "M" : "L"} ${xFor(index)} ${yFor(release.counts[key])}`)
-      .join(" ");
-    return `${line} L ${xFor(sorted.length - 1)} ${baseline} L ${xFor(0)} ${baseline} Z`;
-  };
-  const yTicks = Array.from(new Set([0, Math.ceil(maxCount / 2), maxCount]));
-
-  return (
-    <div className="release-history">
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="Release feature and bug-fix count trend">
-        <path className="release-chart-axis" d={`M ${padLeft} ${padTop} V ${baseline} H ${width - padRight}`} />
-        {yTicks.map((tick) => (
-          <g key={tick}>
-            <path className="release-chart-tick" d={`M ${padLeft - 3} ${yFor(tick)} H ${width - padRight}`} />
-            <text className="release-chart-y-label" x={padLeft - 7} y={yFor(tick) + 3} textAnchor="end">{tick}</text>
-          </g>
-        ))}
-        <path className="release-chart-area feature" d={areaFor("features")} />
-        <path className="release-chart-area fix" d={areaFor("bugFixes")} />
-        <path className="release-chart-line feature" d={pathFor("features")} />
-        <path className="release-chart-line fix" d={pathFor("bugFixes")} />
-        <path className="release-chart-active-line" d={`M ${xFor(markerIndex)} ${padTop} V ${baseline}`} />
-        {sorted.map((release, index) => {
-          const releaseDateLabel = release.releasedAt
-            ? `completed ${formatReleaseDate(release.releasedAt)}`
-            : release.targetDate
-              ? `target ${formatReleaseDate(release.targetDate)}`
-              : release.targetWindow
-                ? `target ${release.targetWindow}`
-                : "no date recorded";
-          return (
-            <g
-              key={release.id}
-              role="listitem"
-              tabIndex={0}
-              aria-label={`${release.name}, ${releaseDateLabel}, ${release.counts.features} features, ${release.counts.bugFixes} bug fixes. Select it from the release list to inspect details.`}
-              onClick={() => setInspectedReleaseId(release.id)}
-              onFocus={() => setInspectedReleaseId(release.id)}
-            >
-              <title>{`${release.name} · ${releaseDateLabel} · ${release.counts.features} features · ${release.counts.bugFixes} bug fixes · select from the release list`}</title>
-              <circle className={`${release.id === activeReleaseId ? "active" : ""} ${releaseTone(release.posture)}`} cx={xFor(index)} cy={yFor(release.counts.features)} r="3.5" />
-              <text className="release-chart-x-label" x={xFor(index)} y={xLabelY} textAnchor="end" transform={`rotate(-65 ${xFor(index)} ${xLabelY})`}>{release.version}</text>
-            </g>
-          );
-        })}
-      </svg>
-      <div className="release-chart-legend">
-        <span><i className="feature" />Features</span>
-        <span><i className="fix" />Bug fixes</span>
-      </div>
-    </div>
-  );
-}
-
 function ReleaseTruthDetails({
   releaseSummary,
   releaseDetail,
@@ -1287,7 +1012,7 @@ function App() {
     try {
       const response = action === "status"
         ? await fetch("/api/status")
-        : await fetch(action === "sync-repair" ? "/api/sync-repair" : "/api/doctor", {
+        : await mutationFetch(action === "sync-repair" ? "/api/sync-repair" : "/api/doctor", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify(action === "doctor-apply" ? { apply: true } : action === "doctor-dry-run" ? { apply: false } : {})
@@ -1315,8 +1040,9 @@ function App() {
 
   useEffect(() => subscribeToDataEvents({
     onValid: async () => {
-      if (releasePlanningDirty || rulesEditorDirty) {
-        setDataNotice("Architext data changed. Save or discard editor changes before refreshing.");
+      const dirtyNotice = dataRefreshNoticeForDirtyEditors({ releasePlanningDirty, rulesEditorDirty });
+      if (dirtyNotice) {
+        setDataNotice(dirtyNotice);
         return;
       }
       try {
@@ -1344,12 +1070,8 @@ function App() {
 
   const reloadReleasePlanningModel = async () => {
     const loaded = await loadArchitectureModel();
-    const selectedReleaseId = activeReleaseId || loaded.releases?.index.currentReleaseId || "";
-    const releaseDetails = new Map((loaded.releases?.details ?? []).map((detail) => [detail.id, detail]));
-    if (loaded.releases && selectedReleaseId && !releaseDetails.has(selectedReleaseId)) {
-      const selectedDetail = await loadReleaseDetail(fetch, loaded.releases, selectedReleaseId);
-      releaseDetails.set(selectedDetail.id, selectedDetail);
-    }
+    const selectedReleaseId = selectedReleaseIdForReload(activeReleaseId, loaded.releases);
+    const releaseDetails = await releaseDetailsForSelectedRelease(fetch, loaded.releases, selectedReleaseId);
     setModel(loaded);
     setActiveReleaseId((current) => {
       const releases: ReleaseSummary[] = loaded.releases?.index.releases ?? [];
@@ -1441,9 +1163,10 @@ function App() {
   const activeFlow = flowsById.get(activeFlowId) ?? model.flows[0];
   const fallbackView = model.views[0];
   const selectedView = viewsById.get(activeViewId);
-  const activeView = viewBelongsToMode(selectedView, activeMode)
+  const modeView = viewBelongsToMode(selectedView, activeMode)
     ? selectedView
     : defaultViewForMode(activeMode, model.views, fallbackView);
+  const activeView = defaultViewForFlow(activeMode, modeView, model.views, activeFlow, fallbackView) as View;
   const isC4View = activeMode === "c4";
   const isSequenceView = activeMode === "sequence";
   const isReleaseTruthView = activeMode === "release-truth";
@@ -1468,7 +1191,8 @@ function App() {
     ? model.rules?.find((rule) => rule.id === selection.id) ?? null
     : null;
 
-  const filteredFlows = model.flows.filter((flow) => {
+  const visibleFlows = activeMode === "flows" ? compatibleFlowsForView(model.flows, activeView) as Flow[] : model.flows;
+  const filteredFlows = visibleFlows.filter((flow) => {
     const text = [flow.name, flow.summary, flow.status, flow.trigger, ...flow.knownGaps].join(" ").toLowerCase();
     return text.includes(query.toLowerCase());
   });
@@ -1558,6 +1282,14 @@ function App() {
     window.history.replaceState(null, "", hashForMode(nextMode));
     setActiveMode(nextMode);
     setActiveViewId(viewId);
+    if (nextMode === "flows") {
+      const nextFlow = defaultFlowForView(view, activeFlow, model.flows, model.flows[0]) as Flow;
+      if (nextFlow?.id && nextFlow.id !== activeFlow.id) {
+        setActiveFlowId(nextFlow.id);
+        setSelection({ kind: "flow", id: nextFlow.id });
+        return;
+      }
+    }
     if (nextMode === "c4") {
       const firstNodeId = view.lanes.flatMap((lane) => lane.nodeIds)[0];
       if (firstNodeId) setSelection({ kind: "node", id: firstNodeId });
@@ -1595,12 +1327,11 @@ function App() {
   };
 
   const exportActiveViewPdf = () => {
-    if (typeof window.print !== "function") {
-      setDataNotice("PDF export is unavailable in this browser.");
-      return;
-    }
-    setDataNotice("Use the browser print dialog to save this view as PDF.");
-    window.requestAnimationFrame(() => window.print());
+    const result = requestPdfExport({
+      print: window.print,
+      requestAnimationFrame: window.requestAnimationFrame.bind(window)
+    });
+    setDataNotice(result.message);
   };
 
   return (
@@ -1689,6 +1420,11 @@ function App() {
             onRiskFilterChange={setRiskFilter}
             onSelectFlow={(flowId) => {
               if (!confirmEditorNavigationOrStay()) return;
+              const nextFlow = flowsById.get(flowId);
+              if (nextFlow && activeMode === "flows") {
+                const nextView = defaultViewForFlow(activeMode, activeView, model.views, nextFlow, fallbackView) as View;
+                if (nextView?.id && nextView.id !== activeView.id) setActiveViewId(nextView.id);
+              }
               setActiveFlowId(flowId);
               setSelection({ kind: "flow", id: flowId });
             }}
@@ -1768,8 +1504,8 @@ function App() {
           <>
             <section className="diagram-header">
               <div className="diagram-title-line">
-                <h2 title={activeView.name}>{activeView.name}</h2>
-                <p title={activeView.summary}>{activeView.summary}</p>
+                <h2 title={isSequenceView ? activeFlow.name : activeView.name}>{isSequenceView ? activeFlow.name : activeView.name}</h2>
+                <p title={isSequenceView ? activeFlow.summary : activeView.summary}>{isSequenceView ? activeFlow.summary : activeView.summary}</p>
               </div>
               <DiagramControls
                 transform={diagramTransform}
@@ -2166,8 +1902,7 @@ function LeftPanel({
     );
   }
 
-  const flowProjectionTypes = new Set(viewTypesForMode("flows"));
-  const flowViews = views.filter((view) => flowProjectionTypes.has(view.type));
+  const flowViews = compatibleFlowViewsForFlow(views, activeFlow) as View[];
 
   return (
     <>
@@ -2261,7 +1996,7 @@ function DiagramControls({
       <button type="button" onClick={onFit}>Fit</button>
       <button type="button" onClick={onReset}>Reset</button>
       <button type="button" onClick={onToggleFocus}>{transform.focused ? "Exit focus" : "Focus"}</button>
-      <button type="button" onClick={onExportPdf}>PDF</button>
+      <button type="button" onClick={onExportPdf}>{pdfExportControlLabel}</button>
     </div>
   );
 }
@@ -2293,9 +2028,12 @@ function SystemMap({
   onSelectRelationship: (relationship: Relationship) => void;
   onSelectNode: (id: Id) => void;
 }) {
-  const visibleNodeIds = new Set(view.lanes.flatMap((lane) => lane.nodeIds));
-  const flowNodeIds = new Set(activeFlow ? activeFlow.steps.flatMap((step) => [step.from, step.to]) : Array.from(visibleNodeIds));
-  const structuralRelationships = Array.from(visibleNodeIds).flatMap((nodeId) => {
+  const visibleNodeIds = useMemo(() => new Set(view.lanes.flatMap((lane) => lane.nodeIds)), [view]);
+  const flowNodeIds = useMemo(
+    () => new Set(activeFlow ? activeFlow.steps.flatMap((step) => [step.from, step.to]) : Array.from(visibleNodeIds)),
+    [activeFlow, visibleNodeIds]
+  );
+  const structuralRelationships = useMemo(() => Array.from(visibleNodeIds).flatMap((nodeId) => {
     const node = nodesById.get(nodeId);
     return (node?.dependencies ?? [])
       .filter((dependencyId) => visibleNodeIds.has(dependencyId))
@@ -2312,9 +2050,9 @@ function SystemMap({
           toType: to?.type
         };
       });
-  });
+  }), [nodesById, visibleNodeIds]);
 
-  const flowRelationships = activeFlow?.steps.map((step, index) => {
+  const flowRelationships = useMemo(() => activeFlow?.steps.map((step, index) => {
     const from = nodesById.get(step.from);
     const to = nodesById.get(step.to);
     return {
@@ -2328,7 +2066,7 @@ function SystemMap({
       flowId: activeFlow.id,
       displayIndex: index + 1
     };
-  }) ?? [];
+  }) ?? [], [activeFlow, nodesById]);
 
   const layout = diagramLayoutFor(view, showStructuralConnections ? structuralRelationships.length : flowRelationships.length);
   const {
@@ -2344,7 +2082,7 @@ function SystemMap({
     canvasExtraHeight
   } = layout;
 
-  const planInput = {
+  const planInput = useMemo(() => ({
     view,
     relationships: showStructuralConnections ? structuralRelationships : flowRelationships,
     visibleNodeIds,
@@ -2359,9 +2097,26 @@ function SystemMap({
     canvasExtraWidth,
     canvasExtraHeight,
     style: routingStyle
-  };
+  }), [
+    view,
+    showStructuralConnections,
+    structuralRelationships,
+    flowRelationships,
+    visibleNodeIds,
+    nodeWidth,
+    nodeHeight,
+    laneWidth,
+    rowGap,
+    marginX,
+    marginY,
+    minCanvasWidth,
+    minCanvasHeight,
+    canvasExtraWidth,
+    canvasExtraHeight,
+    routingStyle
+  ]);
   const planningState = usePlannedDiagram(planInput);
-  const fallbackCanvas = plannedCanvasFallback(planInput);
+  const fallbackCanvas = useMemo(() => plannedCanvasFallback(planInput), [planInput]);
   const plan = planningState.plan;
 
   if (planningState.error) {
@@ -2476,7 +2231,7 @@ function SystemMap({
                 }}
               >
                 <StepRoute
-                  className="flow-step-route"
+                  className={stepRouteClassName("flow")}
                   lineClassName="flow-line"
                   markerClassName="flow-step-dot"
                   labelClassName="flow-step-label"
@@ -2667,19 +2422,19 @@ function C4Diagram({
     canvasExtraHeight,
     boundaryLabel
   } = layout;
-  const rawNodeIds = view.lanes.flatMap((lane) => lane.nodeIds);
-  const allNodeIds = Array.from(new Set(rawNodeIds));
-  const duplicateNodeIds = Array.from(
+  const rawNodeIds = useMemo(() => view.lanes.flatMap((lane) => lane.nodeIds), [view]);
+  const allNodeIds = useMemo(() => Array.from(new Set(rawNodeIds)), [rawNodeIds]);
+  const duplicateNodeIds = useMemo(() => Array.from(
     rawNodeIds.reduce((counts, nodeId) => counts.set(nodeId, (counts.get(nodeId) ?? 0) + 1), new Map<Id, number>())
-  ).filter(([, count]) => count > 1).map(([nodeId]) => nodeId);
-  const documentWarnings = duplicateNodeIds.map((nodeId) => ({
+  ).filter(([, count]) => count > 1).map(([nodeId]) => nodeId), [rawNodeIds]);
+  const documentWarnings = useMemo(() => duplicateNodeIds.map((nodeId) => ({
     code: "duplicate-c4-node",
     nodeId,
     viewId: view.id,
     message: `${nodeId} appears more than once in ${view.name}; rendered once.`
-  }));
-  const visibleNodeIds = new Set(allNodeIds);
-  const relationships = allNodeIds.flatMap((nodeId) => {
+  })), [duplicateNodeIds, view.id, view.name]);
+  const visibleNodeIds = useMemo(() => new Set(allNodeIds), [allNodeIds]);
+  const relationships = useMemo(() => allNodeIds.flatMap((nodeId) => {
     const node = nodesById.get(nodeId);
     return (node?.dependencies ?? [])
       .filter((dependencyId) => visibleNodeIds.has(dependencyId))
@@ -2696,8 +2451,8 @@ function C4Diagram({
           toType: to?.type
         };
       });
-  });
-  const planInput = {
+  }), [allNodeIds, nodesById, visibleNodeIds]);
+  const planInput = useMemo(() => ({
     view,
     relationships,
     visibleNodeIds,
@@ -2712,9 +2467,24 @@ function C4Diagram({
     canvasExtraWidth,
     canvasExtraHeight,
     style: routingStyle
-  };
+  }), [
+    view,
+    relationships,
+    visibleNodeIds,
+    nodeWidth,
+    nodeHeight,
+    laneWidth,
+    rowGap,
+    marginX,
+    marginY,
+    minCanvasWidth,
+    minCanvasHeight,
+    canvasExtraWidth,
+    canvasExtraHeight,
+    routingStyle
+  ]);
   const planningState = usePlannedDiagram(planInput);
-  const fallbackCanvas = plannedCanvasFallback(planInput);
+  const fallbackCanvas = useMemo(() => plannedCanvasFallback(planInput), [planInput]);
   const plan = planningState.plan;
 
   if (planningState.error) {
@@ -2970,7 +2740,7 @@ function SequenceDiagram({
                 }}
               >
                 <StepRoute
-                  className="sequence-step-route"
+                  className={stepRouteClassName("sequence")}
                   lineClassName="sequence-line"
                   markerClassName="sequence-step-dot"
                   labelClassName="sequence-step-label"
