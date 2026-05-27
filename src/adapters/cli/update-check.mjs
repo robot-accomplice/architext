@@ -117,7 +117,16 @@ export async function runPackageUpdateCheck({
     return;
   }
 
-  const shouldInstall = options.yes || await promptYesNo(promptLine, `Install ${packageName}@${latestVersion}?`, true);
+  const crossesMajor = versionParts(latestVersion).core[0] !== versionParts(currentVersion).core[0];
+  const autoInstall = options.yes && !crossesMajor;
+  if (options.yes && crossesMajor) {
+    console.log(
+      `Architext ${latestVersion} crosses a major version boundary from ${currentVersion}; skipping unattended install. Confirm to proceed.`
+    );
+  }
+
+  console.log(`Resolved install target: ${packageName}@${latestVersion}.`);
+  const shouldInstall = autoInstall || await promptYesNo(promptLine, `Install ${packageName}@${latestVersion}?`, true);
   if (!shouldInstall) {
     console.log("Package update skipped.");
     return;

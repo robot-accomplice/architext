@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-4-11",
+  "currentReleaseId": "v1-5-0",
   "releases": [
     {
       "id": "v1-1-2",
@@ -396,6 +396,28 @@
         "stretch": 0
       },
       "file": "v1-4-11.json"
+    },
+    {
+      "id": "v1-5-0",
+      "version": "1.5.0",
+      "name": "Architext 1.5.0 Diagram Semantics and Skill Release",
+      "status": "completed",
+      "posture": "shipped",
+      "targetDate": "2026-05-27",
+      "releasedAt": "2026-05-27T11:54:36.000Z",
+      "lastUpdated": "2026-05-27T11:54:36.000Z",
+      "summary": "Architext 1.5.0 ships stronger flow and sequence diagram semantics, printable Architext skill content, and completed audit-hardening work on the 1.5.0 data schema line.",
+      "counts": {
+        "features": 2,
+        "bugFixes": 1,
+        "workstreams": 3,
+        "blockers": 0,
+        "complete": 3,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-5-0.json"
     }
   ]
 }

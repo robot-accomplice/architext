@@ -113,6 +113,7 @@ Useful project-root commands:
 architext doctor
 architext status --json
 architext prompt --mode architecture-change
+architext skill
 architext clean
 architext clean --node-modules
 architext explain nodes
@@ -124,6 +125,9 @@ it applies those repairs directly. Repairs include converging model-specific
 rule files such as `AGENTS.md`, `CLAUDE.md`, Cursor rule files, and
 `.cursorrules` into the model-agnostic `data/rules.json` source of truth when
 the rules can be migrated deterministically.
+
+`skill` prints Architext's package-owned `SKILL.md` content so maintainers can
+paste it into an LLM chat session when creating a model-specific skill.
 
 ## Viewer Data
 

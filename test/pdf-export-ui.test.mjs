@@ -104,3 +104,15 @@ test("diagram legend renders above the contained canvas viewport", () => {
   assert.match(legendPanel, /position:\s*absolute/);
   assert.match(legendPanel, /z-index:\s*45/);
 });
+
+test("diagram legend icons preserve node type colors", () => {
+  const styleSource = readFileSync(new URL("../docs/architext/src/styles.css", import.meta.url), "utf8");
+
+  assert.match(cssBlock(styleSource, ".legend-icon.actor,\n.node-card.actor .node-icon {"), /color:\s*var\(--pink\)/);
+  assert.match(cssBlock(styleSource, ".legend-icon.software-system,\n.node-card.software-system .node-icon {"), /color:\s*var\(--cyan\)/);
+  assert.match(cssBlock(styleSource, ".legend-icon.client,\n.node-card.client .node-icon {"), /color:\s*var\(--blue\)/);
+  assert.match(cssBlock(styleSource, ".legend-icon.queue,\n.node-card.queue .node-icon {"), /color:\s*var\(--orange\)/);
+  assert.match(cssBlock(styleSource, ".legend-icon.data-store,\n.node-card.data-store .node-icon {"), /color:\s*var\(--green\)/);
+  assert.match(cssBlock(styleSource, ".legend-icon.external-service,\n.node-card.external-service .node-icon {"), /color:\s*var\(--c4-external\)/);
+  assert.match(cssBlock(styleSource, ".legend-icon.decision,\n.step-icon[aria-label=\"Decision\"] {"), /color:\s*var\(--orange\)/);
+});

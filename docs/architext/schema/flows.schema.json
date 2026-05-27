@@ -43,9 +43,32 @@
                 "id": { "$ref": "#/$defs/id" },
                 "from": { "$ref": "#/$defs/id" },
                 "to": { "$ref": "#/$defs/id" },
+                "kind": {
+                  "type": "string",
+                  "enum": ["process", "decision", "start", "stop", "request", "return", "async", "persistence", "self", "artifact"]
+                },
+                "returnOf": { "$ref": "#/$defs/id" },
+                "outcome": { "type": "string", "minLength": 1 },
                 "action": { "type": "string", "minLength": 1 },
                 "summary": { "type": "string", "minLength": 1 },
                 "data": { "$ref": "#/$defs/idList" }
+              }
+            }
+          },
+          "sequenceFrames": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["id", "type", "label", "stepIds"],
+              "properties": {
+                "id": { "$ref": "#/$defs/id" },
+                "type": {
+                  "type": "string",
+                  "enum": ["loop", "optional", "retry", "transaction"]
+                },
+                "label": { "type": "string", "minLength": 1 },
+                "stepIds": { "$ref": "#/$defs/idList" }
               }
             }
           },

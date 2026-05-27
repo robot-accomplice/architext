@@ -5,6 +5,7 @@ export const PORT_STUB = 18;
 export const PORT_SPACING = 6;
 
 export function anchorFor(rect, side) {
+  if (rect.sideAnchors?.[side]) return rect.sideAnchors[side];
   if (side === "left") return { x: rect.x, y: rect.y + rect.height / 2 };
   if (side === "right") return { x: rect.x + rect.width, y: rect.y + rect.height / 2 };
   if (side === "top") return { x: rect.x + rect.width / 2, y: rect.y };
@@ -33,8 +34,8 @@ export function offsetForEndpointOrder(order) {
 export function portFor(rect, side, distance = PORT_STUB, rawOffset = 0) {
   const anchor = anchorFor(rect, side);
   const vector = sideVector(side);
-  const maxOffset = (side === "left" || side === "right" ? rect.height : rect.width) / 2 - 8;
-  const offset = clamp(rawOffset, -maxOffset, maxOffset);
+  const maxOffset = rect.fixedPorts ? 0 : (side === "left" || side === "right" ? rect.height : rect.width) / 2 - 8;
+  const offset = rect.fixedPorts ? 0 : clamp(rawOffset, -maxOffset, maxOffset);
   const tangent = tangentVector(side);
   const offsetAnchor = {
     x: anchor.x + tangent.x * offset,
@@ -50,6 +51,7 @@ export function portFor(rect, side, distance = PORT_STUB, rawOffset = 0) {
 }
 
 export function portCandidatesFor(rect, side, offsets) {
+  if (rect.fixedPorts) return [portFor(rect, side, PORT_STUB, 0)];
   const maxOffset = (side === "left" || side === "right" ? rect.height : rect.width) / 2 - 8;
   return [...new Set(offsets.map((offset) => Math.round(clamp(offset, -maxOffset, maxOffset))))].map((offset) => portFor(rect, side, PORT_STUB, offset));
 }

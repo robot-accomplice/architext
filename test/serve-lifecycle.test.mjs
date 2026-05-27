@@ -1,13 +1,21 @@
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
 import { createServer } from "node:http";
-import { existsSync } from "node:fs";
+import { chmodSync, existsSync } from "node:fs";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { browserOpenCommand, isLoopbackServeUrl } from "../src/adapters/cli/serve-lifecycle.mjs";
+import { browserOpenCommand, isLoopbackServeUrl, readServeState } from "../src/adapters/cli/serve-lifecycle.mjs";
 import { parseArgs } from "../src/adapters/cli/command-line.mjs";
+
+const serveRuntimeDir = path.join(tmpdir(), "architext-serve");
+
+function serveStatePathForTarget(target) {
+  const key = createHash("sha256").update(path.resolve(target)).digest("hex").slice(0, 24);
+  return path.join(serveRuntimeDir, `${key}.json`);
+}
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const cli = path.join(repoRoot, "tools", "architext-adopt.mjs");
@@ -43,18 +51,7 @@ async function withViewerDist(callback) {
   }
 }
 
-async function freePort() {
-  const server = createServer();
-  await new Promise((resolve, reject) => {
-    server.once("error", reject);
-    server.listen(0, "127.0.0.1", resolve);
-  });
-  const { port } = server.address();
-  await new Promise((resolve) => server.close(resolve));
-  return port;
-}
-
-async function occupyPort(port) {
+async function occupyPort(port = 0) {
   const server = createServer((_request, response) => {
     response.end("occupied");
   });
@@ -175,8 +172,8 @@ test("serve options fail loudly for conflicting lifecycle controls", () => {
   assert.throws(() => parseArgs(["serve", "--host"]), /--host requires a value/);
   assert.throws(() => parseArgs(["serve", "--host", "0.0.0.0"]), /--host must be a loopback address/);
   assert.throws(() => parseArgs(["serve", "--host", "192.168.1.10"]), /--host must be a loopback address/);
-  assert.throws(() => parseArgs(["serve", "--port", "0"]), /--port must be an integer/);
   assert.throws(() => parseArgs(["serve", "--port", "abc"]), /--port must be an integer/);
+  assert.equal(parseArgs(["serve", "--port", "0"]).port, 0);
   assert.throws(() => parseArgs(["sync", "--open"]), /--open is only valid for architext serve/);
 
   assert.equal(parseArgs(["serve", "--host", "localhost"]).host, "localhost");
@@ -211,23 +208,23 @@ test("serve lifecycle only probes loopback HTTP instance URLs", () => {
 test("serve background records status and can be stopped", async () => {
   await withViewerDist(async () => {
     const target = await createServeTarget();
-    const port = await freePort();
     try {
-      const output = run(["serve", target, "--background", "--host", "127.0.0.1", "--port", String(port), "--no-open"]);
+      const output = run(["serve", target, "--background", "--host", "127.0.0.1", "--port", "0", "--no-open"]);
+      const served = servedUrl(output);
       assert.match(output, /in the background/);
-      assert.match(output, new RegExp(`http://127\\.0\\.0\\.1:${port}/`));
+      assert.notEqual(served.port, 0);
 
-      const response = await waitForHttpOk(`http://127.0.0.1:${port}/`);
+      const response = await waitForHttpOk(served.url);
       assert.equal(response.status, 200);
 
-      const duplicate = run(["serve", target, "--background", "--port", String(port), "--no-open"]);
+      const duplicate = run(["serve", target, "--background", "--port", "0", "--no-open"]);
       assert.match(duplicate, /already serving/);
-      assert.match(duplicate, new RegExp(`http://127\\.0\\.0\\.1:${port}/`));
+      assert.match(duplicate, new RegExp(`http://127\\.0\\.0\\.1:${served.port}/`));
 
       const status = run(["serve", target, "--status"]);
       assert.match(status, /Architext is serving/);
       assert.match(status, /PID:/);
-      assert.match(status, new RegExp(`http://127\\.0\\.0\\.1:${port}/`));
+      assert.match(status, new RegExp(`http://127\\.0\\.0\\.1:${served.port}/`));
       assert.match(status, /Logs:/);
 
       const stopped = run(["serve", target, "--stop"]);
@@ -249,8 +246,8 @@ test("serve background records status and can be stopped", async () => {
 test("serve background advances to the next available port when the preferred port is occupied", async () => {
   await withViewerDist(async () => {
     const target = await createServeTarget();
-    const occupiedPort = await freePort();
-    const blocker = await occupyPort(occupiedPort);
+    const blocker = await occupyPort();
+    const occupiedPort = blocker.address().port;
     try {
       const output = run(["serve", target, "--background", "--host", "127.0.0.1", "--port", String(occupiedPort), "--no-open"]);
       const served = servedUrl(output);
@@ -277,19 +274,17 @@ test("serve list shows all instances and stop can target one instance", async ()
   await withViewerDist(async () => {
     const first = await createServeTarget();
     const second = await createServeTarget();
-    const firstPort = await freePort();
-    const secondPort = await freePort();
     try {
-      run(["serve", first, "--background", "--host", "127.0.0.1", "--port", String(firstPort), "--no-open"]);
-      run(["serve", second, "--background", "--host", "127.0.0.1", "--port", String(secondPort), "--no-open"]);
+      const firstServed = servedUrl(run(["serve", first, "--background", "--host", "127.0.0.1", "--port", "0", "--no-open"]));
+      const secondServed = servedUrl(run(["serve", second, "--background", "--host", "127.0.0.1", "--port", "0", "--no-open"]));
 
       const listed = JSON.parse(run(["--list", "--json"]));
       const firstInstance = listed.instances.find((instance) => instance.target === path.resolve(first));
       const secondInstance = listed.instances.find((instance) => instance.target === path.resolve(second));
       assert.ok(firstInstance?.id);
       assert.ok(secondInstance?.id);
-      assert.equal(firstInstance.url, `http://127.0.0.1:${firstPort}/`);
-      assert.equal(secondInstance.url, `http://127.0.0.1:${secondPort}/`);
+      assert.equal(firstInstance.url, firstServed.url);
+      assert.equal(secondInstance.url, secondServed.url);
 
       const textList = run(["serve", "--list"]);
       assert.match(textList, new RegExp(firstInstance.id));
@@ -301,7 +296,7 @@ test("serve list shows all instances and stop can target one instance", async ()
       const afterStop = JSON.parse(run(["serve", "--list", "--json"]));
       assert.equal(afterStop.instances.some((instance) => instance.id === firstInstance.id), false);
       assert.equal(afterStop.instances.some((instance) => instance.id === secondInstance.id), true);
-      await waitForHttpOk(`http://127.0.0.1:${secondPort}/`);
+      await waitForHttpOk(secondServed.url);
     } finally {
       for (const target of [first, second]) {
         try {
@@ -318,14 +313,13 @@ test("serve list shows all instances and stop can target one instance", async ()
 test("serve refresh syncs and restarts a targeted instance", async () => {
   await withViewerDist(async () => {
     const target = await mkdtemp(path.join(tmpdir(), "architext-serve-refresh-"));
-    const port = await freePort();
     try {
       run(["sync", target, "--yes", "--branch", "none"]);
       const manifestPath = path.join(target, "docs", "architext", "data", "manifest.json");
       const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
       await writeFile(manifestPath, `${JSON.stringify({ ...manifest, schemaVersion: "0.1.0" }, null, 2)}\n`);
 
-      run(["serve", target, "--background", "--host", "127.0.0.1", "--port", String(port), "--no-open"]);
+      run(["serve", target, "--background", "--host", "127.0.0.1", "--port", "0", "--no-open"]);
       const before = JSON.parse(run(["serve", "--list", "--json"])).instances.find((instance) => instance.target === path.resolve(target));
       assert.ok(before?.id);
 
@@ -334,10 +328,10 @@ test("serve refresh syncs and restarts a targeted instance", async () => {
       assert.match(refreshed, new RegExp(`Restarted Architext background server .*${before.id}`));
 
       const after = JSON.parse(run(["serve", "--list", "--json"])).instances.find((instance) => instance.id === before.id);
-      assert.equal(after.url, `http://127.0.0.1:${port}/`);
+      assert.equal(after.url, before.url);
       assert.notEqual(after.pid, before.pid);
-      assert.equal(JSON.parse(await readFile(manifestPath, "utf8")).schemaVersion, "1.4.0");
-      await waitForHttpOk(`http://127.0.0.1:${port}/`);
+      assert.equal(JSON.parse(await readFile(manifestPath, "utf8")).schemaVersion, "1.5.0");
+      await waitForHttpOk(before.url);
     } finally {
       try {
         run(["serve", target, "--stop"]);
@@ -362,8 +356,7 @@ test("serve status and stop are safe when no serve instance is recorded", async 
 test("serve foreground remains an explicit blocking server path", async () => {
   await withViewerDist(async () => {
     const target = await createServeTarget();
-    const port = await freePort();
-    const child = spawn(process.execPath, [cli, "serve", target, "--foreground", "--port", String(port), "--no-open"], {
+    const child = spawn(process.execPath, [cli, "serve", target, "--foreground", "--port", "0", "--no-open"], {
       cwd: repoRoot,
       stdio: ["ignore", "pipe", "pipe"]
     });
@@ -376,12 +369,13 @@ test("serve foreground remains an explicit blocking server path", async () => {
     });
 
     try {
-      const response = await waitForHttpOk(`http://127.0.0.1:${port}/`);
+      output = await waitForText(() => output, /Open http:\/\/127\.0\.0\.1:\d+\//);
+      const served = servedUrl(output);
+      const response = await waitForHttpOk(served.url);
       assert.equal(response.status, 200);
       assert.equal(child.exitCode, null);
-      output = await waitForText(() => output, /Serving Architext/);
       assert.match(output, /Serving Architext/);
-      assert.match(output, new RegExp(`http://127\\.0\\.0\\.1:${port}/`));
+      assert.notEqual(served.port, 0);
     } finally {
       child.kill("SIGTERM");
       await new Promise((resolve) => child.once("exit", resolve));
@@ -393,8 +387,8 @@ test("serve foreground remains an explicit blocking server path", async () => {
 test("serve foreground advances to the next available port when the preferred port is occupied", async () => {
   await withViewerDist(async () => {
     const target = await createServeTarget();
-    const occupiedPort = await freePort();
-    const blocker = await occupyPort(occupiedPort);
+    const blocker = await occupyPort();
+    const occupiedPort = blocker.address().port;
     const child = spawn(process.execPath, [cli, "serve", target, "--foreground", "--port", String(occupiedPort), "--no-open"], {
       cwd: repoRoot,
       stdio: ["ignore", "pipe", "pipe"]
@@ -427,20 +421,28 @@ test("serve foreground advances to the next available port when the preferred po
 test("serve list discovers live foreground instances", async () => {
   await withViewerDist(async () => {
     const target = await createServeTarget();
-    const port = await freePort();
-    const child = spawn(process.execPath, [cli, "serve", target, "--foreground", "--port", String(port), "--no-open"], {
+    const child = spawn(process.execPath, [cli, "serve", target, "--foreground", "--port", "0", "--no-open"], {
       cwd: repoRoot,
       stdio: ["ignore", "pipe", "pipe"]
     });
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      output += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      output += chunk.toString();
+    });
 
     try {
-      await waitForHttpOk(`http://127.0.0.1:${port}/`);
+      output = await waitForText(() => output, /Open http:\/\/127\.0\.0\.1:\d+\//);
+      const served = servedUrl(output);
+      await waitForHttpOk(served.url);
 
       const listed = JSON.parse(run(["--list", "--json"]));
       const instance = listed.instances.find((candidate) => candidate.target === path.resolve(target));
       assert.ok(instance?.id);
       assert.equal(instance.mode, "foreground");
-      assert.equal(instance.url, `http://127.0.0.1:${port}/`);
+      assert.equal(instance.url, served.url);
       assert.equal(instance.pid, child.pid);
 
       const textList = run(["serve", "--list"]);
@@ -457,14 +459,22 @@ test("serve list discovers live foreground instances", async () => {
 test("serve refresh refuses foreground instances", async () => {
   await withViewerDist(async () => {
     const target = await createServeTarget();
-    const port = await freePort();
-    const child = spawn(process.execPath, [cli, "serve", target, "--foreground", "--port", String(port), "--no-open"], {
+    const child = spawn(process.execPath, [cli, "serve", target, "--foreground", "--port", "0", "--no-open"], {
       cwd: repoRoot,
       stdio: ["ignore", "pipe", "pipe"]
     });
+    let output = "";
+    child.stdout.on("data", (chunk) => {
+      output += chunk.toString();
+    });
+    child.stderr.on("data", (chunk) => {
+      output += chunk.toString();
+    });
 
     try {
-      await waitForHttpOk(`http://127.0.0.1:${port}/`);
+      output = await waitForText(() => output, /Open http:\/\/127\.0\.0\.1:\d+\//);
+      const served = servedUrl(output);
+      await waitForHttpOk(served.url);
       const listed = JSON.parse(run(["--list", "--json"]));
       const instance = listed.instances.find((candidate) => candidate.target === path.resolve(target));
       assert.ok(instance?.id);
@@ -473,11 +483,36 @@ test("serve refresh refuses foreground instances", async () => {
         () => run(["serve", "--refresh", "--instance", instance.id]),
         /Foreground serve instances cannot be restarted/
       );
-      await waitForHttpOk(`http://127.0.0.1:${port}/`);
+      await waitForHttpOk(served.url);
     } finally {
       child.kill("SIGTERM");
       await new Promise((resolve) => child.once("exit", resolve));
       await rm(target, { recursive: true, force: true });
     }
   });
+});
+
+test("reading serve state preserves the file on a transient (non-ENOENT, non-parse) read error", async () => {
+  // A transient read failure (e.g. EACCES from a permissions hiccup, EMFILE under
+  // load) must NOT delete state for a live background server. Deletion is only
+  // correct when the state is genuinely gone (ENOENT) or corrupt (JSON parse).
+  const target = await mkdtemp(path.join(tmpdir(), "architext-serve-transient-"));
+  const statePath = serveStatePathForTarget(target);
+  await mkdir(serveRuntimeDir, { recursive: true });
+  await writeFile(statePath, JSON.stringify({ pid: 4242, url: "http://127.0.0.1:4317/" }));
+  // Make the file unreadable to force an EACCES (a transient-style read error)
+  // without making it missing or corrupt.
+  chmodSync(statePath, 0o000);
+  try {
+    const state = await readServeState(target);
+    // The read failed, so no state is surfaced...
+    assert.equal(state, null);
+    // ...but the file must survive because the live server still owns it.
+    assert.equal(existsSync(statePath), true, "transient read error must not delete serve state");
+  } finally {
+    // The file may already be gone if the guard regresses; restore perms best-effort.
+    if (existsSync(statePath)) chmodSync(statePath, 0o644);
+    await rm(statePath, { force: true });
+    await rm(target, { recursive: true, force: true });
+  }
 });

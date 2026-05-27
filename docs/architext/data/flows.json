@@ -14,6 +14,7 @@
           "id": "resolve-target",
           "from": "maintainer",
           "to": "architext-cli",
+          "kind": "start",
           "action": "resolveTargetPath",
           "summary": "CLI resolves the optional path argument or defaults to the current directory.",
           "data": [
@@ -24,6 +25,7 @@
           "id": "write-starter-data",
           "from": "architext-cli",
           "to": "target-data-files",
+          "kind": "persistence",
           "action": "writeStarterData",
           "summary": "CLI writes neutral starter data under docs/architext/data.",
           "data": [
@@ -34,6 +36,7 @@
           "id": "write-metadata",
           "from": "architext-cli",
           "to": "target-repository",
+          "kind": "artifact",
           "action": "writeLifecycleMetadata",
           "summary": "CLI writes docs/architext/.architext.json with install state.",
           "data": [
@@ -44,10 +47,36 @@
           "id": "validate-install",
           "from": "architext-cli",
           "to": "schema-validator",
+          "kind": "decision",
           "action": "validateStarterModel",
           "summary": "Package-owned schemas validate the starter model.",
           "data": [
             "architecture-model",
+            "validation-output"
+          ]
+        },
+        {
+          "id": "install-valid",
+          "from": "schema-validator",
+          "to": "target-repository",
+          "kind": "process",
+          "outcome": "valid",
+          "action": "recordInstalledState",
+          "summary": "Valid starter data lets sync report an installed data-only Architext repository.",
+          "data": [
+            "repository-metadata",
+            "validation-output"
+          ]
+        },
+        {
+          "id": "install-invalid",
+          "from": "schema-validator",
+          "to": "architext-cli",
+          "kind": "stop",
+          "outcome": "invalid",
+          "action": "stopWithValidationErrors",
+          "summary": "Invalid starter data returns validation errors to the CLI and blocks installation success.",
+          "data": [
             "validation-output"
           ]
         }

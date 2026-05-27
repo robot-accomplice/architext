@@ -44,13 +44,19 @@ export function validateArchitectureReferences(model) {
   }
 
   for (const flow of flows) {
+    const steps = nestedArray(flow, "steps", `flow ${flow.id}`);
+    const stepIds = new Set(steps.map((step) => step.id));
     for (const id of nestedArray(flow, "actors", `flow ${flow.id}`)) requireKnown(id, nodeIds, `flow ${flow.id}.actors`);
-    for (const step of nestedArray(flow, "steps", `flow ${flow.id}`)) {
+    for (const step of steps) {
       if (!step.from) errors.push(`flow ${flow.id} step ${step.id}.from is required`);
       else requireKnown(step.from, nodeIds, `flow ${flow.id} step ${step.id}.from`);
       if (!step.to) errors.push(`flow ${flow.id} step ${step.id}.to is required`);
       else requireKnown(step.to, nodeIds, `flow ${flow.id} step ${step.id}.to`);
+      if (step.returnOf) requireKnown(step.returnOf, stepIds, `flow ${flow.id} step ${step.id}.returnOf`);
       for (const id of nestedArray(step, "data", `flow ${flow.id} step ${step.id}`)) requireKnown(id, dataIds, `flow ${flow.id} step ${step.id}.data`);
+    }
+    for (const frame of nestedArray(flow, "sequenceFrames", `flow ${flow.id}`)) {
+      for (const id of nestedArray(frame, "stepIds", `flow ${flow.id} sequenceFrame ${frame.id}`)) requireKnown(id, stepIds, `flow ${flow.id} sequenceFrame ${frame.id}.stepIds`);
     }
   }
 

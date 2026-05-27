@@ -61,9 +61,19 @@ export type FlowStep = {
   id: Id;
   from: Id;
   to: Id;
+  kind?: "process" | "decision" | "start" | "stop" | "request" | "return" | "async" | "persistence" | "self" | "artifact";
+  returnOf?: Id;
+  outcome?: string;
   action: Id;
   summary: string;
   data: Id[];
+};
+
+export type SequenceFrame = {
+  id: Id;
+  type: "loop" | "optional" | "retry" | "transaction";
+  label: string;
+  stepIds: Id[];
 };
 
 export type Flow = {
@@ -74,6 +84,7 @@ export type Flow = {
   trigger: string;
   actors: Id[];
   steps: FlowStep[];
+  sequenceFrames?: SequenceFrame[];
   guarantees: string[];
   failureBehavior: string[];
   observability: string[];
@@ -312,7 +323,15 @@ export type Relationship = {
   relationshipType: "flow" | "structural";
   toType?: NodeType;
   stepId?: Id;
+  branchStepId?: Id;
   flowId?: Id;
+  displayIndex?: number;
+  stepKind?: FlowStep["kind"];
+  outcome?: string;
+  componentFrom?: Id;
+  componentTo?: Id;
+  preferredStartSide?: "left" | "right" | "top" | "bottom";
+  preferredEndSide?: "left" | "right" | "top" | "bottom";
 };
 
 export type Selection =

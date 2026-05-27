@@ -17,7 +17,9 @@ export function routeCacheKey(input) {
       label: relationship.label,
       relationshipType: relationship.relationshipType,
       stepId: relationship.stepId,
-      flowId: relationship.flowId
+      flowId: relationship.flowId,
+      preferredStartSide: relationship.preferredStartSide,
+      preferredEndSide: relationship.preferredEndSide
     })),
     visibleNodeIds: Array.from(input.visibleNodeIds).sort(),
     nodeRects: mapEntries(input.nodeRects),

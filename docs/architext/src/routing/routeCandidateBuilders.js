@@ -16,19 +16,14 @@ import { withQualityCosts } from "./routeScoring.js";
 import { withReadableLabel } from "./routeLabels.js";
 import { createMinHeap } from "./priorityQueue.js";
 import { CORRIDOR_PADDING } from "./routeCorridors.js";
+import { CANVAS_INSET, ROUTE_COST_WEIGHTS, rectCenter } from "./routeConstants.js";
 
 const defaultGridRouteMaxPoints = 1600;
 const defaultGridRouteMaxExpansions = 4000;
 
 function monotonicBacktrackCost(points, fromRect, toRect) {
-  const fromCenter = {
-    x: fromRect.x + fromRect.width / 2,
-    y: fromRect.y + fromRect.height / 2
-  };
-  const toCenter = {
-    x: toRect.x + toRect.width / 2,
-    y: toRect.y + toRect.height / 2
-  };
+  const fromCenter = rectCenter(fromRect);
+  const toCenter = rectCenter(toRect);
   const xDirection = Math.sign(toCenter.x - fromCenter.x);
   const yDirection = Math.sign(toCenter.y - fromCenter.y);
   let cost = 0;
@@ -37,8 +32,8 @@ function monotonicBacktrackCost(points, fromRect, toRect) {
     const end = points[index + 1];
     const dx = end.x - start.x;
     const dy = end.y - start.y;
-    if (xDirection !== 0 && Math.sign(dx) === -xDirection) cost += Math.abs(dx) * 18;
-    if (yDirection !== 0 && Math.sign(dy) === -yDirection) cost += Math.abs(dy) * 18;
+    if (xDirection !== 0 && Math.sign(dx) === -xDirection) cost += Math.abs(dx) * ROUTE_COST_WEIGHTS.monotonicBacktrack;
+    if (yDirection !== 0 && Math.sign(dy) === -yDirection) cost += Math.abs(dy) * ROUTE_COST_WEIGHTS.monotonicBacktrack;
   }
   return cost;
 }
@@ -63,10 +58,10 @@ export function createRouteCandidateFactory(context) {
     const toRect = rectFor(toId);
     const blockers = blockerRects(fromId, toId);
     const padding = CORRIDOR_PADDING;
-    const minX = 24;
-    const maxX = canvasWidth - 24;
-    const minY = 30;
-    const maxY = canvasHeight - 24;
+    const minX = CANVAS_INSET.left;
+    const maxX = canvasWidth - CANVAS_INSET.right;
+    const minY = CANVAS_INSET.top;
+    const maxY = canvasHeight - CANVAS_INSET.bottom;
     const add = (set, value, min, max) => set.add(Math.min(max, Math.max(min, Math.round(value))));
     const xLines = new Set([Math.round(start.x), Math.round(end.x), minX, maxX]);
     const yLines = new Set([Math.round(start.y), Math.round(end.y), minY, maxY]);
@@ -201,9 +196,9 @@ export function createRouteCandidateFactory(context) {
       points: simplified
     }, {
       ...routeQualityFromSamples(samples, label, fromId, toId, usedRoutes, relationship),
-      pointCountCost: simplified.length * 24,
-      bendCost: bendCount(simplified) * 420,
-      doglegCost: shallowJogCount(simplified) * 14000,
+      pointCountCost: simplified.length * ROUTE_COST_WEIGHTS.pointCount,
+      bendCost: bendCount(simplified) * ROUTE_COST_WEIGHTS.bend,
+      doglegCost: shallowJogCount(simplified) * ROUTE_COST_WEIGHTS.dogleg,
       monotonicBacktrackCost: backtrackCost
     });
   };
@@ -220,15 +215,15 @@ export function createRouteCandidateFactory(context) {
     const direction = { x: end.x - start.x, y: end.y - start.y };
     const startDirection = startVector.x * direction.x + startVector.y * direction.y;
     const endDirection = endVector.x * direction.x + endVector.y * direction.y;
-    const sideDirectionCost = (startDirection < 0 ? Math.abs(startDirection) * 260 : 0) +
-      (endDirection > 0 ? Math.abs(endDirection) * 260 : 0);
+    const sideDirectionCost = (startDirection < 0 ? Math.abs(startDirection) * ROUTE_COST_WEIGHTS.sideDirection : 0) +
+      (endDirection > 0 ? Math.abs(endDirection) * ROUTE_COST_WEIGHTS.sideDirection : 0);
     const controlA = {
-      x: clamp(start.x + chord.x * controlDistance + normal.x * curvatureOffset, 24, canvasWidth - 24),
-      y: clamp(start.y + chord.y * controlDistance + normal.y * curvatureOffset, 30, canvasHeight - 24)
+      x: clamp(start.x + chord.x * controlDistance + normal.x * curvatureOffset, CANVAS_INSET.left, canvasWidth - CANVAS_INSET.right),
+      y: clamp(start.y + chord.y * controlDistance + normal.y * curvatureOffset, CANVAS_INSET.top, canvasHeight - CANVAS_INSET.bottom)
     };
     const controlB = {
-      x: clamp(end.x - chord.x * controlDistance + normal.x * curvatureOffset, 24, canvasWidth - 24),
-      y: clamp(end.y - chord.y * controlDistance + normal.y * curvatureOffset, 30, canvasHeight - 24)
+      x: clamp(end.x - chord.x * controlDistance + normal.x * curvatureOffset, CANVAS_INSET.left, canvasWidth - CANVAS_INSET.right),
+      y: clamp(end.y - chord.y * controlDistance + normal.y * curvatureOffset, CANVAS_INSET.top, canvasHeight - CANVAS_INSET.bottom)
     };
     const samples = [start, ...sampleCubic(start, controlA, controlB, end, 32)];
     const label = pointAtDistance(samples, routeLength(samples) / 2) ?? {
@@ -247,10 +242,10 @@ export function createRouteCandidateFactory(context) {
     }, {
       ...routeQualityFromSamples(samples, label, fromId, toId, usedRoutes, relationship),
       lengthCost: routeLength(samples),
-      pointCountCost: 48,
-      directnessReward: -1400,
+      pointCountCost: 2 * ROUTE_COST_WEIGHTS.pointCount,
+      directnessReward: ROUTE_COST_WEIGHTS.splineReward,
       splineSideDirectionCost: sideDirectionCost,
-      splineStraightnessCost: Math.abs(curvatureOffset) < 1 ? 90000 : 0
+      splineStraightnessCost: Math.abs(curvatureOffset) < 1 ? ROUTE_COST_WEIGHTS.splineFlatPenalty : 0
     });
   };
 
@@ -258,12 +253,12 @@ export function createRouteCandidateFactory(context) {
     const start = startPort.port;
     const end = endPort.port;
     const gutter = side === "left"
-      ? 24 + routeOffset
+      ? CANVAS_INSET.left + routeOffset
       : side === "right"
-        ? canvasWidth - 24 - routeOffset
+        ? canvasWidth - CANVAS_INSET.right - routeOffset
         : side === "top"
-          ? 30 + routeOffset
-          : canvasHeight - 24 - routeOffset;
+          ? CANVAS_INSET.top + routeOffset
+          : canvasHeight - CANVAS_INSET.bottom - routeOffset;
     const points = side === "left" || side === "right"
       ? [
           startPort.anchor,
@@ -296,20 +291,20 @@ export function createRouteCandidateFactory(context) {
       points: simplified
     }, {
       ...routeQualityFromSamples(samples, label, fromId, toId, usedRoutes, relationship),
-      perimeterFallbackCost: 7000,
-      perimeterLengthCost: routeLength(samples) * 8,
-      pointCountCost: simplified.length * 24,
-      bendCost: bendCount(simplified) * 420,
-      doglegCost: shallowJogCount(simplified) * 14000
+      perimeterFallbackCost: ROUTE_COST_WEIGHTS.perimeterFallback,
+      perimeterLengthCost: routeLength(samples) * ROUTE_COST_WEIGHTS.perimeterLength,
+      pointCountCost: simplified.length * ROUTE_COST_WEIGHTS.pointCount,
+      bendCost: bendCount(simplified) * ROUTE_COST_WEIGHTS.bend,
+      doglegCost: shallowJogCount(simplified) * ROUTE_COST_WEIGHTS.dogleg
     });
   };
 
   const cornerPerimeterRoutes = (relationship, fromId, toId, routeOffset, usedRoutes, startPort, endPort) => {
     const boundaries = [
-      { x: 24 + routeOffset, y: 30 + routeOffset },
-      { x: canvasWidth - 24 - routeOffset, y: 30 + routeOffset },
-      { x: 24 + routeOffset, y: canvasHeight - 24 - routeOffset },
-      { x: canvasWidth - 24 - routeOffset, y: canvasHeight - 24 - routeOffset }
+      { x: CANVAS_INSET.left + routeOffset, y: CANVAS_INSET.top + routeOffset },
+      { x: canvasWidth - CANVAS_INSET.right - routeOffset, y: CANVAS_INSET.top + routeOffset },
+      { x: CANVAS_INSET.left + routeOffset, y: canvasHeight - CANVAS_INSET.bottom - routeOffset },
+      { x: canvasWidth - CANVAS_INSET.right - routeOffset, y: canvasHeight - CANVAS_INSET.bottom - routeOffset }
     ];
 
     const start = startPort.port;
@@ -351,11 +346,11 @@ export function createRouteCandidateFactory(context) {
         points: simplified
       }, {
         ...routeQualityFromSamples(samples, label, fromId, toId, usedRoutes, relationship),
-        perimeterFallbackCost: 12000,
-        perimeterLengthCost: routeLength(samples) * 10,
-        pointCountCost: simplified.length * 24,
-        bendCost: bendCount(simplified) * 420,
-        doglegCost: shallowJogCount(simplified) * 14000
+        perimeterFallbackCost: ROUTE_COST_WEIGHTS.cornerPerimeterFallback,
+        perimeterLengthCost: routeLength(samples) * ROUTE_COST_WEIGHTS.cornerPerimeterLength,
+        pointCountCost: simplified.length * ROUTE_COST_WEIGHTS.pointCount,
+        bendCost: bendCount(simplified) * ROUTE_COST_WEIGHTS.bend,
+        doglegCost: shallowJogCount(simplified) * ROUTE_COST_WEIGHTS.dogleg
       });
     });
   };
@@ -381,8 +376,8 @@ export function createRouteCandidateFactory(context) {
       points
     }, {
       ...routeQualityFromSamples(samples, label, fromId, toId, usedRoutes, relationship),
-      directnessReward: -2000,
-      doglegCost: shallowJogCount(points) * 14000
+      directnessReward: ROUTE_COST_WEIGHTS.directPortReward,
+      doglegCost: shallowJogCount(points) * ROUTE_COST_WEIGHTS.dogleg
     });
   };
 
@@ -404,8 +399,8 @@ export function createRouteCandidateFactory(context) {
     }, {
       ...routeQualityFromSamples(samples, label, fromId, toId, usedRoutes, relationship),
       lengthCost: routeLength(samples),
-      pointCountCost: 24,
-      directnessReward: -2200
+      pointCountCost: ROUTE_COST_WEIGHTS.pointCount,
+      directnessReward: ROUTE_COST_WEIGHTS.straightReward
     }));
   };
 
@@ -448,9 +443,9 @@ export function createRouteCandidateFactory(context) {
       points: simplified
     }, {
       ...routeQualityFromSamples(samples, label, fromId, toId, usedRoutes, relationship),
-      pointCountCost: simplified.length * 24,
-      bendCost: bendCount(simplified) * 420,
-      doglegCost: shallowJogCount(simplified) * 14000,
+      pointCountCost: simplified.length * ROUTE_COST_WEIGHTS.pointCount,
+      bendCost: bendCount(simplified) * ROUTE_COST_WEIGHTS.bend,
+      doglegCost: shallowJogCount(simplified) * ROUTE_COST_WEIGHTS.dogleg,
       monotonicBacktrackCost: monotonicBacktrackCost(simplified, rectFor(fromId), rectFor(toId))
     });
   };

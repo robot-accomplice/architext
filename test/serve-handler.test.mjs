@@ -208,7 +208,7 @@ test("serve handler can run constrained sync repair for missing data", async () 
       assert.equal(body.ok, true);
       assert.equal(body.reload, true);
       assert.match(body.output, /Operation: install/);
-      assert.match(await readFile(path.join(target, "docs", "architext", "data", "manifest.json"), "utf8"), /"schemaVersion": "1.4.0"/);
+      assert.match(await readFile(path.join(target, "docs", "architext", "data", "manifest.json"), "utf8"), /"schemaVersion": "1.5.0"/);
     });
   } finally {
     await rm(target, { recursive: true, force: true });

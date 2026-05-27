@@ -7,3 +7,6 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
+
+# Ephemeral local planning/direction — not a repository artifact
+docs/superpowers/

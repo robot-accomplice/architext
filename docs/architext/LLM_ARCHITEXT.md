@@ -33,23 +33,34 @@ complete.
   or use-case paths need a dedicated Flows projection. Workflow views should
   reference existing nodes and selected flows instead of duplicating flow facts
   or inventing workflow-specific routing rules.
+- Prefer semantic iconography over UML/code diagrams or broad flowchart shape
+  palettes for flow enrichment. Mark decision, start, stop, async,
+  persistence, artifact, return, and process semantics with `step.kind` when
+  the flow needs them. For decision branches, set `step.outcome` to the
+  concrete branch/result label that should be readable on the path. A decision
+  branch should have at least two outgoing outcome steps from the decision node,
+  and those branch lines should share the decision step number. Do not add
+  UML/code diagrams for now.
 - For sequence diagrams, create explicit return paths for request/response,
   command/result, event/acknowledgement, and failure-return interactions when
-  the flow requires them. Use loops, retries, optional branches, and
-  transaction or consistency blocks to group outbound and return messages
-  together instead of leaving return behavior implied.
+  the flow requires them. Mark return steps with `kind: "return"` and
+  `returnOf` when they answer a specific outbound step. Use `sequenceFrames`
+  for loops, retries, optional branches, and transaction or consistency blocks
+  so outbound and return messages are visibly grouped instead of implied.
 - Update data classification whenever data movement changes.
 - Update risks when adding external dependencies, persistence, async
   processing, sensitive data handling, trust boundary crossings, or operational
   complexity.
-- Update Release Truth data under `docs/architext/data/releases/` when release
-  scope, blockers, milestones, posture, evidence, or target dates change.
 - Update Rules data in `docs/architext/data/rules.json` when project rules
   change. Rule categories are maintainer-defined classifications, not a fixed
   Architext taxonomy.
+- Update Release Truth data under `docs/architext/data/releases/` when release
+  scope, blockers, milestones, posture, evidence, or target dates change.
 - Treat Release Truth as the reviewed release source of truth. If you complete,
   defer, add, remove, reprioritize, or block release work, update the release
   detail file and ensure `releases/index.json` is regenerated from those facts.
+- Do not leave completed, deferred, or cut release items in active blocker
+  `itemIds`. Completion and blocking are mutually exclusive lifecycle facts.
 - Keep Release Path rows concise. Put rationale, blocker explanation,
   dependency detail, evidence, and next actions in the selected release item's
   detail data instead of duplicating long prose in labels or summaries.

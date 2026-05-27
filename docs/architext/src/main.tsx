@@ -1,7 +1,8 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
 import { c4LayoutFor } from "./routing/c4Layout.js";
+import { pathToSvgWithHops } from "./routing/routeEdges.js";
 import { relationshipLabel } from "./routing/relationshipLabels.js";
 import { plannedCanvasFallback, usePlannedDiagram } from "./routing/usePlannedDiagram.js";
 import {
@@ -21,12 +22,16 @@ import { ReleasePath } from "./presentation/ReleasePathView.js";
 import { ReleasePlanningPanel, ReleasePlanningWorkspace } from "./presentation/ReleasePlanning.js";
 import { ReleaseTrendChart } from "./presentation/ReleaseTrendChart.js";
 import { nextRuleCategoryName, orderedRules, ruleCategories, ruleCategoryAccent, ruleCriticalityTone, ruleProtectionLabel } from "./presentation/rules.js";
+import { DiagramIcon } from "./presentation/DiagramIcon.js";
+import { iconForNodeType, iconForStep } from "./presentation/diagramIconModel.js";
+import { decisionBranchTargets, flowStepDisplayIndexes, isDecisionBranchSupportStep, isRenderedFlowRelationshipStep } from "./presentation/flowStepDisplayModel.js";
 import { postRulesAction } from "./presentation/rulesClient.js";
 import { useUnsavedEditorGuard } from "./presentation/unsavedEditorGuard.js";
+import { useDiagramViewport } from "./presentation/useDiagramViewport.js";
 import { dataRefreshNoticeForDirtyEditors } from "./presentation/releasePlanningModel.js";
 import { pdfExportControlLabel, requestPdfExport } from "./presentation/pdfExportModel.js";
 import { StepRoute } from "./presentation/StepRoute.js";
-import { stepRouteClassName } from "./presentation/stepRouteModel.js";
+import { sequenceActivationSpans, sequenceStepMessageKind, stepRouteClassName } from "./presentation/stepRouteModel.js";
 import {
   progressFill,
   progressTone,
@@ -53,7 +58,6 @@ import {
   modeLabels,
   viewBelongsToMode
 } from "./presentation/viewSelection.js";
-import { readBooleanPreference, readDebugRouting, readRoutingStylePreference, writeBooleanPreference, writeRoutingStylePreference } from "./adapters/browserPreferences.js";
 import type {
   ArchNode,
   DataClass,
@@ -76,11 +80,12 @@ import type {
   RoutingStyle,
   Selection,
   View,
-  ViewportSize
 } from "./domain/architectureTypes.js";
 import "./styles.css";
 
 declare const __ARCHITEXT_VERSION__: string;
+
+type RouteSide = NonNullable<Relationship["preferredStartSide"]>;
 
 const MIN_DESKTOP_FIT_ZOOM = 0.85;
 const MIN_COMPACT_FIT_ZOOM = 0.7;
@@ -113,8 +118,105 @@ type RecoveryResult = {
   };
 };
 
+type SequenceActivationSpan = {
+  id: Id;
+  participantId: Id;
+  y1: number;
+  y2: number;
+  depth: number;
+};
+
 function progressBarStyle(value?: number): React.CSSProperties {
   return { "--progress-fill": progressFill(value) } as React.CSSProperties;
+}
+
+function outcomeLabelPoint(route: any) {
+  const start = route.points?.[0] ?? { x: route.labelX, y: route.labelY };
+  const samples = route.samples?.length ? route.samples : route.points ?? [start];
+  const anchor = samples.find((sample: any) => Math.hypot(sample.x - start.x, sample.y - start.y) >= 92)
+    ?? route.points?.[1]
+    ?? route.points?.at?.(-1)
+    ?? { x: route.labelX, y: route.labelY };
+  return {
+    anchorX: anchor.x,
+    anchorY: anchor.y,
+    x: anchor.x,
+    y: anchor.y
+  };
+}
+
+function decisionNodeId(stepId: Id) {
+  return `decision:${stepId}`;
+}
+
+function decisionTip(rect: { x: number; y: number; width: number; height: number }, side: RouteSide) {
+  const center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
+  const radius = rect.width / Math.SQRT2;
+  if (side === "left") return { x: center.x - radius, y: center.y };
+  if (side === "right") return { x: center.x + radius, y: center.y };
+  if (side === "top") return { x: center.x, y: center.y - radius };
+  return { x: center.x, y: center.y + radius };
+}
+
+function decisionRouteRect(rect: { x: number; y: number; width: number; height: number }) {
+  return {
+    ...rect,
+    fixedPorts: true,
+    sideAnchors: {
+      left: decisionTip(rect, "left"),
+      right: decisionTip(rect, "right"),
+      top: decisionTip(rect, "top"),
+      bottom: decisionTip(rect, "bottom")
+    }
+  };
+}
+
+function decisionConnectorRoute(decisionNode: { componentId: Id; rect: { x: number; y: number; width: number; height: number } }, componentRect: { x: number; y: number; width: number; height: number }) {
+  const x = componentRect.x + componentRect.width / 2;
+  const decisionTop = decisionTip(decisionNode.rect, "top");
+  return {
+    points: [
+      { x, y: componentRect.y + componentRect.height },
+      decisionTop
+    ]
+  };
+}
+
+function nodeLanePosition(view: View, nodeId: Id) {
+  for (let laneIndex = 0; laneIndex < view.lanes.length; laneIndex += 1) {
+    const rowIndex = view.lanes[laneIndex].nodeIds.indexOf(nodeId);
+    if (rowIndex >= 0) return { laneIndex, rowIndex };
+  }
+  return null;
+}
+
+function preferredDecisionBranchSide(view: View, decisionNode: { laneIndex: number; rowIndex: number }, targetNodeId: Id): RouteSide {
+  const target = nodeLanePosition(view, targetNodeId);
+  if (!target) return "right";
+  const deltaLane = target.laneIndex - decisionNode.laneIndex;
+  const deltaRow = target.rowIndex - decisionNode.rowIndex;
+  if (deltaLane !== 0) return deltaLane < 0 ? "left" : "right";
+  if (deltaRow < 0) return "left";
+  if (deltaRow > 0) return "bottom";
+  if (deltaLane !== 0) return deltaLane < 0 ? "left" : "right";
+  return "right";
+}
+
+function oppositeSide(side: RouteSide): RouteSide {
+  if (side === "left") return "right";
+  if (side === "right") return "left";
+  if (side === "top") return "bottom";
+  return "top";
+}
+
+function preferredDecisionBranchEndSide(view: View, decisionNode: { laneIndex: number; rowIndex: number }, targetNodeId: Id, startSide: RouteSide): RouteSide {
+  const target = nodeLanePosition(view, targetNodeId);
+  if (target && target.laneIndex === decisionNode.laneIndex) {
+    if (target.rowIndex < decisionNode.rowIndex) return "left";
+    if (target.rowIndex > decisionNode.rowIndex) return "top";
+  }
+  if (startSide === "right") return "right";
+  return oppositeSide(startSide);
 }
 
 function byId<T extends { id: Id }>(items: T[]): Map<Id, T> {
@@ -175,23 +277,6 @@ function ScaledCanvasExtent({
       {children}
     </div>
   );
-}
-
-function useElementSize<T extends HTMLElement>() {
-  const ref = useRef<T | null>(null);
-  const [size, setSize] = useState<ViewportSize>({ width: 0, height: 0 });
-
-  useEffect(() => {
-    if (!ref.current) return;
-    const observer = new ResizeObserver(([entry]) => {
-      const { width, height } = entry.contentRect;
-      setSize({ width, height });
-    });
-    observer.observe(ref.current);
-    return () => observer.disconnect();
-  }, []);
-
-  return [ref, size] as const;
 }
 
 function RoutingLoadingOverlay({ active }: { active: boolean }) {
@@ -935,8 +1020,6 @@ function App() {
   const [recoveryResult, setRecoveryResult] = useState<RecoveryResult | null>(null);
   const [dataNotice, setDataNotice] = useState<string | null>(null);
   const [dataIssue, setDataIssue] = useState<{ message: string; waiting: boolean } | null>(null);
-  const [navCollapsed, setNavCollapsed] = useState(() => readBooleanPreference(localStorage, "architext-left-collapsed"));
-  const [rightCollapsed, setRightCollapsed] = useState(() => readBooleanPreference(localStorage, "architext-right-collapsed"));
   const [query, setQuery] = useState("");
   const [activeMode, setActiveMode] = useState<Mode>("flows");
   const [activeViewId, setActiveViewId] = useState<Id>("");
@@ -949,12 +1032,27 @@ function App() {
   const [rulesEditorDirty, setRulesEditorDirty] = useState(false);
   const [selectedRuleCategory, setSelectedRuleCategory] = useState("all");
   const [newRuleDraftRequest, setNewRuleDraftRequest] = useState<{ id: number; category: string } | null>(null);
-  const [diagramTransform, setDiagramTransform] = useState<DiagramTransform>({ zoom: 1, focused: false });
-  const [routingStyle, setRoutingStyle] = useState<RoutingStyle>(() => readRoutingStylePreference(localStorage) as RoutingStyle);
-  const [debugRouting] = useState(() => readDebugRouting(window.location.search));
   const [riskFilter, setRiskFilter] = useState("all");
   const [stepsCollapsed, setStepsCollapsed] = useState(false);
-  const [diagramViewportRef, diagramViewportSize] = useElementSize<HTMLElement>();
+  const {
+    debugRouting,
+    diagramTransform,
+    diagramViewportRef,
+    diagramViewportSize,
+    fitZoomFor,
+    navCollapsed,
+    rightCollapsed,
+    routingStyle,
+    setDiagramTransform,
+    setNavCollapsed,
+    setRightCollapsed,
+    setRoutingStyle
+  } = useDiagramViewport({
+    compactFitZoom: MIN_COMPACT_FIT_ZOOM,
+    desktopFitZoom: MIN_DESKTOP_FIT_ZOOM,
+    localStorage,
+    locationSearch: window.location.search
+  });
   const editorStates = useMemo(() => [
     { id: "release-planning", label: "Release Planning", dirty: releasePlanningDirty },
     { id: "rules", label: "Rules editor", dirty: rulesEditorDirty }
@@ -1100,18 +1198,6 @@ function App() {
   };
 
   useEffect(() => {
-    writeBooleanPreference(localStorage, "architext-left-collapsed", navCollapsed);
-  }, [navCollapsed]);
-
-  useEffect(() => {
-    writeBooleanPreference(localStorage, "architext-right-collapsed", rightCollapsed);
-  }, [rightCollapsed]);
-
-  useEffect(() => {
-    writeRoutingStylePreference(localStorage, routingStyle);
-  }, [routingStyle]);
-
-  useEffect(() => {
     const onHashChange = () => {
       const requestedMode = modeForHash(window.location.hash) as Mode | null;
       if (!requestedMode || !model) return;
@@ -1120,27 +1206,6 @@ function App() {
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
   }, [activeMode, confirmEditorNavigation, model]);
-
-  useEffect(() => {
-    const narrowWidth = window.matchMedia("(max-width: 760px)");
-    const laptopWidth = window.matchMedia("(max-width: 1180px)");
-    const collapseForViewport = () => {
-      if (narrowWidth.matches) {
-        setNavCollapsed(true);
-        setRightCollapsed(true);
-      } else if (laptopWidth.matches) {
-        setRightCollapsed(true);
-      }
-    };
-
-    collapseForViewport();
-    narrowWidth.addEventListener("change", collapseForViewport);
-    laptopWidth.addEventListener("change", collapseForViewport);
-    return () => {
-      narrowWidth.removeEventListener("change", collapseForViewport);
-      laptopWidth.removeEventListener("change", collapseForViewport);
-    };
-  }, []);
 
   if (error) {
     return <RecoveryShell error={error} busy={recoveryBusy} result={recoveryResult} onAction={requestRecoveryAction} />;
@@ -1161,6 +1226,7 @@ function App() {
   const decisionsById = byId<Decision>(model.decisions);
   const risksById = byId<Risk>(model.risks);
   const activeFlow = flowsById.get(activeFlowId) ?? model.flows[0];
+  const activeFlowStepDisplayIndexes = flowStepDisplayIndexes(activeFlow.steps);
   const fallbackView = model.views[0];
   const selectedView = viewsById.get(activeViewId);
   const modeView = viewBelongsToMode(selectedView, activeMode)
@@ -1179,6 +1245,7 @@ function App() {
   const selectedStepId = selectedStepIdForSelection(selection);
   const selectedFlowId = selectedFlowIdForSelection(selection);
   const selectedActiveStepId = activeFlow.steps.some((step) => isSelectedStep(selection, activeFlow.id, step.id)) ? selectedStepId : null;
+  const selectedActiveStepDisplayIndex = selectedActiveStepId ? activeFlowStepDisplayIndexes.get(selectedActiveStepId) ?? null : null;
   const selectedFlowForStep = selectedFlowId ? flowsById.get(selectedFlowId) : null;
   const selectedStep = selectedStepId
     ? selectedFlowForStep?.steps.find((step) => step.id === selectedStepId) ?? null
@@ -1197,37 +1264,6 @@ function App() {
     return text.includes(query.toLowerCase());
   });
 
-  const estimateCanvasSize = (mode: Mode, view: View, flow: Flow): ViewportSize => {
-    if (mode === "sequence") {
-      const participantCount = new Set(flow.steps.flatMap((step) => [step.from, step.to])).size;
-      return {
-        width: 56 + participantCount * 146,
-        height: 88 + flow.steps.length * 56 + 56
-      };
-    }
-
-    if (mode === "c4") {
-      return {
-        width: Math.max(760, 112 + view.lanes.length * 210),
-        height: Math.max(440, 72 + Math.max(...view.lanes.map((lane) => lane.nodeIds.length), 1) * 86 + 96)
-      };
-    }
-
-    return {
-      width: 192 + view.lanes.length * 210,
-      height: Math.max(380, 86 + Math.max(...view.lanes.map((lane) => lane.nodeIds.length), 1) * 84 + 104)
-    };
-  };
-
-  const fitZoomFor = (mode: Mode, view: View, flow: Flow) => {
-    const estimate = estimateCanvasSize(mode, view, flow);
-    const availableWidth = Math.max(diagramViewportSize.width - 24, 1);
-    const availableHeight = Math.max(diagramViewportSize.height - 24, 1);
-    const nextZoom = Math.min(availableWidth / estimate.width, availableHeight / estimate.height);
-    const readableMinimum = window.innerWidth < 900 ? MIN_COMPACT_FIT_ZOOM : MIN_DESKTOP_FIT_ZOOM;
-    return Math.min(1, Math.max(readableMinimum, Number(nextZoom.toFixed(2))));
-  };
-
   const clearEditorDirtyState = () => {
     setReleasePlanningDirty(false);
     setRulesEditorDirty(false);
@@ -1241,29 +1277,37 @@ function App() {
     return false;
   };
 
-  const switchMode = (mode: Mode, options: { restoreHashOnCancel?: boolean } = {}) => {
+  const guardedSelect = (select: () => void, onCancel?: () => void) => {
     if (!confirmEditorNavigationOrStay()) {
-      if (options.restoreHashOnCancel) window.history.replaceState(null, "", hashForMode(activeMode));
-      return;
+      onCancel?.();
+      return false;
     }
-    const nextView = defaultViewForMode(mode, model.views, fallbackView);
-    window.history.replaceState(null, "", hashForMode(mode));
-    setActiveMode(mode);
-    setActiveViewId(nextView.id);
-    setSelection(null);
-    if (mode === "release-truth" && !activeReleaseId && model.releases?.index.currentReleaseId) {
-      setActiveReleaseId(model.releases.index.currentReleaseId);
-    }
-    if (diagramViewportSize.width && diagramViewportSize.height) {
-      const nextZoom = fitZoomFor(mode, nextView, activeFlow);
-      setDiagramTransform((value) => ({ ...value, zoom: Math.min(value.zoom, nextZoom) }));
-    }
+    select();
+    return true;
+  };
+
+  const switchMode = (mode: Mode, options: { restoreHashOnCancel?: boolean } = {}) => {
+    guardedSelect(() => {
+      const nextView = defaultViewForMode(mode, model.views, fallbackView);
+      window.history.replaceState(null, "", hashForMode(mode));
+      setActiveMode(mode);
+      setActiveViewId(nextView.id);
+      setSelection(null);
+      if (mode === "release-truth" && !activeReleaseId && model.releases?.index.currentReleaseId) {
+        setActiveReleaseId(model.releases.index.currentReleaseId);
+      }
+      if (diagramViewportSize.width && diagramViewportSize.height) {
+        const nextZoom = fitZoomFor(mode, nextView, activeFlow);
+        setDiagramTransform((value) => ({ ...value, zoom: Math.min(value.zoom, nextZoom) }));
+      }
+    }, options.restoreHashOnCancel ? () => window.history.replaceState(null, "", hashForMode(activeMode)) : undefined);
   };
 
   const selectRelease = async (releaseId: Id) => {
-    if (!confirmEditorNavigationOrStay()) return;
-    setActiveReleaseId(releaseId);
-    setSelection(null);
+    if (!guardedSelect(() => {
+      setActiveReleaseId(releaseId);
+      setSelection(null);
+    })) return;
     if (!model.releases || releaseDetailsById.has(releaseId)) return;
     const detail = await loadReleaseDetail(fetch, model.releases, releaseId);
     setReleaseDetailsById((current) => new Map(current).set(detail.id, detail));
@@ -1275,54 +1319,150 @@ function App() {
   };
 
   const selectView = (viewId: Id) => {
-    if (!confirmEditorNavigationOrStay()) return;
-    const view = viewsById.get(viewId);
-    if (!view) return;
-    const nextMode = modeForView(view);
-    window.history.replaceState(null, "", hashForMode(nextMode));
-    setActiveMode(nextMode);
-    setActiveViewId(viewId);
-    if (nextMode === "flows") {
-      const nextFlow = defaultFlowForView(view, activeFlow, model.flows, model.flows[0]) as Flow;
-      if (nextFlow?.id && nextFlow.id !== activeFlow.id) {
-        setActiveFlowId(nextFlow.id);
-        setSelection({ kind: "flow", id: nextFlow.id });
+    guardedSelect(() => {
+      const view = viewsById.get(viewId);
+      if (!view) return;
+      const nextMode = modeForView(view);
+      window.history.replaceState(null, "", hashForMode(nextMode));
+      setActiveMode(nextMode);
+      setActiveViewId(viewId);
+      if (nextMode === "flows") {
+        const nextFlow = defaultFlowForView(view, activeFlow, model.flows, model.flows[0]) as Flow;
+        if (nextFlow?.id && nextFlow.id !== activeFlow.id) {
+          setActiveFlowId(nextFlow.id);
+          setSelection({ kind: "flow", id: nextFlow.id });
+          return;
+        }
+      }
+      if (nextMode === "c4") {
+        const firstNodeId = view.lanes.flatMap((lane) => lane.nodeIds)[0];
+        if (firstNodeId) setSelection({ kind: "node", id: firstNodeId });
         return;
       }
-    }
-    if (nextMode === "c4") {
-      const firstNodeId = view.lanes.flatMap((lane) => lane.nodeIds)[0];
-      if (firstNodeId) setSelection({ kind: "node", id: firstNodeId });
-      return;
-    }
-    setSelection(null);
+      setSelection(null);
+    });
   };
 
   const selectC4Node = (nodeId: Id) => {
-    if (!confirmEditorNavigationOrStay()) return;
-    const childView = childC4ViewForNode(model.views, activeView, nodeId) as View | null;
-    if (childView) {
-      setActiveViewId(childView.id);
-      const firstNodeId = childView.lanes.flatMap((lane) => lane.nodeIds)[0] ?? nodeId;
-      setSelection({ kind: "node", id: firstNodeId });
+    guardedSelect(() => {
+      const childView = childC4ViewForNode(model.views, activeView, nodeId) as View | null;
+      if (childView) {
+        setActiveViewId(childView.id);
+        const firstNodeId = childView.lanes.flatMap((lane) => lane.nodeIds)[0] ?? nodeId;
+        setSelection({ kind: "node", id: firstNodeId });
+        return;
+      }
+      const node = nodesById.get(nodeId);
+      const reason = c4DrilldownUnavailableReason(activeView, node);
+      if (reason) setDataNotice(reason);
+      setSelection({ kind: "node", id: nodeId });
+    });
+  };
+
+  const selectNode = (id: Id) => {
+    guardedSelect(() => {
+      setSelection({ kind: "node", id });
+    });
+  };
+
+  const selectFlow = (flowId: Id) => {
+    guardedSelect(() => {
+      const nextFlow = flowsById.get(flowId);
+      if (nextFlow && activeMode === "flows") {
+        const nextView = defaultViewForFlow(activeMode, activeView, model.views, nextFlow, fallbackView) as View;
+        if (nextView?.id && nextView.id !== activeView.id) setActiveViewId(nextView.id);
+      }
+      setActiveFlowId(flowId);
+      setSelection({ kind: "flow", id: flowId });
+    });
+  };
+
+  const selectRule = (id: Id) => {
+    guardedSelect(() => {
+      setSelection({ kind: "rule", id });
+      setRightCollapsed(false);
+    });
+  };
+
+  const selectRuleCategory = (category: string) => {
+    guardedSelect(() => {
+      setSelectedRuleCategory(category);
+      setSelection(null);
+    });
+  };
+
+  const addRuleCategory = () => {
+    guardedSelect(() => {
+      const category = nextRuleCategoryName(model.rules ?? []);
+      setSelectedRuleCategory(category);
+      setSelection(null);
+      setNewRuleDraftRequest((current) => ({ id: (current?.id ?? 0) + 1, category }));
+    });
+  };
+
+  const selectReleaseItem = (id: Id) => {
+    guardedSelect(() => {
+      setSelection({ kind: "release-item", itemId: id });
+      setRightCollapsed(false);
+    });
+  };
+
+  const selectReleaseMilestone = (id: Id) => {
+    guardedSelect(() => {
+      setSelection({ kind: "release-milestone", milestoneId: id });
+      setRightCollapsed(false);
+    });
+  };
+
+  const setPlanningMode = (nextPlanningMode: boolean) => {
+    if (!nextPlanningMode) {
+      guardedSelect(() => setReleasePlanningMode(nextPlanningMode));
       return;
     }
-    const node = nodesById.get(nodeId);
-    const reason = c4DrilldownUnavailableReason(activeView, node);
-    if (reason) setDataNotice(reason);
-    setSelection({ kind: "node", id: nodeId });
+    setReleasePlanningMode(nextPlanningMode);
+  };
+
+  const saveSelectedRule = (id: Id) => {
+    setSelection({ kind: "rule", id });
+    setRightCollapsed(false);
+  };
+
+  const selectDiagramNode = (id: Id) => {
+    guardedSelect(() => {
+      setSelection({ kind: "node", id });
+    });
   };
 
   const selectRelationship = (relationship: Relationship) => {
-    if (!confirmEditorNavigationOrStay()) return;
-    setSelection({
-      kind: "relationship",
-      from: relationship.from,
-      to: relationship.to,
-      label: relationship.label,
-      relationshipType: relationship.relationshipType,
-      stepId: relationship.stepId,
-      flowId: relationship.flowId
+    guardedSelect(() => {
+      if (
+        relationship.stepId &&
+        selection?.kind === "step" &&
+        selection.flowId === relationship.flowId &&
+        selection.stepId === relationship.stepId
+      ) {
+        setSelection({ kind: "flow", id: relationship.flowId ?? activeFlow.id });
+        return;
+      }
+      setSelection({
+        kind: "relationship",
+        from: relationship.from,
+        to: relationship.to,
+        label: relationship.label,
+        relationshipType: relationship.relationshipType,
+        stepId: relationship.stepId,
+        flowId: relationship.flowId
+      });
+    });
+  };
+
+  const selectActiveStep = (stepId: Id) => {
+    guardedSelect(() => {
+      setSelection((current) => (
+        current?.kind === "step" && current.flowId === activeFlow.id && current.stepId === stepId
+          ? { kind: "flow", id: activeFlow.id }
+          : { kind: "step", flowId: activeFlow.id, stepId }
+      ));
     });
   };
 
@@ -1384,17 +1524,28 @@ function App() {
         </div>
       ) : null}
 
+      <button
+        type="button"
+        className="side-toggle left-side-toggle"
+        onClick={() => setNavCollapsed((value) => !value)}
+        aria-label={navCollapsed ? "Expand left navigation" : "Collapse left navigation"}
+        title={navCollapsed ? "Expand left navigation" : "Collapse left navigation"}
+        data-tooltip={navCollapsed ? "Expand" : "Collapse"}
+      >
+        {navCollapsed ? "›" : "‹"}
+      </button>
+      <button
+        type="button"
+        className="side-toggle right-side-toggle"
+        onClick={() => setRightCollapsed((value) => !value)}
+        aria-label={rightCollapsed ? "Expand right details" : "Collapse right details"}
+        title={rightCollapsed ? "Expand right details" : "Collapse right details"}
+        data-tooltip={rightCollapsed ? "Expand" : "Collapse"}
+      >
+        {rightCollapsed ? "‹" : "›"}
+      </button>
+
       <aside className="left-nav">
-        <button
-          type="button"
-          className="side-toggle left-side-toggle"
-          onClick={() => setNavCollapsed((value) => !value)}
-          aria-label={navCollapsed ? "Expand left navigation" : "Collapse left navigation"}
-          title={navCollapsed ? "Expand left navigation" : "Collapse left navigation"}
-          data-tooltip={navCollapsed ? "Expand" : "Collapse"}
-        >
-          {navCollapsed ? "›" : "‹"}
-        </button>
         {navCollapsed ? (
           <button type="button" className="panel-rail" onClick={() => setNavCollapsed(false)}>
             Browse
@@ -1418,39 +1569,13 @@ function App() {
             activeRuleCategory={selectedRuleCategory}
             riskFilter={riskFilter}
             onRiskFilterChange={setRiskFilter}
-            onSelectFlow={(flowId) => {
-              if (!confirmEditorNavigationOrStay()) return;
-              const nextFlow = flowsById.get(flowId);
-              if (nextFlow && activeMode === "flows") {
-                const nextView = defaultViewForFlow(activeMode, activeView, model.views, nextFlow, fallbackView) as View;
-                if (nextView?.id && nextView.id !== activeView.id) setActiveViewId(nextView.id);
-              }
-              setActiveFlowId(flowId);
-              setSelection({ kind: "flow", id: flowId });
-            }}
+            onSelectFlow={selectFlow}
             onSelectView={selectView}
-            onSelectNode={(id) => {
-              if (!confirmEditorNavigationOrStay()) return;
-              setSelection({ kind: "node", id });
-            }}
+            onSelectNode={selectNode}
             onSelectRelease={selectRelease}
-            onSelectRule={(id) => {
-              if (!confirmEditorNavigationOrStay()) return;
-              setSelection({ kind: "rule", id });
-              setRightCollapsed(false);
-            }}
-            onSelectRuleCategory={(category) => {
-              if (!confirmEditorNavigationOrStay()) return;
-              setSelectedRuleCategory(category);
-              setSelection(null);
-            }}
-            onAddRuleCategory={() => {
-              if (!confirmEditorNavigationOrStay()) return;
-              const category = nextRuleCategoryName(model.rules ?? []);
-              setSelectedRuleCategory(category);
-              setSelection(null);
-              setNewRuleDraftRequest((current) => ({ id: (current?.id ?? 0) + 1, category }));
-            }}
+            onSelectRule={selectRule}
+            onSelectRuleCategory={selectRuleCategory}
+            onAddRuleCategory={addRuleCategory}
           />
         )}
       </aside>
@@ -1462,15 +1587,8 @@ function App() {
             selectedRule={selectedRule}
             selectedCategory={selectedRuleCategory}
             newRuleDraftRequest={newRuleDraftRequest}
-            onSelectRule={(id) => {
-              if (!confirmEditorNavigationOrStay()) return;
-              setSelection({ kind: "rule", id });
-              setRightCollapsed(false);
-            }}
-            onRuleSaved={(id) => {
-              setSelection({ kind: "rule", id });
-              setRightCollapsed(false);
-            }}
+            onSelectRule={selectRule}
+            onRuleSaved={saveSelectedRule}
             onRulesChanged={reloadArchitectureData}
             onEditingChange={setRulesEditorDirty}
           />
@@ -1482,23 +1600,12 @@ function App() {
             selection={selection}
             onSelectCurrentRelease={selectCurrentRelease}
             planningMode={releasePlanningMode}
-            onPlanningModeChange={(nextPlanningMode) => {
-              if (!nextPlanningMode && !confirmEditorNavigationOrStay()) return;
-              setReleasePlanningMode(nextPlanningMode);
-            }}
+            onPlanningModeChange={setPlanningMode}
             roadmapItems={model.roadmap}
             onReleasePlanApproved={reloadReleasePlanningModel}
             onReleasePlanningEditingChange={setReleasePlanningDirty}
-            onSelectReleaseItem={(id) => {
-              if (!confirmEditorNavigationOrStay()) return;
-              setSelection({ kind: "release-item", itemId: id });
-              setRightCollapsed(false);
-            }}
-            onSelectReleaseMilestone={(id) => {
-              if (!confirmEditorNavigationOrStay()) return;
-              setSelection({ kind: "release-milestone", milestoneId: id });
-              setRightCollapsed(false);
-            }}
+            onSelectReleaseItem={selectReleaseItem}
+            onSelectReleaseMilestone={selectReleaseMilestone}
           />
         ) : (
           <>
@@ -1525,8 +1632,11 @@ function App() {
                 <summary>Legend</summary>
                 <div>
                   {(["actor", "software-system", "client", "service", "worker", "queue", "data-store", "external-service"] as NodeType[]).map((type) => (
-                    <span key={type}><i className={`dot ${type}`} />{type}</span>
+                    <span key={type}><DiagramIcon icon={iconForNodeType(type)} className={`legend-icon ${type}`} />{type}</span>
                   ))}
+                  <span><DiagramIcon icon="start" className="legend-icon start" />start</span>
+                  <span><DiagramIcon icon="decision" className="legend-icon decision" />decision</span>
+                  <span><DiagramIcon icon="stop" className="legend-icon stop" />stop</span>
                 </div>
               </details>
             </section>
@@ -1539,10 +1649,7 @@ function App() {
                   dataById={dataById}
                   selectedStepId={selectedActiveStepId}
                   transform={diagramTransform}
-                  onSelectStep={(stepId) => {
-                    if (!confirmEditorNavigationOrStay()) return;
-                    setSelection({ kind: "step", flowId: activeFlow.id, stepId });
-                  }}
+                  onSelectStep={selectActiveStep}
                   onSelectRelationship={selectRelationship}
                 />
               ) : isC4View ? (
@@ -1564,15 +1671,13 @@ function App() {
                   activeFlow={showOrderedFlow ? activeFlow : null}
                   showStructuralConnections={showStructuralConnections}
                   selectedStepId={selectedActiveStepId}
+                  selectedStepDisplayIndex={selectedActiveStepDisplayIndex}
                   selectedRelationship={selection?.kind === "relationship" ? selection : null}
                   selectedNodeId={selectedNodeId}
                   transform={diagramTransform}
                   routingStyle={routingStyle}
                   debugRouting={debugRouting}
-                  onSelectNode={(id) => {
-                    if (!confirmEditorNavigationOrStay()) return;
-                    setSelection({ kind: "node", id });
-                  }}
+                  onSelectNode={selectDiagramNode}
                   onSelectRelationship={selectRelationship}
                 />
               )}
@@ -1597,17 +1702,21 @@ function App() {
             {!stepsCollapsed && (
               <>
                 <div className="step-list">
-                  {activeFlow.steps.map((step, index) => (
+                  {activeFlow.steps.map((step, index) => ({ step, index })).filter(({ step, index }) => !isDecisionBranchSupportStep(activeFlow.steps, step, index)).map(({ step, index }) => (
                     <button
                       key={step.id}
                       type="button"
-                      className={`step-card ${isSelectedStep(selection, activeFlow.id, step.id) ? "active" : ""}`}
+                      className={`step-card ${(activeFlowStepDisplayIndexes.get(step.id) ?? index + 1) === selectedActiveStepDisplayIndex ? "active" : ""}`}
                       onClick={() => {
-                        if (!confirmEditorNavigationOrStay()) return;
-                        setSelection({ kind: "step", flowId: activeFlow.id, stepId: step.id });
+                        selectActiveStep(step.id);
                       }}
                     >
-                      <span className="step-number">{index + 1}</span>
+                      <span className="step-kind-icon">
+                        <DiagramIcon icon={iconForStep(step, index, activeFlow.steps.length)} className="step-icon" />
+                      </span>
+                      <span className="step-number">
+                        <span>{activeFlowStepDisplayIndexes.get(step.id) ?? index + 1}</span>
+                      </span>
                       <strong>{nodesById.get(step.from)?.name ?? step.from} {"→"} {nodesById.get(step.to)?.name ?? step.to}</strong>
                       <span>{step.action}</span>
                     </button>
@@ -1620,16 +1729,6 @@ function App() {
       </main>
 
       <aside className="details">
-        <button
-          type="button"
-          className="side-toggle right-side-toggle"
-          onClick={() => setRightCollapsed((value) => !value)}
-          aria-label={rightCollapsed ? "Expand right details" : "Collapse right details"}
-          title={rightCollapsed ? "Expand right details" : "Collapse right details"}
-          data-tooltip={rightCollapsed ? "Expand" : "Collapse"}
-        >
-          {rightCollapsed ? "‹" : "›"}
-        </button>
         {rightCollapsed ? (
           <button type="button" className="panel-rail" onClick={() => setRightCollapsed(false)}>
             Details
@@ -1654,15 +1753,8 @@ function App() {
             selection={selection}
             selectedStep={selectedStep}
             activeFlow={activeFlow}
-            onSelectNode={(id) => {
-              if (!confirmEditorNavigationOrStay()) return;
-              setSelection({ kind: "node", id });
-            }}
-            onSelectFlow={(id) => {
-              if (!confirmEditorNavigationOrStay()) return;
-              setActiveFlowId(id);
-              setSelection({ kind: "flow", id });
-            }}
+            onSelectNode={selectNode}
+            onSelectFlow={selectFlow}
           />
         )}
       </aside>
@@ -2007,6 +2099,7 @@ function SystemMap({
   activeFlow,
   showStructuralConnections,
   selectedStepId,
+  selectedStepDisplayIndex,
   selectedRelationship,
   selectedNodeId,
   transform,
@@ -2020,6 +2113,7 @@ function SystemMap({
   activeFlow: Flow | null;
   showStructuralConnections: boolean;
   selectedStepId: Id | null;
+  selectedStepDisplayIndex: number | null;
   selectedRelationship: Extract<Selection, { kind: "relationship" }> | null;
   selectedNodeId: Id | null;
   transform: DiagramTransform;
@@ -2052,21 +2146,35 @@ function SystemMap({
       });
   }), [nodesById, visibleNodeIds]);
 
-  const flowRelationships = useMemo(() => activeFlow?.steps.map((step, index) => {
-    const from = nodesById.get(step.from);
-    const to = nodesById.get(step.to);
-    return {
-      id: step.id,
-      from: step.from,
-      to: step.to,
-      label: `${index + 1}. ${step.action}`,
-      summary: step.summary,
-      relationshipType: "flow" as const,
-      stepId: step.id,
-      flowId: activeFlow.id,
-      displayIndex: index + 1
-    };
-  }) ?? [], [activeFlow, nodesById]);
+  const flowRelationships = useMemo(() => {
+    if (!activeFlow) return [];
+    const displayIndexes = flowStepDisplayIndexes(activeFlow.steps);
+    const decisionStepByTarget = new Map(activeFlow.steps.filter((step) => step.kind === "decision").map((step) => [step.to, step]));
+    return activeFlow.steps.filter((step, index) => isRenderedFlowRelationshipStep(activeFlow.steps, step, index)).map((step, index) => {
+      const displayIndex = displayIndexes.get(step.id) ?? index + 1;
+      const decisionStep = step.outcome ? decisionStepByTarget.get(step.from) : null;
+      const decisionPosition = decisionStep ? nodeLanePosition(view, step.from) : null;
+      const branchStartSide = decisionStep && decisionPosition ? preferredDecisionBranchSide(view, decisionPosition, step.to) : undefined;
+      return {
+        id: step.id,
+        from: decisionStep ? decisionNodeId(decisionStep.id) : step.from,
+        to: step.to,
+        label: `${displayIndex}. ${step.action}`,
+        summary: step.summary,
+        relationshipType: "flow" as const,
+        stepId: decisionStep ? decisionStep.id : step.id,
+        branchStepId: decisionStep ? step.id : undefined,
+        flowId: activeFlow.id,
+        displayIndex,
+        stepKind: step.kind,
+        outcome: step.outcome,
+        componentFrom: step.from,
+        componentTo: step.to,
+        preferredStartSide: branchStartSide,
+        preferredEndSide: branchStartSide && decisionPosition ? preferredDecisionBranchEndSide(view, decisionPosition, step.to, branchStartSide) : undefined
+      };
+    });
+  }, [activeFlow, view]);
 
   const layout = diagramLayoutFor(view, showStructuralConnections ? structuralRelationships.length : flowRelationships.length);
   const {
@@ -2081,6 +2189,32 @@ function SystemMap({
     canvasExtraWidth,
     canvasExtraHeight
   } = layout;
+  const decisionNodes = useMemo(() => {
+    if (!activeFlow) return [];
+    const branchedTargets = decisionBranchTargets(activeFlow.steps);
+    const displayIndexes = flowStepDisplayIndexes(activeFlow.steps);
+    return activeFlow.steps
+      .filter((step) => step.kind === "decision" && branchedTargets.has(step.to))
+      .flatMap((step) => {
+        const position = nodeLanePosition(view, step.to);
+        if (!position) return [];
+        const { laneIndex, rowIndex } = position;
+        return [{
+          id: decisionNodeId(step.id),
+          action: step.action,
+          componentId: step.to,
+          displayIndex: displayIndexes.get(step.id) ?? 0,
+          rect: {
+            x: marginX + laneIndex * laneWidth + nodeWidth / 2 - 19,
+            y: marginY + rowIndex * rowGap + nodeHeight + 22,
+            width: 38,
+            height: 38
+          },
+          laneIndex,
+          rowIndex
+        }];
+      });
+  }, [activeFlow, view, marginX, marginY, laneWidth, rowGap, nodeHeight]);
 
   const planInput = useMemo(() => ({
     view,
@@ -2096,6 +2230,9 @@ function SystemMap({
     minCanvasHeight,
     canvasExtraWidth,
     canvasExtraHeight,
+    extraNodeRects: new Map(decisionNodes.map((node) => [node.id, decisionRouteRect(node.rect)])),
+    extraLaneIndexByNode: new Map(decisionNodes.map((node) => [node.id, node.laneIndex])),
+    extraRowIndexByNode: new Map(decisionNodes.map((node) => [node.id, node.rowIndex])),
     style: routingStyle
   }), [
     view,
@@ -2113,6 +2250,7 @@ function SystemMap({
     minCanvasHeight,
     canvasExtraWidth,
     canvasExtraHeight,
+    decisionNodes,
     routingStyle
   ]);
   const planningState = usePlannedDiagram(planInput);
@@ -2158,7 +2296,7 @@ function SystemMap({
     selectedRelationship?.from === relationship.from && selectedRelationship.to === relationship.to
   );
   const isFlowSelected = (relationship: Relationship) => (
-    selectedStepId === relationship.stepId || (
+    (selectedStepDisplayIndex !== null && relationship.displayIndex === selectedStepDisplayIndex) || (
       selectedRelationship?.from === relationship.from &&
       selectedRelationship.to === relationship.to &&
       selectedRelationship.stepId === relationship.stepId
@@ -2166,6 +2304,16 @@ function SystemMap({
   );
   const orderedStructuralRelationships = [...structuralRelationships].sort((a, b) => Number(isStructuralSelected(a)) - Number(isStructuralSelected(b)));
   const orderedFlowRelationships = [...flowRelationships].sort((a, b) => Number(isFlowSelected(a)) - Number(isFlowSelected(b)));
+  const visibleDecisionConnectorRoutes = !showStructuralConnections
+    ? decisionNodes.flatMap((decisionNode) => {
+      const componentRect = plan.nodeRects.get(decisionNode.componentId);
+      return componentRect ? [decisionConnectorRoute(decisionNode, componentRect)] : [];
+    })
+    : [];
+  const selectedEndpointNodeIds = new Set(orderedFlowRelationships.filter(isFlowSelected).flatMap((relationship) => [
+    relationship.componentFrom ?? relationship.from,
+    relationship.componentTo ?? relationship.to
+  ]).filter((nodeId) => visibleNodeIds.has(nodeId)));
 
   return (
     <section className="map-shell" aria-busy={planningState.planning ? "true" : "false"}>
@@ -2211,6 +2359,22 @@ function SystemMap({
               </g>
             );
           })}
+          {!showStructuralConnections && decisionNodes.map((decisionNode) => {
+            const componentRect = plan.nodeRects.get(decisionNode.componentId);
+            if (!componentRect) return null;
+            const connector = decisionConnectorRoute(decisionNode, componentRect);
+            const isSelected = selectedStepDisplayIndex === decisionNode.displayIndex;
+            return (
+              <line
+                key={`${decisionNode.id}:connector`}
+                className={isSelected ? "decision-node-connector selected" : "decision-node-connector"}
+                x1={connector.points[0].x}
+                y1={connector.points[0].y}
+                x2={connector.points[1].x}
+                y2={connector.points[1].y}
+              />
+            );
+          })}
           {!showStructuralConnections && orderedFlowRelationships.map((relationship, index) => {
             if (!plan.laneIndexByNode.has(relationship.from) || !plan.laneIndexByNode.has(relationship.to)) {
               return null;
@@ -2218,6 +2382,16 @@ function SystemMap({
             const route = flowRoutes.get(relationship.id);
             if (!route) return null;
             const isSelected = isFlowSelected(relationship);
+            const outcomePoint = relationship.outcome ? outcomeLabelPoint(route) : null;
+            const previousDisplayRoutes = routingStyle === "orthogonal"
+              ? visibleDecisionConnectorRoutes.concat(orderedFlowRelationships
+                  .slice(0, index)
+                  .map((candidate) => flowRoutes.get(candidate.id))
+                  .filter(Boolean))
+              : [];
+            const routeD = routingStyle === "orthogonal"
+              ? pathToSvgWithHops(route.points, previousDisplayRoutes)
+              : route.d;
             return (
               <g
                 key={relationship.id}
@@ -2230,22 +2404,55 @@ function SystemMap({
                   if (event.key === "Enter" || event.key === " ") onSelectRelationship(relationship);
                 }}
               >
-                <StepRoute
-                  className={stepRouteClassName("flow")}
-                  lineClassName="flow-line"
+                {relationship.outcome ? (
+                  <path
+                    className="flow-line decision-branch-line"
+                    d={routeD}
+                    markerEnd={isSelected ? "url(#flow-arrowhead-selected)" : "url(#arrowhead)"}
+                  />
+                ) : (
+                  <StepRoute
+                    className={stepRouteClassName("flow")}
+                    lineClassName="flow-line"
                   markerClassName="flow-step-dot"
                   labelClassName="flow-step-label"
-                  d={route.d}
-                  markerEnd={isSelected ? "url(#flow-arrowhead-selected)" : "url(#arrowhead)"}
-                  labelX={route.labelX}
-                  labelY={route.labelY}
-                  label={relationship.displayIndex}
-                />
+                  d={routeD}
+                    markerEnd={isSelected ? "url(#flow-arrowhead-selected)" : "url(#arrowhead)"}
+                    labelX={route.labelX}
+                    labelY={route.labelY}
+                    label={relationship.displayIndex}
+                  />
+                )}
+                {relationship.outcome ? (
+                  <g className="flow-outcome-label" transform={`translate(${outcomePoint?.x ?? route.labelX} ${outcomePoint?.y ?? route.labelY})`}>
+                    <rect x={-Math.max(28, relationship.outcome.length * 4 + 8)} y="-11" width={Math.max(56, relationship.outcome.length * 8 + 16)} height="20" rx="10" />
+                    <text y="2">{relationship.outcome}</text>
+                  </g>
+                ) : null}
               </g>
             );
           })}
           {debugRouting ? <RoutingDebugGeometry plan={plan} relationships={showStructuralConnections ? structuralRelationships : flowRelationships} /> : null}
           </svg>
+          {!showStructuralConnections && decisionNodes.map((decisionNode) => {
+            const isSelected = selectedStepDisplayIndex === decisionNode.displayIndex;
+            return (
+              <div
+                key={decisionNode.id}
+                className={`decision-node ${isSelected ? "selected" : ""}`}
+                style={{
+                  left: decisionNode.rect.x,
+                  top: decisionNode.rect.y,
+                  width: decisionNode.rect.width,
+                  height: decisionNode.rect.height
+                }}
+                title={`${decisionNode.displayIndex}. ${decisionNode.action}`}
+              >
+                <DiagramIcon icon="decision" />
+                <span>{decisionNode.displayIndex}</span>
+              </div>
+            );
+          })}
           {view.lanes.map((lane, laneIndex) => (
             <div
               className="lane-column"
@@ -2260,16 +2467,20 @@ function SystemMap({
             if (!node) return null;
             const isActive = flowNodeIds.has(node.id);
             const isSelected = selectedNodeId === node.id;
+            const isEndpointSelected = selectedEndpointNodeIds.has(node.id);
             const position = nodePosition(node.id);
             return (
               <button
                 key={node.id}
                 type="button"
-                className={`node-card ${node.type} ${isActive ? "in-flow" : ""} ${isSelected ? "selected" : ""}`}
+                className={`node-card ${node.type} ${isActive ? "in-flow" : ""} ${isSelected ? "selected" : ""} ${isEndpointSelected ? "selected-endpoint" : ""}`}
                 style={{ left: position.x, top: position.y, width: nodeWidth, height: nodeHeight }}
                 onClick={() => onSelectNode(node.id)}
               >
-                <strong>{node.name}</strong>
+                <span className="node-card-title">
+                  <DiagramIcon icon={iconForNodeType(node.type)} className="node-icon" />
+                  <strong>{node.name}</strong>
+                </span>
                 <span>{node.type}</span>
               </button>
             );
@@ -2637,6 +2848,33 @@ function SequenceDiagram({
   const width = marginX * 2 + participantIds.length * participantWidth;
   const height = messageStartY + activeFlow.steps.length * rowHeight + 38;
   const xFor = (id: Id) => marginX + participantIds.indexOf(id) * participantWidth + participantWidth / 2;
+  const yForStepIndex = (index: number) => messageStartY + index * rowHeight;
+  const stepIndexById = new Map(activeFlow.steps.map((step, index) => [step.id, index]));
+  const activationBars = (sequenceActivationSpans(activeFlow.steps, rowHeight) as SequenceActivationSpan[]).map((span) => ({
+    ...span,
+    x: xFor(span.participantId) + span.depth * 8 - 5,
+    y: messageStartY + span.y1,
+    height: Math.max(18, span.y2 - span.y1)
+  }));
+  const sequenceFrames = (activeFlow.sequenceFrames ?? []).flatMap((frame) => {
+    const indexes = frame.stepIds
+      .map((stepId) => stepIndexById.get(stepId))
+      .filter((index): index is number => index !== undefined);
+    if (indexes.length === 0) return [];
+    const participantIndexes = frame.stepIds.flatMap((stepId) => {
+      const step = activeFlow.steps[stepIndexById.get(stepId) ?? -1];
+      return step ? [participantIds.indexOf(step.from), participantIds.indexOf(step.to)] : [];
+    }).filter((index) => index >= 0);
+    const minParticipant = Math.min(...participantIndexes);
+    const maxParticipant = Math.max(...participantIndexes);
+    const minIndex = Math.min(...indexes);
+    const maxIndex = Math.max(...indexes);
+    const x = marginX + minParticipant * participantWidth + 8;
+    const frameWidth = (maxParticipant - minParticipant + 1) * participantWidth - 16;
+    const y = yForStepIndex(minIndex) - 30;
+    const frameHeight = yForStepIndex(maxIndex) - y + 34;
+    return [{ ...frame, x, y, width: frameWidth, height: frameHeight }];
+  });
   const orderedStepMessages: { step: FlowStep; index: number }[] = orderSelectedLast(
     activeFlow.steps.map((step, index) => ({ step, index })),
     ({ step }: { step: FlowStep }) => selectedStepId === step.id
@@ -2697,16 +2935,33 @@ function SequenceDiagram({
               </g>
             );
           })}
+          {sequenceFrames.map((frame) => (
+            <g key={frame.id} className={`sequence-frame ${frame.type}`}>
+              <rect x={frame.x} y={frame.y} width={frame.width} height={frame.height} rx="3" />
+              <text x={frame.x + 8} y={frame.y + 14}>{frame.type}: {frame.label}</text>
+            </g>
+          ))}
+          {activationBars.map((bar) => (
+            <rect
+              key={bar.id}
+              className="sequence-activation-bar"
+              x={bar.x}
+              y={bar.y}
+              width="10"
+              height={bar.height}
+              rx="1.5"
+            />
+          ))}
           {orderedStepMessages.map(({ step, index }) => {
             const fromX = xFor(step.from);
             const toX = xFor(step.to);
             const y = messageStartY + index * rowHeight;
             const midX = (fromX + toX) / 2;
             const dataLabel = step.data.map((id) => dataById.get(id)?.name ?? id).join(", ");
-            const messageKind = step.to.includes("queue") ? "async" : step.to.includes("db") || step.to.includes("store") ? "persistence" : toX < fromX ? "response" : "request";
+            const messageKind = sequenceStepMessageKind(step, fromX, toX);
             const markerId = selectedStepId === step.id
               ? "sequence-arrowhead-selected"
-              : messageKind === "response"
+              : messageKind === "return"
                 ? "sequence-arrowhead-response"
                 : messageKind === "persistence"
                   ? "sequence-arrowhead-persistence"
@@ -2741,7 +2996,7 @@ function SequenceDiagram({
               >
                 <StepRoute
                   className={stepRouteClassName("sequence")}
-                  lineClassName="sequence-line"
+                  lineClassName={`sequence-line ${messageKind}`}
                   markerClassName="sequence-step-dot"
                   labelClassName="sequence-step-label"
                   x1={fromX}

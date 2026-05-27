@@ -322,6 +322,7 @@ architext serve [path]
 architext validate [path]
 architext build [path]
 architext prompt [path]
+architext skill
 architext clean [path]
 architext explain flows
 architext version
@@ -349,6 +350,15 @@ Use `prompt` to print LLM-ready instructions:
 architext prompt --mode initial-buildout
 architext prompt --mode architecture-change
 architext prompt --mode repair-validation
+```
+
+Use `skill` to print the package-owned Architext `SKILL.md` content directly to
+the terminal. This is intended for maintainers who want to paste the skill into
+an LLM chat session and ask that model to create its own model-specific skill
+without first learning that model's skill installation mechanism:
+
+```sh
+architext skill
 ```
 
 Use `clean` to remove generated local build output. It removes

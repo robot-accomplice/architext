@@ -33,6 +33,24 @@ function routeInput(relationships) {
   };
 }
 
+function singleRouteInput(style) {
+  return {
+    ...routeInput([
+      { id: `single-${style}`, from: "a", to: "b", label: "uses", relationshipType: "flow" }
+    ]),
+    style
+  };
+}
+
+function isSideCenter(point, rect) {
+  return (
+    (point.x === rect.x && point.y === rect.y + rect.height / 2) ||
+    (point.x === rect.x + rect.width && point.y === rect.y + rect.height / 2) ||
+    (point.x === rect.x + rect.width / 2 && point.y === rect.y) ||
+    (point.x === rect.x + rect.width / 2 && point.y === rect.y + rect.height)
+  );
+}
+
 test("single-surface routes prefer the surface centerpoint", () => {
   const routes = routeEdges(routeInput([
     { id: "single-a-b", from: "a", to: "b", label: "uses", relationshipType: "flow" }
@@ -41,6 +59,16 @@ test("single-surface routes prefer the surface centerpoint", () => {
 
   assert.equal(route.points[0].y, 20);
   assert.equal(route.points.at(-1).y, 20);
+});
+
+test("single-surface routes stay centered for every line style", () => {
+  for (const style of ["orthogonal", "spline", "straight"]) {
+    const input = singleRouteInput(style);
+    const route = routeEdges(input).get(`single-${style}`);
+
+    assert.equal(isSideCenter(route.points[0], input.nodeRects.get("a")), true);
+    assert.equal(isSideCenter(route.points.at(-1), input.nodeRects.get("b")), true);
+  }
 });
 
 test("fan-out routes may spread ports away from the centerpoint", () => {
@@ -53,7 +81,7 @@ test("fan-out routes may spread ports away from the centerpoint", () => {
 });
 
 test("single routes on a node side use that side centerpoint", () => {
-  const routes = routeEdges({
+  const input = {
     relationships: [
       { id: "vertical", from: "above", to: "target", label: "writes", relationshipType: "flow" },
       { id: "horizontal", from: "left", to: "target", label: "reads", relationshipType: "flow" }
@@ -78,11 +106,47 @@ test("single routes on a node side use that side centerpoint", () => {
     canvasHeight: 220,
     marginY: 30,
     style: "orthogonal"
-  });
+  };
+  const routes = routeEdges(input);
   const vertical = routes.get("vertical");
 
   assert.equal(vertical.points[0].x, 250);
   assert.equal(vertical.points.at(-1).x, 250);
+});
+
+test("single side endpoints stay centered for every line style", () => {
+  for (const style of ["orthogonal", "spline", "straight"]) {
+    const routes = routeEdges({
+      relationships: [
+        { id: `vertical-${style}`, from: "above", to: "target", label: "writes", relationshipType: "flow" },
+        { id: `horizontal-${style}`, from: "left", to: "target", label: "reads", relationshipType: "flow" }
+      ],
+      visibleNodeIds: new Set(["above", "left", "target"]),
+      nodeRects: new Map([
+        ["above", { x: 200, y: 0, width: 100, height: 40 }],
+        ["left", { x: 0, y: 110, width: 100, height: 40 }],
+        ["target", { x: 200, y: 110, width: 100, height: 40 }]
+      ]),
+      laneIndexByNode: new Map([
+        ["left", 0],
+        ["above", 1],
+        ["target", 1]
+      ]),
+      rowIndexByNode: new Map([
+        ["above", 0],
+        ["left", 1],
+        ["target", 1]
+      ]),
+      canvasWidth: 420,
+      canvasHeight: 220,
+      marginY: 30,
+      style
+    });
+    const vertical = routes.get(`vertical-${style}`);
+
+    assert.equal(vertical.points[0].x, 250);
+    assert.equal(vertical.points.at(-1).x, 250);
+  }
 });
 
 test("single top-side flow routes stay centered in the system map", () => {

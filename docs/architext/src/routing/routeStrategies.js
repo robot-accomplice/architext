@@ -1,12 +1,106 @@
-import { clamp } from "./routeGeometry.js";
+import { bendCount, clamp, lineSamples } from "./routeGeometry.js";
 import { SIDES } from "./routePorts.js";
+import { pathToSvg, simplifyOrthogonalPoints } from "./routeRendering.js";
 import {
   isCleanRouteCandidate,
   scoreRouteCandidates,
   sortedRouteCandidates,
+  withQualityCosts,
   warningRouteCandidate
 } from "./routeScoring.js";
 import { allSidePairs, candidatePorts, portPairsFor, sidePairsFor } from "./routeCandidatePorts.js";
+import { ROUTE_COST_WEIGHTS, ROUTE_SPACING, SPLINE_CURVE_VARIANTS, createCandidateCollector, dedupeBy } from "./routeConstants.js";
+
+function preferredStartSidePairs(pairs, relationship) {
+  if (!relationship.preferredStartSide && !relationship.preferredEndSide) return pairs;
+  const preferred = pairs.filter(([startSide, endSide]) => (
+    (!relationship.preferredStartSide || startSide === relationship.preferredStartSide) &&
+    (!relationship.preferredEndSide || endSide === relationship.preferredEndSide)
+  ));
+  return preferred.length > 0 ? preferred : pairs;
+}
+
+function fixedPreferredOrthogonalCandidate(relationship, fromRect, toRect, endpointOffsets, routeCandidates, usedRoutes) {
+  if (!fromRect.fixedPorts || !relationship.preferredStartSide) return null;
+  const endSide = relationship.preferredEndSide ?? sidePairsFor(fromRect, toRect)[0]?.[1] ?? "left";
+  const ports = candidatePorts(fromRect, toRect, relationship.preferredStartSide, endSide, endpointOffsets);
+  const [startPort, endPort] = portPairsFor(ports)[0] ?? [];
+  if (!startPort || !endPort) return null;
+  if (relationship.preferredStartSide === "left" && endSide === "bottom") {
+    const gutter = Math.min(startPort.port.x, toRect.x) - ROUTE_COST_WEIGHTS.fixedPreferredGutter;
+    const points = simplifyOrthogonalPoints([
+      startPort.anchor,
+      startPort.port,
+      { x: gutter, y: startPort.port.y },
+      { x: gutter, y: endPort.port.y },
+      endPort.port,
+      endPort.anchor
+    ]);
+    const samples = lineSamples(points);
+    const label = samples[Math.floor(samples.length / 2)] ?? points[Math.floor(points.length / 2)] ?? startPort.anchor;
+    return withQualityCosts({
+      d: pathToSvg(points),
+      labelX: label.x,
+      labelY: label.y,
+      bends: bendCount(points),
+      samples,
+      points
+    }, {
+      lengthCost: samples.reduce((sum, sample, index) => index === 0 ? 0 : sum + Math.hypot(sample.x - samples[index - 1].x, sample.y - samples[index - 1].y), 0),
+      pointCountCost: points.length * ROUTE_COST_WEIGHTS.pointCount,
+      bendCost: bendCount(points) * ROUTE_COST_WEIGHTS.bend
+    });
+  }
+  const preferred = routeCandidates.directPortCandidate(relationship, relationship.from, relationship.to, relationship.preferredStartSide, endSide, usedRoutes, startPort, endPort);
+  if (preferred) return preferred;
+  if (relationship.preferredStartSide === endSide) {
+    const gutter = endSide === "right"
+      ? toRect.x + toRect.width + ROUTE_COST_WEIGHTS.fixedPreferredGutter
+      : endSide === "left"
+        ? toRect.x - ROUTE_COST_WEIGHTS.fixedPreferredGutter
+        : endSide === "top"
+          ? toRect.y - ROUTE_COST_WEIGHTS.fixedPreferredGutter
+          : toRect.y + toRect.height + ROUTE_COST_WEIGHTS.fixedPreferredGutter;
+    const points = simplifyOrthogonalPoints(
+      endSide === "left" || endSide === "right"
+        ? [startPort.anchor, startPort.port, { x: gutter, y: startPort.port.y }, { x: gutter, y: endPort.port.y }, endPort.port, endPort.anchor]
+        : [startPort.anchor, startPort.port, { x: startPort.port.x, y: gutter }, { x: endPort.port.x, y: gutter }, endPort.port, endPort.anchor]
+    );
+    const samples = lineSamples(points);
+    const label = samples[Math.floor(samples.length / 2)] ?? points[Math.floor(points.length / 2)] ?? startPort.anchor;
+    return withQualityCosts({
+      d: pathToSvg(points),
+      labelX: label.x,
+      labelY: label.y,
+      bends: bendCount(points),
+      samples,
+      points
+    }, {
+      lengthCost: samples.reduce((sum, sample, index) => index === 0 ? 0 : sum + Math.hypot(sample.x - samples[index - 1].x, sample.y - samples[index - 1].y), 0),
+      pointCountCost: points.length * ROUTE_COST_WEIGHTS.pointCount,
+      bendCost: bendCount(points) * ROUTE_COST_WEIGHTS.bend
+    });
+  }
+  const points = simplifyOrthogonalPoints(
+    relationship.preferredStartSide === "left" || relationship.preferredStartSide === "right"
+      ? [startPort.anchor, startPort.port, { x: endPort.port.x, y: startPort.port.y }, endPort.port, endPort.anchor]
+      : [startPort.anchor, startPort.port, { x: startPort.port.x, y: endPort.port.y }, endPort.port, endPort.anchor]
+  );
+  const samples = lineSamples(points);
+  const label = samples[Math.floor(samples.length / 2)] ?? points[Math.floor(points.length / 2)] ?? startPort.anchor;
+  return withQualityCosts({
+    d: pathToSvg(points),
+    labelX: label.x,
+    labelY: label.y,
+    bends: bendCount(points),
+    samples,
+    points
+  }, {
+    lengthCost: samples.reduce((sum, sample, index) => index === 0 ? 0 : sum + Math.hypot(sample.x - samples[index - 1].x, sample.y - samples[index - 1].y), 0),
+    pointCountCost: points.length * ROUTE_COST_WEIGHTS.pointCount,
+    bendCost: bendCount(points) * ROUTE_COST_WEIGHTS.bend
+  });
+}
 
 export function selectRouteCandidate(input) {
   const {
@@ -28,15 +122,9 @@ export function selectRouteCandidate(input) {
   } = input;
   const candidates = [];
   const candidateKeys = new Set();
-  const addCandidate = (candidate) => {
-    if (!candidate) return;
-    const key = candidate.points.map((point) => `${point.x},${point.y}`).join("|");
-    if (candidateKeys.has(key)) return;
-    candidateKeys.add(key);
-    candidates.push(candidate);
-  };
-  const sidePairs = sidePairsFor(fromRect, toRect);
-  const routeOffset = pairIndex * 40 + (index % 6) * 14;
+  const addCandidate = createCandidateCollector(candidates, candidateKeys);
+  const sidePairs = preferredStartSidePairs(sidePairsFor(fromRect, toRect), relationship);
+  const routeOffset = pairIndex * ROUTE_SPACING.pairOffset + (index % ROUTE_SPACING.indexOffsetModulo) * ROUTE_SPACING.indexOffset;
   const topLimit = Math.min(fromRect.y, toRect.y);
   const bottomLimit = Math.max(fromRect.y + fromRect.height, toRect.y + toRect.height);
   const scoringContext = {
@@ -51,6 +139,18 @@ export function selectRouteCandidate(input) {
     collisionCount
   };
   const warnCandidate = (candidate) => warningRouteCandidate(candidate, { style, fromRect, toRect });
+  const relaxedPreferenceRoute = () => (
+    relationship.preferredStartSide || relationship.preferredEndSide
+      ? selectRouteCandidate({
+          ...input,
+          relationship: {
+            ...relationship,
+            preferredStartSide: undefined,
+            preferredEndSide: undefined
+          }
+        })
+      : undefined
+  );
 
   if (style === "spline") {
     const splineCandidates = [];
@@ -60,26 +160,16 @@ export function selectRouteCandidate(input) {
         const start = startPort.anchor;
         const end = endPort.anchor;
         const centerDistance = Math.hypot(end.x - start.x, end.y - start.y);
-        const curveOffset = clamp(centerDistance * 0.18 + pairIndex * 8, 36, 180);
-        const routeSpread = (index % 7) * 10;
-        for (const offset of [
-          curveOffset + routeSpread,
-          -curveOffset - routeSpread,
-          curveOffset * 0.72,
-          -curveOffset * 0.72,
-          curveOffset * 1.36 + routeSpread,
-          -curveOffset * 1.36 - routeSpread,
-          curveOffset * 2.1 + routeSpread,
-          -curveOffset * 2.1 - routeSpread,
-          curveOffset * 0.38,
-          -curveOffset * 0.38
-        ]) {
+        const curveOffset = clamp(centerDistance * 0.18 + pairIndex * ROUTE_SPACING.splinePairOffset, ROUTE_SPACING.splineMinCurve, ROUTE_SPACING.splineMaxCurve);
+        const routeSpread = (index % ROUTE_SPACING.splineSpreadModulo) * ROUTE_SPACING.splineSpread;
+        for (const variant of SPLINE_CURVE_VARIANTS) {
+          const offset = curveOffset * variant.multiplier + routeSpread * variant.spread;
           splineCandidates.push(routeCandidates.splineCandidate(relationship, fromId, toId, startSide, endSide, usedRoutes, startPort, endPort, pairIndex, offset));
         }
       }
     });
     scoreRouteCandidates(splineCandidates, scoringContext);
-    return sortedRouteCandidates(splineCandidates).map(warnCandidate)[0];
+    return sortedRouteCandidates(splineCandidates).map(warnCandidate)[0] ?? relaxedPreferenceRoute();
   }
 
   if (style === "straight") {
@@ -91,19 +181,19 @@ export function selectRouteCandidate(input) {
       }
     });
     scoreRouteCandidates(straightCandidates, scoringContext);
-    return sortedRouteCandidates(straightCandidates).map(warnCandidate)[0];
+    return sortedRouteCandidates(straightCandidates).map(warnCandidate)[0] ?? relaxedPreferenceRoute();
+  }
+
+  const fixedPreferredRoute = fixedPreferredOrthogonalCandidate(relationship, fromRect, toRect, endpointOffsets, routeCandidates, usedRoutes);
+  if (fixedPreferredRoute) {
+    scoreRouteCandidates([fixedPreferredRoute], scoringContext);
+    return warnCandidate(fixedPreferredRoute);
   }
 
   const cheapCandidates = [];
-  const addCheapCandidate = (candidate) => {
-    if (!candidate) return;
-    const key = candidate.points.map((point) => `${point.x},${point.y}`).join("|");
-    if (candidateKeys.has(key)) return;
-    candidateKeys.add(key);
-    cheapCandidates.push(candidate);
-  };
+  const addCheapCandidate = createCandidateCollector(cheapCandidates, candidateKeys);
 
-  allSidePairs().forEach(([startSide, endSide]) => {
+  preferredStartSidePairs(allSidePairs(), relationship).forEach(([startSide, endSide]) => {
     const ports = candidatePorts(fromRect, toRect, startSide, endSide, endpointOffsets);
     for (const [startPort, endPort] of portPairsFor(ports)) {
       if (pairIndex === 0) {
@@ -150,7 +240,9 @@ export function selectRouteCandidate(input) {
   }
 
   if (!hasCleanCheapCandidate) {
-    SIDES.forEach((side) => {
+    const perimeterStartSides = relationship.preferredStartSide ? [relationship.preferredStartSide] : SIDES;
+    perimeterStartSides.forEach((side) => {
+      if (relationship.preferredEndSide && relationship.preferredEndSide !== side) return;
       const ports = candidatePorts(fromRect, toRect, side, side, endpointOffsets);
       for (const [startPort, endPort] of portPairsFor(ports)) {
         addCandidate(routeCandidates.perimeterRoute(relationship, fromId, toId, side, routeOffset, usedRoutes, startPort, endPort));
@@ -161,7 +253,12 @@ export function selectRouteCandidate(input) {
     });
   }
 
-  scoreRouteCandidates(candidates.filter((candidate) => candidate.collisions === undefined), scoringContext);
+  scoreRouteCandidates(dedupeBy(
+    candidates.filter((candidate) => candidate.collisions === undefined),
+    (candidate) => candidate.points.map((point) => `${point.x},${point.y}`).join("|")
+  ), scoringContext);
 
-  return sortedRouteCandidates(candidates).map(warnCandidate)[0];
+  return sortedRouteCandidates(candidates).map(warnCandidate)[0]
+    ?? fixedPreferredOrthogonalCandidate(relationship, fromRect, toRect, endpointOffsets, routeCandidates, usedRoutes)
+    ?? relaxedPreferenceRoute();
 }
