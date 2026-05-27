@@ -19,6 +19,17 @@ test("command router maps lifecycle aliases to the sync use case", async () => {
   ]);
 });
 
+test("command router maps skill to the skill use case", async () => {
+  const calls = [];
+  const handlers = createCommandHandlers({
+    skill: async (target, options) => calls.push(["skill", target, options.command])
+  });
+
+  await routeCommand({ options: { command: "skill" }, target: "/tmp/repo", handlers });
+
+  assert.deepEqual(calls, [["skill", "/tmp/repo", "skill"]]);
+});
+
 test("command router fails loudly for unknown commands", async () => {
   await assert.rejects(
     routeCommand({ options: { command: "unknown" }, target: "/tmp/repo", handlers: createCommandHandlers({}) }),

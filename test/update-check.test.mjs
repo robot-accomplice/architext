@@ -62,6 +62,75 @@ test("package update check installs newer package and refreshes selected instanc
   );
 });
 
+test("package update under --yes refuses to auto-install across a major boundary", async () => {
+  const calls = [];
+  const prompts = [];
+  await runPackageUpdateCheck({
+    currentVersion: "1.4.11",
+    options: { yes: true },
+    cwd: "/repo",
+    runCommand: (command, args, cwd) => calls.push({ type: "run", command, args, cwd }),
+    tryRunCommand: (command, args, cwd) => {
+      calls.push({ type: "try", command, args, cwd });
+      if (args[0] === "view") return { ok: true, output: "2.0.0" };
+      return { ok: true, output: JSON.stringify({ instances: [] }) };
+    },
+    promptLine: async (question) => {
+      prompts.push(question);
+      return "n";
+    }
+  });
+
+  const installCalls = calls.filter(
+    (call) => call.type === "run" && call.command === "npm" && call.args[0] === "install"
+  );
+  assert.equal(
+    installCalls.length,
+    0,
+    "must not auto-run npm install -g across a major boundary under --yes"
+  );
+  assert.ok(
+    prompts.length > 0,
+    "major bump under --yes must route through interactive confirmation"
+  );
+});
+
+test("package update under --yes proceeds for a same-major bump and surfaces the resolved version", async () => {
+  const calls = [];
+  const logs = [];
+  const originalLog = console.log;
+  console.log = (...args) => logs.push(args.join(" "));
+  try {
+    await runPackageUpdateCheck({
+      currentVersion: "1.4.11",
+      options: { yes: true },
+      cwd: "/repo",
+      runCommand: (command, args, cwd) => calls.push({ type: "run", command, args, cwd }),
+      tryRunCommand: (command, args, cwd) => {
+        calls.push({ type: "try", command, args, cwd });
+        if (args[0] === "view") return { ok: true, output: "1.5.0" };
+        return { ok: true, output: JSON.stringify({ instances: [] }) };
+      },
+      promptLine: async () => {
+        throw new Error("prompt should not be called for same-major --yes bump");
+      }
+    });
+  } finally {
+    console.log = originalLog;
+  }
+
+  const installCalls = calls.filter(
+    (call) => call.type === "run" && call.command === "npm" && call.args[0] === "install"
+  );
+  assert.deepEqual(installCalls.map((call) => call.args), [
+    ["install", "-g", "@robotaccomplice/architext@1.5.0"]
+  ]);
+  assert.ok(
+    logs.some((line) => line.includes("1.5.0")),
+    "resolved version being installed must be surfaced"
+  );
+});
+
 test("package update check does nothing when npm latest is current", async () => {
   const runs = [];
   await runPackageUpdateCheck({

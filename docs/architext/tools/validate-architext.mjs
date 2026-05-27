@@ -100,9 +100,15 @@ function validateReferences(model, errors) {
     for (const step of flow.steps) {
       if (stepIds.has(step.id)) errors.push(`flow ${flow.id} contains duplicate step id "${step.id}"`);
       stepIds.add(step.id);
+    }
+    for (const step of flow.steps) {
       requireKnown(step.from, nodeIds, `flow ${flow.id} step ${step.id}.from`, errors);
       requireKnown(step.to, nodeIds, `flow ${flow.id} step ${step.id}.to`, errors);
+      if (step.returnOf) requireKnown(step.returnOf, stepIds, `flow ${flow.id} step ${step.id}.returnOf`, errors);
       for (const dataId of step.data) requireKnown(dataId, dataIds, `flow ${flow.id} step ${step.id}.data`, errors);
+    }
+    for (const frame of flow.sequenceFrames ?? []) {
+      for (const stepId of frame.stepIds) requireKnown(stepId, stepIds, `flow ${flow.id} sequenceFrame ${frame.id}.stepIds`, errors);
     }
   }
 

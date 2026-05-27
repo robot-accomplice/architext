@@ -1,3 +1,5 @@
+import { dedupeBy } from "./routeConstants.js";
+
 export function clamp(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
@@ -188,5 +190,5 @@ export function pointAtDistance(samples, distance) {
 }
 
 export function uniqueRounded(values) {
-  return [...new Set(values.map((value) => Math.round(value)))];
+  return dedupeBy(values.map((value) => Math.round(value)), (value) => value);
 }

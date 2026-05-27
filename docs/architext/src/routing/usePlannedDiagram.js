@@ -12,6 +12,17 @@ const ROUTING_LOADING_DELAY_MS = 1000;
  * }} PlannedDiagramState
  */
 
+function sortedMapEntries(map, projectValue) {
+  if (!map) return [];
+  return Array.from(map.entries())
+    .map(([nodeId, value]) => [nodeId, projectValue(value)])
+    .sort(([left], [right]) => String(left).localeCompare(String(right)));
+}
+
+function roundRect(rect) {
+  return [Math.round(rect.x), Math.round(rect.y), Math.round(rect.width), Math.round(rect.height)];
+}
+
 export function planInputKey(input) {
   return JSON.stringify({
     view: {
@@ -39,6 +50,10 @@ export function planInputKey(input) {
     minCanvasHeight: input.minCanvasHeight,
     canvasExtraWidth: input.canvasExtraWidth,
     canvasExtraHeight: input.canvasExtraHeight,
+    extraNodeRects: sortedMapEntries(input.extraNodeRects, roundRect),
+    extraLaneIndexByNode: sortedMapEntries(input.extraLaneIndexByNode, (value) => value),
+    extraRowIndexByNode: sortedMapEntries(input.extraRowIndexByNode, (value) => value),
+    scoreEdgeProximity: Boolean(input.scoreEdgeProximity),
     style: input.style
   });
 }

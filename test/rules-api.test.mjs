@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -182,6 +182,47 @@ test("rules API rejects unknown actions before writing", async () => {
 
     const written = JSON.parse(await readFile(path.join(targetDataDir, "rules.json"), "utf8"));
     assert.equal(written.rules[0].summary, "Editable rule.");
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test("rules API rollback restores the exact on-disk bytes present before the failed write", async () => {
+  const target = await mkdtemp(path.join(tmpdir(), "architext-rules-api-"));
+  const targetDataDir = path.join(target, "docs", "architext", "data");
+  const rulesPath = path.join(targetDataDir, "rules.json");
+  try {
+    await mkdir(targetDataDir, { recursive: true });
+    await writeJson(path.join(targetDataDir, "manifest.json"), {
+      files: { rules: "rules.json" }
+    });
+
+    // Write the original file with non-canonical formatting (4-space indent, no
+    // trailing newline). It parses to a valid rules document, but re-serializing
+    // the in-memory read via writeJson would NOT reproduce these bytes. A correct
+    // byte-snapshot rollback restores the file verbatim; a rollback that re-writes
+    // the stale in-memory read silently rewrites the file's formatting.
+    const originalBytes = JSON.stringify({ rules: [editableRule] }, null, 4);
+    await writeFile(rulesPath, originalBytes, "utf8");
+
+    await assert.rejects(
+      updateRulesRequest({
+        target,
+        payload: { action: "update", rule: { ...editableRule, summary: "Invalid candidate." } },
+        dataDir: () => targetDataDir,
+        readJson,
+        writeJson,
+        validateTarget: async () => ({ ok: false, output: "rules schema failed" })
+      }),
+      /Rules update did not validate/
+    );
+
+    const afterRollback = await readFile(rulesPath, "utf8");
+    assert.equal(
+      afterRollback,
+      originalBytes,
+      "rollback must restore the exact bytes the adapter overwrote, not a re-serialization of the in-memory read snapshot"
+    );
   } finally {
     await rm(target, { recursive: true, force: true });
   }

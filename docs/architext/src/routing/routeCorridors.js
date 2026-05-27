@@ -1,5 +1,6 @@
 import { uniqueRounded } from "./routeGeometry.js";
 import { PORT_STUB } from "./routePorts.js";
+import { CANVAS_INSET, dedupeBy } from "./routeConstants.js";
 
 export const CORRIDOR_PADDING = 10;
 
@@ -19,20 +20,14 @@ function interiorCorridors(fromRect, toRect) {
 }
 
 function mergeCorridors(corridors) {
-  const seen = new Set();
-  return corridors.filter((corridor) => {
-    const key = `${corridor.axis}:${corridor.value}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+  return dedupeBy(corridors, (corridor) => `${corridor.axis}:${corridor.value}`);
 }
 
 export function freeSpaceCorridors(visibleRects, canvasWidth, canvasHeight) {
-  const minX = 24;
-  const maxX = canvasWidth - 24;
-  const minY = 30;
-  const maxY = canvasHeight - 24;
+  const minX = CANVAS_INSET.left;
+  const maxX = canvasWidth - CANVAS_INSET.right;
+  const minY = CANVAS_INSET.top;
+  const maxY = canvasHeight - CANVAS_INSET.bottom;
   const verticalEdges = uniqueRounded(visibleRects.flatMap((rect) => [rect.x, rect.x + rect.width])).sort((a, b) => a - b);
   const horizontalEdges = uniqueRounded(visibleRects.flatMap((rect) => [rect.y, rect.y + rect.height])).sort((a, b) => a - b);
   const corridors = [];

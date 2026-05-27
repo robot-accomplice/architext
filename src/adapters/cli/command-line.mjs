@@ -11,6 +11,7 @@ const knownCommands = new Set([
   "validate",
   "build",
   "prompt",
+  "skill",
   "clean",
   "explain",
   "help",
@@ -35,6 +36,7 @@ Commands:
   validate                   Validate target Architext JSON with package-owned schemas.
   build                      Build a static viewer into docs/architext/dist by default.
   prompt                     Print an LLM maintenance prompt.
+  skill                      Print the Architext SKILL.md content for LLM skill creation.
   clean                      Remove generated local artifacts.
   explain [topic]            Explain schemas and data contracts.
   version                    Print the Architext package version.
@@ -56,7 +58,7 @@ Options:
   --no-open                  Do not open the system browser.
   --host <host>              Serve bind host. Defaults to 127.0.0.1.
                               Must be localhost, 127.0.0.0/8, or ::1.
-  --port <port>              Preferred serve port. Defaults to 4317; startup advances if occupied.
+  --port <port>              Preferred serve port. Defaults to 4317; use 0 for an OS-assigned port.
   --status                   Show the recorded serve process.
   --stop                     Stop the recorded serve process.
   --json                     Machine-readable status/doctor output.
@@ -98,6 +100,7 @@ Examples:
   architext sync . --yes --branch current
   architext build . --out docs/architext/dist
   architext prompt . --mode architecture-change
+  architext skill
 
 Target repository ownership:
   Target repos should commit only project-owned Architext state:
@@ -240,8 +243,8 @@ function validateOptions(options) {
   if (!isLoopbackHost(options.host)) {
     throw new Error("--host must be a loopback address: localhost, 127.0.0.1, or ::1");
   }
-  if (!Number.isInteger(options.port) || options.port < 1 || options.port > 65535) {
-    throw new Error("--port must be an integer between 1 and 65535");
+  if (!Number.isInteger(options.port) || options.port < 0 || options.port > 65535) {
+    throw new Error("--port must be an integer between 0 and 65535");
   }
 }
 

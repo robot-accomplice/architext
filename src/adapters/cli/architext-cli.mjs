@@ -47,7 +47,8 @@ const viewerDistDir = path.join(viewerDir, "dist");
 const schemaDir = path.join(viewerDir, "schema");
 const validatorPath = path.join(viewerDir, "tools", "validate-architext.mjs");
 const appendixPath = path.join(viewerDir, "AGENTS_APPENDIX.md");
-const dataSchemaVersion = "1.4.0";
+const skillPath = path.join(packageRoot, "skills", "architext", "SKILL.md");
+const dataSchemaVersion = "1.5.0";
 const mutationTokenHeader = "x-architext-mutation-token";
 const servePortSearchLimit = 50;
 
@@ -998,7 +999,8 @@ Rules:
 - Treat manifest.schemaVersion as the Architext data schema contract version, not the installed CLI/package version. Update it only when the data contract changes or when architext doctor/sync applies a schema repair.
 - Reuse stable IDs, create nodes before references, keep flows ordered, and prefer source-path-backed claims.
 - Keep flow diagrams free of orphaned elements; every rendered node, edge, marker, and label must be traceable to the selected flow, a selected supporting relationship, or an explicit context relationship shown in the projection. Remove disconnected context, connect it with a labeled relationship, or split it into a separate view.
-- For sequence diagrams, create explicit return paths and group outbound plus return messages inside loops, retries, optional branches, and transaction or consistency blocks when the flow requires them.
+- Prefer semantic iconography over UML/code diagrams or broad flowchart shape palettes for flow enrichment; mark decision, start, stop, async, persistence, artifact, return, and process semantics with step.kind when the flow needs them. For decision branches, create at least two outgoing outcome steps from the decision node, set step.outcome for each branch label, and expect those branch lines to share the decision step number.
+- For sequence diagrams, create explicit return paths; mark returns with kind: "return" and returnOf when they answer a specific outbound step, and use sequenceFrames for loops, retries, optional branches, and transaction or consistency blocks that group outbound plus return messages.
 - Keep Release Truth data current when release scope, blockers, milestones, evidence, target dates, dependencies, or posture changes.
 - Treat Release Truth as reviewed release state, not a planning scratchpad: update detail files for completed, deferred, blocked, reprioritized, or newly scoped work, then refresh the generated release index from those facts.
 - Keep Release Path labels concise; put rationale, blocker explanation, evidence, dependencies, and next actions in detail data for the selected release item.
@@ -1015,6 +1017,11 @@ Required finish:
 - Summarize covered architecture areas.
 - Summarize remaining uncertainty.
 - Report validation result.`);
+}
+
+async function printSkill() {
+  const content = await readFile(skillPath, "utf8");
+  console.log(content.trimEnd());
 }
 
 async function cleanGenerated(target, options) {
@@ -1293,7 +1300,7 @@ function listenOnPort(server, host, port) {
     }
     function onListening() {
       server.off("error", onError);
-      resolve(true);
+      resolve(server.address().port);
     }
     server.once("error", onError);
     server.once("listening", onListening);
@@ -1307,20 +1314,20 @@ async function createViewerServer({ target, host, port }) {
   }
   const targetDataDir = dataDir(target);
   const mutationToken = randomBytes(32).toString("base64url");
-  const lastPort = Math.min(65535, port + servePortSearchLimit - 1);
+  const lastPort = port === 0 ? 0 : Math.min(65535, port + servePortSearchLimit - 1);
 
   for (let candidatePort = port; candidatePort <= lastPort; candidatePort += 1) {
     const watchHub = createDataWatchHub({ target, dataDir, validateTarget });
     const server = createServer(createViewerRequestHandler({ target, targetDataDir, watchHub, mutationToken }));
-    const listening = await listenOnPort(server, host, candidatePort);
-    if (!listening) {
+    const boundPort = await listenOnPort(server, host, candidatePort);
+    if (!boundPort) {
       server.close();
       watchHub.close();
       continue;
     }
     watchHub.start();
     server.once("close", () => watchHub.close());
-    return { server, port: candidatePort };
+    return { server, port: boundPort };
   }
 
   throw new Error(`No available loopback port found from ${port} through ${lastPort}.`);
@@ -1448,6 +1455,7 @@ function commandHandlers(version) {
     },
     build: (target, options) => buildStatic(target, options),
     prompt: (target, options) => printPrompt(target, options.mode),
+    skill: () => printSkill(),
     clean: (target, options) => cleanGenerated(target, options),
     explain: (_target, options) => explainTopic(options.topic),
     status: async (target, options) => {
@@ -1489,7 +1497,7 @@ export async function main() {
   }
 
   const target = path.resolve(options.target || process.cwd());
-  if (options.command !== "explain") await assertTarget(target);
+  if (!["explain", "skill"].includes(options.command)) await assertTarget(target);
 
   return routeCommand({ options, target, handlers: commandHandlers(version) });
 }

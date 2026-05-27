@@ -30,12 +30,18 @@ function serveStatePathById(id) {
   return path.join(serveRuntimeDir, `${id}.json`);
 }
 
-async function readServeState(target) {
+function isMissingOrCorruptStateError(error) {
+  return error?.code === "ENOENT" || error instanceof SyntaxError;
+}
+
+export async function readServeState(target) {
   const statePath = serveStatePath(target);
   try {
     return await readJson(statePath);
-  } catch {
-    await rm(statePath, { force: true });
+  } catch (error) {
+    // Only discard state when it is genuinely gone (ENOENT) or corrupt (parse
+    // failure). Transient errors (EACCES, EMFILE) must not orphan a live server.
+    if (isMissingOrCorruptStateError(error)) await rm(statePath, { force: true });
     return null;
   }
 }
@@ -45,8 +51,10 @@ async function readServeStateById(id) {
   const statePath = serveStatePathById(id);
   try {
     return await readJson(statePath);
-  } catch {
-    await rm(statePath, { force: true });
+  } catch (error) {
+    // Only discard state when it is genuinely gone (ENOENT) or corrupt (parse
+    // failure). Transient errors (EACCES, EMFILE) must not orphan a live server.
+    if (isMissingOrCorruptStateError(error)) await rm(statePath, { force: true });
     return null;
   }
 }

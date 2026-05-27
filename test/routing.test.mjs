@@ -43,6 +43,14 @@ function assertFiniteRoute(route, expectedStyle = "orthogonal") {
   assert.equal(route.style, expectedStyle);
   if (expectedStyle === "orthogonal") {
     assert.doesNotMatch(route.d, /\bC\b/);
+    for (let index = 0; index < route.points.length - 1; index += 1) {
+      const start = route.points[index];
+      const end = route.points[index + 1];
+      assert.ok(
+        start.x === end.x || start.y === end.y,
+        `orthogonal route contains diagonal segment ${JSON.stringify({ start, end, route: route.d })}`
+      );
+    }
   }
   assert.equal(Number.isFinite(route.labelX), true);
   assert.equal(Number.isFinite(route.labelY), true);
@@ -170,6 +178,95 @@ test("routeEdges keeps unobstructed connections straight", () => {
   assertFiniteRoute(route);
   assert.equal(route.bends, 0);
   assert.equal(route.warnings.length, 0);
+});
+
+test("routeEdges honors preferred decision branch exit sides", () => {
+  for (const style of ["orthogonal", "straight", "spline"]) {
+    const left = routeEdges(baseInput({
+      style,
+      relationships: [
+        { id: "left", from: "source", to: "target", preferredStartSide: "left" }
+      ]
+    })).get("left");
+    const right = routeEdges(baseInput({
+      style,
+      relationships: [
+        { id: "right", from: "source", to: "target", preferredStartSide: "right" }
+      ]
+    })).get("right");
+
+    assert.equal(left.points[0].x, 40, `${style} should exit from the left side`);
+    assert.equal(right.points[0].x, 176, `${style} should exit from the right side`);
+  }
+});
+
+test("routeEdges honors preferred target entry sides", () => {
+  for (const style of ["orthogonal", "straight", "spline"]) {
+    const route = routeEdges(baseInput({
+      style,
+      relationships: [
+        { id: "target-right", from: "source", to: "target", preferredEndSide: "right" }
+      ]
+    })).get("target-right");
+
+    assert.equal(route.points.at(-1).x, 596, `${style} should enter the target from the right side`);
+  }
+});
+
+test("routeEdges can start decision branches on fixed diamond points", () => {
+  const diamondPoint = { x: 120, y: 120 };
+  for (const style of ["orthogonal", "straight", "spline"]) {
+    const route = routeEdges(baseInput({
+      style,
+      nodeRects: new Map([
+        ["decision", {
+          x: 100,
+          y: 100,
+          width: 40,
+          height: 40,
+          fixedPorts: true,
+          sideAnchors: { right: diamondPoint }
+        }],
+        ["target", { x: 460, y: 90, width: 136, height: 54 }]
+      ]),
+      laneIndexByNode: new Map([["decision", 0], ["target", 1]]),
+      rowIndexByNode: new Map([["decision", 0], ["target", 0]]),
+      visibleNodeIds: new Set(["decision", "target"]),
+      relationships: [
+        { id: "branch", from: "decision", to: "target", preferredStartSide: "right" }
+      ]
+    })).get("branch");
+
+    assert.deepEqual(route.points[0], diamondPoint, `${style} should start at the diamond point`);
+    assert.equal(route.points[1].y, diamondPoint.y, `${style} should leave the diamond without an immediate vertical dogleg`);
+  }
+});
+
+test("fixed-port same-side branches use a local target gutter instead of the canvas edge", () => {
+  const route = routeEdges(baseInput({
+    canvasWidth: 1200,
+    nodeRects: new Map([
+      ["decision", {
+        x: 300,
+        y: 250,
+        width: 40,
+        height: 40,
+        fixedPorts: true,
+        sideAnchors: { right: { x: 340, y: 270 } }
+      }],
+      ["target", { x: 700, y: 90, width: 136, height: 54 }]
+    ]),
+    laneIndexByNode: new Map([["decision", 0], ["target", 1]]),
+    rowIndexByNode: new Map([["decision", 1], ["target", 0]]),
+    visibleNodeIds: new Set(["decision", "target"]),
+    relationships: [
+      { id: "valid", from: "decision", to: "target", preferredStartSide: "right", preferredEndSide: "right" }
+    ]
+  })).get("valid");
+
+  assert.equal(route.points[0].x, 340);
+  assert.equal(route.points.at(-1).x, 836);
+  assert.equal(Math.max(...route.points.map((point) => point.x)), 872);
 });
 
 test("routeEdges meets endpoint nodes perpendicularly", () => {
@@ -381,6 +478,59 @@ test("routeEdges separates same-node endpoint anchors", () => {
   assert.notDeepEqual(routes.get("a").points[0], routes.get("b").points[0]);
 });
 
+test("routeEdges spreads multiple routes entering the same node side", () => {
+  const nodeRects = new Map([
+    ["source-a", { x: 40, y: 90, width: 136, height: 54 }],
+    ["source-b", { x: 40, y: 220, width: 136, height: 54 }],
+    ["target", { x: 460, y: 150, width: 136, height: 54 }]
+  ]);
+  const routes = routeEdges({
+    relationships: [
+      { id: "a", from: "source-a", to: "target", preferredEndSide: "left", relationshipType: "flow" },
+      { id: "b", from: "source-b", to: "target", preferredEndSide: "left", relationshipType: "flow" }
+    ],
+    visibleNodeIds: new Set(nodeRects.keys()),
+    nodeRects,
+    laneIndexByNode: new Map([["source-a", 0], ["source-b", 0], ["target", 1]]),
+    rowIndexByNode: new Map([["source-a", 0], ["target", 1], ["source-b", 2]]),
+    canvasWidth: 760,
+    canvasHeight: 420
+  });
+  const firstEnd = routes.get("a").points.at(-1);
+  const secondEnd = routes.get("b").points.at(-1);
+  const target = nodeRects.get("target");
+
+  assert.equal(firstEnd.x, 460);
+  assert.equal(secondEnd.x, 460);
+  assert.equal(firstEnd.y, target.y + target.height / 3);
+  assert.equal(secondEnd.y, target.y + (target.height * 2) / 3);
+  assertFiniteRoute(routes.get("a"));
+  assertFiniteRoute(routes.get("b"));
+});
+
+test("routeEdges moves the upstream bend onto the shifted arrowhead mount", () => {
+  const nodeRects = new Map([
+    ["maintainer", { x: 180, y: 76, width: 136, height: 54 }],
+    ["architext-cli", { x: 390, y: 76, width: 136, height: 54 }],
+    ["schema-validator", { x: 390, y: 178, width: 136, height: 54 }]
+  ]);
+  const routes = routeEdges({
+    relationships: [
+      { id: "resolve", from: "maintainer", to: "architext-cli", relationshipType: "flow", preferredEndSide: "left" },
+      { id: "invalid", from: "schema-validator", to: "architext-cli", relationshipType: "flow", preferredEndSide: "left" }
+    ],
+    visibleNodeIds: new Set(nodeRects.keys()),
+    nodeRects,
+    laneIndexByNode: new Map([["maintainer", 0], ["architext-cli", 1], ["schema-validator", 1]]),
+    rowIndexByNode: new Map([["maintainer", 0], ["architext-cli", 0], ["schema-validator", 1]]),
+    canvasWidth: 800,
+    canvasHeight: 400
+  });
+
+  assert.equal(routes.get("resolve").d, "M 316 94 L 390 94");
+  assert.equal(routes.get("invalid").d, "M 458 178 L 458 160 L 458 112 L 372 112 L 390 112");
+});
+
 test("routeEdges avoids line crossings when a clean alternative exists", () => {
   const nodeRects = new Map([
     ["left", { x: 40, y: 180, width: 136, height: 54 }],
@@ -435,6 +585,25 @@ test("pathToSvgWithHops renders hop-overs for accepted orthogonal crossings", ()
   );
 
   assert.match(d, /\bQ\b/);
+});
+
+test("pathToSvgWithHops keeps east-west segments straight", () => {
+  const d = pathToSvgWithHops(
+    [
+      { x: 80, y: 160 },
+      { x: 240, y: 160 }
+    ],
+    [
+      {
+        points: [
+          { x: 160, y: 100 },
+          { x: 160, y: 220 }
+        ]
+      }
+    ]
+  );
+
+  assert.doesNotMatch(d, /\bQ\b/);
 });
 
 test("routeEdges routes multi-target fan-out deterministically", () => {

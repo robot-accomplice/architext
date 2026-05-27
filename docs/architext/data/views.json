@@ -19,7 +19,7 @@
       "summary": "Project-owned data moving through package-owned validation and viewer runtime.",
       "lanes": [
         { "id": "actors", "name": "Actors", "nodeIds": ["maintainer", "llm-agent"] },
-        { "id": "package-owned", "name": "Package-Owned Runtime", "nodeIds": ["architext-cli", "cli-adapters", "lifecycle-domain", "architecture-model-domain", "viewer-runtime", "viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine", "schema-validator", "package-schemas"] },
+        { "id": "package-owned", "name": "Package-Owned Runtime", "nodeIds": ["architext-cli", "schema-validator", "package-schemas", "cli-adapters", "lifecycle-domain", "architecture-model-domain", "viewer-runtime", "viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine"] },
         { "id": "repo-owned", "name": "Repo-Owned Data", "nodeIds": ["target-repository", "target-data-files", "static-dist"] }
       ]
     },

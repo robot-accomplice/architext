@@ -26,6 +26,7 @@
     "docs/architext/tools",
     "docs/architext/tsconfig.json",
     "docs/architext/vite.config.ts",
+    "skills",
     "src",
     "tools",
     "LICENSE",

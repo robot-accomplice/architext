@@ -50,11 +50,21 @@ and label must be traceable to the selected flow, a selected supporting
 relationship, or an explicit context relationship shown in the projection.
 Remove disconnected context, connect it with a labeled relationship, or split it
 into a separate view; do not leave loose boxes, endpoints, markers, or labels
-for the reader to interpret. For sequence diagrams, create explicit return paths
+for the reader to interpret. Prefer semantic iconography over UML/code diagrams
+or broad flowchart shape palettes for flow enrichment. Mark decision, start,
+stop, async, persistence, artifact, return, and process semantics with
+`step.kind` when the flow needs them. For decision branches, set `step.outcome`
+to the concrete branch/result label that should be readable on the path. A
+decision branch should have at least two outgoing outcome steps from the
+decision node, and those branch lines should share the decision step number. Do
+not add UML/code diagrams for now.
+For sequence diagrams, create explicit return paths
 for request/response, command/result, event/acknowledgement, and failure-return
-interactions when the flow requires them. Use loops, retries, optional branches,
-and transaction or consistency blocks to group outbound and return messages
-together instead of leaving return behavior implied.
+interactions when the flow requires them. Mark return steps with `kind:
+"return"` and `returnOf` when they answer a specific outbound step. Use
+`sequenceFrames` for loops, retries, optional branches, and transaction or
+consistency blocks so outbound and return messages are visibly grouped instead
+of implied.
 
 For source extraction work, produce a reviewable draft of proposed JSON changes
 with source paths and confidence notes before editing data files. Never replace

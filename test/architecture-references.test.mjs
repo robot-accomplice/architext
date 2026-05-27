@@ -40,13 +40,20 @@ test("architecture reference validation accepts a closed model graph", () => {
 test("architecture reference validation reports unknown ids with context", () => {
   assert.deepEqual(validateArchitectureReferences(minimalModel({
     manifest: { defaultViewId: "missing-view" },
-    flows: [{ id: "flow", actors: ["missing-actor"], steps: [{ id: "step", from: "actor", to: "missing-node", data: ["missing-data"] }] }],
+    flows: [{
+      id: "flow",
+      actors: ["missing-actor"],
+      steps: [{ id: "step", from: "actor", to: "missing-node", returnOf: "missing-step", data: ["missing-data"] }],
+      sequenceFrames: [{ id: "loop", stepIds: ["missing-frame-step"] }]
+    }],
     views: [{ id: "main", scopeNodeId: "missing-scope", lanes: [{ id: "lane", nodeIds: ["missing-node"] }] }]
   })), [
     'manifest.defaultViewId references unknown id "missing-view"',
     'flow flow.actors references unknown id "missing-actor"',
     'flow flow step step.to references unknown id "missing-node"',
+    'flow flow step step.returnOf references unknown id "missing-step"',
     'flow flow step step.data references unknown id "missing-data"',
+    'flow flow sequenceFrame loop.stepIds references unknown id "missing-frame-step"',
     'view main.scopeNodeId references unknown id "missing-scope"',
     'view main lane lane references unknown id "missing-node"'
   ]);

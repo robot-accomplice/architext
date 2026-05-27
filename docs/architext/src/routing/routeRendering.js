@@ -26,11 +26,7 @@ function orthogonalCrossings(points, previousRoutes) {
         const usedEnd = route.points[usedIndex + 1];
         if (usedStart.x !== usedEnd.x && usedStart.y !== usedEnd.y) continue;
         if (start.y === end.y && usedStart.x === usedEnd.x) {
-          const crossing = horizontalVerticalIntersection(start, end, usedStart, usedEnd);
-          if (crossing) {
-            const direction = Math.sign(end.x - start.x);
-            crossings.set(index, [...(crossings.get(index) ?? []), { ...crossing, direction }]);
-          }
+          continue;
         } else if (start.x === end.x && usedStart.y === usedEnd.y) {
           const crossing = horizontalVerticalIntersection(usedStart, usedEnd, start, end);
           if (crossing) {

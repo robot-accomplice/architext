@@ -47,8 +47,14 @@ function labelPlacementCandidates(route) {
 function flowMarkerPlacementCandidates(route) {
   const samples = route.samples?.length ? route.samples : [{ x: route.labelX, y: route.labelY }];
   const candidates = [];
-  const add = (sample, searchOrderCost) => {
+  const start = samples[0];
+  const end = samples[samples.length - 1];
+  const add = (sample, searchOrderCost, force = false) => {
     if (!sample) return;
+    if (!force) {
+      if (Math.hypot(sample.x - start.x, sample.y - start.y) < 42) return;
+      if (Math.hypot(sample.x - end.x, sample.y - end.y) < 50) return;
+    }
     candidates.push({ x: sample.x, y: sample.y, searchOrderCost });
   };
   const preferred = samples.reduce((nearest, sample) => (
@@ -62,6 +68,10 @@ function flowMarkerPlacementCandidates(route) {
   }
   for (let index = 0; index < samples.length; index += Math.max(1, Math.floor(samples.length / 10))) {
     add(samples[index], candidates.length * 4);
+  }
+  if (candidates.length === 0) {
+    const fallback = samples[Math.floor(samples.length / 2)] ?? { x: route.labelX, y: route.labelY };
+    add(fallback, 1000, true);
   }
   const seen = new Set();
   return candidates.filter((candidate) => {
@@ -101,7 +111,17 @@ function placeLabel(route, relationship, nodeRects, placedLabels, canvasWidth, c
       qualityCosts
     };
   });
-  return scored.sort((a, b) => a.cost - b.cost)[0];
+  return scored.sort((a, b) => a.cost - b.cost)[0] ?? {
+    candidate: { x: route.labelX, y: route.labelY },
+    box: labelBoxAt(route.labelX, route.labelY, relationship),
+    qualityCosts: {
+      labelMovementCost: 100000,
+      labelSearchOrderCost: 100000,
+      labelBoundaryCost: 0,
+      labelNodeConflictCost: 0,
+      labelConflictCost: 0
+    }
+  };
 }
 
 export function planDiagram(input) {
@@ -142,6 +162,12 @@ export function planDiagram(input) {
       }
     ];
   }));
+  for (const [nodeId, rect] of input.extraNodeRects ?? []) {
+    visibleNodeIds.add(nodeId);
+    nodeRects.set(nodeId, rect);
+    laneIndexByNode.set(nodeId, input.extraLaneIndexByNode?.get(nodeId) ?? 0);
+    rowIndexByNode.set(nodeId, input.extraRowIndexByNode?.get(nodeId) ?? 0);
+  }
   const routes = routeEdges({
     relationships: input.relationships,
     visibleNodeIds,
