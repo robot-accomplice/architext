@@ -1,0 +1,26 @@
+{
+  "name": "architext",
+  "owner": {
+    "name": "Robot Accomplice",
+    "url": "https://github.com/robot-accomplice"
+  },
+  "metadata": {
+    "description": "Architext architecture-documentation tooling for Claude Code.",
+    "version": "1.0.0"
+  },
+  "plugins": [
+    {
+      "name": "architext",
+      "source": "./",
+      "description": "Maintain machine-readable architecture documentation and Release Truth for repositories that use docs/architext/data JSON or the architext CLI.",
+      "version": "1.4.11",
+      "keywords": [
+        "architecture",
+        "c4",
+        "dataflow",
+        "documentation",
+        "llm"
+      ]
+    }
+  ]
+}
