@@ -10,6 +10,7 @@
     "architext": "tools/architext-adopt.mjs"
   },
   "files": [
+    ".codex-plugin",
     "docs/architecture",
     "docs/assets/screenshots",
     "docs/architext/data",

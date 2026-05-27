@@ -59,6 +59,16 @@
       "consequences": ["Routing fixes can target geometry, ports, route indexing, and rendering separately", "CLI lifecycle changes can share doctor/sync policy", "React remains responsible for rendering instead of owning architecture facts"],
       "relatedNodes": ["cli-adapters", "lifecycle-domain", "architecture-model-domain", "viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine"],
       "relatedFlows": ["architecture-maintenance", "local-review"]
+    },
+    {
+      "id": "codex-root-plugin",
+      "status": "accepted",
+      "title": "Publish Codex plugin metadata from the repository root",
+      "context": "Architext already packages the reusable skill under skills/architext. A generated nested plugin would duplicate that skill and create a second release surface.",
+      "decision": "Treat the repository root as the Codex plugin root. Publish .codex-plugin/plugin.json and the existing skills directory as part of the package artifact.",
+      "consequences": ["Codex plugin metadata, npm package contents, and skill guidance share one source tree", "Package dry runs must confirm .codex-plugin and skills are included", "Marketplace entries remain a distribution concern instead of driving repository layout"],
+      "relatedNodes": ["package-artifacts"],
+      "relatedFlows": ["release-packaging"]
     }
   ]
 }
