@@ -1012,7 +1012,60 @@ function spreadSharedSideEndpoints(plannedRawRoutes, input) {
   reorderSharedSurfaceMounts(routeById, relationshipById, input);
   routeReciprocalPairsParallel(routeById, relationshipById, input);
   reduceCrossingsBySurfaceSwaps(routeById, relationshipById, input);
+  centerSoloReciprocalPairSurfaces(routeById, relationshipById, input);
   return plannedRawRoutes.map(([relationshipId]) => [relationshipId, routeById.get(relationshipId)]);
+}
+
+// When a node surface carries exactly one reciprocal pair (A->B and B->A) and
+// nothing else, parallel-pairing can leave the two mounts bunched at one end.
+// Re-space them symmetrically across the full surface (even distribution),
+// preserving their current order so they stay parallel and non-crossing.
+function centerSoloReciprocalPairSurfaces(routeById, relationshipById, input) {
+  const groups = new Map();
+  for (const [relationshipId, route] of routeById) {
+    const relationship = relationshipById.get(relationshipId);
+    if (!relationship || relationship.relationshipType !== "flow" || !route.points?.length) continue;
+    const register = (nodeId, endpointIndex) => {
+      const rect = input.nodeRects.get(nodeId);
+      const point = endpointIndex === 0 ? route.points[0] : route.points.at(-1);
+      const side = rect ? endpointSide(rect, point) : "";
+      if (!rect || rect.fixedPorts || !sideNeedsPostSelectionCentering(side)) return;
+      const key = sideEndpointKey(nodeId, side);
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push({ relationshipId, endpointIndex, rect, side });
+    };
+    register(relationship.from, 0);
+    register(relationship.to, route.points.length - 1);
+  }
+  for (const endpoints of groups.values()) {
+    if (endpoints.length !== 2) continue;
+    const first = relationshipById.get(endpoints[0].relationshipId);
+    const second = relationshipById.get(endpoints[1].relationshipId);
+    if (!first || !second || first.from !== second.to || first.to !== second.from) continue;
+    const axis = endpoints[0].side === "left" || endpoints[0].side === "right" ? "y" : "x";
+    const ordered = endpoints
+      .map((endpoint) => {
+        const route = routeById.get(endpoint.relationshipId);
+        const point = endpoint.endpointIndex === 0 ? route.points[0] : route.points.at(-1);
+        return { ...endpoint, mount: point[axis] };
+      })
+      .sort((a, b) => a.mount - b.mount);
+    const saved = ordered.map((endpoint) => [endpoint.relationshipId, routeById.get(endpoint.relationshipId)]);
+    const beforeBends = saved.reduce((sum, [, route]) => sum + (route.bends ?? 0), 0);
+    ordered.forEach((endpoint, index) => {
+      const route = routeById.get(endpoint.relationshipId);
+      const offset = endpointSpreadOffset(index, ordered.length, endpoint.rect, endpoint.side);
+      routeById.set(endpoint.relationshipId, offsetEndpointRoute(route, endpoint.endpointIndex, endpoint.rect, endpoint.side, offset));
+    });
+    const afterBends = ordered.reduce((sum, endpoint) => sum + (routeById.get(endpoint.relationshipId).bends ?? 0), 0);
+    const collides = ordered.some((endpoint) =>
+      routeCollidesWithNonEndpoints(routeById.get(endpoint.relationshipId), relationshipById.get(endpoint.relationshipId), input));
+    // Centering must not undo an already-straight (aligned) pair; keep it only
+    // when it does not add bends and does not collide.
+    if (collides || afterBends > beforeBends) {
+      for (const [relationshipId, route] of saved) routeById.set(relationshipId, route);
+    }
+  }
 }
 
 function crossingsBetween(routeA, routeB) {
