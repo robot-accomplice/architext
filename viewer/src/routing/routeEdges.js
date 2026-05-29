@@ -1596,5 +1596,6 @@ export {
   axisAlignedSegments,
   sharedSegmentLength,
   sideNeedsPostSelectionCentering,
-  routeCollidesWithNonEndpoints
+  routeCollidesWithNonEndpoints,
+  routeHasEndpointTraversal
 };

@@ -6,7 +6,8 @@ import {
   axisAlignedSegments,
   sharedSegmentLength,
   sideNeedsPostSelectionCentering,
-  routeCollidesWithNonEndpoints
+  routeCollidesWithNonEndpoints,
+  routeHasEndpointTraversal
 } from "./routeEdges.js";
 
 function movableEndpoints(routeById, relationshipById, input) {
@@ -44,7 +45,10 @@ export function mountAssignmentCost(routeById, relationshipById, input) {
   for (const [id, route] of routes) {
     const rel = relationshipById.get(id);
     if (rel && routeCollidesWithNonEndpoints(route, rel, input)) cost += MOUNT_COST.collision;
+    if (rel && routeHasEndpointTraversal(route, rel, input)) cost += MOUNT_COST.endpointTraversal;
     cost += (route.bends ?? 0) * MOUNT_COST.bend;
+    cost += (route.repeatedCrossings ?? 0) * MOUNT_COST.repeatedCrossing;
+    cost += (route.selfOverlappingSegments ?? 0) * MOUNT_COST.selfOverlap;
   }
   // tiers 2/3: pairwise crossings + shared segments
   for (let i = 0; i < routes.length; i += 1) {

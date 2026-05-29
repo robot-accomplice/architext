@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { surfaceSpacingCost, mountAssignmentCost } from "../viewer/src/routing/routeMountModel.js";
-import { MIN_LEGIBLE_GAP } from "../viewer/src/routing/routeConstants.js";
+import { MIN_LEGIBLE_GAP, MOUNT_COST } from "../viewer/src/routing/routeConstants.js";
 
 // A left/right surface of length 54 with 3 mounts: ideal slots at 54*[1,2,3]/4.
 test("evenly-spread mounts cost less than crammed mounts", () => {
@@ -19,20 +19,18 @@ test("a gap below MIN_LEGIBLE_GAP is penalized as cramped", () => {
   assert.ok(MIN_LEGIBLE_GAP > 2);
 });
 
-// Two facing nodes, one straight edge; verify a clean straight route costs less
-// than the same edge forced through a node body (collision) — tier 0 dominates.
-function twoNodeInput() {
+test("a route through a non-endpoint node body costs at least one tier-0 collision unit", () => {
   const nodeRects = new Map([
     ["a", { x: 0, y: 0, width: 40, height: 40 }],
-    ["b", { x: 200, y: 0, width: 40, height: 40 }]
+    ["b", { x: 400, y: 0, width: 40, height: 40 }],
+    ["mid", { x: 180, y: 0, width: 40, height: 40 }]   // sits in the straight corridor a->b
   ]);
-  return { nodeRects, visibleNodeIds: new Set(["a", "b"]), canvasWidth: 280, canvasHeight: 60 };
-}
-
-test("a colliding assignment costs at least one tier-0 unit more than a clean one", () => {
-  const input = twoNodeInput();
-  const clean = new Map([["e", { points: [{ x: 40, y: 20 }, { x: 200, y: 20 }], bends: 0 }]]);
+  const input = { nodeRects, visibleNodeIds: new Set(["a", "b", "mid"]), canvasWidth: 480, canvasHeight: 60 };
   const relationshipById = new Map([["e", { id: "e", from: "a", to: "b", relationshipType: "flow" }]]);
-  const colliding = new Map([["e", { points: [{ x: 40, y: 20 }, { x: 120, y: 20 }, { x: 120, y: -200 }, { x: 200, y: 20 }], bends: 2 }]]);
-  assert.ok(mountAssignmentCost(clean, relationshipById, input) < mountAssignmentCost(colliding, relationshipById, input));
+  const clean = new Map([["e", { style: "orthogonal", points: [{ x: 40, y: 20 }, { x: 100, y: 20 }, { x: 100, y: -40 }, { x: 380, y: -40 }, { x: 380, y: 20 }, { x: 400, y: 20 }], bends: 4, samples: [] }]]);
+  const through = new Map([["e", { style: "orthogonal", points: [{ x: 40, y: 20 }, { x: 400, y: 20 }], bends: 4, samples: [] }]]); // straight line crosses "mid"; same bends so only collision differs
+  const c = (r) => mountAssignmentCost(r, relationshipById, input);
+  // The straight route plows through "mid" (a non-endpoint node) -> tier-0 collision;
+  // the detour avoids every node body. Tier-0 must dominate the detour's extra bends.
+  assert.ok(c(through) - c(clean) >= MOUNT_COST.collision, `expected tier-0 gap, got ${c(through) - c(clean)}`);
 });
