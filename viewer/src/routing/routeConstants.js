@@ -75,3 +75,24 @@ export function createCandidateCollector(target, seen = new Set()) {
     target.push(candidate);
   };
 }
+
+// Tiered mount-cost weights. Gaps between tiers are wide enough that no lower
+// tier can outweigh a higher one across realistic diagram sizes (E < ~200).
+export const MOUNT_COST = {
+  collision: 1_000_000_000,        // tier 0 — inviolable
+  overCapacity: 1_000_000_000,     // tier 0
+  endpointTraversal: 1_000_000_000,// tier 0
+  repeatedCrossing: 5_000_000,     // tier 1
+  selfOverlap: 5_000_000,          // tier 1
+  sharedSegment: 200_000,          // tier 2 (per overlapping pair)
+  sharedSegmentLength: 1_500,      // tier 2 (per unit length)
+  crossing: 3_000,                 // tier 3 (matches existing crossingCost)
+  bend: 420,                       // tier 4 (matches ROUTE_COST_WEIGHTS.bend)
+  dogleg: 14_000,                  // tier 4 (matches ROUTE_COST_WEIGHTS.dogleg)
+  spacingDeviation: 6,             // tier 5 (per unit deviation from ideal slot)
+  cramped: 1_200,                  // tier 5 (per unit a gap is below MIN_LEGIBLE_GAP)
+  intentMismatch: 900             // tier 5 (per endpoint leaving the non-facing side)
+};
+
+export const MIN_LEGIBLE_GAP = 12;  // px; mounts closer than this read as one line
+export const MOUNT_MAX_ITERS = 8;   // aggregate-pass convergence bound
