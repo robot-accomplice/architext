@@ -1011,7 +1011,101 @@ function spreadSharedSideEndpoints(plannedRawRoutes, input) {
   }
   reorderSharedSurfaceMounts(routeById, relationshipById, input);
   routeReciprocalPairsParallel(routeById, relationshipById, input);
+  reduceCrossingsBySurfaceSwaps(routeById, relationshipById, input);
   return plannedRawRoutes.map(([relationshipId]) => [relationshipId, routeById.get(relationshipId)]);
+}
+
+function crossingsBetween(routeA, routeB) {
+  const segmentsA = axisAlignedSegments(routeA);
+  const segmentsB = axisAlignedSegments(routeB);
+  const points = new Set();
+  for (const left of segmentsA) {
+    for (const right of segmentsB) {
+      if (left.orientation === right.orientation) continue;
+      const horizontal = left.orientation === "horizontal" ? left : right;
+      const vertical = left.orientation === "horizontal" ? right : left;
+      if (
+        vertical.x > horizontal.min && vertical.x < horizontal.max &&
+        horizontal.y > vertical.min && horizontal.y < vertical.max
+      ) {
+        points.add(`${vertical.x},${horizontal.y}`);
+      }
+    }
+  }
+  return points.size;
+}
+
+// Local-search (bubble-sort) crossing reduction: when two edges cross AND share a
+// mount surface, try swapping their mount offsets on that surface; keep the swap
+// only if it reduces total crossings without colliding with a node. Bounded passes.
+function reduceCrossingsBySurfaceSwaps(routeById, relationshipById, input) {
+  const ids = [...routeById.keys()];
+  if (ids.length < 2 || ids.length > 80) return;
+  const totalCrossings = () => {
+    let total = 0;
+    for (let i = 0; i < ids.length; i += 1) {
+      for (let j = i + 1; j < ids.length; j += 1) {
+        total += crossingsBetween(routeById.get(ids[i]), routeById.get(ids[j]));
+      }
+    }
+    return total;
+  };
+  const surfaceEndpoints = (relationshipId) => {
+    const relationship = relationshipById.get(relationshipId);
+    const route = routeById.get(relationshipId);
+    if (!relationship || !route?.points?.length) return [];
+    const out = [];
+    const fromRect = input.nodeRects.get(relationship.from);
+    const toRect = input.nodeRects.get(relationship.to);
+    const startSide = fromRect ? endpointSide(fromRect, route.points[0]) : "";
+    const endSide = toRect ? endpointSide(toRect, route.points.at(-1)) : "";
+    if (fromRect && !fromRect.fixedPorts && sideNeedsPostSelectionCentering(startSide)) {
+      out.push({ node: relationship.from, side: startSide, endpointIndex: 0, rect: fromRect });
+    }
+    if (toRect && !toRect.fixedPorts && sideNeedsPostSelectionCentering(endSide)) {
+      out.push({ node: relationship.to, side: endSide, endpointIndex: route.points.length - 1, rect: toRect });
+    }
+    return out;
+  };
+  let improved = true;
+  for (let pass = 0; pass < 12 && improved; pass += 1) {
+    improved = false;
+    for (let i = 0; i < ids.length; i += 1) {
+      for (let j = i + 1; j < ids.length; j += 1) {
+        const a = ids[i];
+        const b = ids[j];
+        if (crossingsBetween(routeById.get(a), routeById.get(b)) === 0) continue;
+        for (const pa of surfaceEndpoints(a)) {
+          for (const pb of surfaceEndpoints(b)) {
+            if (pa.node !== pb.node || pa.side !== pb.side) continue;
+            const routeA = routeById.get(a);
+            const routeB = routeById.get(b);
+            const axis = pa.side === "left" || pa.side === "right" ? "y" : "x";
+            const center = axis === "y" ? pa.rect.y + pa.rect.height / 2 : pa.rect.x + pa.rect.width / 2;
+            const pointA = pa.endpointIndex === 0 ? routeA.points[0] : routeA.points.at(-1);
+            const pointB = pb.endpointIndex === 0 ? routeB.points[0] : routeB.points.at(-1);
+            const offsetA = pointA[axis] - center;
+            const offsetB = pointB[axis] - center;
+            if (Math.abs(offsetA - offsetB) < 0.5) continue;
+            const before = totalCrossings();
+            const swappedA = offsetEndpointRoute(routeA, pa.endpointIndex, pa.rect, pa.side, offsetB);
+            const swappedB = offsetEndpointRoute(routeB, pb.endpointIndex, pb.rect, pb.side, offsetA);
+            routeById.set(a, swappedA);
+            routeById.set(b, swappedB);
+            const collides =
+              routeCollidesWithNonEndpoints(swappedA, relationshipById.get(a), input) ||
+              routeCollidesWithNonEndpoints(swappedB, relationshipById.get(b), input);
+            if (!collides && totalCrossings() < before) {
+              improved = true;
+            } else {
+              routeById.set(a, routeA);
+              routeById.set(b, routeB);
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 // Offset an axis-aligned polyline perpendicular to each segment by `delta`
