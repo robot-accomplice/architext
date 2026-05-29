@@ -1016,54 +1016,79 @@ function spreadSharedSideEndpoints(plannedRawRoutes, input) {
   return plannedRawRoutes.map(([relationshipId]) => [relationshipId, routeById.get(relationshipId)]);
 }
 
-// When a node surface carries exactly one reciprocal pair (A->B and B->A) and
-// nothing else, parallel-pairing can leave the two mounts bunched at one end.
-// Re-space them symmetrically across the full surface (even distribution),
-// preserving their current order so they stay parallel and non-crossing.
+// A reciprocal pair (A->B and B->A) whose two endpoints occupy surfaces carrying
+// nothing but that pair can get bunched at one end after parallel-pairing. Re-space
+// them symmetrically across the full surface. BOTH shared surfaces are re-spaced
+// together (atomically) so a straight pair stays straight — centering one end
+// alone would bend it and trip the guard. Kept only if it adds no bends/collisions.
 function centerSoloReciprocalPairSurfaces(routeById, relationshipById, input) {
-  const groups = new Map();
+  const surfaceCounts = new Map();
   for (const [relationshipId, route] of routeById) {
     const relationship = relationshipById.get(relationshipId);
     if (!relationship || relationship.relationshipType !== "flow" || !route.points?.length) continue;
-    const register = (nodeId, endpointIndex) => {
+    for (const [nodeId, endpointIndex] of [[relationship.from, 0], [relationship.to, route.points.length - 1]]) {
       const rect = input.nodeRects.get(nodeId);
       const point = endpointIndex === 0 ? route.points[0] : route.points.at(-1);
       const side = rect ? endpointSide(rect, point) : "";
-      if (!rect || rect.fixedPorts || !sideNeedsPostSelectionCentering(side)) return;
+      if (!rect || rect.fixedPorts || !sideNeedsPostSelectionCentering(side)) continue;
       const key = sideEndpointKey(nodeId, side);
-      if (!groups.has(key)) groups.set(key, []);
-      groups.get(key).push({ relationshipId, endpointIndex, rect, side });
-    };
-    register(relationship.from, 0);
-    register(relationship.to, route.points.length - 1);
+      surfaceCounts.set(key, (surfaceCounts.get(key) ?? 0) + 1);
+    }
   }
-  for (const endpoints of groups.values()) {
-    if (endpoints.length !== 2) continue;
-    const first = relationshipById.get(endpoints[0].relationshipId);
-    const second = relationshipById.get(endpoints[1].relationshipId);
-    if (!first || !second || first.from !== second.to || first.to !== second.from) continue;
-    const axis = endpoints[0].side === "left" || endpoints[0].side === "right" ? "y" : "x";
-    const ordered = endpoints
-      .map((endpoint) => {
-        const route = routeById.get(endpoint.relationshipId);
-        const point = endpoint.endpointIndex === 0 ? route.points[0] : route.points.at(-1);
-        return { ...endpoint, mount: point[axis] };
-      })
-      .sort((a, b) => a.mount - b.mount);
-    const saved = ordered.map((endpoint) => [endpoint.relationshipId, routeById.get(endpoint.relationshipId)]);
+  const byNodePair = new Map();
+  for (const relationship of relationshipById.values()) {
+    if (relationship.relationshipType !== "flow" || !routeById.has(relationship.id)) continue;
+    const key = [relationship.from, relationship.to].sort().join(" ");
+    if (!byNodePair.has(key)) byNodePair.set(key, []);
+    byNodePair.get(key).push(relationship);
+  }
+  for (const group of byNodePair.values()) {
+    if (group.length !== 2) continue;
+    const [a, b] = group;
+    if (a.from !== b.to || a.to !== b.from) continue;
+    // Gather both routes' endpoints that sit on sole-pair surfaces.
+    const targets = [];
+    for (const relationshipId of [a.id, b.id]) {
+      const route = routeById.get(relationshipId);
+      const relationship = relationshipById.get(relationshipId);
+      for (const [nodeId, endpointIndex] of [[relationship.from, 0], [relationship.to, route.points.length - 1]]) {
+        const rect = input.nodeRects.get(nodeId);
+        const point = endpointIndex === 0 ? route.points[0] : route.points.at(-1);
+        const side = rect ? endpointSide(rect, point) : "";
+        if (!rect || rect.fixedPorts || !sideNeedsPostSelectionCentering(side)) continue;
+        const key = sideEndpointKey(nodeId, side);
+        if (surfaceCounts.get(key) !== 2) continue;
+        targets.push({ relationshipId, endpointIndex, rect, side, key });
+      }
+    }
+    if (!targets.length) continue;
+    const saved = [...new Set(targets.map((target) => target.relationshipId))].map((id) => [id, routeById.get(id)]);
     const beforeBends = saved.reduce((sum, [, route]) => sum + (route.bends ?? 0), 0);
-    ordered.forEach((endpoint, index) => {
-      const route = routeById.get(endpoint.relationshipId);
-      const offset = endpointSpreadOffset(index, ordered.length, endpoint.rect, endpoint.side);
-      routeById.set(endpoint.relationshipId, offsetEndpointRoute(route, endpoint.endpointIndex, endpoint.rect, endpoint.side, offset));
-    });
-    const afterBends = ordered.reduce((sum, endpoint) => sum + (routeById.get(endpoint.relationshipId).bends ?? 0), 0);
-    const collides = ordered.some((endpoint) =>
-      routeCollidesWithNonEndpoints(routeById.get(endpoint.relationshipId), relationshipById.get(endpoint.relationshipId), input));
-    // Centering must not undo an already-straight (aligned) pair; keep it only
-    // when it does not add bends and does not collide.
+    const bySurface = new Map();
+    for (const target of targets) {
+      if (!bySurface.has(target.key)) bySurface.set(target.key, []);
+      bySurface.get(target.key).push(target);
+    }
+    for (const surfaceTargets of bySurface.values()) {
+      if (surfaceTargets.length < 2) continue;
+      const axis = surfaceTargets[0].side === "left" || surfaceTargets[0].side === "right" ? "y" : "x";
+      const ordered = surfaceTargets
+        .map((target) => {
+          const route = routeById.get(target.relationshipId);
+          const point = target.endpointIndex === 0 ? route.points[0] : route.points.at(-1);
+          return { ...target, mount: point[axis] };
+        })
+        .sort((left, right) => left.mount - right.mount);
+      ordered.forEach((target, index) => {
+        const route = routeById.get(target.relationshipId);
+        const offset = endpointSpreadOffset(index, ordered.length, target.rect, target.side);
+        routeById.set(target.relationshipId, offsetEndpointRoute(route, target.endpointIndex, target.rect, target.side, offset));
+      });
+    }
+    const afterBends = saved.reduce((sum, [id]) => sum + (routeById.get(id).bends ?? 0), 0);
+    const collides = saved.some(([id]) => routeCollidesWithNonEndpoints(routeById.get(id), relationshipById.get(id), input));
     if (collides || afterBends > beforeBends) {
-      for (const [relationshipId, route] of saved) routeById.set(relationshipId, route);
+      for (const [id, route] of saved) routeById.set(id, route);
     }
   }
 }
