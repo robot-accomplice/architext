@@ -88,10 +88,10 @@
       "dateAdded": "2026-05-18T06:05:00.000Z",
       "targetReleaseId": "v1-4-0",
       "evidence": [
-        "docs/architext/src/main.tsx PDF control",
-        "docs/architext/src/styles.css print artifact styles",
+        "viewer/src/main.tsx PDF control",
+        "viewer/src/styles.css print artifact styles",
         "test/pdf-export-ui.test.mjs",
-        "npm --prefix docs/architext run build"
+        "npm --prefix viewer run build"
       ]
     },
     {
@@ -162,7 +162,7 @@
       "evidence": [
         "node --test test/view-selection.test.mjs test/fetch-architecture-data.test.mjs",
         "npm run validate",
-        "npm --prefix docs/architext run build"
+        "npm --prefix viewer run build"
       ]
     },
     {
@@ -236,8 +236,8 @@
       "targetReleaseId": "v1-4-1",
       "dateAdded": "2026-05-21T13:00:00.000Z",
       "evidence": [
-        "docs/architext/src/main.tsx RulesWorkspace action footer",
-        "docs/architext/src/styles.css rule editor action styles",
+        "viewer/src/main.tsx RulesWorkspace action footer",
+        "viewer/src/styles.css rule editor action styles",
         "npm test"
       ]
     },
@@ -292,6 +292,50 @@
         "test/serve-lifecycle.test.mjs",
         "npm test"
       ]
+    },
+    {
+      "id": "repo-tree-view",
+      "title": "Repository tree view",
+      "summary": "Add a top-level Repo Tree tab that helps users understand source layout, optionally color-coding folders tied to C4 or Flow responsibilities and leaving room for a future 3D graph projection.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "high",
+      "section": "Repository Intelligence",
+      "targetReleaseId": "v1-6-0",
+      "dateAdded": "2026-05-27T16:30:00.000Z"
+    },
+    {
+      "id": "repo-blast-radius-search",
+      "title": "Repository blast-radius search",
+      "summary": "Provide search for filenames, components, or known code concepts so users can see where a concern reaches across repository files and architecture elements.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "high",
+      "section": "Repository Intelligence",
+      "targetReleaseId": "v1-6-0",
+      "dateAdded": "2026-05-27T16:30:00.000Z"
+    },
+    {
+      "id": "diagram-spacing-controls",
+      "title": "Diagram spacing controls",
+      "summary": "Add explicit ergonomics controls for diagram column width and sequence-diagram row spacing so users can improve readability without relying only on zoom.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Diagram Ergonomics",
+      "targetReleaseId": "v1-6-0",
+      "dateAdded": "2026-05-27T16:30:00.000Z"
+    },
+    {
+      "id": "persistent-architecture-element-notes",
+      "title": "Persistent architecture element notes",
+      "summary": "Allow users to edit or annotate architecture elements and persist the notes in Architext JSON, including cases where a high-risk area is intentionally mitigated by the system being documented.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "high",
+      "section": "Architecture Editing",
+      "targetReleaseId": "v1-6-0",
+      "dateAdded": "2026-05-27T16:30:00.000Z"
     }
   ]
 }

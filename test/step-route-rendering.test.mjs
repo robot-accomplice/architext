@@ -7,7 +7,7 @@ import {
   stepRouteClassName,
   stepRouteLabelClassName,
   stepRouteMarkerClassName
-} from "../docs/architext/src/presentation/stepRouteModel.js";
+} from "../viewer/src/presentation/stepRouteModel.js";
 
 test("flow and sequence step routes share the same presentation model", () => {
   assert.equal(stepRouteClassName("flow"), "flow-step-route");
@@ -26,9 +26,9 @@ test("step route presentation model fails loudly for unknown route kinds", () =>
 test("sequence route model distinguishes return and outbound message semantics", () => {
   assert.equal(sequenceStepMessageKind({ action: "send request", summary: "", from: "a", to: "b" }, 10, 100), "request");
   assert.equal(sequenceStepMessageKind({ kind: "return", action: "done", summary: "", from: "b", to: "a" }, 100, 10), "return");
-  assert.equal(sequenceStepMessageKind({ action: "return result", summary: "", from: "b", to: "a" }, 100, 10), "return");
-  assert.equal(sequenceStepMessageKind({ action: "publish", summary: "", from: "a", to: "work-queue" }, 10, 100), "async");
-  assert.equal(sequenceStepMessageKind({ action: "persist", summary: "", from: "a", to: "event-store" }, 10, 100), "persistence");
+  assert.equal(sequenceStepMessageKind({ action: "return result", summary: "", from: "b", to: "a" }, 100, 10), "request");
+  assert.equal(sequenceStepMessageKind({ kind: "async", action: "publish", summary: "", from: "a", to: "work-queue" }, 10, 100), "async");
+  assert.equal(sequenceStepMessageKind({ kind: "persistence", action: "persist", summary: "", from: "a", to: "event-store" }, 10, 100), "persistence");
 });
 
 test("sequence route model pairs returns with explicit or reverse outbound messages", () => {

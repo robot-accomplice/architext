@@ -3,13 +3,13 @@ import test from "node:test";
 import {
   releaseDetailsForSelectedRelease,
   selectedReleaseIdForReload
-} from "../docs/architext/src/adapters/fetchArchitectureData.js";
+} from "../viewer/src/adapters/fetchArchitectureData.js";
 import {
   dataRefreshNoticeForDirtyEditors,
   releasePlanActionDisabled,
   releasePlanProposalPayload
-} from "../docs/architext/src/presentation/releasePlanningModel.js";
-import { releaseItemSummaryText } from "../docs/architext/src/presentation/releaseTruth.js";
+} from "../viewer/src/presentation/releasePlanningModel.js";
+import { releaseItemSummaryText } from "../viewer/src/presentation/releaseTruth.js";
 
 function response(body) {
   return {

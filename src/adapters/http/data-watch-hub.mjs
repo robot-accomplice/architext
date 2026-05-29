@@ -18,6 +18,8 @@ export function createDataWatchHub({
   let heartbeatTimer = null;
   let watcher = null;
   let version = 0;
+  let validating = false;
+  let validationPending = false;
 
   const stopHeartbeat = () => {
     if (!heartbeatTimer) return;
@@ -25,9 +27,9 @@ export function createDataWatchHub({
     heartbeatTimer = null;
   };
 
-  const closeClient = (client) => {
+  const closeClient = (client, { end = true } = {}) => {
     if (!clients.delete(client)) return;
-    client.end();
+    if (end) client.end();
     if (clients.size === 0) stopHeartbeat();
   };
 
@@ -50,13 +52,25 @@ export function createDataWatchHub({
 
   const validateAndBroadcast = async () => {
     timer = null;
-    const validation = await validateTarget(target);
-    version += 1;
-    broadcast({
-      type: validation.ok ? "valid" : "invalid",
-      version,
-      output: validation.output
-    });
+    if (validating) {
+      validationPending = true;
+      return;
+    }
+    validating = true;
+    try {
+      do {
+        validationPending = false;
+        const validation = await validateTarget(target);
+        version += 1;
+        broadcast({
+          type: validation.ok ? "valid" : "invalid",
+          version,
+          output: validation.output
+        });
+      } while (validationPending);
+    } finally {
+      validating = false;
+    }
   };
 
   const schedule = (fileName = "") => {
@@ -92,10 +106,7 @@ export function createDataWatchHub({
     });
     clients.add(response);
     response.socket?.setTimeout?.(heartbeatMs * 3, () => response.destroy?.());
-    response.on("close", () => {
-      clients.delete(response);
-      if (clients.size === 0) stopHeartbeat();
-    });
+    response.on("close", () => closeClient(response, { end: false }));
     response.on("error", () => closeClient(response));
     writeToClient(response, "\n");
     startHeartbeat();
@@ -107,8 +118,7 @@ export function createDataWatchHub({
     watcher?.close?.();
     watcher = null;
     stopHeartbeat();
-    for (const client of clients) client.end();
-    clients.clear();
+    for (const client of [...clients]) closeClient(client);
   };
 
   return { attach, close, schedule, start };

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { iconForNodeType, iconForStep, iconLabel } from "../docs/architext/src/presentation/diagramIconModel.js";
+import { iconForNodeType, iconForStep, iconLabel } from "../viewer/src/presentation/diagramIconModel.js";
 
 test("diagram icon model maps node taxonomy to semantic icons", () => {
   assert.equal(iconForNodeType("actor"), "actor");

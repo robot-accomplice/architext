@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { c4DrilldownUnavailableReason, childC4ViewForNode } from "../docs/architext/src/presentation/c4Drilldown.js";
+import { c4DrilldownUnavailableReason, childC4ViewForNode } from "../viewer/src/presentation/c4Drilldown.js";
 
 test("C4 drilldown uses explicit scope metadata for child views", () => {
   const views = [

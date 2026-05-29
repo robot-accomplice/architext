@@ -9,6 +9,13 @@ import { readJson, writeJson } from "./runtime.mjs";
 
 const serveRuntimeDir = path.join(tmpdir(), "architext-serve");
 const serveLockStaleMs = 30000;
+const serveStateLockTimeoutMs = 5000;
+const serveStateLockPollMs = 50;
+const serveStartupTimeoutMs = 5000;
+const serveStartupPollMs = 100;
+const browserOpenSettleMs = 100;
+const serveStopTimeoutMs = 3000;
+const serveStopPollMs = 100;
 
 function serveUrl(options) {
   return `http://${options.host}:${options.port}/`;
@@ -79,7 +86,7 @@ async function removeServeStateIfOwned(target, expected) {
   }
 }
 
-async function withServeStateLock(target, callback, { timeoutMs = 5000, pollMs = 50 } = {}) {
+async function withServeStateLock(target, callback, { timeoutMs = serveStateLockTimeoutMs, pollMs = serveStateLockPollMs } = {}) {
   await mkdir(serveRuntimeDir, { recursive: true });
   const lockPath = serveLockPath(target);
   const deadline = Date.now() + timeoutMs;
@@ -136,21 +143,21 @@ async function urlReachable(url) {
   }
 }
 
-async function waitForUrl(url, timeoutMs = 5000) {
+async function waitForUrl(url, timeoutMs = serveStartupTimeoutMs) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     if (await urlReachable(url)) return true;
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, serveStartupPollMs));
   }
   return false;
 }
 
-async function waitForChildServeState(target, pid, timeoutMs = 5000) {
+async function waitForChildServeState(target, pid, timeoutMs = serveStartupTimeoutMs) {
   const started = Date.now();
   while (Date.now() - started < timeoutMs) {
     const state = await readServeState(target);
     if (state?.pid === pid && await urlReachable(state.url)) return state;
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, serveStartupPollMs));
   }
   return null;
 }
@@ -178,7 +185,7 @@ async function openSystemBrowser(url) {
       if (settled) return;
       settled = true;
       resolve({ ok: true });
-    }, 100);
+    }, browserOpenSettleMs);
   });
 }
 
@@ -347,8 +354,8 @@ async function stopState(state) {
       const started = Date.now();
       const poll = () => {
         if (!pidExists(state.pid)) resolve(true);
-        else if (Date.now() - started > 3000) resolve(false);
-        else setTimeout(poll, 100);
+        else if (Date.now() - started > serveStopTimeoutMs) resolve(false);
+        else setTimeout(poll, serveStopPollMs);
       };
       poll();
     });

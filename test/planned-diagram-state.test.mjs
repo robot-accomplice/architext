@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { plannedCanvasFallback, planInputKey } from "../docs/architext/src/routing/usePlannedDiagram.js";
+import { plannedCanvasFallback, planInputKey } from "../viewer/src/routing/usePlannedDiagram.js";
 
 const input = {
   view: {
@@ -71,6 +71,35 @@ test("planned diagram keys differ when edge proximity scoring toggles", () => {
   const off = { ...input, scoreEdgeProximity: false };
   const on = { ...input, scoreEdgeProximity: true };
   assert.notEqual(planInputKey(off), planInputKey(on));
+});
+
+test("planned diagram keys differ when route semantics change", () => {
+  const request = {
+    ...input,
+    relationships: [
+      {
+        ...input.relationships[0],
+        kind: "request",
+        displayIndex: 1
+      }
+    ]
+  };
+  const response = {
+    ...input,
+    relationships: [
+      {
+        ...input.relationships[0],
+        kind: "return",
+        returnOf: "request-step",
+        outcome: "ok",
+        displayIndex: 2,
+        preferredStartSide: "bottom",
+        preferredEndSide: "top"
+      }
+    ]
+  };
+
+  assert.notEqual(planInputKey(request), planInputKey(response));
 });
 
 test("planned diagram keys are stable when extra node rect key order changes", () => {

@@ -10,3 +10,6 @@ pnpm-debug.log*
 
 # Ephemeral local planning/direction — not a repository artifact
 docs/superpowers/
+
+# Architext generated static builds.
+docs/architext/.architext-write.lock/

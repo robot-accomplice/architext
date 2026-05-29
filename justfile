@@ -13,7 +13,7 @@ release-check:
 # Refresh README-facing screenshots and grep for common stale public-doc markers.
 release-doc-check:
     node scripts/capture-readme-screenshots.mjs
-    rg -n "semver-|currentVersion:|Release Truth|Rules|1\\.[0-9]+\\.[0-9]+" README.md docs/architext/README.md docs/architecture src || true
+    rg -n "semver-|currentVersion:|Release Truth|Rules|1\\.[0-9]+\\.[0-9]+" README.md viewer/README.md docs/architecture src || true
 
 # Show the most recent CI runs for the repository.
 ci:

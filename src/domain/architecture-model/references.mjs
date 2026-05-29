@@ -1,4 +1,5 @@
 import { releaseSummaryFromDetail } from "./release-history.mjs";
+import { releaseItems } from "./release-scopes.mjs";
 
 export function validateArchitectureReferences(model) {
   const errors = [];
@@ -80,16 +81,6 @@ export function validateArchitectureReferences(model) {
   return errors;
 }
 
-function allReleaseItems(detail) {
-  return [
-    ...detail.scope.required,
-    ...detail.scope.planned,
-    ...detail.scope.stretch,
-    ...detail.scope.deferred,
-    ...detail.scope.outOfScope
-  ];
-}
-
 function releaseItemCanBeBlocked(status) {
   return !["complete", "deferred", "cut"].includes(status);
 }
@@ -127,7 +118,7 @@ export function validateReleaseReferences(releases, errors = [], options = {}) {
   }
 
   for (const detail of releases.details) {
-    const items = allReleaseItems(detail);
+    const items = releaseItems(detail);
     const itemIds = new Set(items.map((item) => item.id));
     const itemsById = new Map(items.map((item) => [item.id, item]));
     const workstreamIds = new Set(detail.workstreams.map((workstream) => workstream.id));

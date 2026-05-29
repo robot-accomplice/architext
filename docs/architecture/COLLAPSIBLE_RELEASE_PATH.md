@@ -34,9 +34,17 @@ the milestone restores the same item list.
 The collapse state transition is isolated in a small presentation helper so it
 can be tested without rendering React.
 
+Bulk collapse and expand controls live with the Release Path list because they
+operate on the same session-only presentation state as the per-milestone
+toggle. `Collapse all` stores every rendered milestone id in the collapsed set,
+including the synthetic unlinked-scope milestone when it exists. `Expand all`
+clears the set. Neither action mutates Release Truth data or changes the active
+selection.
+
 ## Verification
 
 - Unit tests cover collapse-state toggling and immutability.
+- Unit tests cover bulk collapse and expand state transitions.
 - The production frontend build validates the React wiring and CSS selectors.
 - Browser verification checks that Release Path renders, a completed milestone
   can collapse, and the item rows are hidden from the page.

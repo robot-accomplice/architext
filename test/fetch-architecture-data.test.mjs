@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { loadArchitectureModel, loadReleaseDetail } from "../docs/architext/src/adapters/fetchArchitectureData.js";
+import { loadArchitectureModel, loadReleaseDetail } from "../viewer/src/adapters/fetchArchitectureData.js";
 import { releaseSummaryFromDetail } from "../src/domain/architecture-model/release-history.mjs";
 
 function response(body, ok = true) {

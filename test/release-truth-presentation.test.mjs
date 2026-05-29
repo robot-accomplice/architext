@@ -14,7 +14,7 @@ import {
   releaseProgress,
   releaseScopeByItemId,
   releaseTone
-} from "../docs/architext/src/presentation/releaseTruth.js";
+} from "../viewer/src/presentation/releaseTruth.js";
 
 const detail = {
   scope: {

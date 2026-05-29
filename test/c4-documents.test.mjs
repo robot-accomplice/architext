@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import { c4LayoutFor } from "../docs/architext/src/routing/c4Layout.js";
-import { planDiagram } from "../docs/architext/src/routing/planDiagram.js";
-import { relationshipLabel } from "../docs/architext/src/routing/relationshipLabels.js";
-import { routeIntersectsRect } from "../docs/architext/src/routing/routeEdges.js";
+import { c4LayoutFor } from "../viewer/src/routing/c4Layout.js";
+import { planDiagram } from "../viewer/src/routing/planDiagram.js";
+import { relationshipLabel } from "../viewer/src/routing/relationshipLabels.js";
+import { routeIntersectsRect } from "../viewer/src/routing/routeEdges.js";
 
 const architextDataDir = path.resolve(import.meta.dirname, "../docs/architext/data");
 

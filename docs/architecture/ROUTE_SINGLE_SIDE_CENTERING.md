@@ -12,6 +12,11 @@ relationships overall, but only one relationship attached to a given surface.
   surface with enough visual clearance that arrowheads do not read as a single
   collision. Two routes must not claim the same anchor point unless the node
   uses fixed ports.
+- Surface density is a routing constraint, not just a scoring preference. Each
+  side has a simple capacity of `floor(side length / minimum port spacing)`.
+  Once planned routes consume that capacity, the side becomes unavailable for
+  later route candidates unless every side has been exhausted and the router is
+  already falling back to a least-bad route.
 - Shared-side endpoints are distributed by cardinality. For `n` connections on
   one surface, endpoint `i` lands at `(i + 1) / (n + 1)` along that surface; two
   connections therefore use the one-third and two-thirds points.
@@ -27,6 +32,7 @@ relationships overall, but only one relationship attached to a given surface.
 - Cross-surface alignment must also avoid creating a new shared segment with
   another visible route; when alignment would reuse an occupied corridor, keep
   the distributed endpoint and let the route dogleg.
+- Endpoint adjustment must not make a route double back over its own line.
 - Endpoint adjustment must orient the first bend before the arrowhead in line
   with the arrowhead mount position; do not add a corrective double right angle
   at the final stub.
@@ -37,6 +43,9 @@ relationships overall, but only one relationship attached to a given surface.
   segments must remain straight so primary left-to-right relationships stay
   readable.
 - Source and destination top/bottom endpoints follow the same rule.
+- Source and destination nodes are endpoint obstacles. A route may touch an
+  endpoint node at its selected surface contact only; it must not cross through
+  the endpoint node's interior to reach another side.
 - This rule applies after the route planner selects sides; unrelated routes on
   other sides must not move a single top or bottom endpoint off center.
 - Post-selection endpoint spreading must preserve the selected line style. In
@@ -62,5 +71,7 @@ fitness.
   the top-side relationship centered on the top edge.
 - A node with multiple relationships entering the same side receives visually
   distinct anchors on that side.
+- A saturated side is removed from later candidate generation, forcing dense
+  fan-in or fan-out to use another side before lines pile onto the same surface.
 - Opposing movable surfaces align to the same mount point for the route.
 - Orthogonal routes remain orthogonal after endpoint centering or spreading.

@@ -50,7 +50,10 @@ architext serve [path]
 ```
 
 The package-owned viewer loads target data from `/data/manifest.json`, then
-follows the file list in the manifest to load the remaining JSON files.
+follows the file list in the manifest to load the remaining JSON files. The
+viewer source lives under `viewer/`; target-owned architecture data stays under
+`docs/architext/data`. The package repository must not place package-owned
+source under the same path that sync treats as target-owned lifecycle state.
 
 This avoids browser lock-in. A direct `file://` page with sibling JSON files is
 not a sound baseline because browser security rules differ.
@@ -182,12 +185,12 @@ Implemented boundaries:
   can share the same repair categories.
 - `src/adapters/cli/` owns argument parsing, command routing, and terminal
   presentation.
-- `docs/architext/src/adapters/` owns browser data loading and preference
+- `viewer/src/adapters/` owns browser data loading and preference
   storage.
-- `docs/architext/src/domain/` owns viewer-side architecture DTO types.
-- `docs/architext/src/presentation/` owns mode, view, and step selection
+- `viewer/src/domain/` owns viewer-side architecture DTO types.
+- `viewer/src/presentation/` owns mode, view, and step selection
   policy.
-- `docs/architext/src/routing/` now separates diagram planning state,
+- `viewer/src/routing/` now separates diagram planning state,
   geometry, ports, port-pair enumeration, corridor discovery, labels, route
   candidate construction, route strategy assembly, route indexing, route
   rendering, route scoring and warnings, route style normalization, route
@@ -198,7 +201,7 @@ Remaining architectural pressure:
 - `tools/architext-adopt.mjs` is still too responsible for lifecycle execution,
   filesystem operations, validation process orchestration, HTTP serving, and
   build commands.
-- `docs/architext/src/main.tsx` still combines many React components and detail
+- `viewer/src/main.tsx` still combines many React components and detail
   presenters in one entrypoint.
 - The routing strategy module is still internally organized by conditional
   branches for orthogonal, spline, and straight routing. Future work can split

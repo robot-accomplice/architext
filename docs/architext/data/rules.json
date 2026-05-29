@@ -60,6 +60,25 @@
       }
     },
     {
+      "id": "node-geometry-independent-of-routing",
+      "title": "Node geometry is independent of routing",
+      "summary": "Changing node dimensions to accommodate edge mount points, endpoint demand, or surface capacity is strictly forbidden; resolve routing pressure in the router.",
+      "category": "Architecture",
+      "criticality": "critical",
+      "order": 35,
+      "source": "maintainer",
+      "rationale": "Node rectangles are a layout contract; inflating a box to create surface capacity disfigures the diagram and masks a routing defect instead of fixing it. Endpoint crowding belongs to port distribution and surface-selection logic, not to geometry.",
+      "appliesTo": [
+        "routing",
+        "diagram layout",
+        "surface capacity"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
       "id": "release-truth-stays-current",
       "title": "Release Truth stays current",
       "summary": "When release scope, implementation state, blockers, or deferrals change, update Release Truth in the same work session.",

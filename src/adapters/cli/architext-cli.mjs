@@ -42,7 +42,7 @@ import {
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const cliEntryPath = path.join(packageRoot, "tools", "architext-adopt.mjs");
-const viewerDir = path.join(packageRoot, "docs", "architext");
+const viewerDir = path.join(packageRoot, "viewer");
 const viewerDistDir = path.join(viewerDir, "dist");
 const schemaDir = path.join(viewerDir, "schema");
 const validatorPath = path.join(viewerDir, "tools", "validate-architext.mjs");
@@ -50,6 +50,8 @@ const appendixPath = path.join(viewerDir, "AGENTS_APPENDIX.md");
 const skillPath = path.join(packageRoot, "skills", "architext", "SKILL.md");
 const dataSchemaVersion = "1.5.0";
 const mutationTokenHeader = "x-architext-mutation-token";
+const maxRequestBodyBytes = 1024 * 1024;
+const maxDiagnosticJsonWalkDepth = 24;
 const servePortSearchLimit = 50;
 
 async function packageVersion() {
@@ -872,7 +874,7 @@ async function syncTarget(target, options, version, logger = console) {
 
   log(`Target: ${target}`);
   log(`Architext CLI: ${version}`);
-  printStatus(status, { verbose: true }, logger);
+  if (options.dryRun) printStatus(status, { verbose: true }, logger);
   if (migrating) {
     log(`Copied install detected: ${status.copiedInstallPaths.length} package-owned paths`);
   }
@@ -893,6 +895,7 @@ async function syncTarget(target, options, version, logger = console) {
     log(writePlan.operationLabel);
 
     if (!shouldWrite) {
+      if (!options.dryRun) printStatus(status, { verbose: true }, logger);
       log("No lifecycle changes needed.");
       return;
     }
@@ -971,7 +974,11 @@ async function syncTarget(target, options, version, logger = console) {
     };
 
     if (options.dryRun) await performWrites();
-    else await withTargetWriteLock(target, performWrites);
+    else {
+      await withTargetWriteLock(target, performWrites);
+      const finalStatus = await collectStatus(target, version, { runValidation: !options.skipValidate });
+      printStatus(finalStatus, { verbose: true }, logger);
+    }
   } finally {
     rl.close();
   }
@@ -1162,7 +1169,7 @@ async function requestJson(request) {
   let total = 0;
   for await (const chunk of request) {
     total += chunk.length;
-    if (total > 1024 * 1024) throw new Error("Request body is too large");
+    if (total > maxRequestBodyBytes) throw new Error("Request body is too large");
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
@@ -1203,11 +1210,12 @@ async function statusApiRequest(target, version) {
 async function malformedJsonDiagnostic(target) {
   const root = dataDir(target);
   const files = [];
-  async function collect(dir) {
+  async function collect(dir, depth = 0) {
+    if (depth > maxDiagnosticJsonWalkDepth) return;
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
     for (const entry of entries) {
       const file = path.join(dir, entry.name);
-      if (entry.isDirectory()) await collect(file);
+      if (entry.isDirectory()) await collect(file, depth + 1);
       else if (entry.isFile() && entry.name.endsWith(".json")) files.push(file);
     }
   }
@@ -1249,16 +1257,17 @@ async function doctorApiRequest(target, payload, version) {
       output: "Run sync before doctor repairs."
     };
   }
-  const repairs = await withTargetWriteLock(target, async () => {
+  const { repairs, validation } = await withTargetWriteLock(target, async () => {
     const lockedStatus = await collectStatus(target, version, { runValidation: true });
     if (!lockedStatus.installed || lockedStatus.needsMigration) {
       throw new Error("Run sync before doctor repairs.");
     }
-    return lockedStatus.doctorRepairs.length
-      ? applyDoctorRepairs(target, lockedStatus, false)
+    const repairs = lockedStatus.doctorRepairs.length
+      ? await applyDoctorRepairs(target, lockedStatus, false)
       : [];
+    const validation = await validateTarget(target);
+    return { repairs, validation };
   });
-  const validation = await validateTarget(target);
   return {
     ok: validation.ok,
     mode: "apply",
@@ -1392,7 +1401,7 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
           const result = await approveReleasePlanRequest(target, await requestJson(request));
           sendJson(response, 200, result);
         } catch (error) {
-          sendJson(response, 400, { error: error.message });
+          sendJson(response, 200, { ok: false, mode: "release-plans", error: error.message, reload: false });
         }
         return;
       }
@@ -1402,7 +1411,7 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
           const result = await updateRulesRequest(target, await requestJson(request));
           sendJson(response, 200, result);
         } catch (error) {
-          sendJson(response, 400, { error: error.message });
+          sendJson(response, 200, { ok: false, mode: "rules", error: error.message, reload: false });
         }
         return;
       }

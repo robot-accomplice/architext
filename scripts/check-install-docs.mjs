@@ -1,6 +1,6 @@
 import { readFileSync } from "node:fs";
 
-const docs = ["README.md", "docs/architext/README.md"];
+const docs = ["README.md", "viewer/README.md"];
 const scopedPackage = "@robotaccomplice/architext";
 
 const forbiddenPatterns = [

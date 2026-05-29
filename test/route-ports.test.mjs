@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { planDiagram } from "../docs/architext/src/routing/planDiagram.js";
-import { routeEdges } from "../docs/architext/src/routing/routeEdges.js";
+import { planDiagram } from "../viewer/src/routing/planDiagram.js";
+import { routeEdges } from "../viewer/src/routing/routeEdges.js";
 
 const architextFlows = JSON.parse(readFileSync(new URL("../docs/architext/data/flows.json", import.meta.url), "utf8")).flows;
 const architextViews = JSON.parse(readFileSync(new URL("../docs/architext/data/views.json", import.meta.url), "utf8")).views;
@@ -149,7 +149,7 @@ test("single side endpoints stay centered for every line style", () => {
   }
 });
 
-test("single top-side flow routes stay centered in the system map", () => {
+test("single flow routes stay centered on their selected system map surface", () => {
   const view = architextViews.find((candidate) => candidate.name === "System Map");
   const flow = architextFlows.find((candidate) => candidate.name === "Fresh data-only install");
   const relationships = flow.steps.map((step, index) => ({
@@ -160,7 +160,10 @@ test("single top-side flow routes stay centered in the system map", () => {
     relationshipType: "flow",
     stepId: step.id,
     flowId: flow.id,
-    displayIndex: index + 1
+    displayIndex: index + 1,
+    kind: step.kind,
+    returnOf: step.returnOf,
+    outcome: step.outcome
   }));
   const plan = planDiagram({
     view,
@@ -186,7 +189,7 @@ test("single top-side flow routes stay centered in the system map", () => {
     y: repositoryRect.y
   });
   assert.deepEqual(plan.routes.get("write-starter-data").points.at(-1), {
-    x: dataRect.x + dataRect.width / 2,
-    y: dataRect.y
+    x: dataRect.x,
+    y: dataRect.y + dataRect.height / 2
   });
 });

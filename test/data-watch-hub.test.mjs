@@ -22,6 +22,7 @@ class ResponseStub extends EventEmitter {
   }
 
   end() {
+    this.endCount = (this.endCount ?? 0) + 1;
     this.ended = true;
   }
 }
@@ -99,6 +100,61 @@ test("data watch hub closes clients that apply write back-pressure", async () =>
   await timerCallback();
 
   assert.equal(response.ended, true);
+  assert.equal(response.endCount, 1);
+});
+
+test("data watch hub close and error paths are idempotent", () => {
+  const response = new ResponseStub();
+  const hub = createDataWatchHub({
+    target: "/tmp/repo",
+    dataDir: (target) => `${target}/docs/architext/data`,
+    validateTarget: async () => ({ ok: true, output: "valid" }),
+    watchFn: () => ({ close() {} })
+  });
+
+  hub.attach(response);
+  response.emit("error");
+  response.emit("close");
+
+  assert.equal(response.endCount, 1);
+});
+
+test("data watch hub serializes overlapping validation broadcasts", async () => {
+  const timerCallbacks = [];
+  let releaseValidation;
+  let validateCount = 0;
+  const response = new ResponseStub();
+  const hub = createDataWatchHub({
+    target: "/tmp/repo",
+    dataDir: (target) => `${target}/docs/architext/data`,
+    validateTarget: async () => {
+      validateCount += 1;
+      if (validateCount === 1) {
+        await new Promise((resolve) => { releaseValidation = resolve; });
+      }
+      return { ok: true, output: `valid ${validateCount}` };
+    },
+    watchFn: () => ({ close() {} }),
+    setTimer: (callback) => {
+      timerCallbacks.push(callback);
+      return callback;
+    },
+    clearTimer: () => {}
+  });
+
+  hub.attach(response);
+  hub.schedule("flows.json");
+  const firstRun = timerCallbacks.shift()();
+  hub.schedule("views.json");
+  const secondRun = timerCallbacks.shift()();
+  assert.equal(validateCount, 1);
+  releaseValidation();
+  await Promise.all([firstRun, secondRun]);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(validateCount, 2);
+  assert.match(response.body, /"version":1/);
+  assert.match(response.body, /"version":2/);
 });
 
 test("data watch hub ignores non-json writes and reports invalid validation state", async () => {

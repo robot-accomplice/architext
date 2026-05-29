@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-5-0",
+  "currentReleaseId": "v1-5-1",
   "releases": [
     {
       "id": "v1-1-2",
@@ -418,6 +418,48 @@
         "stretch": 0
       },
       "file": "v1-5-0.json"
+    },
+    {
+      "id": "v1-5-1",
+      "version": "1.5.1",
+      "name": "Architext 1.5.1 Audit Remediation",
+      "status": "implementing",
+      "posture": "on-track",
+      "targetDate": "2026-05-27",
+      "lastUpdated": "2026-05-27T15:30:00.000Z",
+      "summary": "Architext 1.5.1 finishes the audit-remediation sweep and separates package-owned viewer source from target-owned architecture data.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 1,
+        "workstreams": 3,
+        "blockers": 0,
+        "complete": 1,
+        "inProgress": 1,
+        "planned": 1,
+        "stretch": 0
+      },
+      "file": "v1-5-1.json"
+    },
+    {
+      "id": "v1-6-0",
+      "version": "1.6.0",
+      "name": "Architext 1.6.0 Repository Intelligence",
+      "status": "planned",
+      "posture": "on-track",
+      "targetWindow": "After 1.5.1",
+      "lastUpdated": "2026-05-27T16:30:00.000Z",
+      "summary": "Architext 1.6.0 is reserved for repository intelligence, diagram ergonomics, and persistent architecture annotations.",
+      "counts": {
+        "features": 4,
+        "bugFixes": 0,
+        "workstreams": 3,
+        "blockers": 0,
+        "complete": 0,
+        "inProgress": 0,
+        "planned": 4,
+        "stretch": 0
+      },
+      "file": "v1-6-0.json"
     }
   ]
 }

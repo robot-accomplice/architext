@@ -1,0 +1,344 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { planDiagram } from "../viewer/src/routing/planDiagram.js";
+import { diagramLayoutFor } from "../viewer/src/presentation/diagramLayout.js";
+import { diagnosePlannedRoutes } from "../viewer/src/routing/routeDiagnostics.js";
+import { deriveRouteIntent } from "../viewer/src/routing/routeIntent.js";
+import { routeIntersectsRect } from "../viewer/src/routing/routeEdges.js";
+
+function simplePlan(relationships) {
+  const view = {
+    id: "diagnostic-fixture",
+    name: "Diagnostic Fixture",
+    type: "flow-explorer",
+    lanes: [
+      { id: "left", name: "Left", nodeIds: ["source"] },
+      { id: "right", name: "Right", nodeIds: ["target", "other-target"] }
+    ]
+  };
+  return planDiagram({
+    view,
+    relationships,
+    visibleNodeIds: new Set(view.lanes.flatMap((lane) => lane.nodeIds)),
+    nodeWidth: 100,
+    nodeHeight: 40,
+    laneWidth: 180,
+    rowGap: 90,
+    marginX: 40,
+    marginY: 40,
+    minCanvasWidth: 420,
+    minCanvasHeight: 240,
+    canvasExtraWidth: 80,
+    canvasExtraHeight: 60,
+    style: "orthogonal",
+    diagnostics: true
+  });
+}
+
+function assertOrthogonalRouteSet(plan) {
+  for (const [relationshipId, route] of plan.routes) {
+    for (let index = 0; index < route.points.length - 1; index += 1) {
+      const start = route.points[index];
+      const end = route.points[index + 1];
+      assert.ok(
+        start.x === end.x || start.y === end.y,
+        `${relationshipId} contains non-axis-aligned segment ${JSON.stringify({ start, end })}`
+      );
+    }
+  }
+}
+
+test("deriveRouteIntent keeps semantic role separate from route geometry", () => {
+  const intent = deriveRouteIntent({
+    relationship: {
+      id: "return-context",
+      from: "memory-system",
+      to: "unified-pipeline",
+      kind: "return",
+      returnOf: "retrieve-context",
+      outcome: "cached"
+    },
+    fromRect: { x: 300, y: 40, width: 100, height: 40 },
+    toRect: { x: 40, y: 40, width: 100, height: 40 },
+    fromLaneIndex: 1,
+    toLaneIndex: 0,
+    fromRowIndex: 0,
+    toRowIndex: 0
+  });
+
+  assert.deepEqual(intent, {
+    relationshipId: "return-context",
+    role: "return",
+    returnOf: "retrieve-context",
+    outcome: "cached",
+    laneDirection: "backward",
+    rowDirection: "same",
+    expectedSourceSide: "left",
+    expectedTargetSide: "right"
+  });
+});
+
+test("diagnostics are opt-in and report route-set sanity without rendering", () => {
+  const relationships = [
+    { id: "source-target", from: "source", to: "target", label: "first", relationshipType: "flow", displayIndex: 1 },
+    { id: "source-other", from: "source", to: "other-target", label: "second", relationshipType: "flow", displayIndex: 2 }
+  ];
+  const normalPlan = simplePlan(relationships.map((relationship) => ({ ...relationship })));
+  const diagnostics = normalPlan.diagnostics ?? diagnosePlannedRoutes(normalPlan, relationships);
+
+  assert.ok(diagnostics.routes.length > 0);
+  assert.equal(diagnostics.routes.every((route) => route.relationshipId), true);
+  assert.equal(typeof diagnostics.metrics.closeParallelRuns, "number");
+});
+
+test("dense fan-in diagnostics explain surface-capacity escape endpoints", () => {
+  const view = {
+    id: "complex-fan-in",
+    name: "Complex Fan-In",
+    type: "system-map",
+    lanes: [
+      { id: "sources", name: "Sources", nodeIds: ["source-a", "source-b", "source-c", "source-d"] },
+      { id: "middle", name: "Middle", nodeIds: ["blocker-a", "blocker-b"] },
+      { id: "target", name: "Target", nodeIds: ["target"] }
+    ]
+  };
+  const relationships = ["source-a", "source-b", "source-c", "source-d"].map((sourceId) => ({
+    id: `${sourceId}-target`,
+    from: sourceId,
+    to: "target",
+    label: `${sourceId} feeds target`,
+    relationshipType: "flow",
+    kind: "request"
+  }));
+  const plan = planDiagram({
+    view,
+    relationships,
+    visibleNodeIds: new Set(view.lanes.flatMap((lane) => lane.nodeIds)),
+    nodeWidth: 144,
+    nodeHeight: 62,
+    laneWidth: 218,
+    rowGap: 116,
+    marginX: 72,
+    marginY: 76,
+    minCanvasWidth: 820,
+    minCanvasHeight: 520,
+    canvasExtraWidth: 80,
+    canvasExtraHeight: 96,
+    style: "orthogonal",
+    diagnostics: true
+  });
+  const sourceA = plan.diagnostics.routes.find((route) => route.relationshipId === "source-a-target");
+
+  // source-a is coplanar with the target with blocker-a directly between them, so
+  // per the obstacle-aware rule it escapes to a parallel surface on BOTH ends and
+  // routes under the blocker instead of exiting toward the blocked facing corridor.
+  assert.equal(sourceA.sourceSide, "bottom");
+  assert.equal(sourceA.targetSide, "bottom");
+  assert.equal(
+    sourceA.constraints.some((constraint) => constraint.code === "constrained-primary-target-corridor-blocked"),
+    true
+  );
+  assert.equal(sourceA.findings.some((finding) => finding.code === "singleton-endpoint-off-center"), false);
+});
+
+test("semantic return gutters leave badge-sized clearance between long parallel lanes", () => {
+  const view = {
+    id: "return-gutter-clearance",
+    name: "Return Gutter Clearance",
+    type: "flow-explorer",
+    lanes: [
+      { id: "entry", name: "Entry", nodeIds: ["user", "browser", "channel"] },
+      { id: "runtime", name: "Runtime", nodeIds: ["pipeline"] },
+      { id: "services", name: "Services", nodeIds: ["memory", "model"] }
+    ]
+  };
+  const relationships = [
+    { id: "browser-pipeline", from: "browser", to: "pipeline", relationshipType: "flow", kind: "request", displayIndex: 1 },
+    { id: "channel-pipeline", from: "channel", to: "pipeline", relationshipType: "flow", kind: "request", displayIndex: 2 },
+    { id: "pipeline-memory", from: "pipeline", to: "memory", relationshipType: "flow", kind: "request", displayIndex: 3 },
+    { id: "memory-pipeline", from: "memory", to: "pipeline", relationshipType: "flow", kind: "return", returnOf: "pipeline-memory", displayIndex: 4 },
+    { id: "pipeline-model", from: "pipeline", to: "model", relationshipType: "flow", kind: "request", displayIndex: 5 },
+    { id: "model-pipeline", from: "model", to: "pipeline", relationshipType: "flow", kind: "return", returnOf: "pipeline-model", displayIndex: 6 },
+    { id: "pipeline-browser", from: "pipeline", to: "browser", relationshipType: "flow", kind: "return", returnOf: "browser-pipeline", displayIndex: 7 },
+    { id: "pipeline-channel", from: "pipeline", to: "channel", relationshipType: "flow", kind: "return", returnOf: "channel-pipeline", displayIndex: 8 },
+    { id: "channel-user", from: "channel", to: "user", relationshipType: "flow", kind: "return", displayIndex: 9 }
+  ];
+  const plan = planDiagram({
+    view,
+    relationships,
+    visibleNodeIds: new Set(view.lanes.flatMap((lane) => lane.nodeIds)),
+    nodeWidth: 136,
+    nodeHeight: 54,
+    laneWidth: 210,
+    rowGap: 102,
+    marginX: 180,
+    marginY: 76,
+    minCanvasWidth: 820,
+    minCanvasHeight: 520,
+    canvasExtraWidth: 80,
+    canvasExtraHeight: 96,
+    style: "orthogonal",
+    diagnostics: true,
+    diagnosticOptions: { closeParallelRunBudget: 0 }
+  });
+
+  assert.equal(plan.diagnostics.metrics.closeParallelRuns, 0);
+});
+
+test("viewer flow layout keeps dense request and return routes in readable channels", () => {
+  const view = {
+    id: "viewer-dense-flow",
+    name: "Viewer Dense Flow",
+    type: "flow-explorer",
+    lanes: [
+      { id: "entry", name: "Entry", nodeIds: ["operator", "cli", "tui", "browser", "websocket", "external"] },
+      { id: "factory", name: "Factory", nodeIds: ["pipeline"] },
+      { id: "context", name: "Context", nodeIds: ["memory", "product", "skills", "mcp", "sqlite"] },
+      { id: "output", name: "Output", nodeIds: ["llm", "cloud", "local", "observability"] }
+    ]
+  };
+  const relationships = [
+    { id: "receive-message", from: "operator", to: "external", relationshipType: "flow", kind: "process", displayIndex: 1 },
+    { id: "submit-web-session-message", from: "browser", to: "websocket", relationshipType: "flow", kind: "request", displayIndex: 2 },
+    { id: "delegate-web-message", from: "websocket", to: "pipeline", relationshipType: "flow", kind: "request", displayIndex: 3 },
+    { id: "normalize-input", from: "external", to: "pipeline", relationshipType: "flow", kind: "request", displayIndex: 4 },
+    { id: "resolve-session", from: "pipeline", to: "sqlite", relationshipType: "flow", kind: "persistence", displayIndex: 5 },
+    { id: "session-resolved", from: "sqlite", to: "pipeline", relationshipType: "flow", kind: "return", returnOf: "resolve-session", displayIndex: 6 },
+    { id: "retrieve-context", from: "pipeline", to: "memory", relationshipType: "flow", kind: "request", displayIndex: 7 },
+    { id: "context-returned", from: "memory", to: "pipeline", relationshipType: "flow", kind: "return", returnOf: "retrieve-context", displayIndex: 8 },
+    { id: "execute-tools", from: "pipeline", to: "mcp", relationshipType: "flow", kind: "request", displayIndex: 9 },
+    { id: "tool-evidence-returned", from: "mcp", to: "pipeline", relationshipType: "flow", kind: "return", returnOf: "execute-tools", displayIndex: 10 },
+    { id: "request-model", from: "pipeline", to: "llm", relationshipType: "flow", kind: "request", displayIndex: 11 },
+    { id: "model-response", from: "llm", to: "pipeline", relationshipType: "flow", kind: "return", returnOf: "request-model", displayIndex: 12 },
+    { id: "persist-response", from: "pipeline", to: "sqlite", relationshipType: "flow", kind: "persistence", displayIndex: 13 },
+    { id: "persistence-confirmed", from: "sqlite", to: "pipeline", relationshipType: "flow", kind: "return", returnOf: "persist-response", displayIndex: 14 },
+    { id: "web-pipeline-outcome", from: "pipeline", to: "websocket", relationshipType: "flow", kind: "return", returnOf: "delegate-web-message", displayIndex: 15 },
+    { id: "web-deliver-response", from: "websocket", to: "browser", relationshipType: "flow", kind: "return", returnOf: "submit-web-session-message", displayIndex: 16 },
+    { id: "format-response", from: "pipeline", to: "external", relationshipType: "flow", kind: "return", returnOf: "normalize-input", displayIndex: 17 },
+    { id: "deliver-response", from: "external", to: "operator", relationshipType: "flow", kind: "return", returnOf: "receive-message", displayIndex: 18 }
+  ];
+  const layout = diagramLayoutFor(view, relationships.length);
+  const plan = planDiagram({
+    view,
+    relationships,
+    visibleNodeIds: new Set(view.lanes.flatMap((lane) => lane.nodeIds)),
+    ...layout,
+    style: "orthogonal",
+    diagnostics: true,
+    diagnosticOptions: { closeParallelRunBudget: 0 }
+  });
+
+  assert.equal(plan.diagnostics.metrics.closeParallelRuns, 0);
+  assertOrthogonalRouteSet(plan);
+  assert.equal(plan.diagnostics.findings.filter((finding) => finding.code?.startsWith("non-facing")).length, 0);
+  const receiveMessage = plan.diagnostics.routes.find((route) => route.relationshipId === "receive-message");
+  assert.equal(receiveMessage.targetSide, "top", "same-lane downward flow should preserve the target's semantically correct top surface");
+  const receiveRoute = plan.routes.get("receive-message");
+  for (const blockerId of ["cli", "tui", "browser", "websocket"]) {
+    assert.equal(
+      routeIntersectsRect(receiveRoute, plan.nodeRects.get(blockerId), 0),
+      false,
+      `same-lane downward flow must not collapse through ${blockerId}`
+    );
+  }
+  const operator = plan.nodeRects.get("operator");
+  assert.ok(
+    receiveRoute.points.some((point) => point.x < operator.x),
+    "same-lane first-column flow should use the exterior gutter instead of the interior lane"
+  );
+  const formatResponse = plan.diagnostics.routes.find((route) => route.relationshipId === "format-response");
+  assert.equal(formatResponse.targetSide, "right", "return routes should not abandon the facing target surface only because another side is empty");
+  const requestModel = plan.diagnostics.routes.find((route) => route.relationshipId === "request-model");
+  assert.equal(requestModel.targetSide, "bottom", "blocked same-row flows should use an escape surface when the nominal facing corridor is occupied");
+  assert.equal(
+    requestModel.constraints.some((constraint) => constraint.code === "constrained-primary-target-corridor-blocked"),
+    true,
+    "diagnostics should explain why the route did not use the nominal target surface"
+  );
+  const modelResponse = plan.diagnostics.routes.find((route) => route.relationshipId === "model-response");
+  assert.equal(modelResponse.sourceSide, "bottom", "blocked same-row returns should leave from the escape surface instead of traversing the occupied facing corridor");
+  assert.equal(plan.routes.get("retrieve-context").bends, 0, "facing service routes should align paired endpoints after surface distribution");
+  assert.equal(plan.routes.get("context-returned").bends, 0, "return service routes should not keep a tiny dogleg after surface distribution");
+});
+
+test("entry return gutters choose open channels instead of close parallel lanes", () => {
+  const view = {
+    id: "entry-return-clearance",
+    name: "Entry Return Clearance",
+    type: "flow-explorer",
+    lanes: [
+      { id: "entry", name: "Entry", nodeIds: ["operator", "browser", "websocket", "external"] },
+      { id: "runtime", name: "Runtime", nodeIds: ["pipeline"] }
+    ]
+  };
+  const relationships = [
+    { id: "delegate", from: "websocket", to: "pipeline", relationshipType: "flow", kind: "request", displayIndex: 1 },
+    { id: "normalize", from: "external", to: "pipeline", relationshipType: "flow", kind: "request", displayIndex: 2 },
+    { id: "format", from: "pipeline", to: "external", relationshipType: "flow", kind: "return", displayIndex: 3 },
+    { id: "deliver", from: "external", to: "operator", relationshipType: "flow", kind: "return", displayIndex: 4 }
+  ];
+  const plan = planDiagram({
+    view,
+    relationships,
+    visibleNodeIds: new Set(view.lanes.flatMap((lane) => lane.nodeIds)),
+    nodeWidth: 136,
+    nodeHeight: 54,
+    laneWidth: 210,
+    rowGap: 102,
+    marginX: 180,
+    marginY: 76,
+    minCanvasWidth: 820,
+    minCanvasHeight: 520,
+    canvasExtraWidth: 80,
+    canvasExtraHeight: 96,
+    style: "orthogonal",
+    diagnostics: true,
+    diagnosticOptions: { closeParallelRunBudget: 0 }
+  });
+
+  assert.equal(plan.diagnostics.metrics.closeParallelRuns, 0);
+  const deliverRoute = plan.routes.get("deliver");
+  const operator = plan.nodeRects.get("operator");
+  assert.ok(
+    deliverRoute.points.some((point) => point.x < operator.x),
+    "same-lane return should be able to use the exterior gutter left of the first node column"
+  );
+});
+
+test("same-lane blocked routes preserve facing surfaces without traversing blockers", () => {
+  const view = {
+    id: "same-lane-blocked",
+    name: "Same Lane Blocked",
+    type: "flow-explorer",
+    lanes: [
+      { id: "lane", name: "Lane", nodeIds: ["top", "middle", "bottom"] }
+    ]
+  };
+  const relationships = [
+    { id: "top-bottom", from: "top", to: "bottom", relationshipType: "flow", kind: "request", displayIndex: 1 }
+  ];
+  const plan = planDiagram({
+    view,
+    relationships,
+    visibleNodeIds: new Set(view.lanes.flatMap((lane) => lane.nodeIds)),
+    nodeWidth: 136,
+    nodeHeight: 54,
+    laneWidth: 210,
+    rowGap: 102,
+    marginX: 180,
+    marginY: 76,
+    minCanvasWidth: 420,
+    minCanvasHeight: 420,
+    canvasExtraWidth: 80,
+    canvasExtraHeight: 96,
+    style: "orthogonal",
+    diagnostics: true
+  });
+  const route = plan.diagnostics.routes.find((diagnostic) => diagnostic.relationshipId === "top-bottom");
+  const plannedRoute = plan.routes.get("top-bottom");
+
+  assert.equal(route.findings.some((finding) => finding.code.startsWith("non-facing")), false);
+  assert.equal(route.sourceSide, "bottom");
+  assert.equal(route.targetSide, "top");
+  assert.equal(routeIntersectsRect(plannedRoute, plan.nodeRects.get("middle"), 0), false);
+});
