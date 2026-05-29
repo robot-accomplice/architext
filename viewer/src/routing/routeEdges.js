@@ -1589,3 +1589,12 @@ export function routeEdges(input) {
   }
   return routes;
 }
+
+export {
+  endpointSide,
+  crossingsBetween,
+  axisAlignedSegments,
+  sharedSegmentLength,
+  sideNeedsPostSelectionCentering,
+  routeCollidesWithNonEndpoints
+};
