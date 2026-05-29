@@ -232,7 +232,7 @@ test("viewer flow layout keeps dense request and return routes in readable chann
   assertOrthogonalRouteSet(plan);
   assert.equal(plan.diagnostics.findings.filter((finding) => finding.code?.startsWith("non-facing")).length, 0);
   const receiveMessage = plan.diagnostics.routes.find((route) => route.relationshipId === "receive-message");
-  assert.equal(receiveMessage.targetSide, "top", "same-lane downward flow should preserve the target's semantically correct top surface");
+  assert.equal(receiveMessage.targetSide, "left", "same-column flow past multiple intermediaries mounts on the outer gutter surface and runs straight up it");
   const receiveRoute = plan.routes.get("receive-message");
   for (const blockerId of ["cli", "tui", "browser", "websocket"]) {
     assert.equal(
