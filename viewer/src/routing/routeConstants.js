@@ -91,7 +91,8 @@ export const MOUNT_COST = {
   dogleg: 14_000,                  // tier 4 (matches ROUTE_COST_WEIGHTS.dogleg)
   spacingDeviation: 6,             // tier 5 (per unit deviation from ideal slot)
   cramped: 1_200,                  // tier 5 (per unit a gap is below MIN_LEGIBLE_GAP)
-  intentMismatch: 900             // tier 5 (per endpoint leaving the non-facing side)
+  intentMismatch: 900,             // tier 5 (per endpoint leaving the non-facing side)
+  length: 3                        // tier 5 (per unit of wire length — prefers shorter routes; tunable)
 };
 
 export const MIN_LEGIBLE_GAP = 12;  // px; mounts closer than this read as one line

@@ -40,6 +40,17 @@ export function surfacesOf(routeById, relationshipById, input) {
   return surfaces;
 }
 
+// Total wire length of a route (Euclidean over consecutive points; for orthogonal
+// routes this is the Manhattan path length). Only backtracking doglegs add length —
+// a monotonic orthogonal path between two points has fixed length.
+function routeLength(route) {
+  let total = 0;
+  for (let i = 0; i < route.points.length - 1; i += 1) {
+    total += Math.hypot(route.points[i + 1].x - route.points[i].x, route.points[i + 1].y - route.points[i].y);
+  }
+  return total;
+}
+
 export function mountAssignmentCost(routeById, relationshipById, input) {
   let cost = 0;
   const routes = [...routeById.entries()];
@@ -51,6 +62,7 @@ export function mountAssignmentCost(routeById, relationshipById, input) {
     cost += (route.bends ?? 0) * MOUNT_COST.bend;
     cost += (route.repeatedCrossings ?? 0) * MOUNT_COST.repeatedCrossing;
     cost += (route.selfOverlappingSegments ?? 0) * MOUNT_COST.selfOverlap;
+    cost += routeLength(route) * MOUNT_COST.length;            // tier 5 — prefer shorter wire
   }
   // tiers 2/3: pairwise crossings + shared segments
   for (let i = 0; i < routes.length; i += 1) {

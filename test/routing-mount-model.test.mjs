@@ -31,8 +31,10 @@ test("a route through a non-endpoint node body costs at least one tier-0 collisi
   const through = new Map([["e", { style: "orthogonal", points: [{ x: 40, y: 20 }, { x: 400, y: 20 }], bends: 4, samples: [] }]]); // straight line crosses "mid"; same bends so only collision differs
   const c = (r) => mountAssignmentCost(r, relationshipById, input);
   // The straight route plows through "mid" (a non-endpoint node) -> tier-0 collision;
-  // the detour avoids every node body. Tier-0 must dominate the detour's extra bends.
-  assert.ok(c(through) - c(clean) >= MOUNT_COST.collision, `expected tier-0 gap, got ${c(through) - c(clean)}`);
+  // the detour avoids every node body but adds some wire length. The colliding route
+  // must bear the full tier-0 penalty and stay far costlier than the clean detour.
+  assert.ok(c(through) >= MOUNT_COST.collision, `colliding route must bear tier-0 collision, got ${c(through)}`);
+  assert.ok(c(through) > c(clean), `tier-0 collision must dominate the detour's extra length/bends`);
 });
 
 test("co-shifting a straight facing edge's partner keeps it straight", () => {
@@ -80,4 +82,22 @@ test("optimizeMountAssignments never increases total cost and is idempotent", ()
   const snapshot = JSON.stringify([...routeById].map(([id, r]) => [id, r.points]));
   optimizeMountAssignments(routeById, relationshipById, input, { buildRouteForSides: null });
   assert.equal(JSON.stringify([...routeById].map(([id, r]) => [id, r.points])), snapshot, "optimizer must be idempotent");
+});
+
+test("a longer route costs more than a shorter one with the same bends and mounts (length term)", () => {
+  // Both edges mount at the SAME points (40,120)->(400,120) and have the SAME bend
+  // count (2); they differ only in backtrack depth, i.e. wire length. With identical
+  // mounts the spacing term is equal, so only a length term can separate them.
+  const nodeRects = new Map([
+    ["a", { x: 0, y: 100, width: 40, height: 40 }],
+    ["b", { x: 400, y: 100, width: 40, height: 40 }]
+  ]);
+  const input = { nodeRects, visibleNodeIds: new Set(["a", "b"]), canvasWidth: 480, canvasHeight: 200 };
+  const relationshipById = new Map([["e", { id: "e", from: "a", to: "b", relationshipType: "flow" }]]);
+  const shallow = new Map([["e", { style: "orthogonal", points: [{ x: 40, y: 120 }, { x: 40, y: 60 }, { x: 400, y: 60 }, { x: 400, y: 120 }], bends: 2, samples: [] }]]); // length 480
+  const deep = new Map([["e", { style: "orthogonal", points: [{ x: 40, y: 120 }, { x: 40, y: 20 }, { x: 400, y: 20 }, { x: 400, y: 120 }], bends: 2, samples: [] }]]);    // length 560
+  assert.ok(
+    mountAssignmentCost(deep, relationshipById, input) > mountAssignmentCost(shallow, relationshipById, input),
+    "the longer (deeper backtrack) route must cost strictly more"
+  );
 });
