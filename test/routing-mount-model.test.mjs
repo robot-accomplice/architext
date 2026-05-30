@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { surfaceSpacingCost, mountAssignmentCost } from "../viewer/src/routing/routeMountModel.js";
+import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch } from "../viewer/src/routing/routeMountModel.js";
 import { MIN_LEGIBLE_GAP, MOUNT_COST } from "../viewer/src/routing/routeConstants.js";
 
 // A left/right surface of length 54 with 3 mounts: ideal slots at 54*[1,2,3]/4.
@@ -33,4 +33,20 @@ test("a route through a non-endpoint node body costs at least one tier-0 collisi
   // The straight route plows through "mid" (a non-endpoint node) -> tier-0 collision;
   // the detour avoids every node body. Tier-0 must dominate the detour's extra bends.
   assert.ok(c(through) - c(clean) >= MOUNT_COST.collision, `expected tier-0 gap, got ${c(through) - c(clean)}`);
+});
+
+test("co-shifting a straight facing edge's partner keeps it straight", () => {
+  // a.right at y=20 -> b.left at y=20, straight horizontal edge.
+  const nodeRects = new Map([
+    ["a", { x: 0, y: 0, width: 40, height: 60 }],
+    ["b", { x: 200, y: 0, width: 40, height: 60 }]
+  ]);
+  const input = { nodeRects };
+  const routeById = new Map([["e", { points: [{ x: 40, y: 20 }, { x: 200, y: 20 }], bends: 0 }]]);
+  const relationshipById = new Map([["e", { id: "e", from: "a", to: "b", relationshipType: "flow" }]]);
+  // Move a.right mount down by +10 (to y=30); partner b.left must follow to stay straight.
+  applyOffsetWithMatch(routeById, relationshipById, input, { id: "e", endpointIndex: 0, side: "right", rect: nodeRects.get("a") }, 10);
+  const pts = routeById.get("e").points;
+  assert.equal(pts[0].y, pts[pts.length - 1].y, "edge stays straight (both ends moved together)");
+  assert.equal(pts[0].y, 30);
 });

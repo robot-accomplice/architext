@@ -7,7 +7,8 @@ import {
   sharedSegmentLength,
   sideNeedsPostSelectionCentering,
   routeCollidesWithNonEndpoints,
-  routeHasEndpointTraversal
+  routeHasEndpointTraversal,
+  offsetEndpointRoute
 } from "./routeEdges.js";
 
 function movableEndpoints(routeById, relationshipById, input) {
@@ -89,4 +90,35 @@ export function surfaceSpacingCost(positions, length, count) {
     if (gap < MIN_LEGIBLE_GAP) cost += (MIN_LEGIBLE_GAP - gap) * MOUNT_COST.cramped;
   }
   return cost;
+}
+
+function isStraightFacing(route) {
+  const a = route.points[0];
+  const b = route.points.at(-1);
+  return route.points.length === 2 && (a.x === b.x || a.y === b.y);
+}
+
+// target: { id, endpointIndex, side, rect }. delta: signed shift along the surface axis.
+// Moves the target mount, then — if the edge was a straight facing line — co-shifts the
+// partner end by the same delta so the edge stays straight instead of bending.
+export function applyOffsetWithMatch(routeById, relationshipById, input, target, delta) {
+  const route = routeById.get(target.id);
+  const rel = relationshipById.get(target.id);
+  const straightFacing = isStraightFacing(route);
+  const axis = target.side === "left" || target.side === "right" ? "y" : "x";
+  const center = axis === "y" ? target.rect.y + target.rect.height / 2 : target.rect.x + target.rect.width / 2;
+  const point = target.endpointIndex === 0 ? route.points[0] : route.points.at(-1);
+  let moved = offsetEndpointRoute(route, target.endpointIndex, target.rect, target.side, point[axis] - center + delta);
+  routeById.set(target.id, moved);
+  if (!straightFacing) return;
+  // Matched movement: co-shift the partner end so the straight facing edge stays straight.
+  const partnerIndex = target.endpointIndex === 0 ? moved.points.length - 1 : 0;
+  const partnerNodeId = target.endpointIndex === 0 ? rel.to : rel.from;
+  const partnerRect = input.nodeRects.get(partnerNodeId);
+  if (!partnerRect) return;
+  const partnerPoint = partnerIndex === 0 ? moved.points[0] : moved.points.at(-1);
+  const partnerSide = endpointSide(partnerRect, partnerPoint);
+  const partnerCenter = axis === "y" ? partnerRect.y + partnerRect.height / 2 : partnerRect.x + partnerRect.width / 2;
+  moved = offsetEndpointRoute(moved, partnerIndex, partnerRect, partnerSide, partnerPoint[axis] - partnerCenter + delta);
+  routeById.set(target.id, moved);
 }

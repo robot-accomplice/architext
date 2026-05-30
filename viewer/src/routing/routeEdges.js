@@ -1597,5 +1597,7 @@ export {
   sharedSegmentLength,
   sideNeedsPostSelectionCentering,
   routeCollidesWithNonEndpoints,
-  routeHasEndpointTraversal
+  routeHasEndpointTraversal,
+  offsetEndpointRoute,
+  endpointSpreadOffset
 };
