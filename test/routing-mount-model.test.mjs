@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch, optimizeMountAssignments } from "../viewer/src/routing/routeMountModel.js";
+import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch, optimizeMountAssignments, routeIntersections } from "../viewer/src/routing/routeMountModel.js";
 import { MIN_LEGIBLE_GAP, MOUNT_COST } from "../viewer/src/routing/routeConstants.js";
 
 // A left/right surface of length 54 with 3 mounts: ideal slots at 54*[1,2,3]/4.
@@ -109,4 +109,20 @@ test("legible but off-ideal mount spacing is free; only sub-legible crowding cos
   assert.equal(surfaceSpacingCost([15, 45], 100, 2), 0, "legible-but-uneven spacing must be free");
   // A genuinely crammed pair (2px gap) still costs.
   assert.ok(surfaceSpacingCost([49, 51], 100, 2) > 0, "sub-legible crowding must cost");
+});
+
+test("routeIntersections counts T-junctions but not shared mounts", () => {
+  // T-junction: A is horizontal y=20 over x 0..100; B is vertical x=50 from y=20 down to
+  // y=80, so B's TOP endpoint (50,20) lands ON A's interior. A strict "X" test misses
+  // this; every intersection must count.
+  const A = { points: [{ x: 0, y: 20 }, { x: 100, y: 20 }] };
+  const B = { points: [{ x: 50, y: 20 }, { x: 50, y: 80 }] };
+  assert.equal(routeIntersections(A, B), 1, "a T-junction is an intersection");
+  // A clean X still counts.
+  const C = { points: [{ x: 50, y: 0 }, { x: 50, y: 40 }] };
+  assert.equal(routeIntersections(A, C), 1, "an X crossing counts");
+  // Shared mount: both edges terminate at (0,0) — a legitimate convergence, not a crossing.
+  const D = { points: [{ x: 0, y: 0 }, { x: 60, y: 0 }] };
+  const E = { points: [{ x: 0, y: 0 }, { x: 0, y: 60 }] };
+  assert.equal(routeIntersections(D, E), 0, "a shared mount is not an intersection");
 });

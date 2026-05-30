@@ -2,7 +2,6 @@ import { MOUNT_COST, MIN_LEGIBLE_GAP, MOUNT_MAX_ITERS } from "./routeConstants.j
 import { surfaceCapacity } from "./routePorts.js";
 import {
   endpointSide,
-  crossingsBetween,
   axisAlignedSegments,
   sharedSegmentLength,
   sideNeedsPostSelectionCentering,
@@ -51,6 +50,33 @@ function routeLength(route) {
   return total;
 }
 
+const pointKey = (p) => `${p.x},${p.y}`;
+
+// Count every visual intersection between two routes — X crossings AND T-junctions /
+// touches (one route's corner or stub landing on the other's edge), which a strict
+// straddle test misses. Excludes shared mounts (both routes terminating at the same
+// node port — a legitimate convergence, not a crossing). Each distinct point counts once.
+export function routeIntersections(routeA, routeB) {
+  const segsA = axisAlignedSegments(routeA);
+  const segsB = axisAlignedSegments(routeB);
+  const terminalA = new Set([pointKey(routeA.points[0]), pointKey(routeA.points.at(-1))]);
+  const terminalB = new Set([pointKey(routeB.points[0]), pointKey(routeB.points.at(-1))]);
+  const points = new Set();
+  for (const left of segsA) {
+    for (const right of segsB) {
+      if (left.orientation === right.orientation) continue;
+      const h = left.orientation === "horizontal" ? left : right;
+      const v = left.orientation === "horizontal" ? right : left;
+      if (v.x >= h.min && v.x <= h.max && h.y >= v.min && h.y <= v.max) {
+        const key = `${v.x},${h.y}`;
+        if (terminalA.has(key) && terminalB.has(key)) continue; // shared mount
+        points.add(key);
+      }
+    }
+  }
+  return points.size;
+}
+
 export function mountAssignmentCost(routeById, relationshipById, input) {
   let cost = 0;
   const routes = [...routeById.entries()];
@@ -67,7 +93,7 @@ export function mountAssignmentCost(routeById, relationshipById, input) {
   // tiers 2/3: pairwise crossings + shared segments
   for (let i = 0; i < routes.length; i += 1) {
     for (let j = i + 1; j < routes.length; j += 1) {
-      cost += crossingsBetween(routes[i][1], routes[j][1]) * MOUNT_COST.crossing;
+      cost += routeIntersections(routes[i][1], routes[j][1]) * MOUNT_COST.crossing;
       const segsA = axisAlignedSegments(routes[i][1]);
       const segsB = axisAlignedSegments(routes[j][1]);
       for (const l of segsA) for (const r of segsB) {
