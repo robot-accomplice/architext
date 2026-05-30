@@ -101,3 +101,12 @@ test("a longer route costs more than a shorter one with the same bends and mount
     "the longer (deeper backtrack) route must cost strictly more"
   );
 });
+
+test("legible but off-ideal mount spacing is free; only sub-legible crowding costs", () => {
+  // Two mounts at 15 and 45 on a length-100 surface: gaps to the corners and between
+  // are 15/30/55 — all >= MIN_LEGIBLE_GAP, so perfectly legible — but far from the ideal
+  // even-spread slots (33,67). Legibility, not aesthetic evenness, is the cost driver.
+  assert.equal(surfaceSpacingCost([15, 45], 100, 2), 0, "legible-but-uneven spacing must be free");
+  // A genuinely crammed pair (2px gap) still costs.
+  assert.ok(surfaceSpacingCost([49, 51], 100, 2) > 0, "sub-legible crowding must cost");
+});

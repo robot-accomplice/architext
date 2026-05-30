@@ -81,22 +81,19 @@ export function mountAssignmentCost(routeById, relationshipById, input) {
     const length = surface.side === "left" || surface.side === "right" ? surface.rect.height : surface.rect.width;
     const count = surface.positions.length;
     if (count > surfaceCapacity(surface.rect, surface.side)) cost += MOUNT_COST.overCapacity;
-    cost += surfaceSpacingCost(surface.positions, length, count);
+    cost += surfaceSpacingCost(surface.positions, length);
   }
   return cost;
 }
 
 // positions: mount coordinates along the surface axis, expressed as distance
-// from the surface start (0..length). count: total mounts on the surface.
-export function surfaceSpacingCost(positions, length, count) {
+// from the surface start (0..length). Only legibility costs: a gap (between adjacent
+// mounts or from a mount to a surface corner) below MIN_LEGIBLE_GAP is crowding and is
+// penalized. Mounts that are unevenly placed but still legibly spaced are FREE — even
+// spread is an aesthetic, not a legibility requirement, so it is not charged here.
+export function surfaceSpacingCost(positions, length) {
   const sorted = [...positions].sort((a, b) => a - b);
   let cost = 0;
-  // Deviation from the ideal evenly-spread slots (mounts may run to corners).
-  sorted.forEach((pos, index) => {
-    const ideal = ((index + 1) / (count + 1)) * length;
-    cost += Math.abs(pos - ideal) * MOUNT_COST.spacingDeviation;
-  });
-  // Steep sub-penalty when any adjacent gap (incl. surface ends) is sub-legible.
   const guards = [0, ...sorted, length];
   for (let i = 0; i < guards.length - 1; i += 1) {
     const gap = guards[i + 1] - guards[i];
