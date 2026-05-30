@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch } from "../viewer/src/routing/routeMountModel.js";
+import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch, optimizeMountAssignments } from "../viewer/src/routing/routeMountModel.js";
 import { MIN_LEGIBLE_GAP, MOUNT_COST } from "../viewer/src/routing/routeConstants.js";
 
 // A left/right surface of length 54 with 3 mounts: ideal slots at 54*[1,2,3]/4.
@@ -49,4 +49,35 @@ test("co-shifting a straight facing edge's partner keeps it straight", () => {
   const pts = routeById.get("e").points;
   assert.equal(pts[0].y, pts[pts.length - 1].y, "edge stays straight (both ends moved together)");
   assert.equal(pts[0].y, 30);
+});
+
+test("optimizeMountAssignments never increases total cost and is idempotent", () => {
+  // Two edges share a.right (h=120): one to b (top), one to c (bottom). Their mounts
+  // start ~4px apart (crammed). Re-spreading must not raise cost and must converge.
+  const nodeRects = new Map([
+    ["a", { x: 0, y: 0, width: 40, height: 120 }],
+    ["b", { x: 240, y: 0, width: 40, height: 120 }],
+    ["c", { x: 240, y: 160, width: 40, height: 120 }]
+  ]);
+  const input = {
+    nodeRects, visibleNodeIds: new Set(["a", "b", "c"]),
+    canvasWidth: 320, canvasHeight: 320, relationships: [], style: "orthogonal"
+  };
+  const routeById = new Map([
+    ["ab", { style: "orthogonal", points: [{ x: 40, y: 58 }, { x: 240, y: 20 }], bends: 1, samples: [] }],
+    ["ac", { style: "orthogonal", points: [{ x: 40, y: 62 }, { x: 240, y: 220 }], bends: 1, samples: [] }]
+  ]);
+  const relationshipById = new Map([
+    ["ab", { id: "ab", from: "a", to: "b", relationshipType: "flow", displayIndex: 1 }],
+    ["ac", { id: "ac", from: "a", to: "c", relationshipType: "flow", displayIndex: 2 }]
+  ]);
+  input.relationships = [...relationshipById.values()];
+  const before = mountAssignmentCost(routeById, relationshipById, input);
+  // No rebuild callback in this synthetic fixture -> offsets only.
+  optimizeMountAssignments(routeById, relationshipById, input, { buildRouteForSides: null });
+  const after = mountAssignmentCost(routeById, relationshipById, input);
+  assert.ok(after <= before, `cost rose: ${before} -> ${after}`);
+  const snapshot = JSON.stringify([...routeById].map(([id, r]) => [id, r.points]));
+  optimizeMountAssignments(routeById, relationshipById, input, { buildRouteForSides: null });
+  assert.equal(JSON.stringify([...routeById].map(([id, r]) => [id, r.points])), snapshot, "optimizer must be idempotent");
 });

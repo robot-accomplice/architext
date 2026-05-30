@@ -1,4 +1,4 @@
-import { MOUNT_COST, MIN_LEGIBLE_GAP } from "./routeConstants.js";
+import { MOUNT_COST, MIN_LEGIBLE_GAP, MOUNT_MAX_ITERS } from "./routeConstants.js";
 import { surfaceCapacity } from "./routePorts.js";
 import {
   endpointSide,
@@ -8,7 +8,8 @@ import {
   sideNeedsPostSelectionCentering,
   routeCollidesWithNonEndpoints,
   routeHasEndpointTraversal,
-  offsetEndpointRoute
+  offsetEndpointRoute,
+  endpointSpreadOffset
 } from "./routeEdges.js";
 
 function movableEndpoints(routeById, relationshipById, input) {
@@ -121,4 +122,97 @@ export function applyOffsetWithMatch(routeById, relationshipById, input, target,
   const partnerCenter = axis === "y" ? partnerRect.y + partnerRect.height / 2 : partnerRect.x + partnerRect.width / 2;
   moved = offsetEndpointRoute(moved, partnerIndex, partnerRect, partnerSide, partnerPoint[axis] - partnerCenter + delta);
   routeById.set(target.id, moved);
+}
+
+const SIDES = ["top", "right", "bottom", "left"];
+
+// Deterministic deep clone of a routeById Map for trial/accept.
+function snapshotRoutes(routeById) {
+  return new Map([...routeById].map(([id, r]) => [id, { ...r, points: r.points.map((p) => ({ ...p })) }]));
+}
+
+// Group movable endpoints by surface, carrying the descriptors respread needs.
+// Ordered by the opposite node's centre (stable, non-circular) so the spread is
+// deterministic and crossing-minimal for the common facing case.
+function surfaceEndpointGroups(routeById, relationshipById, input) {
+  const groups = new Map(); // `${nodeId} ${side}` -> endpoint descriptors
+  for (const [id, route] of routeById) {
+    const rel = relationshipById.get(id);
+    if (!rel || !route?.points?.length) continue;
+    for (const [nodeId, endpointIndex, oppositeId] of [[rel.from, 0, rel.to], [rel.to, route.points.length - 1, rel.from]]) {
+      const rect = input.nodeRects.get(nodeId);
+      const point = endpointIndex === 0 ? route.points[0] : route.points.at(-1);
+      const side = rect ? endpointSide(rect, point) : "";
+      if (!rect || rect.fixedPorts || !sideNeedsPostSelectionCentering(side)) continue;
+      const key = `${nodeId} ${side}`;
+      if (!groups.has(key)) groups.set(key, []);
+      const opp = input.nodeRects.get(oppositeId);
+      const axis = side === "left" || side === "right" ? "y" : "x";
+      const oppCentre = opp ? (axis === "y" ? opp.y + opp.height / 2 : opp.x + opp.width / 2) : 0;
+      groups.get(key).push({ id, endpointIndex, rect, side, oppCentre, displayIndex: rel.displayIndex ?? 0 });
+    }
+  }
+  return groups;
+}
+
+// Stages 1+2: re-spread each surface's mounts to their ideal evenly-spaced slots.
+function respreadSurfaces(routeById, relationshipById, input) {
+  for (const endpoints of surfaceEndpointGroups(routeById, relationshipById, input).values()) {
+    if (endpoints.length < 2) continue;
+    endpoints.sort((a, b) => a.oppCentre - b.oppCentre || a.displayIndex - b.displayIndex || a.id.localeCompare(b.id));
+    endpoints.forEach((ep, index) => {
+      const route = routeById.get(ep.id);
+      const offset = endpointSpreadOffset(index, endpoints.length, ep.rect, ep.side);
+      routeById.set(ep.id, offsetEndpointRoute(route, ep.endpointIndex, ep.rect, ep.side, offset));
+    });
+  }
+}
+
+// Item 2: try moving each endpoint to a different surface side, keeping a change
+// only if it strictly lowers the global cost and does not collide. Re-spreads
+// after each trial so the cost reflects the post-spread geometry.
+function trySideMoves(routeById, relationshipById, input, buildRouteForSides) {
+  if (!buildRouteForSides) return;
+  const ids = [...routeById.keys()].sort();
+  for (const id of ids) {
+    const rel = relationshipById.get(id);
+    const route = routeById.get(id);
+    if (!rel || !route?.points?.length) continue;
+    const fromRect = input.nodeRects.get(rel.from);
+    const toRect = input.nodeRects.get(rel.to);
+    if (!fromRect || !toRect) continue;
+    const startSide = endpointSide(fromRect, route.points[0]);
+    const endSide = endpointSide(toRect, route.points.at(-1));
+    for (const candidateStart of SIDES) {
+      for (const candidateEnd of SIDES) {
+        if (candidateStart === startSide && candidateEnd === endSide) continue;
+        const before = mountAssignmentCost(routeById, relationshipById, input);
+        const saved = snapshotRoutes(routeById);
+        const rebuilt = buildRouteForSides(rel, candidateStart, candidateEnd);
+        if (!rebuilt || routeCollidesWithNonEndpoints(rebuilt, rel, input)) continue;
+        routeById.set(id, rebuilt);
+        respreadSurfaces(routeById, relationshipById, input);
+        if (mountAssignmentCost(routeById, relationshipById, input) >= before) {
+          for (const [savedId, savedRoute] of saved) routeById.set(savedId, savedRoute);
+        }
+      }
+    }
+  }
+}
+
+// Staged local search: per-surface respread + scored side moves, accepted only
+// when the whole-diagram cost drops. The snapshot/accept guard makes the result
+// a deterministic fixed point (idempotent on replan) regardless of cache state.
+export function optimizeMountAssignments(routeById, relationshipById, input, options = {}) {
+  const buildRouteForSides = options.buildRouteForSides ?? null;
+  for (let iter = 0; iter < MOUNT_MAX_ITERS; iter += 1) {
+    const before = mountAssignmentCost(routeById, relationshipById, input);
+    const saved = snapshotRoutes(routeById);
+    respreadSurfaces(routeById, relationshipById, input);
+    trySideMoves(routeById, relationshipById, input, buildRouteForSides);
+    if (mountAssignmentCost(routeById, relationshipById, input) >= before) {
+      for (const [id, r] of saved) routeById.set(id, r);
+      break;
+    }
+  }
 }
