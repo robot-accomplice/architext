@@ -1,4 +1,4 @@
-import { MOUNT_COST, MIN_LEGIBLE_GAP, MOUNT_MAX_ITERS } from "./routeConstants.js";
+import { MOUNT_COST, MIN_LEGIBLE_GAP, MOUNT_MAX_ITERS, rectCenter } from "./routeConstants.js";
 import { surfaceCapacity } from "./routePorts.js";
 import {
   endpointSide,
@@ -51,6 +51,46 @@ function routeLength(route) {
 }
 
 const pointKey = (p) => `${p.x},${p.y}`;
+const SIDE_NORMAL = { top: { x: 0, y: -1 }, bottom: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
+
+// Count segments that travel AGAINST the overall from->to direction — a route that
+// doubles back (a dogleg). Mirrors the existing monotonicBacktrack notion but counts
+// reversing segments as discrete events for the tiered objective.
+export function doglegCount(route, fromRect, toRect) {
+  if (!fromRect || !toRect || !route?.points?.length) return 0;
+  const from = rectCenter(fromRect);
+  const to = rectCenter(toRect);
+  const xDir = Math.sign(to.x - from.x);
+  const yDir = Math.sign(to.y - from.y);
+  let count = 0;
+  for (let i = 0; i < route.points.length - 1; i += 1) {
+    const dx = route.points[i + 1].x - route.points[i].x;
+    const dy = route.points[i + 1].y - route.points[i].y;
+    if (xDir !== 0 && Math.sign(dx) === -xDir) count += 1;
+    if (yDir !== 0 && Math.sign(dy) === -yDir) count += 1;
+  }
+  return count;
+}
+
+// Count endpoints that mount on a node side facing AWAY from the opposite node (the
+// outward side normal points opposite the direction to the partner). Such mounts make
+// an edge leave the wrong way and read as less intentional.
+export function intentMismatchCount(route, relationship, input) {
+  if (!route?.points?.length) return 0;
+  let count = 0;
+  for (const [nodeId, endpointIndex, oppositeId] of [[relationship.from, 0, relationship.to], [relationship.to, route.points.length - 1, relationship.from]]) {
+    const rect = input.nodeRects.get(nodeId);
+    const opp = input.nodeRects.get(oppositeId);
+    if (!rect || !opp) continue;
+    const point = endpointIndex === 0 ? route.points[0] : route.points.at(-1);
+    const normal = SIDE_NORMAL[endpointSide(rect, point)];
+    if (!normal) continue;
+    const c = rectCenter(rect);
+    const o = rectCenter(opp);
+    if (normal.x * (o.x - c.x) + normal.y * (o.y - c.y) < 0) count += 1;
+  }
+  return count;
+}
 
 // Count every visual intersection between two routes — X crossings AND T-junctions /
 // touches (one route's corner or stub landing on the other's edge), which a strict
@@ -89,6 +129,10 @@ export function mountAssignmentCost(routeById, relationshipById, input) {
     cost += (route.repeatedCrossings ?? 0) * MOUNT_COST.repeatedCrossing;
     cost += (route.selfOverlappingSegments ?? 0) * MOUNT_COST.selfOverlap;
     cost += routeLength(route) * MOUNT_COST.length;            // tier 5 — prefer shorter wire
+    if (rel) {
+      cost += doglegCount(route, input.nodeRects.get(rel.from), input.nodeRects.get(rel.to)) * MOUNT_COST.dogleg;        // tier 4
+      cost += intentMismatchCount(route, rel, input) * MOUNT_COST.intentMismatch;                                        // tier 5
+    }
   }
   // tiers 2/3: pairwise crossings + shared segments
   for (let i = 0; i < routes.length; i += 1) {

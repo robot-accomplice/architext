@@ -88,7 +88,7 @@ export const MOUNT_COST = {
   sharedSegmentLength: 1_500,      // tier 2 (per unit length)
   crossing: 3_000,                 // tier 3 (matches existing crossingCost)
   bend: 420,                       // tier 4 (matches ROUTE_COST_WEIGHTS.bend)
-  dogleg: 14_000,                  // tier 4 (matches ROUTE_COST_WEIGHTS.dogleg)
+  dogleg: 1_500,                   // tier 4 (per reversing segment; below crossing, above a bend)
   cramped: 1_200,                  // tier 5 (per unit a gap is below MIN_LEGIBLE_GAP)
   intentMismatch: 900,             // tier 5 (per endpoint leaving the non-facing side)
   length: 3                        // tier 5 (per unit of wire length — prefers shorter routes; tunable)

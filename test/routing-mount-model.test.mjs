@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch, optimizeMountAssignments, routeIntersections } from "../viewer/src/routing/routeMountModel.js";
+import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch, optimizeMountAssignments, routeIntersections, doglegCount, intentMismatchCount } from "../viewer/src/routing/routeMountModel.js";
 import { MIN_LEGIBLE_GAP, MOUNT_COST } from "../viewer/src/routing/routeConstants.js";
 
 // A left/right surface of length 54 with 3 mounts: ideal slots at 54*[1,2,3]/4.
@@ -125,4 +125,27 @@ test("routeIntersections counts T-junctions but not shared mounts", () => {
   const D = { points: [{ x: 0, y: 0 }, { x: 60, y: 0 }] };
   const E = { points: [{ x: 0, y: 0 }, { x: 0, y: 60 }] };
   assert.equal(routeIntersections(D, E), 0, "a shared mount is not an intersection");
+});
+
+test("doglegCount counts segments that backtrack against the overall direction", () => {
+  const fromRect = { x: 0, y: 0, width: 40, height: 40 };    // center (20,20)
+  const toRect = { x: 200, y: 0, width: 40, height: 40 };    // center (220,20) -> overall +x
+  const monotonic = { points: [{ x: 40, y: 20 }, { x: 200, y: 20 }] };
+  assert.equal(doglegCount(monotonic, fromRect, toRect), 0, "a monotonic route has no doglegs");
+  // Jogs right, then LEFT (backtrack vs +x), then right again -> one dogleg segment.
+  const backtrack = { points: [{ x: 40, y: 20 }, { x: 120, y: 20 }, { x: 120, y: 60 }, { x: 80, y: 60 }, { x: 80, y: 100 }, { x: 200, y: 100 }] };
+  assert.equal(doglegCount(backtrack, fromRect, toRect), 1, "the reversing segment is a dogleg");
+});
+
+test("intentMismatchCount penalizes mounting on the side facing away from the target", () => {
+  const nodeRects = new Map([
+    ["a", { x: 0, y: 0, width: 40, height: 40 }],
+    ["b", { x: 200, y: 0, width: 40, height: 40 }]
+  ]);
+  const input = { nodeRects };
+  const rel = { id: "e", from: "a", to: "b" };
+  const facing = { points: [{ x: 40, y: 20 }, { x: 200, y: 20 }] };   // a.right -> b.left, both facing
+  assert.equal(intentMismatchCount(facing, rel, input), 0, "facing mounts are not a mismatch");
+  const away = { points: [{ x: 0, y: 20 }, { x: 200, y: 20 }] };       // a.LEFT faces away from b (to the right)
+  assert.equal(intentMismatchCount(away, rel, input), 1, "mounting away from the target is a mismatch");
 });
