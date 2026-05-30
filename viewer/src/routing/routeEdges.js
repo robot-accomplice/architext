@@ -1096,6 +1096,11 @@ function centerSoloReciprocalPairSurfaces(routeById, relationshipById, input) {
 function crossingsBetween(routeA, routeB) {
   const segmentsA = axisAlignedSegments(routeA);
   const segmentsB = axisAlignedSegments(routeB);
+  // Inclusive bounds so T-junctions / touches (a corner landing on another edge) count
+  // as intersections, not just strict "X" straddles. Shared mounts (both routes
+  // terminating at the same point — a legitimate convergence) are excluded.
+  const terminalA = new Set([`${routeA.points[0].x},${routeA.points[0].y}`, `${routeA.points.at(-1).x},${routeA.points.at(-1).y}`]);
+  const terminalB = new Set([`${routeB.points[0].x},${routeB.points[0].y}`, `${routeB.points.at(-1).x},${routeB.points.at(-1).y}`]);
   const points = new Set();
   for (const left of segmentsA) {
     for (const right of segmentsB) {
@@ -1103,10 +1108,12 @@ function crossingsBetween(routeA, routeB) {
       const horizontal = left.orientation === "horizontal" ? left : right;
       const vertical = left.orientation === "horizontal" ? right : left;
       if (
-        vertical.x > horizontal.min && vertical.x < horizontal.max &&
-        horizontal.y > vertical.min && horizontal.y < vertical.max
+        vertical.x >= horizontal.min && vertical.x <= horizontal.max &&
+        horizontal.y >= vertical.min && horizontal.y <= vertical.max
       ) {
-        points.add(`${vertical.x},${horizontal.y}`);
+        const key = `${vertical.x},${horizontal.y}`;
+        if (terminalA.has(key) && terminalB.has(key)) continue; // shared mount
+        points.add(key);
       }
     }
   }
