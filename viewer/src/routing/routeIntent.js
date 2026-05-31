@@ -64,7 +64,7 @@ export function semanticSurfaceOptions({ expectedSides, relationship, fromRect, 
   // blocker. A sideways gutter escape (vertical intent) is a full detour, only worth
   // it when staying facing would dogleg around two or more intermediaries.
   const verticalGutterEscape = verticalIntent &&
-    corridorBlockerCount(fromRect, toRect, blockerRects) >= 2;
+    corridorBlockerCount(fromRect, toRect, blockerRects) >= 1;
   if ((horizontalIntent || verticalGutterEscape) && semanticPrimaryCorridorBlocked({ relationship, fromRect, toRect, blockerRects }, expectedSides)) {
     const sourceEscape = escapeSideFor(fromRect, expectedSides.source, canvasWidth, canvasHeight);
     const targetEscape = escapeSideFor(toRect, expectedSides.target, canvasWidth, canvasHeight);

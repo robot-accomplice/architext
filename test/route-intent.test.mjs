@@ -73,7 +73,7 @@ test("vertical corridor blocked by two intermediaries escapes to the near outer 
   assert.equal(options.source.size > 1, true, "source keeps its facing surface plus the gutter escape");
 });
 
-test("vertical corridor blocked by a SINGLE intermediary keeps facing surfaces (no gutter detour)", () => {
+test("vertical corridor blocked by a SINGLE intermediary offers a gutter escape", () => {
   const fromRect = { x: 200, y: 0, width: 100, height: 50 };
   const toRect = { x: 200, y: 400, width: 100, height: 50 };
   const blocker = { x: 200, y: 180, width: 100, height: 50 };
@@ -88,7 +88,11 @@ test("vertical corridor blocked by a SINGLE intermediary keeps facing surfaces (
     canvasHeight: 500
   });
 
-  assert.equal(options.source.size, 1, "a single intermediary is cheaper to jog around than to detour to the gutter");
+  // A single intermediary is NOT cheaper to jog around than a clean gutter detour, so
+  // even one blocker offers a perpendicular escape. It stays an *option* alongside the
+  // facing surface — the cleaner routed result wins on the unified score.
+  assert.ok(options.source.has("bottom"), "keeps the facing surface as an option");
+  assert.equal(options.source.size > 1, true, "a single intermediary now offers a gutter escape");
 });
 
 // When the facing corridor is clear, no escape surfaces are added: the edge

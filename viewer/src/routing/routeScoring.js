@@ -244,6 +244,10 @@ export function compareByRoutePriority(a, b) {
     // that crosses a couple of lines over a long swing around the diagram edge.
     hasQualityCost(a, "perimeterFallbackCost") - hasQualityCost(b, "perimeterFallbackCost") ||
     routeMetric(a, "crossings") - routeMetric(b, "crossings") ||
+    // An offered gutter escape is a soft option, not a mandate: only prefer leaving a
+    // blocked facing surface as a tiebreak AFTER honest crossings are compared, so the
+    // escape must earn its place by producing a genuinely cleaner route.
+    routeMetric(a, "blockedPrimarySurfaceUseCount") - routeMetric(b, "blockedPrimarySurfaceUseCount") ||
     hasQualityCost(a, "monotonicBacktrackCost") - hasQualityCost(b, "monotonicBacktrackCost") ||
     hasQualityCost(a, "endpointStackCost") - hasQualityCost(b, "endpointStackCost") ||
     routeMetric(a, "bends") - routeMetric(b, "bends") ||

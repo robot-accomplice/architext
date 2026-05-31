@@ -308,7 +308,7 @@ test("entry return gutters choose open channels instead of close parallel lanes"
   );
 });
 
-test("same-lane blocked routes preserve facing surfaces without traversing blockers", () => {
+test("same-lane blocked routes escape to the gutter instead of jogging the blocker", () => {
   const view = {
     id: "same-lane-blocked",
     name: "Same Lane Blocked",
@@ -340,8 +340,65 @@ test("same-lane blocked routes preserve facing surfaces without traversing block
   const route = plan.diagnostics.routes.find((diagnostic) => diagnostic.relationshipId === "top-bottom");
   const plannedRoute = plan.routes.get("top-bottom");
 
+  // A single intermediary is NOT cheaper to jog around than a clean gutter detour:
+  // the edge escapes to the side gutter (both ends on the same side, so the run is
+  // straight) and still never traverses the blocker.
   assert.equal(route.findings.some((finding) => finding.code.startsWith("non-facing")), false);
-  assert.equal(route.sourceSide, "bottom");
-  assert.equal(route.targetSide, "top");
+  assert.equal(route.sourceSide, "left");
+  assert.equal(route.targetSide, "left");
   assert.equal(routeIntersectsRect(plannedRoute, plan.nodeRects.get("middle"), 0), false);
+});
+
+// Acceptance test for the dense-hub fix (roboticus `model-inference` in miniature):
+// a hub at the top of a column with reciprocal pairs to the target DIRECTLY below it
+// (t1) and to the target one PAST the blocker (t2). The adjacent pair stays on the
+// facing surfaces; the pair that would otherwise pile onto the hub's bottom and dogleg
+// around t1 escapes to a side gutter instead. Before the fix both pairs crammed onto
+// the hub's bottom surface and crossed; this keeps the dense hub legible.
+test("a hub reciprocal pair past an intermediary escapes to a side gutter, not the blocked facing surface", () => {
+  const view = {
+    id: "dense-hub",
+    name: "Dense Hub",
+    type: "flow-explorer",
+    lanes: [
+      { id: "lane", name: "Lane", nodeIds: ["hub", "t1", "t2"] }
+    ]
+  };
+  const relationships = [
+    { id: "e1", from: "hub", to: "t1", relationshipType: "flow", kind: "request", returnOf: undefined, displayIndex: 1, flowId: "f", stepId: "e1" },
+    { id: "e2", from: "t1", to: "hub", relationshipType: "flow", kind: "return", returnOf: "e1", displayIndex: 2, flowId: "f", stepId: "e2" },
+    { id: "e3", from: "hub", to: "t2", relationshipType: "flow", kind: "request", returnOf: undefined, displayIndex: 3, flowId: "f", stepId: "e3" },
+    { id: "e4", from: "t2", to: "hub", relationshipType: "flow", kind: "return", returnOf: "e3", displayIndex: 4, flowId: "f", stepId: "e4" }
+  ];
+  const plan = planDiagram({
+    view,
+    relationships,
+    visibleNodeIds: new Set(view.lanes.flatMap((lane) => lane.nodeIds)),
+    nodeWidth: 136,
+    nodeHeight: 54,
+    laneWidth: 210,
+    rowGap: 120,
+    marginX: 180,
+    marginY: 76,
+    minCanvasWidth: 480,
+    minCanvasHeight: 560,
+    canvasExtraWidth: 80,
+    canvasExtraHeight: 96,
+    style: "orthogonal",
+    diagnostics: true
+  });
+  const adjacent = plan.diagnostics.routes.find((diagnostic) => diagnostic.relationshipId === "e1");
+  const pastBlocker = plan.diagnostics.routes.find((diagnostic) => diagnostic.relationshipId === "e3");
+
+  // The adjacent reciprocal pair has a clear facing corridor, so it stays facing.
+  assert.equal(adjacent.sourceSide, "bottom");
+  assert.equal(adjacent.targetSide, "top");
+  // The pair past the blocker takes a clean side gutter instead of doglegging.
+  assert.ok(
+    pastBlocker.sourceSide === "left" || pastBlocker.sourceSide === "right",
+    "hub edge past the intermediary should mount a side gutter, not the blocked bottom surface"
+  );
+  assert.notEqual(pastBlocker.sourceSide, "bottom");
+  // The escaping route still never traverses the intermediary it routes around.
+  assert.equal(routeIntersectsRect(plan.routes.get("e3"), plan.nodeRects.get("t1"), 0), false);
 });
