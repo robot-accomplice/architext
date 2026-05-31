@@ -27,7 +27,7 @@ import { estimatedLabelBox, withReadableLabel } from "./routeLabels.js";
 import { edgeCorridors, freeSpaceCorridors } from "./routeCorridors.js";
 import { createRouteCandidateFactory } from "./routeCandidateBuilders.js";
 import { selectRouteCandidate } from "./routeStrategies.js";
-import { relieveCrowdedSurfaces } from "./routeMountModel.js";
+import { relieveCrowdedSurfaces, optimizeMountAssignments } from "./routeMountModel.js";
 import { CANVAS_INSET, ROUTE_COST_WEIGHTS, rectCenter } from "./routeConstants.js";
 
 export { pathToSvgWithHops } from "./routeRendering.js";
@@ -1645,6 +1645,23 @@ export function routeEdges(input) {
       routeReciprocalPairsParallel(relievedById, relationshipById, input, new Set(relief.pairs.flat()));
     }
     reduceCrossingsBySurfaceSwaps(relievedById, relationshipById, input);
+  }
+  // Final mount-assignment authority: a cost-guarded refinement that re-homes endpoints to
+  // the surfaces the lexicographic objective prefers (e.g. a reciprocal return mirroring its
+  // request onto a like surface instead of hooking onto the facing side). Each move must
+  // strictly improve a STRUCTURAL tier, so it can only refine the tuned-pass output.
+  if (style === "orthogonal") {
+    const preOptimizeRoutes = new Map(relievedById);
+    optimizeMountAssignments(relievedById, relationshipById, input, { buildRouteForSides });
+    // A re-homed route must keep perpendicular endpoint contact. If a move left an edge
+    // leaving its surface at an angle, restore that edge's tuned-pass route (which is
+    // perpendicular by construction) — the refinement only keeps clean results.
+    for (const [relationshipId, route] of relievedById) {
+      const relationship = relationshipById.get(relationshipId);
+      if (relationship && !routeEndpointsArePerpendicular(route, relationship, input)) {
+        relievedById.set(relationshipId, preOptimizeRoutes.get(relationshipId));
+      }
+    }
   }
   const displayRawRoutes = separatedRoutes.map(([relationshipId]) => [relationshipId, relievedById.get(relationshipId)]);
   const routes = new Map();

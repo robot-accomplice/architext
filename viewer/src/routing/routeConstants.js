@@ -86,7 +86,9 @@ export const MOUNT_COST = {
   selfOverlap: 5_000_000,          // tier 1
   sharedSegment: 200_000,          // tier 2 (per overlapping pair)
   sharedSegmentLength: 1_500,      // tier 2 (per unit length)
+  perimeterFallback: 7_000,        // tier 2.5 — a perimeter detour is worse than an honest crossing
   crossing: 3_000,                 // tier 3 (matches existing crossingCost)
+  monotonicBacktrack: 5_000,       // tier 3.5 — a route doubling back reads worse than a bend
   bend: 420,                       // tier 4 (matches ROUTE_COST_WEIGHTS.bend)
   dogleg: 1_500,                   // tier 4 (per reversing segment; below crossing, above a bend)
   cramped: 1_200,                  // tier 5 (per unit a gap is below MIN_LEGIBLE_GAP)

@@ -147,14 +147,57 @@ export function mountAssignmentCost(routeById, relationshipById, input) {
   return cost;
 }
 
+// The objective is LEXICOGRAPHIC, not a weighted sum: a worse outcome in a higher tier is
+// never redeemable by any volume of improvement in a lower one. (A weighted sum lets ~30
+// accumulated cramped units at w1200 outweigh a crossing at w3000, so the optimizer trades
+// crossings for spacing — exactly the regression this prevents.) Tiers run worst→least:
+// hard violations, repeated/self overlap, shared segments, crossings, bends/doglegs, then
+// the aesthetic terms (spacing/intent/length/soft-capacity). Weights act only WITHIN a tier.
+const MOUNT_COST_TIERS = [
+  ["collision", "endpointTraversal"],
+  ["repeatedCrossing", "selfOverlap"],
+  ["sharedSegment", "sharedSegmentLength"],
+  ["perimeterFallback"],
+  ["crossing"],
+  ["monotonicBacktrack"],
+  ["bend", "dogleg"],
+  ["overCapacity", "cramped", "intentMismatch", "length"]
+];
+
+export function mountCostVector(routeById, relationshipById, input) {
+  const factors = mountCostFactors(routeById, relationshipById, input);
+  return MOUNT_COST_TIERS.map((tier) => tier.reduce((sum, factor) => sum + (MOUNT_COST[factor] ?? 0) * factors[factor], 0));
+}
+
+// Lexicographic compare: negative when a is strictly better (lower) than b.
+export function compareMountCost(a, b) {
+  for (let i = 0; i < a.length; i += 1) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return 0;
+}
+
+// Compare only the STRUCTURAL tiers (down to and including crossings, index 3): collisions,
+// overlaps, shared segments, crossings. The four tuned passes already minimize bends/spacing,
+// so a single-endpoint re-home is only worth making for a structural gain; a move that merely
+// shaves bends or wire length (and would decenter a lone endpoint or crowd a fan) is left to
+// the tuned layout. This is what keeps the optimizer a strict structural refinement.
+const STRUCTURAL_TIER_COUNT = 5;
+export function compareStructuralMountCost(a, b) {
+  for (let i = 0; i < STRUCTURAL_TIER_COUNT; i += 1) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return 0;
+}
+
 // Raw magnitude of each cost factor across the diagram, before weighting. Keeping the
 // measurement (here) separate from the weighting (in mountAssignmentCost) is what lets any
 // factor be re-weighted in one place, and makes the per-factor breakdown inspectable.
 export function mountCostFactors(routeById, relationshipById, input) {
   const factors = {
     collision: 0, endpointTraversal: 0, repeatedCrossing: 0, selfOverlap: 0,
-    sharedSegment: 0, sharedSegmentLength: 0, crossing: 0, bend: 0, dogleg: 0,
-    cramped: 0, intentMismatch: 0, length: 0, overCapacity: 0
+    sharedSegment: 0, sharedSegmentLength: 0, perimeterFallback: 0, crossing: 0, monotonicBacktrack: 0,
+    bend: 0, dogleg: 0, cramped: 0, intentMismatch: 0, length: 0, overCapacity: 0
   };
   const routes = [...routeById.entries()];
   for (const [id, route] of routes) {
@@ -164,6 +207,8 @@ export function mountCostFactors(routeById, relationshipById, input) {
     factors.bend += route.bends ?? 0;
     factors.repeatedCrossing += route.repeatedCrossings ?? 0;
     factors.selfOverlap += route.selfOverlappingSegments ?? 0;
+    if ((route.qualityCosts?.perimeterFallbackCost ?? 0) > 0) factors.perimeterFallback += 1;
+    if ((route.qualityCosts?.monotonicBacktrackCost ?? 0) > 0) factors.monotonicBacktrack += 1;
     if (rel) {
       const fromRect = input.nodeRects.get(rel.from);
       const toRect = input.nodeRects.get(rel.to);
@@ -297,21 +342,30 @@ function trySideMoves(routeById, relationshipById, input, buildRouteForSides) {
     const rel = relationshipById.get(id);
     const route = routeById.get(id);
     if (!rel || !route?.points?.length) continue;
+    // Only flow edges carry the directional/semantic intent the mount cost model reasons
+    // about; structural (dependency) relationships are laid out by their own four-pass path
+    // and re-homing them by this objective mis-optimizes them. Leave them as routed.
+    if (rel.relationshipType !== "flow") continue;
+    // Respect the same pins the four-pass cascade honors: an endpoint fixed to a port or
+    // steered to a preferred side (decision branches, explicit entry/exit sides) must not
+    // be re-homed by the optimizer.
+    if (rel.preferredStartSide || rel.preferredEndSide) continue;
     const fromRect = input.nodeRects.get(rel.from);
     const toRect = input.nodeRects.get(rel.to);
     if (!fromRect || !toRect) continue;
+    if (fromRect.fixedPorts || toRect.fixedPorts) continue;
     const startSide = endpointSide(fromRect, route.points[0]);
     const endSide = endpointSide(toRect, route.points.at(-1));
     for (const candidateStart of SIDES) {
       for (const candidateEnd of SIDES) {
         if (candidateStart === startSide && candidateEnd === endSide) continue;
-        const before = mountAssignmentCost(routeById, relationshipById, input);
+        const before = mountCostVector(routeById, relationshipById, input);
         const saved = snapshotRoutes(routeById);
         const rebuilt = buildRouteForSides(rel, candidateStart, candidateEnd);
         if (!rebuilt || routeCollidesWithNonEndpoints(rebuilt, rel, input)) continue;
         routeById.set(id, rebuilt);
         respreadSurfaces(routeById, relationshipById, input);
-        if (mountAssignmentCost(routeById, relationshipById, input) >= before) {
+        if (compareStructuralMountCost(mountCostVector(routeById, relationshipById, input), before) >= 0) {
           for (const [savedId, savedRoute] of saved) routeById.set(savedId, savedRoute);
         }
       }
@@ -531,14 +585,24 @@ export function relieveCrowdedSurfaces(routeById, relationshipById, input, build
 // a deterministic fixed point (idempotent on replan) regardless of cache state.
 export function optimizeMountAssignments(routeById, relationshipById, input, options = {}) {
   const buildRouteForSides = options.buildRouteForSides ?? null;
+  const debug = typeof process !== "undefined" && process.env.MOUNT_DEBUG === "cost";
+  const entryFactors = debug ? mountCostFactors(routeById, relationshipById, input) : null;
   for (let iter = 0; iter < MOUNT_MAX_ITERS; iter += 1) {
-    const before = mountAssignmentCost(routeById, relationshipById, input);
+    const before = mountCostVector(routeById, relationshipById, input);
     const saved = snapshotRoutes(routeById);
     respreadSurfaces(routeById, relationshipById, input);
     trySideMoves(routeById, relationshipById, input, buildRouteForSides);
-    if (mountAssignmentCost(routeById, relationshipById, input) >= before) {
+    if (compareMountCost(mountCostVector(routeById, relationshipById, input), before) >= 0) {
       for (const [id, r] of saved) routeById.set(id, r);
       break;
     }
+  }
+  if (debug && entryFactors) {
+    const exitFactors = mountCostFactors(routeById, relationshipById, input);
+    const diff = {};
+    for (const k of Object.keys(entryFactors)) {
+      if (entryFactors[k] !== exitFactors[k]) diff[k] = `${entryFactors[k]}->${exitFactors[k]} (w${MOUNT_COST[k] ?? 0})`;
+    }
+    if (Object.keys(diff).length) console.error(`[mount-cost ${input.relationships?.[0]?.flowId ?? "?"}] ${JSON.stringify(diff)}`);
   }
 }
