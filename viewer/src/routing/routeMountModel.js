@@ -40,14 +40,33 @@ export function surfacesOf(routeById, relationshipById, input) {
 }
 
 // Total wire length of a route (Euclidean over consecutive points; for orthogonal
-// routes this is the Manhattan path length). Only backtracking doglegs add length —
-// a monotonic orthogonal path between two points has fixed length.
+// routes this is the Manhattan path length).
 function routeLength(route) {
   let total = 0;
   for (let i = 0; i < route.points.length - 1; i += 1) {
     total += Math.hypot(route.points[i + 1].x - route.points[i].x, route.points[i + 1].y - route.points[i].y);
   }
   return total;
+}
+
+// The shortest possible wire between two nodes: the Manhattan gap between their bounding
+// boxes (0 on an axis where they overlap). This is the irreducible distance the layout
+// imposes — no routing choice can beat it.
+function nodeGapLength(fromRect, toRect) {
+  if (!fromRect || !toRect) return 0;
+  const gapX = Math.max(0, fromRect.x - (toRect.x + toRect.width), toRect.x - (fromRect.x + fromRect.width));
+  const gapY = Math.max(0, fromRect.y - (toRect.y + toRect.height), toRect.y - (fromRect.y + fromRect.height));
+  return gapX + gapY;
+}
+
+// The AVOIDABLE length of a route: how far it overshoots the shortest possible wire between
+// its two nodes. A direct/monotonic route is 0; a detour or wrap-around mount is charged its
+// overshoot. Base distance (fixed by the layout) is never charged — a necessary long edge is
+// not a defect. This replaces raw wire length so the objective does not assume every pixel of
+// length is an equal unit of cost.
+export function excessLength(route, fromRect, toRect) {
+  if (!route?.points?.length) return 0;
+  return Math.max(0, routeLength(route) - nodeGapLength(fromRect, toRect));
 }
 
 const pointKey = (p) => `${p.x},${p.y}`;
@@ -117,59 +136,80 @@ export function routeIntersections(routeA, routeB) {
   return points.size;
 }
 
+// The whole-diagram objective. Every contributing factor is reduced to a raw, unweighted
+// magnitude in mountCostFactors, then weighted UNIFORMLY here — one tunable weight per factor
+// in MOUNT_COST, no factor special-cased. Costs are NOT assumed equal: each factor carries its
+// own weight, and none is a raw wire-length (the `length` factor is avoidable detour only).
 export function mountAssignmentCost(routeById, relationshipById, input) {
+  const factors = mountCostFactors(routeById, relationshipById, input);
   let cost = 0;
+  for (const factor of Object.keys(factors)) cost += (MOUNT_COST[factor] ?? 0) * factors[factor];
+  return cost;
+}
+
+// Raw magnitude of each cost factor across the diagram, before weighting. Keeping the
+// measurement (here) separate from the weighting (in mountAssignmentCost) is what lets any
+// factor be re-weighted in one place, and makes the per-factor breakdown inspectable.
+export function mountCostFactors(routeById, relationshipById, input) {
+  const factors = {
+    collision: 0, endpointTraversal: 0, repeatedCrossing: 0, selfOverlap: 0,
+    sharedSegment: 0, sharedSegmentLength: 0, crossing: 0, bend: 0, dogleg: 0,
+    cramped: 0, intentMismatch: 0, length: 0, overCapacity: 0
+  };
   const routes = [...routeById.entries()];
-  // tier 0: collisions; tier 4: bends
   for (const [id, route] of routes) {
     const rel = relationshipById.get(id);
-    if (rel && routeCollidesWithNonEndpoints(route, rel, input)) cost += MOUNT_COST.collision;
-    if (rel && routeHasEndpointTraversal(route, rel, input)) cost += MOUNT_COST.endpointTraversal;
-    cost += (route.bends ?? 0) * MOUNT_COST.bend;
-    cost += (route.repeatedCrossings ?? 0) * MOUNT_COST.repeatedCrossing;
-    cost += (route.selfOverlappingSegments ?? 0) * MOUNT_COST.selfOverlap;
-    cost += routeLength(route) * MOUNT_COST.length;            // tier 5 — prefer shorter wire
+    if (rel && routeCollidesWithNonEndpoints(route, rel, input)) factors.collision += 1;
+    if (rel && routeHasEndpointTraversal(route, rel, input)) factors.endpointTraversal += 1;
+    factors.bend += route.bends ?? 0;
+    factors.repeatedCrossing += route.repeatedCrossings ?? 0;
+    factors.selfOverlap += route.selfOverlappingSegments ?? 0;
     if (rel) {
-      cost += doglegCount(route, input.nodeRects.get(rel.from), input.nodeRects.get(rel.to)) * MOUNT_COST.dogleg;        // tier 4
-      cost += intentMismatchCount(route, rel, input) * MOUNT_COST.intentMismatch;                                        // tier 5
+      const fromRect = input.nodeRects.get(rel.from);
+      const toRect = input.nodeRects.get(rel.to);
+      factors.length += excessLength(route, fromRect, toRect);                 // avoidable detour, not raw length
+      factors.dogleg += doglegCount(route, fromRect, toRect);
+      factors.intentMismatch += intentMismatchCount(route, rel, input);
     }
   }
-  // tiers 2/3: pairwise crossings + shared segments
   for (let i = 0; i < routes.length; i += 1) {
     for (let j = i + 1; j < routes.length; j += 1) {
-      cost += routeIntersections(routes[i][1], routes[j][1]) * MOUNT_COST.crossing;
+      factors.crossing += routeIntersections(routes[i][1], routes[j][1]);
       const segsA = axisAlignedSegments(routes[i][1]);
       const segsB = axisAlignedSegments(routes[j][1]);
       for (const l of segsA) for (const r of segsB) {
         const len = sharedSegmentLength(l, r);
-        if (len > 1) cost += MOUNT_COST.sharedSegment + len * MOUNT_COST.sharedSegmentLength;
+        if (len > 1) { factors.sharedSegment += 1; factors.sharedSegmentLength += len; }
       }
     }
   }
-  // tier 0 capacity + tier 5 spacing, per surface
   for (const surface of surfacesOf(routeById, relationshipById, input).values()) {
     const length = surface.side === "left" || surface.side === "right" ? surface.rect.height : surface.rect.width;
-    const count = surface.positions.length;
-    if (count > surfaceCapacity(surface.rect, surface.side)) cost += MOUNT_COST.overCapacity;
-    cost += surfaceSpacingCost(surface.positions, length);
+    factors.overCapacity += Math.max(0, surface.positions.length - surfaceCapacity(surface.rect, surface.side));
+    factors.cramped += surfaceCrampedUnits(surface.positions, length);
   }
-  return cost;
+  return factors;
 }
 
-// positions: mount coordinates along the surface axis, expressed as distance
-// from the surface start (0..length). Only legibility costs: a gap (between adjacent
-// mounts or from a mount to a surface corner) below MIN_LEGIBLE_GAP is crowding and is
-// penalized. Mounts that are unevenly placed but still legibly spaced are FREE — even
-// spread is an aesthetic, not a legibility requirement, so it is not charged here.
-export function surfaceSpacingCost(positions, length) {
+// Raw crowding magnitude of a surface, UNWEIGHTED: the total amount by which gaps fall
+// below MIN_LEGIBLE_GAP (between adjacent mounts, or from a mount to a surface corner).
+// positions are mount coordinates along the surface axis (0..length). Legibly-spaced but
+// uneven mounts are FREE — even spread is an aesthetic, not a legibility requirement.
+export function surfaceCrampedUnits(positions, length) {
   const sorted = [...positions].sort((a, b) => a - b);
-  let cost = 0;
+  let units = 0;
   const guards = [0, ...sorted, length];
   for (let i = 0; i < guards.length - 1; i += 1) {
     const gap = guards[i + 1] - guards[i];
-    if (gap < MIN_LEGIBLE_GAP) cost += (MIN_LEGIBLE_GAP - gap) * MOUNT_COST.cramped;
+    if (gap < MIN_LEGIBLE_GAP) units += MIN_LEGIBLE_GAP - gap;
   }
-  return cost;
+  return units;
+}
+
+// Weighted crowding cost of a surface (the cramped factor applied). Retained for callers
+// and tests that score a single surface in isolation.
+export function surfaceSpacingCost(positions, length) {
+  return surfaceCrampedUnits(positions, length) * MOUNT_COST.cramped;
 }
 
 function isStraightFacing(route) {
@@ -277,6 +317,213 @@ function trySideMoves(routeById, relationshipById, input, buildRouteForSides) {
       }
     }
   }
+}
+
+// Edges the four tuned passes left crowded enough to reconsider: an endpoint sits on
+// an over-capacity surface, OR the edge is one half of a reciprocal pair (A->B and
+// B->A) whose route crosses another edge. The crossing trigger is restricted to
+// reciprocal pairs on purpose — a single-direction edge that crosses a sibling fan or
+// escapes under a blocker is doing so intentionally (obstacle-aware), so it is left
+// alone; only a reciprocal pair forced through a crowded fan, which should run parallel
+// on an open gutter instead, is reconsidered. Returned in deterministic id order so the
+// tuned layout of every other edge is left untouched.
+function reliefCandidateIds(routeById, relationshipById, input) {
+  const overCapacitySurfaces = new Set();
+  for (const [key, surface] of surfacesOf(routeById, relationshipById, input)) {
+    if (surface.positions.length > surfaceCapacity(surface.rect, surface.side)) overCapacitySurfaces.add(key);
+  }
+  const directed = new Set();
+  for (const rel of relationshipById.values()) {
+    if (routeById.has(rel.id)) directed.add(`${rel.from} ${rel.to}`);
+  }
+  const routes = [...routeById.entries()];
+  const crossing = new Set();
+  for (let i = 0; i < routes.length; i += 1) {
+    for (let j = i + 1; j < routes.length; j += 1) {
+      if (routeIntersections(routes[i][1], routes[j][1]) > 0) {
+        crossing.add(routes[i][0]);
+        crossing.add(routes[j][0]);
+      }
+    }
+  }
+  const ids = [];
+  for (const [id, route] of routeById) {
+    const rel = relationshipById.get(id);
+    if (!rel || !route?.points?.length) continue;
+    const fromRect = input.nodeRects.get(rel.from);
+    const toRect = input.nodeRects.get(rel.to);
+    const startSide = fromRect ? endpointSide(fromRect, route.points[0]) : "";
+    const endSide = toRect ? endpointSide(toRect, route.points.at(-1)) : "";
+    const onOverCapacity = overCapacitySurfaces.has(`${rel.from} ${startSide}`) || overCapacitySurfaces.has(`${rel.to} ${endSide}`);
+    const reciprocalCrossing = crossing.has(id) && directed.has(`${rel.to} ${rel.from}`);
+    if (onOverCapacity || reciprocalCrossing) ids.push(id);
+  }
+  return ids.sort();
+}
+
+// Whether a side faces toward the partner node at all (its outward normal has a
+// positive component toward the partner) — as opposed to a perpendicular or away
+// escape. A facing mount on an uncrowded surface is intentional (e.g. a fan of edges
+// into one hub side) and must not be disturbed; a perpendicular escape (dot 0) is fair
+// game for re-homing onto a cleaner side.
+function sideFacesPartner(side, rect, partnerRect) {
+  const center = rectCenter(rect);
+  const partner = rectCenter(partnerRect);
+  const normal = SIDE_NORMAL[side];
+  return normal.x * (partner.x - center.x) + normal.y * (partner.y - center.y) > 0;
+}
+
+// The side whose outward normal points MOST directly at the partner — the side an edge
+// most naturally mounts on. Distinct from sideFacesPartner: a side can face the partner
+// (positive dot) without being the ideal one (e.g. a node's right side weakly faces a
+// partner that is mostly below it; its ideal side is bottom).
+function idealFacingSide(rect, partnerRect) {
+  const center = rectCenter(rect);
+  const partner = rectCenter(partnerRect);
+  const dx = partner.x - center.x;
+  const dy = partner.y - center.y;
+  let best = SIDES[0];
+  let bestDot = -Infinity;
+  for (const side of SIDES) {
+    const normal = SIDE_NORMAL[side];
+    const dot = normal.x * dx + normal.y * dy;
+    if (dot > bestDot) {
+      bestDot = dot;
+      best = side;
+    }
+  }
+  return best;
+}
+
+// Every reciprocal pair (A->B and B->A between the same two nodes) that has a route.
+// Returned as [idA, idB] with idA < idB, in deterministic order.
+function reciprocalPairs(routeById, relationshipById) {
+  const byPair = new Map();
+  for (const rel of relationshipById.values()) {
+    if (!routeById.has(rel.id)) continue;
+    const key = [rel.from, rel.to].sort().join(" ");
+    if (!byPair.has(key)) byPair.set(key, []);
+    byPair.get(key).push(rel.id);
+  }
+  const pairs = [];
+  for (const ids of byPair.values()) {
+    if (ids.length === 2) pairs.push([...ids].sort());
+  }
+  return pairs.sort((a, b) => a[0].localeCompare(b[0]));
+}
+
+// Reciprocal pairs where at least one half crosses another edge — the pair was forced
+// through a crowded fan and should instead run parallel on a clean gutter.
+function reciprocalCrossingPairs(routeById, relationshipById, input) {
+  const routes = [...routeById.entries()];
+  const crossing = new Set();
+  for (let i = 0; i < routes.length; i += 1) {
+    for (let j = i + 1; j < routes.length; j += 1) {
+      if (routeIntersections(routes[i][1], routes[j][1]) > 0) {
+        crossing.add(routes[i][0]);
+        crossing.add(routes[j][0]);
+      }
+    }
+  }
+  return reciprocalPairs(routeById, relationshipById).filter(([a, b]) => crossing.has(a) || crossing.has(b));
+}
+
+// Surgical relief, run AFTER the four tuned passes. They occasionally leave a node side
+// over capacity, or route a reciprocal pair through a crowded fan (crossings) because
+// its facing side was blocked, forcing a perpendicular escape. Two phases, both gated by
+// the whole-diagram cost guard so the pass can only improve or no-op (worst case it
+// validates the prior passes); the snapshot/accept guard keeps it a deterministic fixed
+// point. Phase 1 moves each crowded reciprocal pair JOINTLY onto a shared escape gutter
+// (both halves on one node side; the crossing-reduction swap that runs after this pass then
+// orders their mounts so they nest) — moving them one at a time would split the pair. Phase 2
+// spills the marginal endpoint of any surface
+// still over capacity onto a cleaner side. Neither phase moves an endpoint off a side that
+// faces its partner while that surface is within capacity, so a legible facing fan stays put.
+export function relieveCrowdedSurfaces(routeById, relationshipById, input, buildRouteForSides) {
+  if (!buildRouteForSides) return;
+  const cost = () => mountAssignmentCost(routeById, relationshipById, input);
+  const restore = (saved) => { for (const [id, route] of saved) routeById.set(id, route); };
+  const surfaceOverCapacity = (nodeId, side) => {
+    const rect = input.nodeRects.get(nodeId);
+    if (!rect) return false;
+    const surface = surfacesOf(routeById, relationshipById, input).get(`${nodeId} ${side}`);
+    return surface ? surface.positions.length > surfaceCapacity(rect, side) : false;
+  };
+  // Freeze an endpoint that is on its IDEAL facing side (always — even over capacity, so a
+  // facing pair like a hub and the service beside it is relieved by spilling escapes, not by
+  // doglegging the facing return), OR that merely faces its partner while its surface is within
+  // capacity (so a legible fan keeps its members on the shared facing side). A weakly-facing
+  // escape on an over-capacity surface stays movable so the surface can actually be relieved.
+  const frozenForEndpoint = (rect, partnerRect, side, nodeId) =>
+    side === idealFacingSide(rect, partnerRect) ||
+    (sideFacesPartner(side, rect, partnerRect) && !surfaceOverCapacity(nodeId, side));
+
+  const movedPairs = [];
+  // Phase 1: joint reciprocal-pair moves onto a shared escape gutter.
+  for (const [idA, idB] of reciprocalCrossingPairs(routeById, relationshipById, input)) {
+    const relA = relationshipById.get(idA);
+    const relB = relationshipById.get(idB);
+    const routeA = routeById.get(idA);
+    if (!relA || !relB || !routeA?.points?.length) continue;
+    const fromRect = input.nodeRects.get(relA.from);
+    const toRect = input.nodeRects.get(relA.to);
+    if (!fromRect || !toRect) continue;
+    const startSide = endpointSide(fromRect, routeA.points[0]);
+    const endSide = endpointSide(toRect, routeA.points.at(-1));
+    const startFrozen = frozenForEndpoint(fromRect, toRect, startSide, relA.from);
+    const endFrozen = frozenForEndpoint(toRect, fromRect, endSide, relA.to);
+    for (const side of SIDES) {
+      if (startFrozen && side !== startSide) continue;
+      if (endFrozen && side !== endSide) continue;
+      if (side === startSide && side === endSide) continue;
+      const before = cost();
+      const saved = snapshotRoutes(routeById);
+      const newA = buildRouteForSides(relA, side, side, routeById);
+      if (!newA || routeCollidesWithNonEndpoints(newA, relA, input)) { restore(saved); continue; }
+      routeById.set(idA, newA);
+      const newB = buildRouteForSides(relB, side, side, routeById);
+      if (!newB || routeCollidesWithNonEndpoints(newB, relB, input)) { restore(saved); continue; }
+      routeById.set(idB, newB);
+      if (cost() < before) { movedPairs.push([idA, idB]); break; }
+      restore(saved);
+    }
+  }
+
+  // Phase 2: spill the marginal endpoint of any surface still over capacity.
+  let spilled = false;
+  for (const id of reliefCandidateIds(routeById, relationshipById, input)) {
+    const rel = relationshipById.get(id);
+    const route = routeById.get(id);
+    if (!rel || !route?.points?.length) continue;
+    const fromRect = input.nodeRects.get(rel.from);
+    const toRect = input.nodeRects.get(rel.to);
+    if (!fromRect || !toRect) continue;
+    const startSide = endpointSide(fromRect, route.points[0]);
+    const endSide = endpointSide(toRect, route.points.at(-1));
+    if (!surfaceOverCapacity(rel.from, startSide) && !surfaceOverCapacity(rel.to, endSide)) continue;
+    const startFrozen = frozenForEndpoint(fromRect, toRect, startSide, rel.from);
+    const endFrozen = frozenForEndpoint(toRect, fromRect, endSide, rel.to);
+    for (const candidateStart of SIDES) {
+      if (startFrozen && candidateStart !== startSide) continue;
+      for (const candidateEnd of SIDES) {
+        if (endFrozen && candidateEnd !== endSide) continue;
+        if (candidateStart === startSide && candidateEnd === endSide) continue;
+        const before = cost();
+        const saved = snapshotRoutes(routeById);
+        const rebuilt = buildRouteForSides(rel, candidateStart, candidateEnd, routeById);
+        if (!rebuilt || routeCollidesWithNonEndpoints(rebuilt, rel, input)) continue;
+        routeById.set(id, rebuilt);
+        if (cost() < before) { spilled = true; break; }
+        restore(saved);
+      }
+    }
+  }
+  // pairs: the reciprocal pairs Phase 1 relocated onto a shared gutter — the caller
+  // re-parallels ONLY these so untouched pairs keep their existing lane separation.
+  // anyMoved: whether relief changed any route at all, so the caller knows to re-spread
+  // surfaces (a relief rebuild can land an endpoint beside its neighbours, not in the open
+  // slot) and re-run the crossing-reduction swap.
+  return { pairs: movedPairs, anyMoved: movedPairs.length > 0 || spilled };
 }
 
 // Staged local search: per-surface respread + scored side moves, accepted only

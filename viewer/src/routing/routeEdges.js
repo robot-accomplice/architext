@@ -27,6 +27,7 @@ import { estimatedLabelBox, withReadableLabel } from "./routeLabels.js";
 import { edgeCorridors, freeSpaceCorridors } from "./routeCorridors.js";
 import { createRouteCandidateFactory } from "./routeCandidateBuilders.js";
 import { selectRouteCandidate } from "./routeStrategies.js";
+import { relieveCrowdedSurfaces } from "./routeMountModel.js";
 import { CANVAS_INSET, ROUTE_COST_WEIGHTS, rectCenter } from "./routeConstants.js";
 
 export { pathToSvgWithHops } from "./routeRendering.js";
@@ -1229,7 +1230,7 @@ function offsetOrthogonalPolyline(points, delta) {
 // parallel to the request. Route the return as a constant perpendicular offset of
 // the request so the two never cross; keep the original return if the parallel
 // version collides with a node.
-function routeReciprocalPairsParallel(routeById, relationshipById, input) {
+function routeReciprocalPairsParallel(routeById, relationshipById, input, restrictIds = null) {
   const PARALLEL_OFFSET = 12;
   const byNodePair = new Map();
   for (const relationship of relationshipById.values()) {
@@ -1243,6 +1244,9 @@ function routeReciprocalPairsParallel(routeById, relationshipById, input) {
     if (group.length !== 2) continue;
     const [a, b] = group;
     if (a.from !== b.to || a.to !== b.from) continue;
+    // When restricted (the post-relief re-parallel), only re-separate pairs relief just
+    // relocated; pairs the main passes already laid out keep their existing separation.
+    if (restrictIds && !restrictIds.has(a.id) && !restrictIds.has(b.id)) continue;
     const request = (a.displayIndex ?? 0) <= (b.displayIndex ?? 0) ? a : b;
     const ret = request === a ? b : a;
     const requestRoute = routeById.get(request.id);
@@ -1583,11 +1587,66 @@ export function routeEdges(input) {
     setCachedRawRoutes(cacheKey, plannedRawRoutes);
   }
 
+  // Rebuild a single edge on forced mount sides for the relief pass. The route index is
+  // populated from the relief pass's own current routes (not the cache-skipped planning
+  // loop), so the rebuilt route is corridor-routed AROUND the other current routes while
+  // planning stays deterministic across cache state. The reciprocal pair lands on the
+  // shared gutter from this rebuild and is then nested by the crossing-reduction swap.
+  // A dedicated planner is built only on the cache-hit path (planner is null there); the
+  // common path reuses the planning-loop planner, so relief adds no extra precompute.
+  const reliefPlanner = planner ?? routePlannerContext(input);
+  const buildRouteForSides = (relationship, startSide, endSide, currentRoutes) => {
+    const sideRouteIndex = createRouteIndex();
+    if (currentRoutes) {
+      let position = 0;
+      for (const [otherId, otherRoute] of currentRoutes) {
+        if (otherId === relationship.id) continue;
+        sideRouteIndex.add(otherRoute, position);
+        position += 1;
+      }
+    }
+    const rebuilt = reliefPlanner.edgePath(
+      { ...relationship, preferredStartSide: startSide, preferredEndSide: endSide },
+      0,
+      0,
+      [],
+      [],
+      sideRouteIndex,
+      { from: 0, to: 0 },
+      createEndpointSideUsage(),
+      style
+    );
+    // Relief runs after the global stub-enforcement pass, so each rebuilt route must
+    // carry its own perpendicular endpoint stubs instead of grazing the node boundary.
+    return rebuilt ? routeWithEndpointStubs(rebuilt, relationship, input) : rebuilt;
+  };
   const endpointAdjustedRoutes = enforceEndpointStubs(
     spreadSharedSideEndpoints(recenterSingletonSideEndpoints(plannedRawRoutes, input), input),
     input
   );
-  const displayRawRoutes = separateCloseParallelRoutes(endpointAdjustedRoutes, input);
+  const separatedRoutes = separateCloseParallelRoutes(endpointAdjustedRoutes, input);
+  // Relief runs LAST, as the final mount-assignment authority: it deliberately routes a
+  // crowded reciprocal pair onto a parallel escape gutter, which the close-parallel
+  // separation pass would otherwise tear apart, and spills over-capacity surfaces onto
+  // empty perpendicular faces. Cost-guarded, so it can only improve or no-op.
+  const relievedById = new Map(separatedRoutes);
+  const relationshipById = new Map(input.relationships.map((relationship) => [relationship.id, relationship]));
+  const relief = relieveCrowdedSurfaces(relievedById, relationshipById, input, buildRouteForSides);
+  // After relief, replay the surface-cleanup passes in their original order so the relocated
+  // routes are laid out as cleanly as the main passes lay out everything else:
+  //   1. re-spread shared surfaces so a relief rebuild that landed an endpoint beside its
+  //      neighbours is redistributed into the open slot (fixes bunched mounts);
+  //   2. re-parallel — scoped to ONLY the pairs relief relocated onto a shared gutter — so
+  //      both halves separate onto their own lanes (untouched pairs keep their separation);
+  //   3. the crossing-reduction swap so the mounts order/nest without crossing.
+  if (relief.anyMoved) {
+    reorderSharedSurfaceMounts(relievedById, relationshipById, input);
+    if (relief.pairs.length) {
+      routeReciprocalPairsParallel(relievedById, relationshipById, input, new Set(relief.pairs.flat()));
+    }
+    reduceCrossingsBySurfaceSwaps(relievedById, relationshipById, input);
+  }
+  const displayRawRoutes = separatedRoutes.map(([relationshipId]) => [relationshipId, relievedById.get(relationshipId)]);
   const routes = new Map();
   const allRawRoutes = displayRawRoutes.map(([, rawRoute]) => rawRoute);
   for (const [relationshipId, rawRoute] of displayRawRoutes) {

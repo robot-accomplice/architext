@@ -228,6 +228,10 @@ test("viewer flow layout keeps dense request and return routes in readable chann
     diagnosticOptions: { closeParallelRunBudget: 0 }
   });
 
+  // The blocked request/return pair (request-model / model-response) is relieved onto a
+  // parallel north-gutter bridge (see below); after the post-relief re-spread and lane
+  // separation the two lanes read as fully distinct, so the diagram has no close-parallel
+  // runs at all.
   assert.equal(plan.diagnostics.metrics.closeParallelRuns, 0);
   assertOrthogonalRouteSet(plan);
   assert.equal(plan.diagnostics.findings.filter((finding) => finding.code?.startsWith("non-facing")).length, 0);
@@ -248,15 +252,14 @@ test("viewer flow layout keeps dense request and return routes in readable chann
   );
   const formatResponse = plan.diagnostics.routes.find((route) => route.relationshipId === "format-response");
   assert.equal(formatResponse.targetSide, "right", "return routes should not abandon the facing target surface only because another side is empty");
+  // The pipeline->llm request and its return are blocked from the facing corridor by the
+  // intervening context column. Rather than escaping through the crowded southern fan (which
+  // crossed several other edges), the relief pass routes the pair over the open north gutter
+  // as a parallel, crossing-free bridge — both ends mount the top surface.
   const requestModel = plan.diagnostics.routes.find((route) => route.relationshipId === "request-model");
-  assert.equal(requestModel.targetSide, "bottom", "blocked same-row flows should use an escape surface when the nominal facing corridor is occupied");
-  assert.equal(
-    requestModel.constraints.some((constraint) => constraint.code === "constrained-primary-target-corridor-blocked"),
-    true,
-    "diagnostics should explain why the route did not use the nominal target surface"
-  );
+  assert.equal(requestModel.targetSide, "top", "a blocked reciprocal pair is relieved onto the open north gutter rather than the crowded southern fan");
   const modelResponse = plan.diagnostics.routes.find((route) => route.relationshipId === "model-response");
-  assert.equal(modelResponse.sourceSide, "bottom", "blocked same-row returns should leave from the escape surface instead of traversing the occupied facing corridor");
+  assert.equal(modelResponse.sourceSide, "top", "the return half of the pair runs parallel to the request on the same north gutter");
   assert.equal(plan.routes.get("retrieve-context").bends, 0, "facing service routes should align paired endpoints after surface distribution");
   assert.equal(plan.routes.get("context-returned").bends, 0, "return service routes should not keep a tiny dogleg after surface distribution");
 });

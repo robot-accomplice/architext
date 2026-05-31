@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch, optimizeMountAssignments, routeIntersections, doglegCount, intentMismatchCount } from "../viewer/src/routing/routeMountModel.js";
+import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch, optimizeMountAssignments, routeIntersections, doglegCount, intentMismatchCount, excessLength } from "../viewer/src/routing/routeMountModel.js";
 import { MIN_LEGIBLE_GAP, MOUNT_COST } from "../viewer/src/routing/routeConstants.js";
 
 // A left/right surface of length 54 with 3 mounts: ideal slots at 54*[1,2,3]/4.
@@ -82,6 +82,23 @@ test("optimizeMountAssignments never increases total cost and is idempotent", ()
   const snapshot = JSON.stringify([...routeById].map(([id, r]) => [id, r.points]));
   optimizeMountAssignments(routeById, relationshipById, input, { buildRouteForSides: null });
   assert.equal(JSON.stringify([...routeById].map(([id, r]) => [id, r.points])), snapshot, "optimizer must be idempotent");
+});
+
+test("excessLength charges only the detour over the direct node-gap, not base length", () => {
+  const a = { x: 0, y: 0, width: 40, height: 40 };
+  const b = { x: 400, y: 0, width: 40, height: 40 };   // same row, 360px horizontal gap
+  // A monotonic route straight across the gap carries NO length cost — it is the
+  // shortest possible path between the nodes.
+  const straight = { points: [{ x: 40, y: 20 }, { x: 400, y: 20 }] };           // length 360 = gap
+  assert.equal(excessLength(straight, a, b), 0, "the direct path has zero excess");
+  // A route that detours up and back over the gap is charged its avoidable overshoot.
+  const detour = { points: [{ x: 40, y: 20 }, { x: 40, y: -80 }, { x: 400, y: -80 }, { x: 400, y: 20 }] }; // 100+360+100 = 560
+  assert.equal(excessLength(detour, a, b), 200, "only the 2x100 detour over the 360 gap is charged");
+  // A NECESSARY long edge (far nodes, monotonic) still costs nothing for length:
+  // base distance is fixed by the layout and is not a quality defect.
+  const farB = { x: 800, y: 0, width: 40, height: 40 };                         // 760px gap
+  const straightFar = { points: [{ x: 40, y: 20 }, { x: 800, y: 20 }] };        // length 760 = gap
+  assert.equal(excessLength(straightFar, a, farB), 0, "a necessary long edge has no length cost");
 });
 
 test("a longer route costs more than a shorter one with the same bends and mounts (length term)", () => {
