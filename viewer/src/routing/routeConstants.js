@@ -80,7 +80,7 @@ export function createCandidateCollector(target, seen = new Set()) {
 // tier can outweigh a higher one across realistic diagram sizes (E < ~200).
 export const MOUNT_COST = {
   collision: 1_000_000_000,        // tier 0 — inviolable
-  overCapacity: 1_000_000_000,     // tier 0
+  overCapacity: 2_000,             // tier 5 — SOFT: mild over-subscription is tolerated; relief spills only when the move is cheaper than the crowding it relieves
   endpointTraversal: 1_000_000_000,// tier 0
   repeatedCrossing: 5_000_000,     // tier 1
   selfOverlap: 5_000_000,          // tier 1
