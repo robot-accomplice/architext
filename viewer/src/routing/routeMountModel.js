@@ -136,6 +136,26 @@ export function routeIntersections(routeA, routeB) {
   return points.size;
 }
 
+// Count only TRUE X-crossings between two routes — segments that strictly straddle each
+// other (interior intersection), NOT T-junctions or touches. The optimizer scores moves by
+// this stricter count: a T-junction is not a visual crossing, and chasing one would make the
+// optimizer mangle an otherwise clean route to remove a phantom. (The live four-pass still
+// counts T-junctions; only the mount objective uses this strict view.)
+export function strictCrossingCount(routeA, routeB) {
+  const segsA = axisAlignedSegments(routeA);
+  const segsB = axisAlignedSegments(routeB);
+  let count = 0;
+  for (const left of segsA) {
+    for (const right of segsB) {
+      if (left.orientation === right.orientation) continue;
+      const h = left.orientation === "horizontal" ? left : right;
+      const v = left.orientation === "horizontal" ? right : left;
+      if (v.x > h.min && v.x < h.max && h.y > v.min && h.y < v.max) count += 1;
+    }
+  }
+  return count;
+}
+
 // The whole-diagram objective. Every contributing factor is reduced to a raw, unweighted
 // magnitude in mountCostFactors, then weighted UNIFORMLY here — one tunable weight per factor
 // in MOUNT_COST, no factor special-cased. Costs are NOT assumed equal: each factor carries its
@@ -164,9 +184,12 @@ const MOUNT_COST_TIERS = [
   ["overCapacity", "cramped", "intentMismatch", "length"]
 ];
 
-export function mountCostVector(routeById, relationshipById, input) {
-  const factors = mountCostFactors(routeById, relationshipById, input);
+function vectorFromFactors(factors) {
   return MOUNT_COST_TIERS.map((tier) => tier.reduce((sum, factor) => sum + (MOUNT_COST[factor] ?? 0) * factors[factor], 0));
+}
+
+export function mountCostVector(routeById, relationshipById, input) {
+  return vectorFromFactors(mountCostFactors(routeById, relationshipById, input));
 }
 
 // Lexicographic compare: negative when a is strictly better (lower) than b.
@@ -219,7 +242,7 @@ export function mountCostFactors(routeById, relationshipById, input) {
   }
   for (let i = 0; i < routes.length; i += 1) {
     for (let j = i + 1; j < routes.length; j += 1) {
-      factors.crossing += routeIntersections(routes[i][1], routes[j][1]);
+      factors.crossing += strictCrossingCount(routes[i][1], routes[j][1]);
       const segsA = axisAlignedSegments(routes[i][1]);
       const segsB = axisAlignedSegments(routes[j][1]);
       for (const l of segsA) for (const r of segsB) {

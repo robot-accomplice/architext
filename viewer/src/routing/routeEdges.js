@@ -1653,12 +1653,16 @@ export function routeEdges(input) {
   if (style === "orthogonal") {
     const preOptimizeRoutes = new Map(relievedById);
     optimizeMountAssignments(relievedById, relationshipById, input, { buildRouteForSides });
+    // The cleanup below applies ONLY to edges the optimizer actually re-homed, so it never
+    // disturbs the tuned-pass geometry of untouched edges (e.g. arrowhead-shifted mounts).
+    const movedIds = new Set([...relievedById.keys()].filter((id) => relievedById.get(id) !== preOptimizeRoutes.get(id)));
     // A re-homed route must keep perpendicular endpoint contact. If a move left an edge
     // leaving its surface at an angle, restore that edge's tuned-pass route (which is
     // perpendicular by construction) — the refinement only keeps clean results.
-    for (const [relationshipId, route] of relievedById) {
+    for (const relationshipId of movedIds) {
       const relationship = relationshipById.get(relationshipId);
-      if (relationship && !routeEndpointsArePerpendicular(route, relationship, input)) {
+      const route = relievedById.get(relationshipId);
+      if (relationship && route && !routeEndpointsArePerpendicular(route, relationship, input)) {
         relievedById.set(relationshipId, preOptimizeRoutes.get(relationshipId));
       }
     }
