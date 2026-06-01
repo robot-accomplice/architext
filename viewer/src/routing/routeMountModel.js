@@ -626,11 +626,20 @@ export function reciprocalParallelMoves(routeById, relationshipById, input) {
     byNodePair.get(key).push(rel);
   }
   for (const group of byNodePair.values()) {
-    if (group.length !== 2) continue;
-    const [a, b] = group;
-    if (a.from !== b.to || a.to !== b.from) continue;
-    const request = (a.displayIndex ?? 0) <= (b.displayIndex ?? 0) ? a : b;
-    const ret = request === a ? b : a;
+    if (group.length < 2) continue;
+    // Decompose the node pair into reciprocal sub-pairs (each A->B with its B->A) and mirror EACH:
+    // a pair joined by more than one round trip (memory<->sqlite carries query/return AND
+    // ingest/return) must get every return run parallel to its request, not just the lone-pair case.
+    const byDir = new Map(group.map((r) => [`${r.from} ${r.to}`, r]));
+    const paired = new Set();
+    for (const rel of group) {
+      if (paired.has(rel.id)) continue;
+      const partner = byDir.get(`${rel.to} ${rel.from}`);
+      if (!partner || paired.has(partner.id)) continue;
+      paired.add(rel.id);
+      paired.add(partner.id);
+      const request = (rel.displayIndex ?? 0) <= (partner.displayIndex ?? 0) ? rel : partner;
+      const ret = request === rel ? partner : rel;
     const savedRequest = routeById.get(request.id);
     const savedReturn = routeById.get(ret.id);
     if (!savedRequest?.points?.length || !savedReturn?.points?.length) continue;
@@ -684,6 +693,7 @@ export function reciprocalParallelMoves(routeById, relationshipById, input) {
     }
     routeById.set(request.id, bestRequest);
     routeById.set(ret.id, bestReturn);
+    }
   }
 }
 
