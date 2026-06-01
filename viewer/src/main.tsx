@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { createRoot } from "react-dom/client";
 import type { Root } from "react-dom/client";
 import { c4LayoutFor } from "./routing/c4Layout.js";
@@ -259,15 +260,49 @@ function canvasTransformStyle(width: number, height: number, transform: DiagramT
   };
 }
 
+// The drawn content (nodes + routes) usually fills less than the full canvas — the layout adds
+// outer margins and the sparsest lane can leave a wide empty band. Fit should frame the CONTENT,
+// not that whitespace, so we measure the content's extent and expose it for the fit calculation.
+function contentExtent(plan: { nodeRects: Map<string, { x: number; y: number; width: number; height: number }>; routes: Map<string, { points: { x: number; y: number }[] }>; canvasWidth: number; canvasHeight: number }) {
+  let minX = Infinity;
+  let minY = Infinity;
+  let maxX = -Infinity;
+  let maxY = -Infinity;
+  for (const rect of plan.nodeRects.values()) {
+    minX = Math.min(minX, rect.x);
+    minY = Math.min(minY, rect.y);
+    maxX = Math.max(maxX, rect.x + rect.width);
+    maxY = Math.max(maxY, rect.y + rect.height);
+  }
+  for (const route of plan.routes.values()) {
+    for (const point of route.points) {
+      minX = Math.min(minX, point.x);
+      minY = Math.min(minY, point.y);
+      maxX = Math.max(maxX, point.x);
+      maxY = Math.max(maxY, point.y);
+    }
+  }
+  if (!Number.isFinite(minX)) return { width: plan.canvasWidth, height: plan.canvasHeight };
+  const PAD = 24; // breathing room so content is not flush against the viewport edge
+  return {
+    width: Math.min(plan.canvasWidth, maxX - minX + PAD * 2),
+    height: Math.min(plan.canvasHeight, maxY - minY + PAD * 2)
+  };
+}
+
 function ScaledCanvasExtent({
   width,
   height,
   transform,
+  contentWidth = width,
+  contentHeight = height,
   children
 }: {
   width: number;
   height: number;
   transform: DiagramTransform;
+  contentWidth?: number;
+  contentHeight?: number;
   children: React.ReactNode;
 }) {
   return (
@@ -275,6 +310,8 @@ function ScaledCanvasExtent({
       className="scaled-canvas-extent"
       data-canvas-width={width}
       data-canvas-height={height}
+      data-content-width={contentWidth}
+      data-content-height={contentHeight}
       style={scaledCanvasStyle(width, height, transform)}
     >
       {children}
@@ -282,22 +319,40 @@ function ScaledCanvasExtent({
   );
 }
 
+// Centered transient/notice overlays must sit on the VIEWPORT, not inside the zoom-transformed
+// `.diagram-canvas` (a CSS transform makes the ancestor the containing block for position:fixed,
+// so an in-canvas overlay scales and pans with the diagram). Portalling to document.body frees the
+// overlay from that transform; the fixed, viewport-centred placement lives in CSS.
+function ViewportOverlay({
+  className,
+  children,
+  ...rest
+}: { className: string; children: React.ReactNode } & React.HTMLAttributes<HTMLDivElement>) {
+  if (typeof document === "undefined") return null;
+  return createPortal(
+    <div className={className} {...rest}>
+      {children}
+    </div>,
+    document.body
+  );
+}
+
 function RoutingLoadingOverlay({ active }: { active: boolean }) {
   if (!active) return null;
   return (
-    <div className="routing-loading-overlay" role="status" aria-live="polite">
+    <ViewportOverlay className="routing-loading-overlay" role="status" aria-live="polite">
       <span className="routing-spinner" aria-hidden="true" />
       <span>Planning routes</span>
-    </div>
+    </ViewportOverlay>
   );
 }
 
 function RoutingPlanningError({ message }: { message: string }) {
   return (
-    <div className="routing-planning-error" role="alert">
+    <ViewportOverlay className="routing-planning-error" role="alert">
       <strong>Route planning failed</strong>
       <span>{message}</span>
-    </div>
+    </ViewportOverlay>
   );
 }
 
@@ -2226,7 +2281,7 @@ function SystemMap({
 
   return (
     <section className="map-shell" aria-busy={planningState.planning ? "true" : "false"}>
-      <ScaledCanvasExtent width={canvasWidth} height={canvasHeight} transform={transform}>
+      <ScaledCanvasExtent width={canvasWidth} height={canvasHeight} contentWidth={contentExtent(plan).width} contentHeight={contentExtent(plan).height} transform={transform}>
         <div
           className="diagram-canvas"
           style={canvasTransformStyle(canvasWidth, canvasHeight, transform)}
@@ -2649,7 +2704,7 @@ function C4Diagram({
 
   return (
     <section className="map-shell c4-shell" aria-busy={planningState.planning ? "true" : "false"}>
-      <ScaledCanvasExtent width={canvasWidth} height={canvasHeight} transform={transform}>
+      <ScaledCanvasExtent width={canvasWidth} height={canvasHeight} contentWidth={contentExtent(plan).width} contentHeight={contentExtent(plan).height} transform={transform}>
         <div
           className={`c4-canvas ${view.type}`}
           style={canvasTransformStyle(canvasWidth, canvasHeight, transform)}

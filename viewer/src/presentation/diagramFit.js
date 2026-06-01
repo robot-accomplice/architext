@@ -23,10 +23,12 @@ export function calculateFitZoom({
 export function measuredDiagramFitZoom(viewportElement) {
   const shell = viewportElement?.querySelector(".map-shell");
   const canvas = shell?.querySelector(".scaled-canvas-extent");
+  // Fit the drawn CONTENT, not the full canvas (which carries outer margins and empty lanes);
+  // fall back to the canvas extent when content bounds are unavailable.
   return calculateFitZoom({
     viewportWidth: shell?.clientWidth,
     viewportHeight: shell?.clientHeight,
-    canvasWidth: canvas?.dataset.canvasWidth,
-    canvasHeight: canvas?.dataset.canvasHeight
+    canvasWidth: canvas?.dataset.contentWidth ?? canvas?.dataset.canvasWidth,
+    canvasHeight: canvas?.dataset.contentHeight ?? canvas?.dataset.canvasHeight
   });
 }

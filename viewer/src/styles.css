@@ -2228,10 +2228,10 @@ select:disabled {
 
 .routing-loading-overlay,
 .routing-planning-error {
-  position: absolute;
+  position: fixed;
   left: 50%;
   top: 50%;
-  z-index: var(--z-canvas-overlay);
+  z-index: var(--z-modal);
   display: inline-flex;
   align-items: center;
   gap: 10px;
