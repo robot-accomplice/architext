@@ -78,11 +78,12 @@ export function createCandidateCollector(target, seen = new Set()) {
 
 // Tiered mount-cost weights. Gaps between tiers are wide enough that no lower
 // tier can outweigh a higher one across realistic diagram sizes (E < ~200).
-// Single WEIGHTED-SUM objective. No tiers: each weight is a defect's worth in px-of-detour
-// (length is the base unit, 6/px). Priority is expressed by magnitude. The two hard violations
-// stay effectively inviolable by sheer scale; everything else trades against length so the
-// optimizer prefers the SHORTER, straighter, facing-side route — and removes doglegs, which are
-// always avoidable, by pricing them as high as a crossing.
+// Single WEIGHTED-SUM objective. No tiers: priority is expressed by magnitude. After the two
+// inviolable hard violations (route/endpoint through a node) and the egregious overlaps, the heavy
+// hitters are ordered, per the maintainer: DOGLEGS > CROSSINGS > CROWDING. Doglegs are always
+// avoidable so they are priced highest (a dogleg-y bundle must lose to a clean split); a crossing is
+// next; crowding is third — it matters, but a crossing is never traded to relieve it. Everything
+// below (bends, length) is fine-grained polish.
 export const MOUNT_COST = {
   collision: 1_000_000_000,        // inviolable — a route through a non-endpoint node
   endpointTraversal: 1_000_000_000,// inviolable — an endpoint stub crossing a node
@@ -90,16 +91,16 @@ export const MOUNT_COST = {
   selfOverlap: 5_000_000,          // egregious — a route overlapping itself
   sharedSegment: 200_000,          // two edges drawn as one line (per overlapping pair)
   sharedSegmentLength: 1_500,      //   …per px of that overlap
-  perimeterFallback: 4_200,        // ~700px — a forced detour around a node's perimeter
-  monotonicBacktrack: 4_200,       // ~700px — a route doubling back on itself
-  crossing: 3_000,                 // ~500px — one honest crossing (anchor; preserves crossing minimisation)
-  dogleg: 3_000,                   // ~500px — a jog against travel direction; always avoidable, so priced like a crossing to force its removal
-  shallowJog: 3_000,               // ~500px — a small (<36px) stair-step; the visible "weird dogleg", always avoidable by aligning the two mounts
+  dogleg: 3_300,                   // #1 DOGLEG — a jog against travel direction; always avoidable, priced just above a crossing
+  shallowJog: 3_300,               // #1 DOGLEG — the visible small (<36px) stair-step; always avoidable by aligning mounts
+  monotonicBacktrack: 3_300,       // #1 DOGLEG — a route doubling back on itself
+  perimeterFallback: 4_200,        // a forced detour around a node's perimeter (dogleg-class)
+  crossing: 3_000,                 // #2 CROSSING — one honest crossing
   intentMismatch: 1_500,           // ~250px — mounting on the side facing AWAY from the partner (the far-edge wrap)
   overCapacity: 1_000,             // ~167px per excess mount — SOFT: mild over-subscription is tolerated
-  bend: 300,                       // ~50px — a single corner
-  cramped: 80,                     // ~13px per unit a gap is below MIN_LEGIBLE_GAP — minor; never outweighs a crossing
-  length: 6                        // base unit — per px of wire (raised from 3: wire length was under-penalised)
+  cramped: 120,                    // #3 CROWDING — per unit a gap is below MIN_LEGIBLE_GAP; below a crossing (24 units < one crossing) so crossings are never traded for it
+  bend: 300,                       // ~50px — a single corner (polish)
+  length: 6                        // base unit — per px of wire (polish)
 };
 
 export const MIN_LEGIBLE_GAP = 12;  // px; mounts closer than this read as one line
