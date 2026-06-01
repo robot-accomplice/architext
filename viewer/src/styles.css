@@ -2231,7 +2231,7 @@ select:disabled {
   position: fixed;
   left: 50%;
   top: 50%;
-  z-index: var(--z-modal);
+  z-index: var(--z-canvas-overlay);
   display: inline-flex;
   align-items: center;
   gap: 10px;
