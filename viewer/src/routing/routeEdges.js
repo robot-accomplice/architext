@@ -1686,5 +1686,7 @@ export {
   routeCollidesWithNonEndpoints,
   routeHasEndpointTraversal,
   offsetEndpointRoute,
-  endpointSpreadOffset
+  endpointSpreadOffset,
+  routeWithPoints,
+  offsetOrthogonalPolyline
 };

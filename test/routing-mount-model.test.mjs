@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch, optimizeMountAssignments, routeIntersections, doglegCount, intentMismatchCount, excessLength } from "../viewer/src/routing/routeMountModel.js";
+import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch, optimizeMountAssignments, routeIntersections, doglegCount, intentMismatchCount, excessLength, reciprocalParallelMoves, buildReciprocalGutterBridge } from "../viewer/src/routing/routeMountModel.js";
+import { crossingsBetween } from "../viewer/src/routing/routeEdges.js";
 import { MIN_LEGIBLE_GAP, MOUNT_COST } from "../viewer/src/routing/routeConstants.js";
 
 // A left/right surface of length 54 with 3 mounts: ideal slots at 54*[1,2,3]/4.
@@ -165,4 +166,54 @@ test("intentMismatchCount penalizes mounting on the side facing away from the ta
   assert.equal(intentMismatchCount(facing, rel, input), 0, "facing mounts are not a mismatch");
   const away = { points: [{ x: 0, y: 20 }, { x: 200, y: 20 }] };       // a.LEFT faces away from b (to the right)
   assert.equal(intentMismatchCount(away, rel, input), 1, "mounting away from the target is a mismatch");
+});
+
+test("reciprocalParallelMoves runs an overlapping return parallel to its request (cost-guarded)", () => {
+  // request a->b and return b->a both straight at y=30 -> fully overlapping (a shared segment).
+  // The per-node-pair stage co-moves the return onto a parallel lane so the two no longer
+  // overlap, and only when the lexicographic objective improves. This is the case the per-edge
+  // sweep cannot reach: mirroring the return is a JOINT decision with its request.
+  const nodeRects = new Map([
+    ["a", { x: 0, y: 0, width: 40, height: 60 }],
+    ["b", { x: 200, y: 0, width: 40, height: 60 }]
+  ]);
+  const input = { nodeRects, visibleNodeIds: new Set(["a", "b"]), canvasWidth: 280, canvasHeight: 60, relationships: [], style: "orthogonal" };
+  const routeById = new Map([
+    ["ab", { style: "orthogonal", points: [{ x: 40, y: 30 }, { x: 200, y: 30 }], bends: 0, samples: [] }],
+    ["ba", { style: "orthogonal", points: [{ x: 200, y: 30 }, { x: 40, y: 30 }], bends: 0, samples: [] }]
+  ]);
+  const relationshipById = new Map([
+    ["ab", { id: "ab", from: "a", to: "b", relationshipType: "flow", displayIndex: 1 }],
+    ["ba", { id: "ba", from: "b", to: "a", relationshipType: "flow", displayIndex: 2 }]
+  ]);
+  input.relationships = [...relationshipById.values()];
+  const before = mountAssignmentCost(routeById, relationshipById, input);
+  reciprocalParallelMoves(routeById, relationshipById, input);
+  const after = mountAssignmentCost(routeById, relationshipById, input);
+  assert.ok(after < before, `expected cost to drop after parallel separation: ${before} -> ${after}`);
+  assert.ok(routeById.get("ba").points.every((p) => p.y !== 30), "return must leave the shared y=30 lane");
+});
+
+test("buildReciprocalGutterBridge builds two nested, non-crossing routes over the gutter", () => {
+  // A (left) and B (right) in the same row; a reciprocal pair a->b / b->a.
+  const nodeRects = new Map([
+    ["a", { x: 0, y: 100, width: 40, height: 40 }],
+    ["b", { x: 200, y: 100, width: 40, height: 40 }]
+  ]);
+  const input = { nodeRects, visibleNodeIds: new Set(["a", "b"]), canvasWidth: 280, canvasHeight: 200, relationships: [] };
+  const requestRel = { id: "ab", from: "a", to: "b", relationshipType: "flow", displayIndex: 1 };
+  const returnRel = { id: "ba", from: "b", to: "a", relationshipType: "flow", displayIndex: 2 };
+  const tmpl = { style: "orthogonal", points: [{ x: 40, y: 120 }, { x: 200, y: 120 }], bends: 0, samples: [] };
+  const bridge = buildReciprocalGutterBridge(requestRel, returnRel, tmpl, tmpl, input, "top");
+  assert.ok(bridge, "bridge should be constructible for same-row facing nodes");
+  // The two routes must not cross each other (nested, stacked lanes) — the property the
+  // construction guarantees by arithmetic, with no grid search.
+  assert.equal(crossingsBetween(bridge.request, bridge.return), 0, "request and return must not cross");
+  for (const r of [bridge.request, bridge.return]) {
+    assert.equal(r.points[0].y, 100, "starts on a node top edge");
+    assert.equal(r.points.at(-1).y, 100, "ends on a node top edge");
+  }
+  // The return nests on the outer (higher, smaller-y) lane so it encloses the request.
+  const laneOf = (r) => Math.min(...r.points.map((p) => p.y));
+  assert.ok(laneOf(bridge.return) < laneOf(bridge.request), "return nests on the outer lane");
 });

@@ -78,23 +78,36 @@ export function createCandidateCollector(target, seen = new Set()) {
 
 // Tiered mount-cost weights. Gaps between tiers are wide enough that no lower
 // tier can outweigh a higher one across realistic diagram sizes (E < ~200).
+// Single WEIGHTED-SUM objective. No tiers: each weight is a defect's worth in px-of-detour
+// (length is the base unit, 6/px). Priority is expressed by magnitude. The two hard violations
+// stay effectively inviolable by sheer scale; everything else trades against length so the
+// optimizer prefers the SHORTER, straighter, facing-side route — and removes doglegs, which are
+// always avoidable, by pricing them as high as a crossing.
 export const MOUNT_COST = {
-  collision: 1_000_000_000,        // tier 0 — inviolable
-  overCapacity: 2_000,             // tier 5 — SOFT: mild over-subscription is tolerated; relief spills only when the move is cheaper than the crowding it relieves
-  endpointTraversal: 1_000_000_000,// tier 0
-  repeatedCrossing: 5_000_000,     // tier 1
-  selfOverlap: 5_000_000,          // tier 1
-  sharedSegment: 200_000,          // tier 2 (per overlapping pair)
-  sharedSegmentLength: 1_500,      // tier 2 (per unit length)
-  perimeterFallback: 7_000,        // tier 2.5 — a perimeter detour is worse than an honest crossing
-  crossing: 3_000,                 // tier 3 (matches existing crossingCost)
-  monotonicBacktrack: 5_000,       // tier 3.5 — a route doubling back reads worse than a bend
-  bend: 420,                       // tier 4 (matches ROUTE_COST_WEIGHTS.bend)
-  dogleg: 1_500,                   // tier 4 (per reversing segment; below crossing, above a bend)
-  cramped: 1_200,                  // tier 5 (per unit a gap is below MIN_LEGIBLE_GAP)
-  intentMismatch: 900,             // tier 5 (per endpoint leaving the non-facing side)
-  length: 3                        // tier 5 (per unit of wire length — prefers shorter routes; tunable)
+  collision: 1_000_000_000,        // inviolable — a route through a non-endpoint node
+  endpointTraversal: 1_000_000_000,// inviolable — an endpoint stub crossing a node
+  repeatedCrossing: 5_000_000,     // egregious — the same pair crossing 2+ times
+  selfOverlap: 5_000_000,          // egregious — a route overlapping itself
+  sharedSegment: 200_000,          // two edges drawn as one line (per overlapping pair)
+  sharedSegmentLength: 1_500,      //   …per px of that overlap
+  perimeterFallback: 4_200,        // ~700px — a forced detour around a node's perimeter
+  monotonicBacktrack: 4_200,       // ~700px — a route doubling back on itself
+  crossing: 3_000,                 // ~500px — one honest crossing (anchor; preserves crossing minimisation)
+  dogleg: 3_000,                   // ~500px — a jog against travel direction; always avoidable, so priced like a crossing to force its removal
+  shallowJog: 3_000,               // ~500px — a small (<36px) stair-step; the visible "weird dogleg", always avoidable by aligning the two mounts
+  intentMismatch: 1_500,           // ~250px — mounting on the side facing AWAY from the partner (the far-edge wrap)
+  overCapacity: 1_000,             // ~167px per excess mount — SOFT: mild over-subscription is tolerated
+  bend: 300,                       // ~50px — a single corner
+  cramped: 80,                     // ~13px per unit a gap is below MIN_LEGIBLE_GAP — minor; never outweighs a crossing
+  length: 6                        // base unit — per px of wire (raised from 3: wire length was under-penalised)
 };
 
 export const MIN_LEGIBLE_GAP = 12;  // px; mounts closer than this read as one line
 export const MOUNT_MAX_ITERS = 8;   // aggregate-pass convergence bound
+export const RECIPROCAL_PARALLEL_OFFSET = 12; // px; lane gap when running a reciprocal return parallel to its request
+
+// Per-node-pair reciprocal gutter bridge (request on an inner lane, return nested outside it).
+export const BRIDGE_MOUNT_OFFSET = 9;      // px; request/return mount offset from surface centre
+export const BRIDGE_GUTTER_CLEARANCE = 14; // px; gap from the node edge to the inner (request) lane
+export const BRIDGE_LANE_GAP = 14;         // px; gap between the request lane and the outer return lane
+export const BRIDGE_MAX_LANES = 8;         // how many progressively-higher gutter lanes to try per side

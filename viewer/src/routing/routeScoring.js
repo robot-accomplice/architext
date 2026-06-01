@@ -176,6 +176,15 @@ function sameLaneExteriorMismatchCount(candidate, context) {
   if (!context.canvasWidth || !context.fromRect || !context.toRect) return 0;
   const nodeLeft = Math.min(context.fromRect.x, context.toRect.x);
   const nodeRight = Math.max(context.fromRect.x + context.fromRect.width, context.toRect.x + context.toRect.width);
+  // The exterior preference exists to route AROUND a node sitting in the column between two
+  // stacked nodes. When that interior channel is clear, a straight run down it is correct —
+  // forcing an exterior detour there only manufactures a dogleg, so do not penalise it.
+  const channelTop = Math.min(context.fromRect.y + context.fromRect.height, context.toRect.y + context.toRect.height);
+  const channelBottom = Math.max(context.fromRect.y, context.toRect.y);
+  const interiorBlocked = (context.blockerRects ?? []).some((rect) =>
+    rect.x < nodeRight && rect.x + rect.width > nodeLeft &&
+    rect.y < channelBottom && rect.y + rect.height > channelTop);
+  if (!interiorBlocked) return 0;
   const nodeCenterX = (context.fromRect.x + context.fromRect.width / 2 + context.toRect.x + context.toRect.width / 2) / 2;
   const preferLeftExterior = nodeCenterX < context.canvasWidth / 2;
   const verticalSegments = routeSegments(candidate.points ?? []).filter((segment) => segment.orientation === "vertical");

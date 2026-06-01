@@ -1,5 +1,9 @@
-import { MOUNT_COST, MIN_LEGIBLE_GAP, MOUNT_MAX_ITERS, rectCenter } from "./routeConstants.js";
+import {
+  MOUNT_COST, MIN_LEGIBLE_GAP, MOUNT_MAX_ITERS, rectCenter,
+  RECIPROCAL_PARALLEL_OFFSET, BRIDGE_MOUNT_OFFSET, BRIDGE_GUTTER_CLEARANCE, BRIDGE_LANE_GAP, BRIDGE_MAX_LANES
+} from "./routeConstants.js";
 import { surfaceCapacity } from "./routePorts.js";
+import { shallowJogCount } from "./routeGeometry.js";
 import {
   endpointSide,
   axisAlignedSegments,
@@ -8,7 +12,9 @@ import {
   routeCollidesWithNonEndpoints,
   routeHasEndpointTraversal,
   offsetEndpointRoute,
-  endpointSpreadOffset
+  endpointSpreadOffset,
+  routeWithPoints,
+  offsetOrthogonalPolyline
 } from "./routeEdges.js";
 
 function movableEndpoints(routeById, relationshipById, input) {
@@ -167,51 +173,14 @@ export function mountAssignmentCost(routeById, relationshipById, input) {
   return cost;
 }
 
-// The objective is LEXICOGRAPHIC, not a weighted sum: a worse outcome in a higher tier is
-// never redeemable by any volume of improvement in a lower one. (A weighted sum lets ~30
-// accumulated cramped units at w1200 outweigh a crossing at w3000, so the optimizer trades
-// crossings for spacing — exactly the regression this prevents.) Tiers run worst→least:
-// hard violations, repeated/self overlap, shared segments, crossings, bends/doglegs, then
-// the aesthetic terms (spacing/intent/length/soft-capacity). Weights act only WITHIN a tier.
-const MOUNT_COST_TIERS = [
-  ["collision", "endpointTraversal"],
-  ["repeatedCrossing", "selfOverlap"],
-  ["sharedSegment", "sharedSegmentLength"],
-  ["perimeterFallback"],
-  ["crossing"],
-  ["monotonicBacktrack"],
-  ["bend", "dogleg"],
-  ["overCapacity", "cramped", "intentMismatch", "length"]
-];
-
-function vectorFromFactors(factors) {
-  return MOUNT_COST_TIERS.map((tier) => tier.reduce((sum, factor) => sum + (MOUNT_COST[factor] ?? 0) * factors[factor], 0));
-}
-
-export function mountCostVector(routeById, relationshipById, input) {
-  return vectorFromFactors(mountCostFactors(routeById, relationshipById, input));
-}
-
-// Lexicographic compare: negative when a is strictly better (lower) than b.
-export function compareMountCost(a, b) {
-  for (let i = 0; i < a.length; i += 1) {
-    if (a[i] !== b[i]) return a[i] - b[i];
-  }
-  return 0;
-}
-
-// Compare only the STRUCTURAL tiers (down to and including crossings, index 3): collisions,
-// overlaps, shared segments, crossings. The four tuned passes already minimize bends/spacing,
-// so a single-endpoint re-home is only worth making for a structural gain; a move that merely
-// shaves bends or wire length (and would decenter a lone endpoint or crowd a fan) is left to
-// the tuned layout. This is what keeps the optimizer a strict structural refinement.
-const STRUCTURAL_TIER_COUNT = 5;
-export function compareStructuralMountCost(a, b) {
-  for (let i = 0; i < STRUCTURAL_TIER_COUNT; i += 1) {
-    if (a[i] !== b[i]) return a[i] - b[i];
-  }
-  return 0;
-}
+// The objective is a single WEIGHTED SUM (`mountAssignmentCost`), not a tiered/lexicographic
+// vector. One knob set: each factor's weight in MOUNT_COST is the only lever, so tuning is
+// predictable — raising a weight cannot be silently overridden by a tier boundary, and there is
+// no second variable (tier order) interacting with the weights. Priorities are expressed by the
+// MAGNITUDE of the weights (collision ≫ overlap ≫ shared-segment ≫ crossing ≫ … ≫ length), and a
+// high-but-finite crossing weight is what lets a route accept a crossing rather than wrap the
+// whole diagram to avoid it (a crossing is worth ~crossing/length px of detour). Every optimizer
+// guard below compares `mountAssignmentCost` directly.
 
 // Raw magnitude of each cost factor across the diagram, before weighting. Keeping the
 // measurement (here) separate from the weighting (in mountAssignmentCost) is what lets any
@@ -220,7 +189,7 @@ export function mountCostFactors(routeById, relationshipById, input) {
   const factors = {
     collision: 0, endpointTraversal: 0, repeatedCrossing: 0, selfOverlap: 0,
     sharedSegment: 0, sharedSegmentLength: 0, perimeterFallback: 0, crossing: 0, monotonicBacktrack: 0,
-    bend: 0, dogleg: 0, cramped: 0, intentMismatch: 0, length: 0, overCapacity: 0
+    bend: 0, dogleg: 0, shallowJog: 0, cramped: 0, intentMismatch: 0, length: 0, overCapacity: 0
   };
   const routes = [...routeById.entries()];
   for (const [id, route] of routes) {
@@ -228,6 +197,7 @@ export function mountCostFactors(routeById, relationshipById, input) {
     if (rel && routeCollidesWithNonEndpoints(route, rel, input)) factors.collision += 1;
     if (rel && routeHasEndpointTraversal(route, rel, input)) factors.endpointTraversal += 1;
     factors.bend += route.bends ?? 0;
+    factors.shallowJog += shallowJogCount(route.points);                       // the small stair-steps doglegCount misses — always avoidable by aligning the mounts
     factors.repeatedCrossing += route.repeatedCrossings ?? 0;
     factors.selfOverlap += route.selfOverlappingSegments ?? 0;
     if ((route.qualityCosts?.perimeterFallbackCost ?? 0) > 0) factors.perimeterFallback += 1;
@@ -382,13 +352,13 @@ function trySideMoves(routeById, relationshipById, input, buildRouteForSides) {
     for (const candidateStart of SIDES) {
       for (const candidateEnd of SIDES) {
         if (candidateStart === startSide && candidateEnd === endSide) continue;
-        const before = mountCostVector(routeById, relationshipById, input);
+        const before = mountAssignmentCost(routeById, relationshipById, input);
         const saved = snapshotRoutes(routeById);
         const rebuilt = buildRouteForSides(rel, candidateStart, candidateEnd);
         if (!rebuilt || routeCollidesWithNonEndpoints(rebuilt, rel, input)) continue;
         routeById.set(id, rebuilt);
         respreadSurfaces(routeById, relationshipById, input);
-        if (compareStructuralMountCost(mountCostVector(routeById, relationshipById, input), before) >= 0) {
+        if (mountAssignmentCost(routeById, relationshipById, input) >= before) {
           for (const [savedId, savedRoute] of saved) routeById.set(savedId, savedRoute);
         }
       }
@@ -603,23 +573,141 @@ export function relieveCrowdedSurfaces(routeById, relationshipById, input, build
   return { pairs: movedPairs, anyMoved: movedPairs.length > 0 || spilled };
 }
 
-// Staged local search: per-surface respread + scored side moves, accepted only
-// when the whole-diagram cost drops. The snapshot/accept guard makes the result
-// a deterministic fixed point (idempotent on replan) regardless of cache state.
+// Geometric construction of a crossing-free reciprocal bridge on the top or bottom gutter:
+// the request runs on an inner lane, the return nests on an outer lane, and their mounts are
+// offset to opposite sides of each node's surface centre so the return arc ENCLOSES the request
+// arc (0 within-pair crossings by construction — no grid search, no proximity scoring). Used by
+// reciprocalParallelMoves when both ends of the pair should escape onto a shared gutter.
+export function buildReciprocalGutterBridge(requestRel, returnRel, requestRoute, returnRoute, input, side, gutterClearance = BRIDGE_GUTTER_CLEARANCE) {
+  const ra = input.nodeRects.get(requestRel.from);
+  const rb = input.nodeRects.get(requestRel.to);
+  if (!ra || !rb) return null;
+  const PAD = 8; // keep mounts off the surface corners (matches portFor inset)
+  const surfYa = side === "top" ? ra.y : ra.y + ra.height;
+  const surfYb = side === "top" ? rb.y : rb.y + rb.height;
+  const aCx = ra.x + ra.width / 2;
+  const bCx = rb.x + rb.width / 2;
+  const towardB = Math.sign(bCx - aCx) || 1;
+  const clampX = (rect, x) => Math.max(rect.x + PAD, Math.min(rect.x + rect.width - PAD, x));
+  // request mounts inner (toward the partner); return mounts outer (away from it).
+  const reqAx = clampX(ra, aCx + towardB * BRIDGE_MOUNT_OFFSET);
+  const retAx = clampX(ra, aCx - towardB * BRIDGE_MOUNT_OFFSET);
+  const reqBx = clampX(rb, bCx - towardB * BRIDGE_MOUNT_OFFSET);
+  const retBx = clampX(rb, bCx + towardB * BRIDGE_MOUNT_OFFSET);
+  const edge = side === "top"
+    ? Math.min(ra.y, rb.y) - gutterClearance
+    : Math.max(ra.y + ra.height, rb.y + rb.height) + gutterClearance;
+  const laneReq = edge;
+  const laneRet = side === "top" ? edge - BRIDGE_LANE_GAP : edge + BRIDGE_LANE_GAP;
+  const request = routeWithPoints(requestRoute, [
+    { x: reqAx, y: surfYa }, { x: reqAx, y: laneReq }, { x: reqBx, y: laneReq }, { x: reqBx, y: surfYb }
+  ]);
+  const ret = routeWithPoints(returnRoute, [
+    { x: retBx, y: surfYb }, { x: retBx, y: laneRet }, { x: retAx, y: laneRet }, { x: retAx, y: surfYa }
+  ]);
+  return { request, return: ret };
+}
+
+// Per-node-pair stage: for each reciprocal flow pair (A->B and B->A), JOINTLY re-home the
+// request and return so the return mirrors its request instead of switchbacking. The per-edge
+// trySideMoves CANNOT reach this: mirroring the return alone wraps it around the partner's far
+// side, so the two ends must co-move. Candidates are COUPLED (request+return together): a
+// fixed-gap parallel mirror (cheapest — the return runs as a constant offset of the request) plus
+// top/bottom gutter bridges at increasing lane heights (for pairs whose request also wants to
+// vacate a congested surface). Cost-guarded with the SAME weighted-sum objective as the rest of
+// the optimizer: the cheapest coupled move that lowers total cost wins. A pair with nothing to
+// gain is left untouched — worst case the stage validates prior stages.
+export function reciprocalParallelMoves(routeById, relationshipById, input) {
+  const byNodePair = new Map();
+  for (const rel of relationshipById.values()) {
+    if (rel.relationshipType !== "flow" || !routeById.has(rel.id)) continue;
+    const key = [rel.from, rel.to].sort().join(" ");
+    if (!byNodePair.has(key)) byNodePair.set(key, []);
+    byNodePair.get(key).push(rel);
+  }
+  for (const group of byNodePair.values()) {
+    if (group.length !== 2) continue;
+    const [a, b] = group;
+    if (a.from !== b.to || a.to !== b.from) continue;
+    const request = (a.displayIndex ?? 0) <= (b.displayIndex ?? 0) ? a : b;
+    const ret = request === a ? b : a;
+    const savedRequest = routeById.get(request.id);
+    const savedReturn = routeById.get(ret.id);
+    if (!savedRequest?.points?.length || !savedReturn?.points?.length) continue;
+
+    // Cheapest first: mirror the return as a fixed-gap parallel offset of the request.
+    const reversed = [...savedRequest.points].reverse();
+    const coupled = [];
+    for (const delta of [RECIPROCAL_PARALLEL_OFFSET, -RECIPROCAL_PARALLEL_OFFSET]) {
+      coupled.push({ request: savedRequest, return: routeWithPoints(savedReturn, offsetOrthogonalPolyline(reversed, delta)) });
+    }
+    // Then gutter bridges at progressively higher lanes (a low lane crosses the congested band just
+    // above/below the row; a higher one clears it). All arithmetic — no grid search.
+    const ra = input.nodeRects.get(request.from);
+    const rb = input.nodeRects.get(request.to);
+    const laneStep = MIN_LEGIBLE_GAP * 2;
+    if (ra && rb) {
+      for (const side of ["top", "bottom"]) {
+        const headroom = side === "top"
+          ? Math.min(ra.y, rb.y) - MIN_LEGIBLE_GAP
+          : (input.canvasHeight ?? Infinity) - Math.max(ra.y + ra.height, rb.y + rb.height) - MIN_LEGIBLE_GAP;
+        for (let lane = 0; lane < BRIDGE_MAX_LANES; lane += 1) {
+          const clearance = BRIDGE_GUTTER_CLEARANCE + lane * laneStep + BRIDGE_LANE_GAP;
+          if (clearance > headroom) break;
+          const bridge = buildReciprocalGutterBridge(request, ret, savedRequest, savedReturn, input, side, clearance);
+          if (bridge) coupled.push(bridge);
+        }
+      }
+    }
+
+    const before = mountAssignmentCost(routeById, relationshipById, input);
+    let bestCost = before;
+    let bestRequest = savedRequest;
+    let bestReturn = savedReturn;
+    for (const candidate of coupled) {
+      if (routeCollidesWithNonEndpoints(candidate.request, request, input)) continue;
+      if (routeCollidesWithNonEndpoints(candidate.return, ret, input)) continue;
+      routeById.set(request.id, candidate.request);
+      routeById.set(ret.id, candidate.return);
+      const cost = mountAssignmentCost(routeById, relationshipById, input);
+      // Single weighted-sum guard: keep the cheapest coupled move that lowers total cost. A move
+      // that adds a crossing raises cost (crossing is weighted high) and is rejected; a move that
+      // only straightens a switchback into a parallel mirror (cost-flat in crossings, big drop in
+      // bends/length) is accepted — the legibility case this stage exists for.
+      if (cost < bestCost) {
+        bestCost = cost;
+        bestRequest = candidate.request;
+        bestReturn = candidate.return;
+      }
+      routeById.set(request.id, savedRequest);
+      routeById.set(ret.id, savedReturn);
+    }
+    routeById.set(request.id, bestRequest);
+    routeById.set(ret.id, bestReturn);
+  }
+}
+
+// Staged local search: per-surface respread + scored side moves + per-node-pair reciprocal
+// coordination, accepted only when the whole-diagram cost drops. The snapshot/accept guard makes
+// the result a deterministic fixed point (idempotent on replan) regardless of cache state.
 export function optimizeMountAssignments(routeById, relationshipById, input, options = {}) {
   const buildRouteForSides = options.buildRouteForSides ?? null;
   const debug = typeof process !== "undefined" && process.env.MOUNT_DEBUG === "cost";
   const entryFactors = debug ? mountCostFactors(routeById, relationshipById, input) : null;
   for (let iter = 0; iter < MOUNT_MAX_ITERS; iter += 1) {
-    const before = mountCostVector(routeById, relationshipById, input);
+    const before = mountAssignmentCost(routeById, relationshipById, input);
     const saved = snapshotRoutes(routeById);
     respreadSurfaces(routeById, relationshipById, input);
     trySideMoves(routeById, relationshipById, input, buildRouteForSides);
-    if (compareMountCost(mountCostVector(routeById, relationshipById, input), before) >= 0) {
+    if (mountAssignmentCost(routeById, relationshipById, input) >= before) {
       for (const [id, r] of saved) routeById.set(id, r);
       break;
     }
   }
+  // Per-node-pair reciprocal coordination runs once after the per-edge sweep converges: it co-moves
+  // a reciprocal pair the per-edge moves can't reach (a return that should mirror its request but
+  // switchbacks). Its own cost guard keeps it from regressing.
+  reciprocalParallelMoves(routeById, relationshipById, input);
   if (debug && entryFactors) {
     const exitFactors = mountCostFactors(routeById, relationshipById, input);
     const diff = {};
