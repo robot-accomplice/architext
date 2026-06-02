@@ -918,6 +918,40 @@ function orderedSurfaceEndpoints(endpoints, routeById, input) {
   ));
 }
 
+// Snap every facing reciprocal pair so its two endpoints share one coordinate and the run is
+// straight. alignedFacingEndpointRoute needs to know how many edges share each node side (to move
+// the sparser end onto the busier end's fixed mount), so an endpoint-group count map is built
+// first. Extracted so spreadSharedSideEndpoints and the post-relief replay run the IDENTICAL
+// alignment — a missing copy in the replay is exactly what left facing pairs kinked after relief.
+function realignFacingEndpoints(routeById, relationshipById, input) {
+  const endpointGroups = new Map();
+  for (const [relationshipId, route] of routeById) {
+    const relationship = relationshipById.get(relationshipId);
+    if (!relationship || relationship.relationshipType !== "flow" || !route?.points?.length) continue;
+    for (const [nodeId, point] of [[relationship.from, route.points[0]], [relationship.to, route.points.at(-1)]]) {
+      const rect = input.nodeRects.get(nodeId);
+      const side = rect ? endpointSide(rect, point) : "";
+      if (!rect || rect.fixedPorts || !sideNeedsPostSelectionCentering(side)) continue;
+      const key = sideEndpointKey(nodeId, side);
+      endpointGroups.set(key, [...(endpointGroups.get(key) ?? []), relationshipId]);
+    }
+  }
+  for (const [relationshipId, route] of routeById) {
+    const relationship = relationshipById.get(relationshipId);
+    if (!relationship) continue;
+    const otherRoutes = [...routeById]
+      .filter(([otherRelationshipId]) => otherRelationshipId !== relationshipId)
+      .map(([, otherRoute]) => otherRoute);
+    const alignedRoute = alignedFacingEndpointRoute(route, relationship, input, endpointGroups);
+    routeById.set(relationshipId, routeWithBestCleanupCandidate([
+      route,
+      alignedRoute,
+      ...alternateMiddleDoglegRoutes(route),
+      ...alternateMiddleDoglegRoutes(alignedRoute)
+    ], otherRoutes, relationship, input));
+  }
+}
+
 function spreadSharedSideEndpoints(plannedRawRoutes, input) {
   const relationshipById = new Map(input.relationships.map((relationship) => [relationship.id, relationship]));
   const endpointGroups = new Map();
@@ -997,19 +1031,7 @@ function spreadSharedSideEndpoints(plannedRawRoutes, input) {
       routeById.set(endpoint.relationshipId, routeWithBestCleanupCandidate(candidates, otherRoutes, endpoint.relationship, input));
     });
   }
-  for (const [relationshipId, route] of routeById) {
-    const otherRoutes = [...routeById]
-      .filter(([otherRelationshipId]) => otherRelationshipId !== relationshipId)
-      .map(([, otherRoute]) => otherRoute);
-    const relationship = relationshipById.get(relationshipId);
-    const alignedRoute = alignedFacingEndpointRoute(route, relationship, input, endpointGroups);
-    routeById.set(relationshipId, routeWithBestCleanupCandidate([
-      route,
-      alignedRoute,
-      ...alternateMiddleDoglegRoutes(route),
-      ...alternateMiddleDoglegRoutes(alignedRoute)
-    ], otherRoutes, relationship, input));
-  }
+  realignFacingEndpoints(routeById, relationshipById, input);
   reorderSharedSurfaceMounts(routeById, relationshipById, input);
   routeReciprocalPairsParallel(routeById, relationshipById, input);
   reduceCrossingsBySurfaceSwaps(routeById, relationshipById, input);
@@ -1645,6 +1667,13 @@ export function routeEdges(input) {
       routeReciprocalPairsParallel(relievedById, relationshipById, input, new Set(relief.pairs.flat()));
     }
     reduceCrossingsBySurfaceSwaps(relievedById, relationshipById, input);
+    //   4. re-align facing pairs. reorderSharedSurfaceMounts re-spreads each surface
+    //      independently, so a facing reciprocal pair whose two ends sit on differently-
+    //      populated surfaces (unified.right carries just the pair, memory.left also carries
+    //      the sqlite traffic) lands on mismatched offsets and the straight run kinks. This is
+    //      the same facing alignment spreadSharedSideEndpoints applies; the post-relief replay
+    //      has to re-run it because reorder above just disturbed those offsets.
+    realignFacingEndpoints(relievedById, relationshipById, input);
   }
   // Final mount-assignment authority: a cost-guarded refinement that re-homes endpoints to
   // the surfaces the lexicographic objective prefers (e.g. a reciprocal return mirroring its
