@@ -99,7 +99,7 @@ export const MOUNT_COST = {
   intentMismatch: 1_500,           // ~250px — mounting on the side facing AWAY from the partner (the far-edge wrap)
   overCapacity: 1_000,             // ~167px per excess mount — SOFT: mild over-subscription is tolerated
   cramped: 120,                    // #3 CROWDING — per unit a gap is below MIN_LEGIBLE_GAP; below a crossing (24 units < one crossing) so crossings are never traded for it
-  bend: 300,                       // ~50px — a single corner (polish)
+  bend: 900,                       // ~50px — a single corner (polish)
   length: 6                        // base unit — per px of wire (polish)
 };
 
