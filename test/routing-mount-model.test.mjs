@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch, optimizeMountAssignments, routeIntersections, doglegCount, intentMismatchCount, excessLength, reciprocalParallelMoves, buildReciprocalGutterBridge } from "../viewer/src/routing/routeMountModel.js";
+import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch, optimizeMountAssignments, routeIntersections, doglegCount, intentMismatchCount, routeUnjustifiedNonFacing, excessLength, reciprocalParallelMoves, buildReciprocalGutterBridge } from "../viewer/src/routing/routeMountModel.js";
 import { crossingsBetween } from "../viewer/src/routing/routeEdges.js";
 import { MIN_LEGIBLE_GAP, MOUNT_COST } from "../viewer/src/routing/routeConstants.js";
 
@@ -166,6 +166,24 @@ test("intentMismatchCount penalizes mounting on the side facing away from the ta
   assert.equal(intentMismatchCount(facing, rel, input), 0, "facing mounts are not a mismatch");
   const away = { points: [{ x: 0, y: 20 }, { x: 200, y: 20 }] };       // a.LEFT faces away from b (to the right)
   assert.equal(intentMismatchCount(away, rel, input), 1, "mounting away from the target is a mismatch");
+});
+
+// The facing polish pass (tryIntentFacingMoves) optimizes this count, NOT the raw routeNonFacingCount
+// the reciprocal guard uses: it must treat a justified semantic escape as facing-correct or it would
+// "correct" a legitimate gutter escape back through its blocker. A facing mount and an UNjustified wrap
+// are scored here; the justified-escape exemption is guarded end-to-end by the "same-lane blocked
+// routes escape to the gutter" diagnostics test (which fails if this count over-counts escapes).
+test("routeUnjustifiedNonFacing counts off-facing mounts but not facing ones", () => {
+  const nodeRects = new Map([
+    ["a", { x: 0, y: 0, width: 40, height: 40 }],
+    ["b", { x: 200, y: 0, width: 40, height: 40 }]
+  ]);
+  const input = { nodeRects, visibleNodeIds: new Set(["a", "b"]), canvasWidth: 400, canvasHeight: 200 };
+  const rel = { id: "e", from: "a", to: "b", relationshipType: "flow" };
+  const facing = { points: [{ x: 40, y: 20 }, { x: 200, y: 20 }] };   // a.right -> b.left, both facing
+  assert.equal(routeUnjustifiedNonFacing(facing, rel, input), 0, "facing mounts are not a defect");
+  const wrap = { points: [{ x: 0, y: 20 }, { x: 200, y: 20 }] };       // a.LEFT, no blocker to justify the escape
+  assert.equal(routeUnjustifiedNonFacing(wrap, rel, input), 1, "an unjustified far-edge wrap is a defect");
 });
 
 test("reciprocalParallelMoves runs an overlapping return parallel to its request (cost-guarded)", () => {

@@ -3,7 +3,7 @@ import {
   RECIPROCAL_PARALLEL_OFFSET, BRIDGE_MOUNT_OFFSET, BRIDGE_GUTTER_CLEARANCE, BRIDGE_LANE_GAP, BRIDGE_MAX_LANES
 } from "./routeConstants.js";
 import { surfaceCapacity } from "./routePorts.js";
-import { deriveRouteIntent } from "./routeIntent.js";
+import { deriveRouteIntent, semanticSurfaceOptions } from "./routeIntent.js";
 import { shallowJogCount } from "./routeGeometry.js";
 import {
   endpointSide,
@@ -639,6 +639,121 @@ function routeNonFacingCount(route, rel, input) {
   return count;
 }
 
+// Lane/row-aware off-facing endpoints that are NOT a justified semantic escape — i.e. exactly the
+// endpoints the routeDiagnostics "non-facing-*-surface" finding (and the mount-audit) flag. A mount on
+// the expected facing surface, OR on a semantic escape surface the blocked-corridor model allows
+// (e.g. both ends escaping to a side gutter around a same-column blocker), is NOT a defect.
+// routeNonFacingCount (used as the reciprocal GUARD) counts raw side!=expected; that over-counts as an
+// optimization TARGET and would "correct" legitimate gutter escapes back through their blocker, so this
+// pass measures the justified-escape-aware count the diagnostic actually emits.
+export function routeUnjustifiedNonFacing(route, rel, input) {
+  const fromRect = input.nodeRects.get(rel.from);
+  const toRect = input.nodeRects.get(rel.to);
+  if (!fromRect || !toRect) return 0;
+  const intent = deriveRouteIntent({
+    relationship: rel, fromRect, toRect,
+    fromLaneIndex: input.laneIndexByNode?.get(rel.from),
+    toLaneIndex: input.laneIndexByNode?.get(rel.to),
+    fromRowIndex: input.rowIndexByNode?.get(rel.from),
+    toRowIndex: input.rowIndexByNode?.get(rel.to)
+  });
+  const sourceSide = endpointSide(fromRect, route.points[0]);
+  const targetSide = endpointSide(toRect, route.points.at(-1));
+  if (sourceSide === intent.expectedSourceSide && targetSide === intent.expectedTargetSide) return 0;
+  const blockerRects = [...(input.visibleNodeIds ?? [])]
+    .filter((nodeId) => nodeId !== rel.from && nodeId !== rel.to)
+    .map((nodeId) => input.nodeRects.get(nodeId))
+    .filter(Boolean);
+  const options = semanticSurfaceOptions({
+    expectedSides: { source: intent.expectedSourceSide, target: intent.expectedTargetSide },
+    relationship: rel, fromRect, toRect, blockerRects,
+    canvasWidth: input.canvasWidth, canvasHeight: input.canvasHeight
+  });
+  let count = 0;
+  if (sourceSide !== intent.expectedSourceSide && !options.source.has(sourceSide)) count += 1;
+  if (targetSide !== intent.expectedTargetSide && !options.target.has(targetSide)) count += 1;
+  return count;
+}
+
+// Sum of unjustified off-facing endpoints across every flow edge — the quantity tryIntentFacingMoves
+// drives down (matches the routeDiagnostics finding the mount-audit ranks).
+function totalNonFacing(routeById, relationshipById, input) {
+  let total = 0;
+  for (const [id, route] of routeById) {
+    const rel = relationshipById.get(id);
+    if (!rel || rel.relationshipType !== "flow" || !route?.points?.length) continue;
+    total += routeUnjustifiedNonFacing(route, rel, input);
+  }
+  return total;
+}
+
+// True if NO hard factor regressed. bend/length are polish (paid for by the facing gain below);
+// intentMismatch (the GEOMETRY far-edge-wrap term in the weighted objective) is excluded on purpose:
+// it can disagree with the lane/row-aware facing model, and when they disagree the lane-aware model
+// wins (it is what the diagnostic and the maintainer read). Every other factor — collisions, crossings,
+// all dogleg variants, crowding, over-capacity, shared segments — is a hard floor this pass must not raise.
+function noHardFactorWorsening(before, after) {
+  for (const key of Object.keys(after)) {
+    if (key === "bend" || key === "length" || key === "intentMismatch") continue;
+    if (after[key] > before[key]) return false;
+  }
+  return true;
+}
+
+// Polish objective for the facing pass: one facing correction (intentMismatch weight 1500) outranks a
+// single added bend (900), so a move may straighten intent at the cost of one polish bend but never the
+// reverse; length breaks ties toward shorter wire.
+function facingPolishCost(nonFacing, factors) {
+  return nonFacing * MOUNT_COST.intentMismatch + factors.bend * MOUNT_COST.bend + factors.length * MOUNT_COST.length;
+}
+
+// Decoupled final polish pass: pull a single mount that sits OFF its lane/row-aware facing surface onto
+// a facing (or justified-escape) surface, but ONLY when the move lowers the facing polish cost and
+// worsens NO hard factor. Facing is deliberately NOT a term in mountAssignmentCost (the weighted search
+// is byte-identical to before this pass existed): in the objective it diverts the greedy crossing search
+// into worse local optima — it over-piles mounts onto "correct" surfaces past capacity (the documented
+// regression). Running LAST, from the crossing-optimal layout, with a hard non-worsening guard, the pass
+// provably cannot raise crossings or over-capacity; it only claims the safe facing corrections the
+// per-edge and reciprocal stages leave on the table. One edge at a time: cases that need a coordinated
+// multi-edge re-layout to face correctly are left as routed, by design (facing yields to legibility).
+function tryIntentFacingMoves(routeById, relationshipById, input, buildRouteForSides) {
+  if (!buildRouteForSides) return;
+  for (const id of [...routeById.keys()].sort()) {
+    const rel = relationshipById.get(id);
+    const route = routeById.get(id);
+    if (!rel || !route?.points?.length || rel.relationshipType !== "flow") continue;
+    if (rel.preferredStartSide || rel.preferredEndSide) continue;
+    const fromRect = input.nodeRects.get(rel.from);
+    const toRect = input.nodeRects.get(rel.to);
+    if (!fromRect || !toRect || fromRect.fixedPorts || toRect.fixedPorts) continue;
+    if (routeUnjustifiedNonFacing(route, rel, input) === 0) continue;
+    const startSide = endpointSide(fromRect, route.points[0]);
+    const endSide = endpointSide(toRect, route.points.at(-1));
+    const beforeFactors = mountCostFactors(routeById, relationshipById, input);
+    const beforePolish = facingPolishCost(totalNonFacing(routeById, relationshipById, input), beforeFactors);
+    const saved = snapshotRoutes(routeById);
+    let bestPolish = beforePolish;
+    let bestState = null;
+    for (const candStart of SIDES) {
+      for (const candEnd of SIDES) {
+        if (candStart === startSide && candEnd === endSide) continue;
+        const rebuilt = buildRouteForSides(rel, candStart, candEnd, routeById);
+        if (!rebuilt?.points?.length || routeCollidesWithNonEndpoints(rebuilt, rel, input)) continue;
+        routeById.set(id, rebuilt);
+        respreadSurfaces(routeById, relationshipById, input);
+        const factors = mountCostFactors(routeById, relationshipById, input);
+        const polish = facingPolishCost(totalNonFacing(routeById, relationshipById, input), factors);
+        if (polish < bestPolish && noHardFactorWorsening(beforeFactors, factors)) {
+          bestPolish = polish;
+          bestState = snapshotRoutes(routeById);
+        }
+        for (const [sid, sr] of saved) routeById.set(sid, sr);
+      }
+    }
+    if (bestState) for (const [sid, sr] of bestState) routeById.set(sid, sr);
+  }
+}
+
 // Per-node-pair stage: for each reciprocal flow pair (A->B and B->A), JOINTLY re-home the
 // request and return so the return mirrors its request instead of switchbacking. The per-edge
 // trySideMoves CANNOT reach this: mirroring the return alone wraps it around the partner's far
@@ -794,6 +909,11 @@ export function optimizeMountAssignments(routeById, relationshipById, input, opt
   // a reciprocal pair the per-edge moves can't reach (a return that should mirror its request but
   // switchbacks). Its own cost guard keeps it from regressing.
   reciprocalParallelMoves(routeById, relationshipById, input, buildRouteForSides);
+  // Final decoupled polish: claim the safe single-edge facing corrections the search left behind. Runs
+  // after the crossing-optimal layout is fixed and is hard-guarded against worsening any structural
+  // factor, so it cannot raise crossings/over-capacity — it only moves a mount onto its facing surface
+  // when that is free of cost in everything but bends/length.
+  tryIntentFacingMoves(routeById, relationshipById, input, buildRouteForSides);
   if (debug && entryFactors) {
     const exitFactors = mountCostFactors(routeById, relationshipById, input);
     const diff = {};
