@@ -648,7 +648,7 @@ function routeNonFacingCount(route, rel, input) {
 // vacate a congested surface). Cost-guarded with the SAME weighted-sum objective as the rest of
 // the optimizer: the cheapest coupled move that lowers total cost wins. A pair with nothing to
 // gain is left untouched — worst case the stage validates prior stages.
-export function reciprocalParallelMoves(routeById, relationshipById, input) {
+export function reciprocalParallelMoves(routeById, relationshipById, input, buildRouteForSides = null) {
   const byNodePair = new Map();
   for (const rel of relationshipById.values()) {
     if (rel.relationshipType !== "flow" || !routeById.has(rel.id)) continue;
@@ -703,6 +703,26 @@ export function reciprocalParallelMoves(routeById, relationshipById, input) {
           if (clearance > headroom) break;
           const bridge = buildReciprocalGutterBridge(request, ret, savedRequest, savedReturn, input, side, clearance);
           if (bridge) coupled.push(bridge);
+        }
+      }
+    }
+    // Coupled perpendicular-escape: when the request leaves its mounted surface and immediately
+    // turns to travel perpendicular (a dogleg at the mount, because the facing corridor is blocked
+    // so the route escapes up/down/around), re-home the request onto the surface it escapes TOWARD
+    // and mirror the return to follow it. trySideMoves can't reach this per-edge: moving the request
+    // alone drops its escape leg onto the return's lane (a shared segment the cost guard rejects),
+    // so the return must co-move onto a parallel offset lane. Rebuilt around the current routes;
+    // the guards below keep it only if it lowers cost without adding a crossing or losing facing.
+    if (buildRouteForSides && ra && rb) {
+      const reqStart = endpointSide(ra, savedRequest.points[0]);
+      const reqEnd = endpointSide(rb, savedRequest.points.at(-1));
+      for (const candStart of SIDES) {
+        if (candStart === reqStart) continue;
+        const rebuiltRequest = buildRouteForSides(request, candStart, reqEnd, routeById);
+        if (!rebuiltRequest?.points?.length) continue;
+        const reversedRebuilt = [...rebuiltRequest.points].reverse();
+        for (const delta of [RECIPROCAL_PARALLEL_OFFSET, -RECIPROCAL_PARALLEL_OFFSET]) {
+          coupled.push({ request: rebuiltRequest, return: routeWithPoints(savedReturn, offsetOrthogonalPolyline(reversedRebuilt, delta)) });
         }
       }
     }
@@ -768,7 +788,7 @@ export function optimizeMountAssignments(routeById, relationshipById, input, opt
   // Per-node-pair reciprocal coordination runs once after the per-edge sweep converges: it co-moves
   // a reciprocal pair the per-edge moves can't reach (a return that should mirror its request but
   // switchbacks). Its own cost guard keeps it from regressing.
-  reciprocalParallelMoves(routeById, relationshipById, input);
+  reciprocalParallelMoves(routeById, relationshipById, input, buildRouteForSides);
   if (debug && entryFactors) {
     const exitFactors = mountCostFactors(routeById, relationshipById, input);
     const diff = {};
