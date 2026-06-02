@@ -716,13 +716,18 @@ export function reciprocalParallelMoves(routeById, relationshipById, input, buil
     if (buildRouteForSides && ra && rb) {
       const reqStart = endpointSide(ra, savedRequest.points[0]);
       const reqEnd = endpointSide(rb, savedRequest.points.at(-1));
+      // Vary BOTH the request's start AND end side — a blocked request often mounts the wrong
+      // surface at both ends, so re-homing only the source leaves the target dogleg in place. The
+      // weighted-sum + crossing-non-increase + facing guards below keep only a strict improvement.
       for (const candStart of SIDES) {
-        if (candStart === reqStart) continue;
-        const rebuiltRequest = buildRouteForSides(request, candStart, reqEnd, routeById);
-        if (!rebuiltRequest?.points?.length) continue;
-        const reversedRebuilt = [...rebuiltRequest.points].reverse();
-        for (const delta of [RECIPROCAL_PARALLEL_OFFSET, -RECIPROCAL_PARALLEL_OFFSET]) {
-          coupled.push({ request: rebuiltRequest, return: routeWithPoints(savedReturn, offsetOrthogonalPolyline(reversedRebuilt, delta)) });
+        for (const candEnd of SIDES) {
+          if (candStart === reqStart && candEnd === reqEnd) continue;
+          const rebuiltRequest = buildRouteForSides(request, candStart, candEnd, routeById);
+          if (!rebuiltRequest?.points?.length) continue;
+          const reversedRebuilt = [...rebuiltRequest.points].reverse();
+          for (const delta of [RECIPROCAL_PARALLEL_OFFSET, -RECIPROCAL_PARALLEL_OFFSET]) {
+            coupled.push({ request: rebuiltRequest, return: routeWithPoints(savedReturn, offsetOrthogonalPolyline(reversedRebuilt, delta)) });
+          }
         }
       }
     }
