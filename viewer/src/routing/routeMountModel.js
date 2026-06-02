@@ -388,7 +388,7 @@ function reliefCandidateIds(routeById, relationshipById, input) {
   }
   const directed = new Set();
   for (const rel of relationshipById.values()) {
-    if (routeById.has(rel.id)) directed.add(`${rel.from} ${rel.to}`);
+    if (routeById.has(rel.id)) directed.add(`${rel.from}\0${rel.to}`);
   }
   const routes = [...routeById.entries()];
   const crossing = new Set();
@@ -409,7 +409,7 @@ function reliefCandidateIds(routeById, relationshipById, input) {
     const startSide = fromRect ? endpointSide(fromRect, route.points[0]) : "";
     const endSide = toRect ? endpointSide(toRect, route.points.at(-1)) : "";
     const onOverCapacity = overCapacitySurfaces.has(`${rel.from} ${startSide}`) || overCapacitySurfaces.has(`${rel.to} ${endSide}`);
-    const reciprocalCrossing = crossing.has(id) && directed.has(`${rel.to} ${rel.from}`);
+    const reciprocalCrossing = crossing.has(id) && directed.has(`${rel.to}\0${rel.from}`);
     if (onOverCapacity || reciprocalCrossing) ids.push(id);
   }
   return ids.sort();

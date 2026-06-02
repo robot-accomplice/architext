@@ -1061,7 +1061,7 @@ function centerSoloReciprocalPairSurfaces(routeById, relationshipById, input) {
   const byNodePair = new Map();
   for (const relationship of relationshipById.values()) {
     if (relationship.relationshipType !== "flow" || !routeById.has(relationship.id)) continue;
-    const key = [relationship.from, relationship.to].sort().join(" ");
+    const key = [relationship.from, relationship.to].sort().join("\0");
     if (!byNodePair.has(key)) byNodePair.set(key, []);
     byNodePair.get(key).push(relationship);
   }
@@ -1258,7 +1258,7 @@ function routeReciprocalPairsParallel(routeById, relationshipById, input, restri
   for (const relationship of relationshipById.values()) {
     if (relationship.relationshipType !== "flow") continue;
     if (!routeById.has(relationship.id)) continue;
-    const key = [relationship.from, relationship.to].sort().join(" ");
+    const key = [relationship.from, relationship.to].sort().join("\0");
     if (!byNodePair.has(key)) byNodePair.set(key, []);
     byNodePair.get(key).push(relationship);
   }
