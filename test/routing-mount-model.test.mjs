@@ -194,6 +194,42 @@ test("reciprocalParallelMoves runs an overlapping return parallel to its request
   assert.ok(routeById.get("ba").points.every((p) => p.y !== 30), "return must leave the shared y=30 lane");
 });
 
+test("reciprocalParallelMoves pairs each round trip's return with its OWN request", () => {
+  // The same node pair (a<->b) carries TWO round trips: one over the top gutter (ab1/ba1) and
+  // one over the bottom gutter (ab2/ba2). A direction-keyed pairing would collapse the two
+  // a->b requests onto one key and mis-pair each return with the OTHER trip's request, dragging
+  // the bottom return up to the top gutter (or vice versa). Correct adjacency pairing mirrors
+  // each return parallel to its own request, so each return stays in its own gutter.
+  const nodeRects = new Map([
+    ["a", { x: 0, y: 0, width: 40, height: 40 }],
+    ["b", { x: 200, y: 0, width: 40, height: 40 }]
+  ]);
+  const input = { nodeRects, visibleNodeIds: new Set(["a", "b"]), canvasWidth: 280, canvasHeight: 200, relationships: [], style: "orthogonal" };
+  const top = (pts) => ({ style: "orthogonal", points: pts, bends: pts.length - 2, samples: [] });
+  const routeById = new Map([
+    ["ab1", top([{ x: 20, y: 0 }, { x: 20, y: -30 }, { x: 220, y: -30 }, { x: 220, y: 0 }])],
+    ["ba1", top([{ x: 220, y: 0 }, { x: 220, y: -30 }, { x: 20, y: -30 }, { x: 20, y: 0 }])],
+    ["ab2", top([{ x: 20, y: 40 }, { x: 20, y: 70 }, { x: 220, y: 70 }, { x: 220, y: 40 }])],
+    ["ba2", top([{ x: 220, y: 40 }, { x: 220, y: 70 }, { x: 20, y: 70 }, { x: 20, y: 40 }])]
+  ]);
+  const relationshipById = new Map([
+    ["ab1", { id: "ab1", from: "a", to: "b", relationshipType: "flow", displayIndex: 1 }],
+    ["ba1", { id: "ba1", from: "b", to: "a", relationshipType: "flow", displayIndex: 2 }],
+    ["ab2", { id: "ab2", from: "a", to: "b", relationshipType: "flow", displayIndex: 3 }],
+    ["ba2", { id: "ba2", from: "b", to: "a", relationshipType: "flow", displayIndex: 4 }]
+  ]);
+  input.relationships = [...relationshipById.values()];
+  reciprocalParallelMoves(routeById, relationshipById, input);
+  // Each return mirrors its OWN request, so it stays in that request's gutter: the top return
+  // never dips below the node row, the bottom return never rises above it. A mis-pairing sends a
+  // return to the wrong gutter and breaks one of these.
+  assert.ok(routeById.get("ba1").points.every((p) => p.y <= 0), "top-gutter return stays in the top gutter");
+  assert.ok(routeById.get("ba2").points.every((p) => p.y >= 40), "bottom-gutter return stays in the bottom gutter");
+  // Each return must have left the lane it shared with its request (the mirror fired).
+  assert.ok(routeById.get("ba1").points.some((p) => p.y !== 0 && p.y !== -30), "top return separated onto its own lane");
+  assert.ok(routeById.get("ba2").points.some((p) => p.y !== 40 && p.y !== 70), "bottom return separated onto its own lane");
+});
+
 test("buildReciprocalGutterBridge builds two nested, non-crossing routes over the gutter", () => {
   // A (left) and B (right) in the same row; a reciprocal pair a->b / b->a.
   const nodeRects = new Map([

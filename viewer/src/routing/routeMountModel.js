@@ -3,6 +3,7 @@ import {
   RECIPROCAL_PARALLEL_OFFSET, BRIDGE_MOUNT_OFFSET, BRIDGE_GUTTER_CLEARANCE, BRIDGE_LANE_GAP, BRIDGE_MAX_LANES
 } from "./routeConstants.js";
 import { surfaceCapacity } from "./routePorts.js";
+import { deriveRouteIntent } from "./routeIntent.js";
 import { shallowJogCount } from "./routeGeometry.js";
 import {
   endpointSide,
@@ -167,7 +168,13 @@ export function strictCrossingCount(routeA, routeB) {
 // in MOUNT_COST, no factor special-cased. Costs are NOT assumed equal: each factor carries its
 // own weight, and none is a raw wire-length (the `length` factor is avoidable detour only).
 export function mountAssignmentCost(routeById, relationshipById, input) {
-  const factors = mountCostFactors(routeById, relationshipById, input);
+  return weightedMountCost(mountCostFactors(routeById, relationshipById, input));
+}
+
+// Weighted sum of a pre-measured factor breakdown. Split out from mountAssignmentCost so a caller
+// that already has the factor vector (e.g. to also read factors.crossing) can score it without
+// recomputing the O(E^2) measurement.
+function weightedMountCost(factors) {
   let cost = 0;
   for (const factor of Object.keys(factors)) cost += (MOUNT_COST[factor] ?? 0) * factors[factor];
   return cost;
@@ -608,6 +615,30 @@ export function buildReciprocalGutterBridge(requestRel, returnRel, requestRoute,
   return { request, return: ret };
 }
 
+// How many of a route's two endpoints mount OFF the surface the routeDiagnostics intent model
+// expects to face the partner. Uses the SAME lane/row-aware deriveRouteIntent as the diagnostic
+// (NOT pure geometric facing), so the reciprocal stage's facing guard measures exactly what the
+// "non-facing" finding measures. See the guard for why this is needed beyond the cost model's
+// intentMismatch factor.
+function routeNonFacingCount(route, rel, input) {
+  const fromRect = input.nodeRects.get(rel.from);
+  const toRect = input.nodeRects.get(rel.to);
+  if (!fromRect || !toRect) return 0;
+  const intent = deriveRouteIntent({
+    relationship: rel,
+    fromRect,
+    toRect,
+    fromLaneIndex: input.laneIndexByNode?.get(rel.from),
+    toLaneIndex: input.laneIndexByNode?.get(rel.to),
+    fromRowIndex: input.rowIndexByNode?.get(rel.from),
+    toRowIndex: input.rowIndexByNode?.get(rel.to)
+  });
+  let count = 0;
+  if (endpointSide(fromRect, route.points[0]) !== intent.expectedSourceSide) count += 1;
+  if (endpointSide(toRect, route.points.at(-1)) !== intent.expectedTargetSide) count += 1;
+  return count;
+}
+
 // Per-node-pair stage: for each reciprocal flow pair (A->B and B->A), JOINTLY re-home the
 // request and return so the return mirrors its request instead of switchbacking. The per-edge
 // trySideMoves CANNOT reach this: mirroring the return alone wraps it around the partner's far
@@ -630,16 +661,23 @@ export function reciprocalParallelMoves(routeById, relationshipById, input) {
     // Decompose the node pair into reciprocal sub-pairs (each A->B with its B->A) and mirror EACH:
     // a pair joined by more than one round trip (memory<->sqlite carries query/return AND
     // ingest/return) must get every return run parallel to its request, not just the lone-pair case.
-    const byDir = new Map(group.map((r) => [`${r.from} ${r.to}`, r]));
+    // Pair by displayIndex adjacency, NOT by a direction-keyed map: a map keyed on `${from} ${to}`
+    // collapses the two same-direction requests (query AND curate are both memory->sqlite) onto one
+    // key, which mis-pairs each request with the OTHER round trip's return. Match each request, in
+    // flow order, with the nearest not-yet-paired return that follows it (a return is the opposite
+    // direction with a later displayIndex), so query/return and curate/return stay distinct pairs.
+    const sorted = [...group].sort((a, b) => (a.displayIndex ?? 0) - (b.displayIndex ?? 0));
     const paired = new Set();
-    for (const rel of group) {
-      if (paired.has(rel.id)) continue;
-      const partner = byDir.get(`${rel.to} ${rel.from}`);
-      if (!partner || paired.has(partner.id)) continue;
-      paired.add(rel.id);
-      paired.add(partner.id);
-      const request = (rel.displayIndex ?? 0) <= (partner.displayIndex ?? 0) ? rel : partner;
-      const ret = request === rel ? partner : rel;
+    for (const request of sorted) {
+      if (paired.has(request.id)) continue;
+      const ret = sorted.find((o) =>
+        !paired.has(o.id) && o.id !== request.id &&
+        o.from === request.to && o.to === request.from &&
+        (o.displayIndex ?? 0) >= (request.displayIndex ?? 0)
+      );
+      if (!ret) continue;
+      paired.add(request.id);
+      paired.add(ret.id);
     const savedRequest = routeById.get(request.id);
     const savedReturn = routeById.get(ret.id);
     if (!savedRequest?.points?.length || !savedReturn?.points?.length) continue;
@@ -669,7 +707,9 @@ export function reciprocalParallelMoves(routeById, relationshipById, input) {
       }
     }
 
-    const before = mountAssignmentCost(routeById, relationshipById, input);
+    const beforeFactors = mountCostFactors(routeById, relationshipById, input);
+    const before = weightedMountCost(beforeFactors);
+    const savedNonFacing = routeNonFacingCount(savedRequest, request, input) + routeNonFacingCount(savedReturn, ret, input);
     let bestCost = before;
     let bestRequest = savedRequest;
     let bestReturn = savedReturn;
@@ -678,18 +718,29 @@ export function reciprocalParallelMoves(routeById, relationshipById, input) {
       if (routeCollidesWithNonEndpoints(candidate.return, ret, input)) continue;
       routeById.set(request.id, candidate.request);
       routeById.set(ret.id, candidate.return);
-      const cost = mountAssignmentCost(routeById, relationshipById, input);
-      // Single weighted-sum guard: keep the cheapest coupled move that lowers total cost. A move
-      // that adds a crossing raises cost (crossing is weighted high) and is rejected; a move that
-      // only straightens a switchback into a parallel mirror (cost-flat in crossings, big drop in
-      // bends/length) is accepted — the legibility case this stage exists for.
-      if (cost < bestCost) {
-        bestCost = cost;
-        bestRequest = candidate.request;
-        bestReturn = candidate.return;
-      }
+      const factors = mountCostFactors(routeById, relationshipById, input);
       routeById.set(request.id, savedRequest);
       routeById.set(ret.id, savedReturn);
+      const cost = weightedMountCost(factors);
+      // Keep the cheapest coupled move that lowers total cost.
+      if (cost >= bestCost) continue;
+      // Never let this legibility stage ADD a crossing. The global objective ranks doglegs above
+      // crossings (dogleg 3300 > crossing 3000), so a mirror that trades one dogleg for a crossing
+      // still lowers cost — fine as a global tradeoff, but wrong here: straightening a return must
+      // not make the diagram cross more. Scoped to this stage; the global weighting is unchanged.
+      if (factors.crossing > beforeFactors.crossing) continue;
+      // Facing guard. The weighted-sum objective is blind to a return that leaves the surface
+      // FACING its partner for a PERPENDICULAR one: its intentMismatch factor only counts a full
+      // far-edge wrap, not a perpendicular mount, so a coupled move can shave crowding/bends by
+      // pulling an endpoint off its facing surface — a legibility regression (the routeDiagnostics
+      // "non-facing" finding) the cost can't see. Refuse any move that raises the pair's off-facing
+      // endpoint count UNLESS it strictly removes a crossing, the one trade where leaving the
+      // facing surface earns its keep (the witness: a return mirrors its request to kill a crossing).
+      const candidateNonFacing = routeNonFacingCount(candidate.request, request, input) + routeNonFacingCount(candidate.return, ret, input);
+      if (candidateNonFacing > savedNonFacing && factors.crossing >= beforeFactors.crossing) continue;
+      bestCost = cost;
+      bestRequest = candidate.request;
+      bestReturn = candidate.return;
     }
     routeById.set(request.id, bestRequest);
     routeById.set(ret.id, bestReturn);
