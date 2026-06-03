@@ -91,10 +91,10 @@ export const MOUNT_COST = {
   selfOverlap: 5_000_000,          // egregious — a route overlapping itself
   sharedSegment: 200_000,          // two edges drawn as one line (per overlapping pair)
   sharedSegmentLength: 1_500,      //   …per px of that overlap
-  dogleg: 3_300,                   // #1 DOGLEG — a jog against travel direction; always avoidable, priced just above a crossing
-  shallowJog: 3_300,               // #1 DOGLEG — the visible small (<36px) stair-step; always avoidable by aligning mounts
-  monotonicBacktrack: 3_300,       // #1 DOGLEG — a route doubling back on itself
-  perimeterFallback: 4_200,        // a forced detour around a node's perimeter (dogleg-class)
+  dogleg: 6_000,                   // #1 DOGLEG — a jog against travel direction; virtually never acceptable, priced 2x a crossing
+  shallowJog: 6_000,               // #1 DOGLEG — the visible small (<36px) stair-step; always avoidable by aligning mounts
+  monotonicBacktrack: 6_000,       // #1 DOGLEG — a route doubling back on itself
+  perimeterFallback: 4_200,        // a forced detour around a node's perimeter (dogleg-class; left at 4200, not swept)
   crossing: 3_000,                 // #2 CROSSING — one honest crossing
   intentMismatch: 1_500,           // ~250px — mounting on the side facing AWAY from the partner (the far-edge wrap)
   overCapacity: 1_000,             // ~167px per excess mount — SOFT: mild over-subscription is tolerated
