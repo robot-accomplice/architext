@@ -615,6 +615,59 @@ export function buildReciprocalGutterBridge(requestRel, returnRel, requestRoute,
   return { request, return: ret };
 }
 
+// Rebuild a request route as a MONOTONIC staircase on its current mount surfaces: keep both mount
+// points, connect them with an orthogonal path that turns at a SHARED elbow (mid-column for a
+// facing horizontal pair, mid-row for a vertical pair, the departure-respecting corner for a mixed
+// L). A monotonic staircase has ZERO doglegs by construction — every leg runs with the from->to
+// direction, never against it — so when the planner left a congestion overshoot, this offers the
+// clean shape. reciprocalParallelMoves mirrors it for the return; the stage's cost+crossing+facing
+// guard keeps it only if it actually lowers cost without adding a crossing or losing facing.
+export function buildMonotonicStaircase(requestRoute, startSide, endSide, elbow) {
+  const pA = requestRoute.points[0];
+  const pB = requestRoute.points.at(-1);
+  const horiz = (side) => side === "left" || side === "right";
+  let points;
+  if (horiz(startSide) && horiz(endSide)) {
+    points = pA.y === pB.y ? [pA, pB] : [pA, { x: elbow, y: pA.y }, { x: elbow, y: pB.y }, pB];
+  } else if (!horiz(startSide) && !horiz(endSide)) {
+    points = pA.x === pB.x ? [pA, pB] : [pA, { x: pA.x, y: elbow }, { x: pB.x, y: elbow }, pB];
+  } else {
+    // Mixed L: leave pA perpendicular to its side, arrive pB perpendicular to its side.
+    const corner = horiz(startSide) ? { x: pB.x, y: pA.y } : { x: pA.x, y: pB.y };
+    points = [pA, corner, pB];
+  }
+  return routeWithPoints(requestRoute, points);
+}
+
+// Clear elbow coordinates along `axis` between lo..hi: the centres of the gutters between visible
+// nodes whose PERPENDICULAR span overlaps the staircase's band, so the turning leg threads an open
+// channel instead of crossing a node column (the naive midpoint usually lands on one). Up to `max`
+// candidates, nearest-the-midpoint first; the caller's collision/crossing guard makes the final call.
+function clearElbows(input, axis, lo, hi, bandLo, bandHi, max = 4) {
+  const a = Math.min(lo, hi);
+  const b = Math.max(lo, hi);
+  const occupied = [];
+  for (const id of input.visibleNodeIds ?? []) {
+    const r = input.nodeRects.get(id);
+    if (!r) continue;
+    const spanLo = axis === "x" ? r.y : r.x;
+    const spanHi = axis === "x" ? r.y + r.height : r.x + r.width;
+    if (spanHi <= bandLo || spanLo >= bandHi) continue;
+    occupied.push(axis === "x" ? [r.x, r.x + r.width] : [r.y, r.y + r.height]);
+  }
+  occupied.sort((p, q) => p[0] - q[0]);
+  const gutters = [];
+  let cursor = a;
+  for (const [s, e] of occupied) {
+    if (s > cursor) gutters.push((cursor + Math.min(s, b)) / 2);
+    cursor = Math.max(cursor, e);
+    if (cursor >= b) break;
+  }
+  if (cursor < b) gutters.push((cursor + b) / 2);
+  const mid = (a + b) / 2;
+  return gutters.filter((g) => g > a && g < b).sort((p, q) => Math.abs(p - mid) - Math.abs(q - mid)).slice(0, max);
+}
+
 // How many of a route's two endpoints mount OFF the surface the routeDiagnostics intent model
 // expects to face the partner. Uses the SAME lane/row-aware deriveRouteIntent as the diagnostic
 // (NOT pure geometric facing), so the reciprocal stage's facing guard measures exactly what the
@@ -802,6 +855,32 @@ export function reciprocalParallelMoves(routeById, relationshipById, input, buil
     const coupled = [];
     for (const delta of [RECIPROCAL_PARALLEL_OFFSET, -RECIPROCAL_PARALLEL_OFFSET]) {
       coupled.push({ request: savedRequest, return: routeWithPoints(savedReturn, offsetOrthogonalPolyline(reversed, delta)) });
+    }
+    // Shared-corner staircase: rebuild the request as a monotonic (dogleg-free) staircase on its
+    // current surfaces and mirror it. The plain mirror above preserves whatever dogleg the request
+    // already has; this offers the clean shape when the planner left a congestion overshoot. Guarded
+    // below — kept only if cheaper with no added crossing and no lost facing.
+    const ras = input.nodeRects.get(request.from);
+    const rbs = input.nodeRects.get(request.to);
+    if (ras && rbs) {
+      const pA = savedRequest.points[0];
+      const pB = savedRequest.points.at(-1);
+      const startSide = endpointSide(ras, pA);
+      const endSide = endpointSide(rbs, pB);
+      const horiz = (side) => side === "left" || side === "right";
+      // Sweep clear gutter elbows for a facing Z (turning leg threads an open channel); the mixed-L
+      // case has a single departure-respecting corner (elbow ignored).
+      let elbows;
+      if (horiz(startSide) && horiz(endSide)) elbows = clearElbows(input, "x", pA.x, pB.x, Math.min(pA.y, pB.y), Math.max(pA.y, pB.y));
+      else if (!horiz(startSide) && !horiz(endSide)) elbows = clearElbows(input, "y", pA.y, pB.y, Math.min(pA.x, pB.x), Math.max(pA.x, pB.x));
+      else elbows = [0];
+      for (const elbow of elbows) {
+        const staircase = buildMonotonicStaircase(savedRequest, startSide, endSide, elbow);
+        const reversedStair = [...staircase.points].reverse();
+        for (const delta of [RECIPROCAL_PARALLEL_OFFSET, -RECIPROCAL_PARALLEL_OFFSET]) {
+          coupled.push({ request: staircase, return: routeWithPoints(savedReturn, offsetOrthogonalPolyline(reversedStair, delta)) });
+        }
+      }
     }
     // Then gutter bridges at progressively higher lanes (a low lane crosses the congested band just
     // above/below the row; a higher one clears it). All arithmetic — no grid search.

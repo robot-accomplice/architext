@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch, optimizeMountAssignments, routeIntersections, doglegCount, intentMismatchCount, routeUnjustifiedNonFacing, excessLength, reciprocalParallelMoves, buildReciprocalGutterBridge } from "../viewer/src/routing/routeMountModel.js";
+import { surfaceSpacingCost, mountAssignmentCost, applyOffsetWithMatch, optimizeMountAssignments, routeIntersections, doglegCount, intentMismatchCount, routeUnjustifiedNonFacing, buildMonotonicStaircase, excessLength, reciprocalParallelMoves, buildReciprocalGutterBridge } from "../viewer/src/routing/routeMountModel.js";
 import { crossingsBetween } from "../viewer/src/routing/routeEdges.js";
 import { MIN_LEGIBLE_GAP, MOUNT_COST } from "../viewer/src/routing/routeConstants.js";
 
@@ -184,6 +184,17 @@ test("routeUnjustifiedNonFacing counts off-facing mounts but not facing ones", (
   assert.equal(routeUnjustifiedNonFacing(facing, rel, input), 0, "facing mounts are not a defect");
   const wrap = { points: [{ x: 0, y: 20 }, { x: 200, y: 20 }] };       // a.LEFT, no blocker to justify the escape
   assert.equal(routeUnjustifiedNonFacing(wrap, rel, input), 1, "an unjustified far-edge wrap is a defect");
+});
+
+test("buildMonotonicStaircase produces a dogleg-free path for a cross-row facing pair", () => {
+  const fromRect = { x: 0, y: 200, width: 40, height: 40 };   // source, lower-left
+  const toRect = { x: 200, y: 0, width: 40, height: 40 };     // target, upper-right (a row up)
+  // request mounts source.right and target.left — facing, but the partner is a row up
+  const requestRoute = { points: [{ x: 40, y: 220 }, { x: 200, y: 20 }] };
+  const staircase = buildMonotonicStaircase(requestRoute, "right", "left", 120);
+  // The Z turns at the shared elbow column and never travels against the from->to direction.
+  assert.equal(doglegCount(staircase, fromRect, toRect), 0, "a shared-elbow staircase has no doglegs");
+  assert.deepEqual(staircase.points, [{ x: 40, y: 220 }, { x: 120, y: 220 }, { x: 120, y: 20 }, { x: 200, y: 20 }]);
 });
 
 test("reciprocalParallelMoves runs an overlapping return parallel to its request (cost-guarded)", () => {
