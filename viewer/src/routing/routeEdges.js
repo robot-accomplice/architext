@@ -1116,6 +1116,128 @@ function centerSoloReciprocalPairSurfaces(routeById, relationshipById, input) {
   }
 }
 
+// Count visible segment overlaps that involve one of `ids` (each unordered pair counted
+// once), so a distribution move that slides a mount onto another route's lane is detectable.
+function sharedSegmentCountInvolving(routeById, ids) {
+  const idSet = new Set(ids);
+  let total = 0;
+  for (const id of ids) {
+    const segments = axisAlignedSegments(routeById.get(id));
+    for (const [otherId, otherRoute] of routeById) {
+      if (otherId === id) continue;
+      if (idSet.has(otherId) && otherId < id) continue;
+      const otherSegments = axisAlignedSegments(otherRoute);
+      for (const segment of segments) {
+        for (const otherSegment of otherSegments) {
+          if (sharedSegmentLength(segment, otherSegment) > 1) total += 1;
+        }
+      }
+    }
+  }
+  return total;
+}
+
+// Shared guard for the distribution passes: run `applyMoves` (which mutates the routes named
+// in `ids` within routeById), then keep the result only if it added no bend, no node
+// collision, and no shared visible segment; otherwise restore the saved routes. This is the
+// one place the "a redistribution may only refine" policy lives.
+function keepMountMovesUnlessWorse(routeById, relationshipById, input, ids, applyMoves) {
+  const saved = ids.map((id) => [id, routeById.get(id)]);
+  const beforeBends = saved.reduce((sum, [, route]) => sum + (route.bends ?? 0), 0);
+  const beforeShared = sharedSegmentCountInvolving(routeById, ids);
+  applyMoves();
+  const afterBends = ids.reduce((sum, id) => sum + (routeById.get(id).bends ?? 0), 0);
+  const collides = ids.some((id) => routeCollidesWithNonEndpoints(routeById.get(id), relationshipById.get(id), input));
+  if (collides || afterBends > beforeBends || sharedSegmentCountInvolving(routeById, ids) > beforeShared) {
+    for (const [id, route] of saved) routeById.set(id, route);
+    return false;
+  }
+  return true;
+}
+
+// Post-pass: even out STRAIGHT FACING runs between two adjacent nodes. When a node pair
+// exchanges several straight reciprocal runs across one facing surface-pair (e.g. the
+// Unified Pipeline <-> Memory request/return/ingest lines, all horizontal between
+// UP.right and Memory.left), distributeSurfaceMountUnits cannot spread them: moving one
+// node's mount alone tilts the straight run, so its guard reverts. Here both ends move
+// together — each run is re-homed to an even slot by setting the SAME perpendicular
+// coordinate on both endpoints, so the line stays straight while the set spreads. Runs in
+// the group are ordered like the rest of the router (opposite-node centre, then display
+// index) which keeps reciprocal partners adjacent. Guarded: reverts if it adds a bend, a
+// node collision, or a shared segment.
+function distributeFacingReciprocalSurfaces(routeById, relationshipById, input) {
+  // How many flow endpoints terminate on each node face. A facing group is only re-spaced
+  // when both its faces carry NOTHING but that group's runs — otherwise spreading the facing
+  // runs in isolation ignores the other mounts and unbalances a mixed hub face.
+  const faceOccupancy = new Map();
+  for (const [relationshipId, route] of routeById) {
+    const relationship = relationshipById.get(relationshipId);
+    if (!relationship || relationship.relationshipType !== "flow" || !route.points?.length) continue;
+    for (const [nodeId, point] of [[relationship.from, route.points[0]], [relationship.to, route.points.at(-1)]]) {
+      const rect = input.nodeRects.get(nodeId);
+      const side = rect ? endpointSide(rect, point) : "";
+      if (!rect || !side) continue;
+      const faceKey = sideEndpointKey(nodeId, side);
+      faceOccupancy.set(faceKey, (faceOccupancy.get(faceKey) ?? 0) + 1);
+    }
+  }
+  const groups = new Map();
+  for (const [relationshipId, route] of routeById) {
+    const relationship = relationshipById.get(relationshipId);
+    if (!relationship || relationship.relationshipType !== "flow") continue;
+    if (!route.points || route.points.length !== 2) continue; // only clean straight runs
+    const fromRect = input.nodeRects.get(relationship.from);
+    const toRect = input.nodeRects.get(relationship.to);
+    if (!fromRect || !toRect || fromRect.fixedPorts || toRect.fixedPorts) continue;
+    const [start, end] = route.points;
+    const fromSide = endpointSide(fromRect, start);
+    const toSide = endpointSide(toRect, end);
+    if (!sideNeedsPostSelectionCentering(fromSide) || !sideNeedsPostSelectionCentering(toSide)) continue;
+    const horizontal = start.y === end.y && (fromSide === "left" || fromSide === "right") && (toSide === "left" || toSide === "right");
+    const vertical = start.x === end.x && (fromSide === "top" || fromSide === "bottom") && (toSide === "top" || toSide === "bottom");
+    if (!horizontal && !vertical) continue;
+    const axis = horizontal ? "y" : "x";
+    // Key by the shared surface-pair (direction-independent) so both round-trip directions land together.
+    const key = [sideEndpointKey(relationship.from, fromSide), sideEndpointKey(relationship.to, toSide)].sort().join("|");
+    if (!groups.has(key)) {
+      // Distribution span = the overlap of the two faces along the run axis (where a straight run is valid on both).
+      const fromStart = axis === "y" ? fromRect.y : fromRect.x;
+      const fromLen = axis === "y" ? fromRect.height : fromRect.width;
+      const toStart = axis === "y" ? toRect.y : toRect.x;
+      const toLen = axis === "y" ? toRect.height : toRect.width;
+      const lo = Math.max(fromStart, toStart);
+      const hi = Math.min(fromStart + fromLen, toStart + toLen);
+      groups.set(key, { axis, lo, hi, runs: [] });
+    }
+    const group = groups.get(key);
+    if (group.axis !== axis) continue;
+    const oppositeRect = toRect;
+    const oppositeCenter = axis === "y" ? oppositeRect.y + oppositeRect.height / 2 : oppositeRect.x + oppositeRect.width / 2;
+    group.runs.push({ relationshipId, axis, current: start[axis], oppositeCenter, displayIndex: relationship.displayIndex ?? 0 });
+  }
+
+  for (const [key, { axis, lo, hi, runs }] of groups.entries()) {
+    if (runs.length < 2 || hi <= lo) continue;
+    // Only re-space when both facing surfaces carry nothing but this group's runs; a mixed
+    // face (facing runs sharing a surface with unrelated mounts) is left to the per-face pass.
+    if (key.split("|").some((faceKey) => (faceOccupancy.get(faceKey) ?? 0) !== runs.length)) continue;
+    runs.sort((left, right) =>
+      left.oppositeCenter - right.oppositeCenter ||
+      left.displayIndex - right.displayIndex ||
+      left.relationshipId.localeCompare(right.relationshipId));
+    const targets = runs.map((run, index) => lo + ((index + 1) / (runs.length + 1)) * (hi - lo));
+    if (runs.every((run, index) => Math.abs(run.current - targets[index]) < 0.5)) continue;
+
+    keepMountMovesUnlessWorse(routeById, relationshipById, input, runs.map((run) => run.relationshipId), () => {
+      runs.forEach((run, index) => {
+        const route = routeById.get(run.relationshipId);
+        const points = route.points.map((point) => ({ ...point, [axis]: targets[index] }));
+        routeById.set(run.relationshipId, routeWithPoints(route, points, route.controls));
+      });
+    });
+  }
+}
+
 // Post-pass: even out mount DISTRIBUTION on every shared surface. The earlier passes
 // spread endpoints, but routeReciprocalPairsParallel then re-pins each return edge a
 // fixed gap from its request edge, ignoring the return's own slot — so a face carrying
@@ -1188,50 +1310,22 @@ function distributeSurfaceMountUnits(routeById, relationshipById, input) {
       left.members[0].relationshipId.localeCompare(right.members[0].relationshipId));
 
     const affected = [...new Set(endpoints.map((endpoint) => endpoint.relationshipId))];
-    const affectedSet = new Set(affected);
-    const saved = affected.map((id) => [id, routeById.get(id)]);
-    const beforeBends = saved.reduce((sum, [, route]) => sum + (route.bends ?? 0), 0);
-    // Count visible segment overlaps that involve an affected route, so a redistribution that
-    // slides a mount onto another route's lane (a shared parallel segment) can be rejected.
-    const sharedSegmentsInvolvingAffected = () => {
-      let total = 0;
-      for (const id of affected) {
-        const segments = axisAlignedSegments(routeById.get(id));
-        for (const [otherId, otherRoute] of routeById) {
-          if (otherId === id) continue;
-          if (affectedSet.has(otherId) && otherId < id) continue; // count affected/affected pairs once
-          const otherSegments = axisAlignedSegments(otherRoute);
-          for (const segment of segments) {
-            for (const otherSegment of otherSegments) {
-              if (sharedSegmentLength(segment, otherSegment) > 1) total += 1;
-            }
-          }
+    keepMountMovesUnlessWorse(routeById, relationshipById, input, affected, () => {
+      units.forEach((unit, index) => {
+        const targetOffset = endpointSpreadOffset(index, units.length, rect, side);
+        // Keep a pair's internal spacing (its parallel gap) by translating both mounts to
+        // the unit's slot; a single member just lands on the slot centre.
+        const unitCenter = unit.members.reduce((sum, member) => sum + mountOf(member), 0) / unit.members.length;
+        // Leave a unit that already sits on its slot untouched, so an already-even face stays
+        // byte-identical (no spurious collinear waypoints from re-anchoring an unchanged mount).
+        if (Math.abs(unitCenter - (center + targetOffset)) < 0.5) return;
+        for (const member of unit.members) {
+          const memberOffset = mountOf(member) - unitCenter + targetOffset;
+          const route = routeById.get(member.relationshipId);
+          routeById.set(member.relationshipId, offsetEndpointRoute(route, member.endpointIndex, rect, side, memberOffset));
         }
-      }
-      return total;
-    };
-    const beforeShared = sharedSegmentsInvolvingAffected();
-
-    units.forEach((unit, index) => {
-      const targetOffset = endpointSpreadOffset(index, units.length, rect, side);
-      // Keep a pair's internal spacing (its parallel gap) by translating both mounts to
-      // the unit's slot; a single member just lands on the slot centre.
-      const unitCenter = unit.members.reduce((sum, member) => sum + mountOf(member), 0) / unit.members.length;
-      // Leave a unit that already sits on its slot untouched, so an already-even face stays
-      // byte-identical (no spurious collinear waypoints from re-anchoring an unchanged mount).
-      if (Math.abs(unitCenter - (center + targetOffset)) < 0.5) return;
-      for (const member of unit.members) {
-        const memberOffset = mountOf(member) - unitCenter + targetOffset;
-        const route = routeById.get(member.relationshipId);
-        routeById.set(member.relationshipId, offsetEndpointRoute(route, member.endpointIndex, rect, side, memberOffset));
-      }
+      });
     });
-
-    const afterBends = saved.reduce((sum, [id]) => sum + (routeById.get(id).bends ?? 0), 0);
-    const collides = saved.some(([id]) => routeCollidesWithNonEndpoints(routeById.get(id), relationshipById.get(id), input));
-    if (collides || afterBends > beforeBends || sharedSegmentsInvolvingAffected() > beforeShared) {
-      for (const [id, route] of saved) routeById.set(id, route);
-    }
   }
 }
 
@@ -1819,6 +1913,7 @@ export function routeEdges(input) {
   // mounts; this evens out the SPACING within each face (reciprocal pairs kept parallel as a
   // single unit, lone mounts centred) so no face reads as crowded-at-one-end. Runs last so it
   // has the final word on distribution; guarded per face, so it only refines.
+  distributeFacingReciprocalSurfaces(relievedById, relationshipById, input);
   distributeSurfaceMountUnits(relievedById, relationshipById, input);
   const displayRawRoutes = separatedRoutes.map(([relationshipId]) => [relationshipId, relievedById.get(relationshipId)]);
   const routes = new Map();

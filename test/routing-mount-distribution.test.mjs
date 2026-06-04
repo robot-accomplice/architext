@@ -164,3 +164,34 @@ test("a lone mount on a SQLite face is centred, not left off to one side (memory
     );
   }
 });
+
+test("facing reciprocal runs between Unified Pipeline and Memory spread evenly and stay straight (memory-lifecycle T1)", () => {
+  const plan = planMemoryLifecycle();
+  const memory = plan.nodeRects.get("memory-system");
+
+  // UP.right and Memory.left carry four straight horizontal facing runs (two reciprocal
+  // pairs). They used to bunch in the upper half of the face; distributing them needs a
+  // coordinated both-ends move so each run keeps its straight line.
+  const mounts = faceMounts(plan, "memory-system", "left");
+  assert.equal(mounts.length, 4, `expected 4 facing runs on memory-system left, got ${mounts.length}: ${mounts}`);
+
+  // Four independent straight runs distribute as four even units across the face.
+  const ideal = idealUnitCenters(memory, "left", 4);
+  const tol = 6;
+  mounts.forEach((mount, i) => {
+    assert.ok(
+      Math.abs(mount - ideal[i]) <= tol,
+      `facing run ${i} = ${mount.toFixed(1)} should be within ${tol}px of even slot ${ideal[i].toFixed(1)} (mounts: ${mounts.map((m) => m.toFixed(1))})`
+    );
+  });
+
+  // Every UP<->Memory run must stay a straight horizontal line: its two endpoints share a y.
+  for (const id of ["request-memory", "memory-context-returned", "ingest-turn", "ingest-confirmed"]) {
+    const route = plan.routes.get(id);
+    assert.equal(route.bends, 0, `${id} should remain a straight facing run, got ${route.bends} bend(s)`);
+    assert.equal(
+      route.points[0].y, route.points.at(-1).y,
+      `${id} endpoints should share a y (straight): ${JSON.stringify([route.points[0], route.points.at(-1)])}`
+    );
+  }
+});
