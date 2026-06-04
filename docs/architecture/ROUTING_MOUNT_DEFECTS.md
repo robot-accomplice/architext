@@ -7,6 +7,37 @@ live-viewer review on 2026-06-03, after four committed routing improvements
 metrics — **but the rendered diagrams still have systemic, visible defects the metrics did not
 flag.** This document is the catalog and the fix plan; fixing happens in a later session.
 
+## NEXT WORK ORDER — pair-aware ORDERING pass (maintainer, 2026-06-04 live review)
+
+Distribution (T1/T2) is done. The live review then surfaced ORDERING/face defects that
+distribution does not touch. Maintainer's design for the fix:
+
+> **Ordering must be PAIR-AWARE and generate a COST VALUE for pair crossings — and, like
+> distribution, it must run as a FINAL pass.**
+
+So build a final ordering pass (sibling to `distributeMountsByPointCount`, run last) that:
+- knows reciprocal pairs (pair-aware), so a pair's two lines never cross each other;
+- scores candidate slot/lane orderings by a crossing cost (incl. pair-internal crossings);
+- picks the min-cost ordering; gutter-lane order included (farthest target → outermost lane).
+
+Concrete defects it must fix (verified by geometry + render, `/tmp/mi-dump.mjs`, `/tmp/mi-render.mjs`):
+- **model-inference L2/L3 (LLM↔Cloud)** cross each other TWICE. Directly-stacked pair that
+  should be two straight parallel verticals; instead each jogs (LLM.bottom {1033,1045} vs
+  Cloud.top {1010,1022} misaligned) and they swap sides → self-crossing. (Pre-existing dogleg
+  from the session-5 catalog; pair-aware ordering + straightening should resolve.)
+- **model-inference L6 (→Observability)** runs the INNERMOST gutter (x≈1102), inside L4/L5
+  (1142/1154), so its long descent crosses their Local brackets. Farthest target ⇒ should be
+  OUTERMOST lane. (T4 gutter-lane order.)
+- **memory-lifecycle L7/L8 (memory↔SQLite curate pair)** spill to remote faces (sqlite north,
+  memory south, sqlite west) instead of bracketing onto the EAST faces like the query pair. (T3
+  crowding-driven wrong-face — face SELECTION, owned by intent/relief/optimizeMountAssignments.)
+
+**PROCESS NOTE (maintainer caught this):** the mount-audit harness only measures DISTRIBUTION
+evenness — it does NOT flag crossings, doglegs, or wrong-face. So "5/6 flows clean" meant
+distribution-clean only, and these crossing/face defects were not caught before review. Extend
+the harness to flag T3 (wrong-face) and T4 (crossings/lane-order/doglegs) and ALWAYS render +
+visually inspect each flow before claiming clean.
+
 ## Progress — session 2026-06-04 (`a7d0cef`)
 
 **T1 (even distribution) and T2 (lone-mount centering) are substantially fixed** by a new
