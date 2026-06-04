@@ -38,6 +38,7 @@ export function useDiagramViewport({
 }) {
   const [navCollapsed, setNavCollapsed] = useState(() => readBooleanPreference(localStorage, "architext-left-collapsed"));
   const [rightCollapsed, setRightCollapsed] = useState(() => readBooleanPreference(localStorage, "architext-right-collapsed"));
+  const [stepsCollapsed, setStepsCollapsed] = useState(() => readBooleanPreference(localStorage, "architext-steps-collapsed"));
   const [diagramTransform, setDiagramTransform] = useState<DiagramTransform>({ zoom: 1, focused: false });
   const [routingStyle, setRoutingStyle] = useState<RoutingStyle>(() => readRoutingStylePreference(localStorage) as RoutingStyle);
   const [debugRouting] = useState(() => readDebugRouting(locationSearch));
@@ -50,6 +51,10 @@ export function useDiagramViewport({
   useEffect(() => {
     writeBooleanPreference(localStorage, "architext-right-collapsed", rightCollapsed);
   }, [localStorage, rightCollapsed]);
+
+  useEffect(() => {
+    writeBooleanPreference(localStorage, "architext-steps-collapsed", stepsCollapsed);
+  }, [localStorage, stepsCollapsed]);
 
   useEffect(() => {
     writeRoutingStylePreference(localStorage, routingStyle);
@@ -91,10 +96,12 @@ export function useDiagramViewport({
     fitDisplayedDiagram,
     navCollapsed,
     rightCollapsed,
+    stepsCollapsed,
     routingStyle,
     setDiagramTransform,
     setNavCollapsed,
     setRightCollapsed,
+    setStepsCollapsed,
     setRoutingStyle
   };
 }

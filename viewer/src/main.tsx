@@ -1085,7 +1085,6 @@ function App() {
   const [selectedRuleCategory, setSelectedRuleCategory] = useState("all");
   const [newRuleDraftRequest, setNewRuleDraftRequest] = useState<{ id: number; category: string } | null>(null);
   const [riskFilter, setRiskFilter] = useState("all");
-  const [stepsCollapsed, setStepsCollapsed] = useState(false);
   const {
     debugRouting,
     diagramTransform,
@@ -1093,10 +1092,12 @@ function App() {
     fitDisplayedDiagram,
     navCollapsed,
     rightCollapsed,
+    stepsCollapsed,
     routingStyle,
     setDiagramTransform,
     setNavCollapsed,
     setRightCollapsed,
+    setStepsCollapsed,
     setRoutingStyle
   } = useDiagramViewport({
     localStorage,
