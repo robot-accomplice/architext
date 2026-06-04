@@ -1312,3 +1312,13 @@ test("planDiagram centralizes geometry and route planning", () => {
   assertFiniteRoute(plan.routes.get("a"));
   assertFiniteRoute(plan.routes.get("b"));
 });
+
+test("routeEdges narrates its quality passes through onPhase in order", () => {
+  const phases = [];
+  routeEdges(baseInput({ style: "orthogonal", onPhase: (label) => phases.push(label) }));
+  assert.ok(phases.length > 0, "expected the router to narrate its passes");
+  const idx = (needle) => phases.findIndex((p) => p.includes(needle));
+  // The narration follows the real pipeline order: route, then distribute spacing, then hops.
+  assert.ok(idx("Routing edges") === 0, `expected routing first, got ${JSON.stringify(phases)}`);
+  assert.ok(idx("Evening out") > -1 && idx("hops") > idx("Evening out"), `hops after distribution, got ${JSON.stringify(phases)}`);
+});

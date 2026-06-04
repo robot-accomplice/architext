@@ -1865,6 +1865,10 @@ export function routeEdges(input) {
   const endpointCounts = new Map();
   const endpointSideUsage = createEndpointSideUsage();
   const style = normalizeRouteStyle(input.style);
+  // Optional progress narration: the worker forwards each label to the loading overlay so users
+  // see the quality passes run. No-op by default, so direct callers and tests are unaffected.
+  const onPhase = typeof input.onPhase === "function" ? input.onPhase : () => {};
+  onPhase("Routing edges");
   const cacheKey = routeCacheKey(input);
   const cachedRawRoutes = getCachedRawRoutes(cacheKey);
   const plannedRawRoutes = cachedRawRoutes ?? [];
@@ -1963,6 +1967,7 @@ export function routeEdges(input) {
   // empty perpendicular faces. Cost-guarded, so it can only improve or no-op.
   const relievedById = new Map(separatedRoutes);
   const relationshipById = new Map(input.relationships.map((relationship) => [relationship.id, relationship]));
+  onPhase("Relieving crowded surfaces");
   const relief = relieveCrowdedSurfaces(relievedById, relationshipById, input, buildRouteForSides);
   // After relief, replay the surface-cleanup passes in their original order so the relocated
   // routes are laid out as cleanly as the main passes lay out everything else:
@@ -1972,6 +1977,7 @@ export function routeEdges(input) {
   //      both halves separate onto their own lanes (untouched pairs keep their separation);
   //   3. the crossing-reduction swap so the mounts order/nest without crossing.
   if (relief.anyMoved) {
+    onPhase("Reducing crossings");
     reorderSharedSurfaceMounts(relievedById, relationshipById, input);
     if (relief.pairs.length) {
       routeReciprocalPairsParallel(relievedById, relationshipById, input, new Set(relief.pairs.flat()));
@@ -1990,6 +1996,7 @@ export function routeEdges(input) {
   // request onto a like surface instead of hooking onto the facing side). Each move must
   // strictly improve a STRUCTURAL tier, so it can only refine the tuned-pass output.
   if (style === "orthogonal") {
+    onPhase("Aligning mount points");
     const preOptimizeRoutes = new Map(relievedById);
     optimizeMountAssignments(relievedById, relationshipById, input, { buildRouteForSides });
     // The cleanup below applies ONLY to edges the optimizer actually re-homed, so it never
@@ -2010,6 +2017,7 @@ export function routeEdges(input) {
   // mounts; this evens out the SPACING within each face (reciprocal pairs kept parallel as a
   // single unit, lone mounts centred) so no face reads as crowded-at-one-end. Runs last so it
   // has the final word on distribution; guarded per face, so it only refines.
+  onPhase("Evening out mount spacing");
   distributeFacingReciprocalSurfaces(relievedById, relationshipById, input);
   distributeSurfaceMountUnits(relievedById, relationshipById, input);
   // Final pair-aware ordering: straighten any reciprocal pair the distribution passes left
@@ -2017,8 +2025,10 @@ export function routeEdges(input) {
   // not re-jog it by moving the pair's two ends independently per face; guarded to crossings-only
   // wins, so it can only refine.
   if (style === "orthogonal") {
+    onPhase("Straightening reciprocal pairs");
     straightenSelfCrossingPairs(relievedById, relationshipById, input);
   }
+  onPhase("Drawing hops over crossings");
   const displayRawRoutes = separatedRoutes.map(([relationshipId]) => [relationshipId, relievedById.get(relationshipId)]);
   const routes = new Map();
   const allRawRoutes = displayRawRoutes.map(([, rawRoute]) => rawRoute);

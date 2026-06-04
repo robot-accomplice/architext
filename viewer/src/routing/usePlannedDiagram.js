@@ -88,6 +88,7 @@ export function usePlannedDiagram(input) {
     key: "",
     plan: null,
     planning: false,
+    phase: "",
     error: null
   });
 
@@ -99,6 +100,7 @@ export function usePlannedDiagram(input) {
       key,
       plan: previous.key === key ? previous.plan : null,
       planning: false,
+      phase: "",
       error: null
     }));
 
@@ -114,6 +116,7 @@ export function usePlannedDiagram(input) {
         key,
         plan: attachPlanHelpers(plan),
         planning: false,
+        phase: "",
         error: null
       });
     };
@@ -125,6 +128,7 @@ export function usePlannedDiagram(input) {
         key,
         plan: null,
         planning: false,
+        phase: "",
         error: message
       });
     };
@@ -149,6 +153,13 @@ export function usePlannedDiagram(input) {
     worker = new Worker(new URL("./planningWorker.js", import.meta.url), { type: "module" });
     worker.onmessage = (event) => {
       if (event.data.key !== key) return;
+      if (event.data.phase) {
+        // A pass started — show the overlay immediately (don't wait for the slow timer) so the
+        // narration is visible even on fast diagrams; it just flashes by.
+        window.clearTimeout(slowTimer);
+        setState((previous) => previous.key === key ? { ...previous, planning: true, phase: event.data.phase } : previous);
+        return;
+      }
       if (event.data.error) {
         finishWithError(event.data.error);
         return;

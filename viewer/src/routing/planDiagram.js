@@ -161,7 +161,8 @@ export function planDiagram(input) {
     marginY,
     scoreEdgeProximity: input.scoreEdgeProximity,
     style: input.style,
-    stats: input.stats
+    stats: input.stats,
+    onPhase: input.onPhase
   });
   const relationshipsById = new Map(input.relationships.map((relationship) => [relationship.id, relationship]));
   const plannedRoutes = new Map();

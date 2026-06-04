@@ -337,12 +337,12 @@ function ViewportOverlay({
   );
 }
 
-function RoutingLoadingOverlay({ active }: { active: boolean }) {
+function RoutingLoadingOverlay({ active, phase }: { active: boolean; phase?: string }) {
   if (!active) return null;
   return (
     <ViewportOverlay className="routing-loading-overlay" role="status" aria-live="polite">
       <span className="routing-spinner" aria-hidden="true" />
-      <span>Planning routes</span>
+      <span>{phase || "Planning routes"}…</span>
     </ViewportOverlay>
   );
 }
@@ -2245,7 +2245,7 @@ function SystemMap({
             className="diagram-canvas"
             style={canvasTransformStyle(fallbackCanvas.width, fallbackCanvas.height, transform)}
           >
-            <RoutingLoadingOverlay active={planningState.planning} />
+            <RoutingLoadingOverlay active={planningState.planning} phase={planningState.phase} />
           </div>
         </ScaledCanvasExtent>
       </section>
@@ -2450,7 +2450,7 @@ function SystemMap({
               </button>
             );
           })}
-          <RoutingLoadingOverlay active={planningState.planning} />
+          <RoutingLoadingOverlay active={planningState.planning} phase={planningState.phase} />
         </div>
       </ScaledCanvasExtent>
       {!activeFlow ? (
@@ -2687,7 +2687,7 @@ function C4Diagram({
             className={`c4-canvas ${view.type}`}
             style={canvasTransformStyle(fallbackCanvas.width, fallbackCanvas.height, transform)}
           >
-            <RoutingLoadingOverlay active={planningState.planning} />
+            <RoutingLoadingOverlay active={planningState.planning} phase={planningState.phase} />
           </div>
         </ScaledCanvasExtent>
       </section>
@@ -2778,7 +2778,7 @@ function C4Diagram({
               </button>
             );
           })}
-          <RoutingLoadingOverlay active={planningState.planning} />
+          <RoutingLoadingOverlay active={planningState.planning} phase={planningState.phase} />
         </div>
       </ScaledCanvasExtent>
       <div className="edge-strip">

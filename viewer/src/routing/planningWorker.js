@@ -3,7 +3,10 @@ import { planDiagram } from "./planDiagram.js";
 self.onmessage = (event) => {
   const { key, input } = event.data;
   try {
-    const plan = planDiagram(input);
+    const plan = planDiagram({
+      ...input,
+      onPhase: (phase) => self.postMessage({ key, phase })
+    });
     const { positionFor, ...cloneablePlan } = plan;
     self.postMessage({ key, plan: cloneablePlan });
   } catch (error) {
