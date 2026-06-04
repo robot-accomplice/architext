@@ -20,6 +20,31 @@ So build a final ordering pass (sibling to `distributeMountsByPointCount`, run l
 - scores candidate slot/lane orderings by a crossing cost (incl. pair-internal crossings);
 - picks the min-cost ordering; gutter-lane order included (farthest target → outermost lane).
 
+### Progress — pair-internal straightening landed (`e81b125`, 2026-06-04)
+
+`straightenSelfCrossingPairs` (`viewer/src/routing/routeEdges.js`) runs LAST (after the
+distribution passes, so they cannot re-jog it). For a self-crossing reciprocal pair on a
+directly-facing surface-pair it rebuilds both lines as straight parallel runs, anchoring each to
+its mount on the MORE-occupied (hub) face so the hub face's distribution is preserved and only the
+lighter face's end moves. Guarded: kept only if it strictly reduces the crossings touching the pair
+and adds no node collision or shared segment. The displayIndex-adjacency pairing is shared via
+`routeReciprocal.js`.
+
+- **Fixed (render-verified): model-inference L2/L3** — now two parallel straight verticals.
+- **Sweep: pair-internal crossings 28 → 24**, zero regressions; suite 319/322 (same 3 pre-existing
+  reds), benches 12/12.
+- **Remaining 24 break down as:** ~6 perp/detour (not facing-straightenable); several 2-run facing
+  pairs where straightening one would cross its sibling (multi-round-trip on overlapping faces); and
+  the genuinely-coordinated case below.
+- **COORDINATED CASE FINDING (the one ≥4-run facing group in the corpus): `dashboard-control`
+  web-dashboard ↔ websocket-control-plane is DIAGONAL, not aligned** — web-dashboard sits at
+  y≈410–464, websocket at y≈206–260, **no y-overlap**, so the 4 `right→left` runs cannot be straight
+  horizontal lanes; they must jog (right→up→right). This needs **parallel-jog (Z-shape) bundle
+  ordering** (route N parallel Z-runs through shared corridors without crossing) — a separate, harder
+  algorithm (the reverted `buildReciprocalGutterBridge`/staircase territory), NOT straightening. A
+  facing-group generalization of the straightening pass was prototyped and reverted (its multi-run
+  even-spread branch is unexercised because the only ≥4-run group is this diagonal one).
+
 Concrete defects it must fix (verified by geometry + render, `/tmp/mi-dump.mjs`, `/tmp/mi-render.mjs`):
 - **model-inference L2/L3 (LLM↔Cloud)** cross each other TWICE. Directly-stacked pair that
   should be two straight parallel verticals; instead each jogs (LLM.bottom {1033,1045} vs
