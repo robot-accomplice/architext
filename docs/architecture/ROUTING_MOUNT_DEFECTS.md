@@ -38,6 +38,29 @@ distribution-clean only, and these crossing/face defects were not caught before 
 the harness to flag T3 (wrong-face) and T4 (crossings/lane-order/doglegs) and ALWAYS render +
 visually inspect each flow before claiming clean.
 
+**HARNESS EXTENDED — T4 detectors landed (2026-06-04).** Two pure detectors now live in
+`viewer/src/routing/routeDiagnostics.js` and emit diagram-level findings from
+`diagnosePlannedRoutes`, so the viewer overlay, the unit tests, and the sweep tool share ONE
+implementation:
+- `pairInternalCrossings(routes, relationships)` → `pair-internal-crossing` finding. A reciprocal
+  pair (matched by displayIndex adjacency, MIRRORING `reciprocalParallelMoves`) whose two lines
+  cross is always a defect. **Calibration matters:** the first cut paired *every* opposite-direction
+  edge between a node pair and over-counted 58→28; adjacency pairing matches the router.
+- `laneOrderViolations(plan, relationships)` → `lane-order-violation` finding. The lane is the
+  perpendicular coordinate of the route's LONGEST face-parallel run (not its outermost excursion,
+  which would grab the destination when source/target are in different columns). **Gated on an
+  actual crossing:** the pure "farthest→outermost" rank rule flagged ~75% rank-only non-crossings,
+  so a violation is reported only when the farthest-target route actually crosses a sibling outside
+  it. That ties the detector to a visible defect and self-calibrates to zero false positives.
+
+Calibrated counts against roboticus: **28 pair-internal crossings, 11 lane-order violations** (each
+a real crossing). Render-verified witness: model-inference L2/L3 self-cross and L6 (record-route)
+crossing route-local/local-provider-result. Unit tests in `test/routing-diagnostics.test.mjs` (6,
+all green). Durable sweep: `node viewer/tools/audit-route-crossings.mjs --data-dir <dir>`. Suite
+318/321 (same 3 pre-existing reds), benches 12/12. The mount-audit (distribution) is unchanged and
+still complementary; this adds the missing T4 lens. **T3 wrong-face is still not flagged** (a
+separate face-selection detector remains to build).
+
 ## Progress — session 2026-06-04 (`a7d0cef`)
 
 **T1 (even distribution) and T2 (lone-mount centering) are substantially fixed** by a new

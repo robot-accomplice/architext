@@ -1,10 +1,14 @@
 import { segmentIntersectsRect } from "./routeGeometry.js";
 import { anchorFor, surfaceCapacity } from "./routePorts.js";
 import { deriveRouteIntent, semanticSurfaceOptions } from "./routeIntent.js";
+import { crossingsBetween } from "./routeEdges.js";
 
 const POINT_EPSILON = 1;
 const CLOSE_SEGMENT_DISTANCE = 10;
 const CLOSE_SEGMENT_OVERLAP = 72;
+// Gutter lane-order detection: two routes share a face's gutter only if their perpendicular
+// offsets differ by more than LANE_OFFSET_EPSILON (otherwise they are the same lane).
+const LANE_OFFSET_EPSILON = 2;
 
 export function sideForPoint(rect, point) {
   if (!rect || !point) return "";
@@ -203,6 +207,141 @@ function singletonOffsetIsAlignmentTradeoff(endpoint, endpointsForRoute, counts)
   return (counts.get(endpointKey(opposite.nodeId, opposite.side)) ?? 0) > 1;
 }
 
+// Reciprocal pairs matched by displayIndex adjacency. MIRRORS the pairing in
+// reciprocalParallelMoves (routeMountModel.js): match each request, in flow order, with the
+// nearest not-yet-paired opposite-direction edge that follows it. A node pair carrying 2+ round
+// trips (e.g. query AND ingest between the same two stores) must pair each request with ITS own
+// return, not the other trip's, or the crossing classification roughly doubles. Kept local as a
+// read-only diagnostic mirror rather than imported, to avoid refactoring the live router; keep in
+// sync with routeMountModel.js if that pairing logic changes.
+function reciprocalPairsByAdjacency(relationships) {
+  const byPair = new Map();
+  for (const relationship of relationships) {
+    const key = [relationship.from, relationship.to].slice().sort().join("\u0000");
+    if (!byPair.has(key)) byPair.set(key, []);
+    byPair.get(key).push(relationship);
+  }
+  const pairs = [];
+  for (const group of byPair.values()) {
+    const sorted = group.slice().sort((a, b) => (a.displayIndex ?? 0) - (b.displayIndex ?? 0));
+    const paired = new Set();
+    for (const request of sorted) {
+      if (paired.has(request.id)) continue;
+      const ret = sorted.find((other) =>
+        !paired.has(other.id) && other.id !== request.id &&
+        other.from === request.to && other.to === request.from &&
+        (other.displayIndex ?? 0) >= (request.displayIndex ?? 0));
+      if (!ret) continue;
+      paired.add(request.id);
+      paired.add(ret.id);
+      pairs.push([request.id, ret.id]);
+    }
+  }
+  return pairs;
+}
+
+// T4 detector: a reciprocal pair should render as two parallel lines, so its two routes crossing
+// each other is always a defect — a misaligned/jogged pair (e.g. model-inference route-cloud vs
+// cloud-provider-result, which jog to different x at each end and swap sides). Pure function so the
+// diagnostics overlay, the tests, and the sweep tool all share one implementation.
+export function pairInternalCrossings(routes, relationships) {
+  const results = [];
+  for (const [a, b] of reciprocalPairsByAdjacency(relationships)) {
+    const routeA = routes.get(a);
+    const routeB = routes.get(b);
+    if (!routeA || !routeB) continue;
+    const crossings = crossingsBetween(routeA, routeB);
+    if (crossings > 0) results.push({ a, b, crossings });
+  }
+  return results;
+}
+
+// T4 detector: when several routes leave the SAME node face and run in parallel gutter lanes, the
+// line whose target is farthest should sit in the OUTERMOST lane so its long descent does not cross
+// the shorter siblings' brackets (model-inference record-route targets the farthest node yet sits in
+// the innermost lane, crossing route-local / local-provider-result). Flags a face whose
+// farthest-target route is not its outermost lane.
+// The perpendicular coordinate of the route's longest segment that runs PARALLEL to a face: the
+// gutter lane. For a left/right face the parallel runs are vertical (constant x), so the lane is the
+// x of the longest vertical segment; for a top/bottom face it is the y of the longest horizontal
+// segment. Returns null when the route has no such run (a direct facing line, not a gutter lane).
+function longestParallelRunCoordinate(points, vertical) {
+  let bestLength = 0;
+  let bestCoordinate = null;
+  for (let index = 0; index < points.length - 1; index += 1) {
+    const start = points[index];
+    const end = points[index + 1];
+    const isParallel = vertical ? start.x === end.x : start.y === end.y;
+    if (!isParallel) continue;
+    const length = vertical ? Math.abs(end.y - start.y) : Math.abs(end.x - start.x);
+    if (length > bestLength) {
+      bestLength = length;
+      bestCoordinate = vertical ? start.x : start.y;
+    }
+  }
+  return bestCoordinate;
+}
+
+export function laneOrderViolations(plan, relationships) {
+  const byId = relationshipById(relationships);
+  const groups = new Map();
+  for (const [id, route] of plan.routes) {
+    const relationship = byId.get(id);
+    if (!relationship) continue;
+    const fromRect = plan.nodeRects.get(relationship.from);
+    const toRect = plan.nodeRects.get(relationship.to);
+    if (!fromRect || !toRect) continue;
+    const side = sideForPoint(fromRect, route.points[0]);
+    if (!side) continue;
+    const vertical = side === "left" || side === "right";
+    const faceCoord = side === "left" ? fromRect.x
+      : side === "right" ? fromRect.x + fromRect.width
+      : side === "top" ? fromRect.y
+      : fromRect.y + fromRect.height;
+    // The lane is the route's longest run PARALLEL to the face (the long vertical segment for a
+    // left/right face); its perpendicular coordinate is the lane position. Using the route's
+    // outermost coordinate instead would pick up the destination endpoint when source and target
+    // sit in different columns. A route with no parallel run is a direct facing line, not a gutter
+    // lane participant, so it is skipped.
+    const laneCoord = longestParallelRunCoordinate(route.points, vertical);
+    if (laneCoord === null) continue;
+    const offset = Math.abs(laneCoord - faceCoord);
+    const fromCentre = vertical ? fromRect.y + fromRect.height / 2 : fromRect.x + fromRect.width / 2;
+    const toCentre = vertical ? toRect.y + toRect.height / 2 : toRect.x + toRect.width / 2;
+    const targetDistance = Math.abs(toCentre - fromCentre);
+    const key = endpointKey(relationship.from, side);
+    if (!groups.has(key)) groups.set(key, { nodeId: relationship.from, side, items: [] });
+    groups.get(key).items.push({ id, offset, targetDistance });
+  }
+  const violations = [];
+  for (const { nodeId, side, items } of groups.values()) {
+    if (items.length < 2) continue;
+    const offsets = items.map((item) => item.offset);
+    if (Math.max(...offsets) - Math.min(...offsets) < LANE_OFFSET_EPSILON) continue; // no distinct lanes
+    const farthest = items.slice().sort((a, b) => b.targetDistance - a.targetDistance)[0];
+    // The farthest target should be outermost. Report a violation only when the farthest route
+    // actually CROSSES a sibling that sits outside it — i.e. the mis-ordering produces a visible
+    // crossing. A lane that is ranked "wrong" but never overlaps a sibling is not a visible defect
+    // (calibration showed the pure rank rule flags ~75% rank-only non-crossings), so it is ignored.
+    const farthestRoute = plan.routes.get(farthest.id);
+    if (!farthestRoute) continue;
+    let crossedSibling = null;
+    for (const sibling of items) {
+      if (sibling.id === farthest.id) continue;
+      if (sibling.offset - farthest.offset <= LANE_OFFSET_EPSILON) continue; // sibling not outside farthest
+      const siblingRoute = plan.routes.get(sibling.id);
+      if (siblingRoute && crossingsBetween(farthestRoute, siblingRoute) > 0) {
+        crossedSibling = sibling;
+        break;
+      }
+    }
+    if (crossedSibling) {
+      violations.push({ nodeId, side, farthest: farthest.id, outermost: crossedSibling.id });
+    }
+  }
+  return violations;
+}
+
 export function diagnosePlannedRoutes(plan, relationships, options = {}) {
   const relationshipMap = relationshipById(relationships);
   const endpoints = endpointRecords(plan, relationships);
@@ -361,6 +500,24 @@ export function diagnosePlannedRoutes(plan, relationships, options = {}) {
     }));
   }
 
+  const pairCrossings = pairInternalCrossings(plan.routes, relationships);
+  for (const pair of pairCrossings) {
+    findings.push(routeFinding("pair-internal-crossing", "A reciprocal pair's two lines cross each other instead of running parallel.", {
+      relationshipId: pair.a,
+      pairWith: pair.b,
+      crossings: pair.crossings
+    }));
+  }
+  const laneOrder = laneOrderViolations(plan, relationships);
+  for (const violation of laneOrder) {
+    findings.push(routeFinding("lane-order-violation", "A gutter lane's farthest-target line is not in the outermost lane, so it crosses shorter siblings.", {
+      nodeId: violation.nodeId,
+      side: violation.side,
+      farthest: violation.farthest,
+      outermost: violation.outermost
+    }));
+  }
+
   return {
     routes: routeDiagnostics,
     findings,
@@ -369,6 +526,8 @@ export function diagnosePlannedRoutes(plan, relationships, options = {}) {
       findings: findings.length,
       constraints: routeDiagnostics.reduce((sum, route) => sum + route.constraints.length, 0),
       closeParallelRuns,
+      pairInternalCrossings: pairCrossings.reduce((sum, pair) => sum + pair.crossings, 0),
+      laneOrderViolations: laneOrder.length,
       bends: routeDiagnostics.reduce((sum, route) => sum + route.bends, 0),
       sharedSegments: routeDiagnostics.reduce((sum, route) => sum + route.sharedSegments, 0),
       repeatedCrossings: routeDiagnostics.reduce((sum, route) => sum + route.repeatedCrossings, 0),

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { planDiagram } from "../viewer/src/routing/planDiagram.js";
 import { diagramLayoutFor } from "../viewer/src/presentation/diagramLayout.js";
-import { diagnosePlannedRoutes } from "../viewer/src/routing/routeDiagnostics.js";
+import { diagnosePlannedRoutes, pairInternalCrossings, laneOrderViolations } from "../viewer/src/routing/routeDiagnostics.js";
 import { deriveRouteIntent } from "../viewer/src/routing/routeIntent.js";
 import { routeIntersectsRect } from "../viewer/src/routing/routeEdges.js";
 
@@ -409,4 +409,109 @@ test("a hub reciprocal pair past an intermediary escapes to a side gutter, not t
   assert.notEqual(pastBlocker.sourceSide, "bottom");
   // The escaping route still never traverses the intermediary it routes around.
   assert.equal(routeIntersectsRect(plan.routes.get("e3"), plan.nodeRects.get("t1"), 0), false);
+});
+
+// --- T4 ordering detectors (pair-internal crossings + gutter lane order) ---------------
+// These back the durable defect harness the maintainer asked for: the mount-audit only
+// measured distribution evenness, so reciprocal pairs that cross themselves and gutter
+// lanes ordered wrong went unflagged. The detectors are pure functions so the sweep tool
+// and diagnostics share one implementation and the logic is unit-testable in isolation.
+
+function route(...points) {
+  return { points: points.map(([x, y]) => ({ x, y })) };
+}
+
+test("pairInternalCrossings flags a reciprocal pair whose two lines cross", () => {
+  const routes = new Map([
+    ["req", route([0, 5], [20, 5])], // horizontal at y=5
+    ["ret", route([10, 0], [10, 20])] // vertical at x=10 — crosses req at (10,5)
+  ]);
+  const relationships = [
+    { id: "req", from: "a", to: "b", displayIndex: 1 },
+    { id: "ret", from: "b", to: "a", displayIndex: 2 }
+  ];
+  const found = pairInternalCrossings(routes, relationships);
+  assert.equal(found.length, 1);
+  assert.deepEqual([found[0].a, found[0].b].sort(), ["req", "ret"]);
+  assert.ok(found[0].crossings >= 1);
+});
+
+test("pairInternalCrossings ignores a reciprocal pair that runs parallel", () => {
+  const routes = new Map([
+    ["req", route([0, 5], [20, 5])],
+    ["ret", route([0, 10], [20, 10])] // parallel, never crosses
+  ]);
+  const relationships = [
+    { id: "req", from: "a", to: "b", displayIndex: 1 },
+    { id: "ret", from: "b", to: "a", displayIndex: 2 }
+  ];
+  assert.equal(pairInternalCrossings(routes, relationships).length, 0);
+});
+
+test("pairInternalCrossings does not flag a crossing between non-reciprocal edges", () => {
+  const routes = new Map([
+    ["a-to-b", route([0, 5], [20, 5])],
+    ["a-to-c", route([10, 0], [10, 20])] // crosses, but same direction (not a return)
+  ]);
+  const relationships = [
+    { id: "a-to-b", from: "a", to: "b", displayIndex: 1 },
+    { id: "a-to-c", from: "a", to: "c", displayIndex: 2 }
+  ];
+  assert.equal(pairInternalCrossings(routes, relationships).length, 0);
+});
+
+test("pairInternalCrossings pairs by displayIndex adjacency, not all opposite-direction combos", () => {
+  // a<->b carries TWO round trips. Adjacency pairing = (req1,ret1) and (req2,ret2).
+  // ret1 crossing req2 must NOT be reported as pair-internal (they are not one pair).
+  const routes = new Map([
+    ["req1", route([0, 5], [20, 5])],
+    ["ret1", route([0, 8], [20, 8])], // parallel to req1 — clean pair
+    ["req2", route([0, 11], [20, 11])], // parallel to ret2 — clean pair
+    ["ret2", route([0, 14], [20, 14])],
+    // a stray vertical crossing ret1 and req2 — these are NOT a reciprocal pair
+    ["req1b", route([15, 6], [15, 12])]
+  ]);
+  const relationships = [
+    { id: "req1", from: "a", to: "b", displayIndex: 1 },
+    { id: "ret1", from: "b", to: "a", displayIndex: 2 },
+    { id: "req2", from: "a", to: "b", displayIndex: 3 },
+    { id: "ret2", from: "b", to: "a", displayIndex: 4 },
+    { id: "req1b", from: "a", to: "b", displayIndex: 5 }
+  ];
+  // No reported pair-internal crossing: each adjacency-matched pair runs parallel.
+  assert.equal(pairInternalCrossings(routes, relationships).length, 0);
+});
+
+function laneOrderPlan(farOffset, nearOffset) {
+  const nodeRects = new Map([
+    ["o", { x: 0, y: 0, width: 100, height: 40 }], // right face x=100, centreY=20
+    ["near", { x: 400, y: 80, width: 100, height: 40 }], // centreY=100 (close)
+    ["far", { x: 400, y: 480, width: 100, height: 40 }] // centreY=500 (far)
+  ]);
+  const routes = new Map([
+    ["to-far", route([100, 15], [100 + farOffset, 15], [100 + farOffset, 500], [400, 500])],
+    ["to-near", route([100, 25], [100 + nearOffset, 25], [100 + nearOffset, 100], [400, 100])]
+  ]);
+  return { nodeRects, routes };
+}
+
+test("laneOrderViolations flags the farthest target sitting in an inner lane", () => {
+  const plan = laneOrderPlan(30, 60); // far at offset 30 (inner), near at offset 60 (outer) — wrong
+  const relationships = [
+    { id: "to-far", from: "o", to: "far", displayIndex: 1 },
+    { id: "to-near", from: "o", to: "near", displayIndex: 2 }
+  ];
+  const found = laneOrderViolations(plan, relationships);
+  assert.equal(found.length, 1);
+  assert.equal(found[0].nodeId, "o");
+  assert.equal(found[0].side, "right");
+});
+
+test("laneOrderViolations is clean when the farthest target is outermost", () => {
+  const plan = laneOrderPlan(60, 30); // far at offset 60 (outer), near at offset 30 (inner) — correct
+  const relationships = [
+    { id: "to-far", from: "o", to: "far", displayIndex: 1 },
+    { id: "to-near", from: "o", to: "near", displayIndex: 2 }
+  ];
+  assert.equal(laneOrderViolations(plan, relationships).length, 0);
 });
