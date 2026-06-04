@@ -1236,6 +1236,28 @@ test("pathToSvgWithHops computes hops against a whole finalized route set", () =
   assert.match(d, /\bQ\b/);
 });
 
+test("pathToSvgWithHops still renders a hop when the crossing is near a corner (adaptive radius)", () => {
+  // The crossing at (160,160) sits 4px from the vertical route's top corner (160,156) — within
+  // HOP_RADIUS. The fixed-radius guard skipped the hop here (rendered flat); an adaptive radius
+  // draws a smaller hop sized to the available room so every crossing is still hopped.
+  const corneredVertical = {
+    points: [
+      { x: 160, y: 156 },
+      { x: 160, y: 260 },
+      { x: 200, y: 260 }
+    ]
+  };
+  const d = pathToSvgWithHops(
+    [
+      { x: 80, y: 160 },
+      { x: 240, y: 160 }
+    ],
+    [corneredVertical]
+  );
+
+  assert.match(d, /\bQ\b/, "a crossing within HOP_RADIUS of a corner should still render a (smaller) hop");
+});
+
 test("routeEdges routes multi-target fan-out deterministically", () => {
   const input = baseInput({
     relationships: [

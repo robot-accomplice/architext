@@ -1,4 +1,7 @@
 export const HOP_RADIUS = 6;
+// Below this the hop arc is too small to read, so the crossing renders flat (a sub-pixel bump
+// reads as a rendering glitch, not a hop). Every crossing with at least this much room is hopped.
+const MIN_HOP_RADIUS = 2;
 
 export function horizontalVerticalIntersection(horizontalStart, horizontalEnd, verticalStart, verticalEnd) {
   const minX = Math.min(horizontalStart.x, horizontalEnd.x);
@@ -7,10 +10,17 @@ export function horizontalVerticalIntersection(horizontalStart, horizontalEnd, v
   const maxY = Math.max(verticalStart.y, verticalEnd.y);
   const x = verticalStart.x;
   const y = horizontalStart.y;
-  if (x <= minX + HOP_RADIUS || x >= maxX - HOP_RADIUS || y <= minY + HOP_RADIUS || y >= maxY - HOP_RADIUS) {
+  if (x <= minX || x >= maxX || y <= minY || y >= maxY) {
+    return null; // not an interior crossing
+  }
+  // Adaptive hop radius: a crossing close to a corner still gets a hop, just sized to the room
+  // available before the nearest segment end (so the arc stays within both segments) instead of
+  // being skipped. Only a crossing with less than MIN_HOP_RADIUS of room renders flat.
+  const radius = Math.min(HOP_RADIUS, x - minX, maxX - x, y - minY, maxY - y);
+  if (radius < MIN_HOP_RADIUS) {
     return null;
   }
-  return { x, y };
+  return { x, y, radius };
 }
 
 function routePoints(route) {
@@ -69,16 +79,17 @@ export function pathToSvgWithHops(points, previousRoutes) {
         : Math.abs(a.x - start.x) - Math.abs(b.x - start.x)
     ));
     for (const crossing of segmentCrossings) {
+      const radius = crossing.radius ?? HOP_RADIUS;
       if (start.y === end.y) {
-        const before = { x: crossing.x - crossing.direction * HOP_RADIUS, y: crossing.y };
-        const after = { x: crossing.x + crossing.direction * HOP_RADIUS, y: crossing.y };
+        const before = { x: crossing.x - crossing.direction * radius, y: crossing.y };
+        const after = { x: crossing.x + crossing.direction * radius, y: crossing.y };
         commands.push(`L ${before.x} ${before.y}`);
-        commands.push(`Q ${crossing.x} ${crossing.y - HOP_RADIUS * 1.6} ${after.x} ${after.y}`);
+        commands.push(`Q ${crossing.x} ${crossing.y - radius * 1.6} ${after.x} ${after.y}`);
       } else {
-        const before = { x: crossing.x, y: crossing.y - crossing.direction * HOP_RADIUS };
-        const after = { x: crossing.x, y: crossing.y + crossing.direction * HOP_RADIUS };
+        const before = { x: crossing.x, y: crossing.y - crossing.direction * radius };
+        const after = { x: crossing.x, y: crossing.y + crossing.direction * radius };
         commands.push(`L ${before.x} ${before.y}`);
-        commands.push(`Q ${crossing.x + HOP_RADIUS * 1.6} ${crossing.y} ${after.x} ${after.y}`);
+        commands.push(`Q ${crossing.x + radius * 1.6} ${crossing.y} ${after.x} ${after.y}`);
       }
     }
     commands.push(`L ${end.x} ${end.y}`);
