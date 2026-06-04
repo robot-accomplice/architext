@@ -7,6 +7,41 @@ live-viewer review on 2026-06-03, after four committed routing improvements
 metrics — **but the rendered diagrams still have systemic, visible defects the metrics did not
 flag.** This document is the catalog and the fix plan; fixing happens in a later session.
 
+## Progress — session 2026-06-04 (`a7d0cef`)
+
+**T1 (even distribution) and T2 (lone-mount centering) are substantially fixed** by a new
+final pass, `distributeSurfaceMountUnits` (`viewer/src/routing/routeEdges.js`), committed in
+`a7d0cef`.
+
+- **Root cause located (and it was NOT the hypothesized N/S-vs-E/W axis asymmetry):**
+  `routeReciprocalPairsParallel` pins each return edge a fixed gap from its *request* edge,
+  ignoring the return's own even slot, so a face carrying ≥2 reciprocal pairs bunches them at
+  one end. The spread code is axis-symmetric; the damage scales with pair count, so N/S faces
+  with 2 pairs (LLM south) looked worst.
+- **Fix:** a reciprocal pair = one rigid unit (parallel gap preserved); unit *centres* spread
+  with the existing `endpointSpreadOffset` fractions; a single-unit face lands at offset 0
+  (centres lone mounts). Runs LAST (after relief/optimize settle face assignment), which is why
+  it succeeds where `recenterSingletonSideEndpoints` does not — that pass runs *before* relief
+  and the optimizer drag the mount back off-centre. Guarded per face: reverts any move that
+  adds a bend, a node collision, or a shared visible segment.
+- **Verified (headless faithful fixtures + live viewer, roboticus data):**
+  model-inference LLM bottom two pairs bunched-left → even slots (33%/67%); LLM right even;
+  memory-lifecycle SQLite west/top lone mounts and right lone pair → centred.
+- **Headless sweep** (`/tmp/mount-audit.mjs`, rebuild if cleared — plans every agent-turn-flow
+  flow and flags off-centre lone units / uneven multi-unit faces): **4 of 6 flows now 0 flags**
+  (model-inference, skill-plugin, tool-mcp, local-cli). No new defects introduced.
+- **Tests:** `test/routing-mount-distribution.test.mjs` — model-inference T1 + memory-lifecycle
+  T2, both RED→GREEN. Suite 311/314 (the 3 failures pre-exist on branch HEAD), benches 12/12.
+
+**Still open after this session:**
+- **T1 residual — adjacent-node facing-pair crowding.** Memory.left / UP.right (interactive-turn,
+  memory-lifecycle) carry 4 facing-pair mounts bunched into one tight cluster ~10–12px
+  off-centre. `distributeSurfaceMountUnits` guard-reverts evening them because spreading one end
+  alone kinks the straight facing runs — needs a coordinated both-ends move (cf.
+  `centerSoloReciprocalPairSurfaces`) before it can spread without bending.
+- **T3** (crowding-driven wrong-face) and **T4** (lane-order + hops) untouched. Note the
+  memory-lifecycle T3 hints in the catalog below (line 7/8 mounting north/south vs east/west).
+
 ## Governing mandate (do not skip)
 
 - **Validate every routing change by reviewing every flow diagram in the live viewer**, not by
