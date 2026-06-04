@@ -28,7 +28,8 @@ import { edgeCorridors, freeSpaceCorridors } from "./routeCorridors.js";
 import { createRouteCandidateFactory } from "./routeCandidateBuilders.js";
 import { selectRouteCandidate } from "./routeStrategies.js";
 import { relieveCrowdedSurfaces, optimizeMountAssignments } from "./routeMountModel.js";
-import { CANVAS_INSET, ROUTE_COST_WEIGHTS, rectCenter } from "./routeConstants.js";
+import { CANVAS_INSET, ROUTE_COST_WEIGHTS, RECIPROCAL_PARALLEL_OFFSET, rectCenter } from "./routeConstants.js";
+import { reciprocalPairsByAdjacency } from "./routeReciprocal.js";
 
 export { pathToSvgWithHops } from "./routeRendering.js";
 export { distanceToRect, lineSamples, nearestSample } from "./routeGeometry.js";
@@ -1329,6 +1330,102 @@ function distributeSurfaceMountUnits(routeById, relationshipById, input) {
   }
 }
 
+// Final pair-aware ordering pass (pair-internal first), run last so it has the final say. A
+// reciprocal pair should render as two parallel lines; when its two routes cross each other — a
+// misaligned/jogged facing pair the per-face distribution leaves behind (e.g. model-inference
+// route-cloud vs cloud-provider-result, mounted at {1033,1045} on one face and {1010,1022} on the
+// other, so each line jogs and the jogs cross) — rebuild BOTH as straight parallel runs. Only a
+// pair on a directly-facing surface-pair is handled (a single straight vertical top<->bottom or
+// horizontal left<->right run must be valid for both lines); detour/perpendicular pairs are left
+// alone. Each line is straightened to its mount coordinate on the MORE-occupied (hub) face, so the
+// hub face's distribution is preserved and only the lighter face's end moves; a coincident pair is
+// split to a parallel gap. Guarded: kept only if it strictly reduces the crossings touching the
+// pair and adds no node collision or shared segment.
+function straightenSelfCrossingPairs(routeById, relationshipById, input) {
+  const relationships = [...relationshipById.values()].filter((relationship) => relationship.relationshipType === "flow");
+  const faceOccupancy = new Map();
+  for (const [relationshipId, route] of routeById) {
+    const relationship = relationshipById.get(relationshipId);
+    if (!relationship || relationship.relationshipType !== "flow" || !route.points?.length) continue;
+    for (const [nodeId, point] of [[relationship.from, route.points[0]], [relationship.to, route.points.at(-1)]]) {
+      const rect = input.nodeRects.get(nodeId);
+      const side = rect ? endpointSide(rect, point) : "";
+      if (!side) continue;
+      faceOccupancy.set(sideEndpointKey(nodeId, side), (faceOccupancy.get(sideEndpointKey(nodeId, side)) ?? 0) + 1);
+    }
+  }
+  const crossingsTouching = (ids) => {
+    const idSet = new Set(ids);
+    const entries = [...routeById.entries()];
+    let total = 0;
+    for (let i = 0; i < entries.length; i += 1) {
+      for (let j = i + 1; j < entries.length; j += 1) {
+        if (!idSet.has(entries[i][0]) && !idSet.has(entries[j][0])) continue;
+        total += crossingsBetween(entries[i][1], entries[j][1]);
+      }
+    }
+    return total;
+  };
+  for (const [idA, idB] of reciprocalPairsByAdjacency(relationships)) {
+    const routeA = routeById.get(idA);
+    const routeB = routeById.get(idB);
+    if (!routeA || !routeB || crossingsBetween(routeA, routeB) === 0) continue;
+    const relationship = relationshipById.get(idA);
+    const fromRect = input.nodeRects.get(relationship.from);
+    const toRect = input.nodeRects.get(relationship.to);
+    if (!fromRect || !toRect || fromRect.fixedPorts || toRect.fixedPorts) continue;
+    const fromSide = endpointSide(fromRect, routeA.points[0]);
+    const toSide = endpointSide(toRect, routeA.points.at(-1));
+    const vertical = (fromSide === "top" || fromSide === "bottom") && (toSide === "top" || toSide === "bottom");
+    const horizontal = (fromSide === "left" || fromSide === "right") && (toSide === "left" || toSide === "right");
+    if (!vertical && !horizontal) continue;
+    const axis = vertical ? "x" : "y"; // the coordinate held constant along a straight run
+    const lo = Math.max(axis === "x" ? fromRect.x : fromRect.y, axis === "x" ? toRect.x : toRect.y);
+    const hi = Math.min(
+      axis === "x" ? fromRect.x + fromRect.width : fromRect.y + fromRect.height,
+      axis === "x" ? toRect.x + toRect.width : toRect.y + toRect.height
+    );
+    if (hi - lo < RECIPROCAL_PARALLEL_OFFSET) continue; // no room for two parallel lanes
+    const anchorFrom = (faceOccupancy.get(sideEndpointKey(relationship.from, fromSide)) ?? 0) >=
+      (faceOccupancy.get(sideEndpointKey(relationship.to, toSide)) ?? 0);
+    const anchorNode = anchorFrom ? relationship.from : relationship.to;
+    const clamp = (value) => Math.min(hi, Math.max(lo, value));
+    const coordOnAnchor = (id) => {
+      const route = routeById.get(id);
+      const point = relationshipById.get(id).from === anchorNode ? route.points[0] : route.points.at(-1);
+      return clamp(point[axis]);
+    };
+    let coordA = coordOnAnchor(idA);
+    let coordB = coordOnAnchor(idB);
+    if (Math.abs(coordA - coordB) < RECIPROCAL_PARALLEL_OFFSET) {
+      const mid = clamp((coordA + coordB) / 2);
+      const half = RECIPROCAL_PARALLEL_OFFSET / 2;
+      const aFirst = coordA <= coordB;
+      coordA = clamp(mid + (aFirst ? -half : half));
+      coordB = clamp(mid + (aFirst ? half : -half));
+    }
+    const straighten = (id, coord) => {
+      const route = routeById.get(id);
+      const start = route.points[0];
+      const end = route.points.at(-1);
+      const points = vertical
+        ? [{ x: coord, y: start.y }, { x: coord, y: end.y }]
+        : [{ x: start.x, y: coord }, { x: end.x, y: coord }];
+      routeById.set(id, routeWithPoints(route, points, route.controls));
+    };
+    const ids = [idA, idB];
+    const saved = ids.map((id) => [id, routeById.get(id)]);
+    const beforeCrossings = crossingsTouching(ids);
+    const beforeShared = sharedSegmentCountInvolving(routeById, ids);
+    straighten(idA, coordA);
+    straighten(idB, coordB);
+    const collides = ids.some((id) => routeCollidesWithNonEndpoints(routeById.get(id), relationshipById.get(id), input));
+    if (collides || crossingsTouching(ids) >= beforeCrossings || sharedSegmentCountInvolving(routeById, ids) > beforeShared) {
+      for (const [id, route] of saved) routeById.set(id, route);
+    }
+  }
+}
+
 function crossingsBetween(routeA, routeB) {
   const segmentsA = axisAlignedSegments(routeA);
   const segmentsB = axisAlignedSegments(routeB);
@@ -1915,6 +2012,13 @@ export function routeEdges(input) {
   // has the final word on distribution; guarded per face, so it only refines.
   distributeFacingReciprocalSurfaces(relievedById, relationshipById, input);
   distributeSurfaceMountUnits(relievedById, relationshipById, input);
+  // Final pair-aware ordering: straighten any reciprocal pair the distribution passes left
+  // crossing itself into two parallel runs. Runs last (after distribution) so distribution does
+  // not re-jog it by moving the pair's two ends independently per face; guarded to crossings-only
+  // wins, so it can only refine.
+  if (style === "orthogonal") {
+    straightenSelfCrossingPairs(relievedById, relationshipById, input);
+  }
   const displayRawRoutes = separatedRoutes.map(([relationshipId]) => [relationshipId, relievedById.get(relationshipId)]);
   const routes = new Map();
   const allRawRoutes = displayRawRoutes.map(([, rawRoute]) => rawRoute);

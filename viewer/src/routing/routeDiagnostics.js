@@ -2,6 +2,7 @@ import { segmentIntersectsRect } from "./routeGeometry.js";
 import { anchorFor, surfaceCapacity } from "./routePorts.js";
 import { deriveRouteIntent, semanticSurfaceOptions } from "./routeIntent.js";
 import { crossingsBetween } from "./routeEdges.js";
+import { reciprocalPairsByAdjacency } from "./routeReciprocal.js";
 
 const POINT_EPSILON = 1;
 const CLOSE_SEGMENT_DISTANCE = 10;
@@ -205,39 +206,6 @@ function singletonOffsetIsAlignmentTradeoff(endpoint, endpointsForRoute, counts)
   const opposite = endpoint.endpoint === "source" ? endpointsForRoute.target : endpointsForRoute.source;
   if (!opposite?.side) return false;
   return (counts.get(endpointKey(opposite.nodeId, opposite.side)) ?? 0) > 1;
-}
-
-// Reciprocal pairs matched by displayIndex adjacency. MIRRORS the pairing in
-// reciprocalParallelMoves (routeMountModel.js): match each request, in flow order, with the
-// nearest not-yet-paired opposite-direction edge that follows it. A node pair carrying 2+ round
-// trips (e.g. query AND ingest between the same two stores) must pair each request with ITS own
-// return, not the other trip's, or the crossing classification roughly doubles. Kept local as a
-// read-only diagnostic mirror rather than imported, to avoid refactoring the live router; keep in
-// sync with routeMountModel.js if that pairing logic changes.
-function reciprocalPairsByAdjacency(relationships) {
-  const byPair = new Map();
-  for (const relationship of relationships) {
-    const key = [relationship.from, relationship.to].slice().sort().join("\u0000");
-    if (!byPair.has(key)) byPair.set(key, []);
-    byPair.get(key).push(relationship);
-  }
-  const pairs = [];
-  for (const group of byPair.values()) {
-    const sorted = group.slice().sort((a, b) => (a.displayIndex ?? 0) - (b.displayIndex ?? 0));
-    const paired = new Set();
-    for (const request of sorted) {
-      if (paired.has(request.id)) continue;
-      const ret = sorted.find((other) =>
-        !paired.has(other.id) && other.id !== request.id &&
-        other.from === request.to && other.to === request.from &&
-        (other.displayIndex ?? 0) >= (request.displayIndex ?? 0));
-      if (!ret) continue;
-      paired.add(request.id);
-      paired.add(ret.id);
-      pairs.push([request.id, ret.id]);
-    }
-  }
-  return pairs;
 }
 
 // T4 detector: a reciprocal pair should render as two parallel lines, so its two routes crossing

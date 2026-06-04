@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { planDiagram } from "../viewer/src/routing/planDiagram.js";
 import { diagramLayoutFor } from "../viewer/src/presentation/diagramLayout.js";
+import { pairInternalCrossings } from "../viewer/src/routing/routeDiagnostics.js";
 
 // Faithful fixture for the roboticus `model-inference` flow inside the `agent-turn-flow`
 // view — the exact case the maintainer's live review flagged for uneven mounts. The LLM
@@ -194,4 +195,19 @@ test("facing reciprocal runs between Unified Pipeline and Memory spread evenly a
       `${id} endpoints should share a y (straight): ${JSON.stringify([route.points[0], route.points.at(-1)])}`
     );
   }
+});
+
+// T4 (pair-aware ordering, pair-internal first). The model-inference cloud pair —
+// route-cloud (llm.bottom -> external.top) and cloud-provider-result (external.top ->
+// llm.bottom) — is a directly-facing reciprocal pair that should render as two parallel
+// vertical lines. The mounts are misaligned ({1033,1045} on llm.bottom vs {1010,1022} on
+// external.top), so each line jogs and the two jogs cross twice. The facing-distribution
+// pass skips it (the runs are 5-point jogged, and llm.bottom is a mixed hub face). The
+// straightening pass must rebuild the pair as parallel straight runs with no self-crossing.
+test("model-inference reciprocal pairs do not cross themselves", () => {
+  const relationships = MODEL_INFERENCE_STEPS.map(([id, from, to], index) => ({
+    id, from, to, relationshipType: "flow", displayIndex: index + 1
+  }));
+  const plan = planModelInference();
+  assert.deepEqual(pairInternalCrossings(plan.routes, relationships), []);
 });
