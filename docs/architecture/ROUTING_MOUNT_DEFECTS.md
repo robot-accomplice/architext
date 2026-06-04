@@ -7,6 +7,57 @@ live-viewer review on 2026-06-03, after four committed routing improvements
 metrics — **but the rendered diagrams still have systemic, visible defects the metrics did not
 flag.** This document is the catalog and the fix plan; fixing happens in a later session.
 
+## RELEASE BAR & HANDOVER (2026-06-04, session 8)
+
+**Maintainer-defined release bar (this is the gate; ordering/crossing-reduction is now BONUS):**
+1. **0 avoidable doglegs** — collision-forced doglegs are acceptable.
+2. **All crossings have hops.**
+3. Ordering to avoid unnecessary crossings = bonus. (Separately wanted, not a bar: a minimum
+   segment length to fix node-hugging short stubs — 89 segments under 12px.)
+
+**Status against the bar:**
+- **Bar 1 (doglegs): effectively MET.** 0 reachable shallow jogs; the 4 doglegs are all
+  collision-forced (the direct approach to the mount passes through a node — verified for
+  product-knowledge-retrieval/cli-inventory-returned → agency-service, model-inference/prepare-request
+  → media-services, tool-execution/verify-tool-claim → mcp-system; the 4th, tool-claim-verdict, is the
+  parallel mirror of the forced verify-tool-claim).
+- **Bar 2 (hops): NOT MET.** model-inference **line 6** (record-route) crosses route-local and
+  local-provider-result exactly at their collinear port-stub elbow waypoints (x=1102, the same lane
+  record-route uses), and a crossing landing on a vertex is skipped by the hop detector → renders
+  flat. The adaptive-hop fix (`3cebc12`) only covers near-corner crossings that are still INTERIOR to
+  both segments, not vertex crossings.
+
+**★ Two harness traps proven this session (validate against the rendered DOM, not these numbers):**
+1. **Phantom projections.** The viewer renders a flow only in flows-mode view TYPES
+   (system-map, flow-explorer, workflow, dataflow) via `compatibleFlowViewsForFlow`, and
+   `defaultViewForFlow` overrides system-map to the authored view when one exists — so a flow with an
+   authored (flow-explorer/dataflow) view is never shown in system-map. `risk-overlay` and
+   `release-gate-flow` (sequence) don't render flows as orthogonal routing at all. Measuring every
+   flow×view over-counts. Use `/tmp/reachable-jogs.mjs` (reachable views only): shallow jogs = 0.
+2. **Detector blind spots.** The geometry the harness reads IS faithful to the DOM (verified the
+   rendered `d` string equals planDiagram output), but the detectors missed: (a) crossings that land
+   on a route's collinear waypoint (→ missing hops, line 6); (b) near-coincident line OVERLAP
+   (skill-plugin steps 3 & 7 mount skill-plugin-system.left 1.5px apart and run on top of each other);
+   (c) avoidable jogs from wrong SURFACE SELECTION above the 36px "short" cutoff
+   (memory-lifecycle lines 7 & 8 = curate pair on wrong faces; skill-plugin line 6).
+
+**Open defects (UI-confirmed) for the next session, in bar priority:**
+- **[BAR 2] line-6 missing hops** — fix EITHER hop-detection to merge collinear segments so a
+  vertex-crossing is treated as interior and gets a hop (renderer, low-risk), OR lane-order
+  record-route to the outermost lane so it stops crossing its siblings at their elbows.
+- **[legibility] skill-plugin steps 3 & 7 mount overlap** on skill-plugin-system.left — mount
+  distribution must spread same-face requests.
+- **[T3 / legibility] surface-selection jogs** — memory-lifecycle 7 & 8, skill-plugin 6 — face
+  selection (routeIntent / optimizeMountAssignments).
+
+**Validate in the live UI** (`cd viewer && ARCHITEXT_DATA_DIR=…/roboticus/docs/architext/data npm run
+dev` → :4317). Drive views via the left-nav Flow Views buttons (the list is per-flow). Screenshots
+time out on dense views — extract rendered geometry with Playwright `g.flow-edge path` `d`-attributes.
+
+Also shipped `dadae91`: the planning overlay now narrates each routing pass (onPhase →
+worker → overlay). Visibility is limited because the worker plans synchronously (fast diagrams flash
+past); making it always-visible needs an async-yield pipeline refactor (deferred).
+
 ## NEXT WORK ORDER — pair-aware ORDERING pass (maintainer, 2026-06-04 live review)
 
 Distribution (T1/T2) is done. The live review then surfaced ORDERING/face defects that
