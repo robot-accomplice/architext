@@ -33,12 +33,22 @@ final pass, `distributeSurfaceMountUnits` (`viewer/src/routing/routeEdges.js`), 
 - **Tests:** `test/routing-mount-distribution.test.mjs` — model-inference T1 + memory-lifecycle
   T2, both RED→GREEN. Suite 311/314 (the 3 failures pre-exist on branch HEAD), benches 12/12.
 
+**T1 facing-pair crowding — FIXED for dedicated faces (`861fc0f`).**
+`distributeFacingReciprocalSurfaces` does the coordinated both-ends move: each straight facing
+run is re-homed to an even slot by setting the same perpendicular coordinate on BOTH endpoints,
+so it spreads without kinking. It only fires when the facing surface-pair is dedicated to the
+group's runs (both faces carry nothing else). Memory-lifecycle UP↔Memory (4 runs) now even and
+straight in the live viewer; the mount-audit sweep is 5/6 flows clean. The shared
+save/bend/collision/shared-segment guard used by both distribution passes was extracted into
+`keepMountMovesUnlessWorse` + `sharedSegmentCountInvolving` (one policy, two callers).
+
 **Still open after this session:**
-- **T1 residual — adjacent-node facing-pair crowding.** Memory.left / UP.right (interactive-turn,
-  memory-lifecycle) carry 4 facing-pair mounts bunched into one tight cluster ~10–12px
-  off-centre. `distributeSurfaceMountUnits` guard-reverts evening them because spreading one end
-  alone kinks the straight facing runs — needs a coordinated both-ends move (cf.
-  `centerSoloReciprocalPairSurfaces`) before it can spread without bending.
+- **T1 residual — MIXED hub faces.** Where straight facing runs share a surface with unrelated
+  mounts (e.g. interactive-turn's UP.right carries the Memory facing pair AND tool/session
+  edges), the facing pass intentionally skips (spreading the facing runs in isolation would
+  unbalance the rest of the face) and the per-face pass can't move the straight runs without a
+  kink. Fixing this needs a unit model that distributes ALL of a face's mounts together,
+  coordinating the facing runs' opposite ends — a larger change.
 - **T3** (crowding-driven wrong-face) and **T4** (lane-order + hops) untouched. Note the
   memory-lifecycle T3 hints in the catalog below (line 7/8 mounting north/south vs east/west).
 
