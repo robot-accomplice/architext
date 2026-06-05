@@ -1,0 +1,91 @@
+# Routing overhaul — review handoff
+
+Status: **release-gate bars met; ready for maintainer live-viewer review.** Branch
+`routing-overhaul`, 51 commits ahead of `main` (no upstream set yet). The routing module under
+`viewer/src/routing/` is effectively new on this branch (24 files, ~6.5k lines: a routing-engine
+extraction plus the mount-model, distribution, diagnostics, and hop work).
+
+## Validation (run 2026-06-05)
+
+- **Suite: 323/326 pass** (`npm test`). The 3 reds are characterized below — none is a crash or a
+  corpus-flow regression.
+- **Benchmarks: 12/12** (`npm run test:benchmark`).
+- **Architext data: validates clean** (`architext validate`).
+
+## Release bars — both met
+
+The maintainer's gate (everything else is bonus):
+
+1. **0 avoidable doglegs — MET.** 0 reachable shallow jogs; the 4 remaining doglegs are all
+   collision-forced (the direct mount approach passes through a node). Reachable-views-only audit:
+   `/tmp/reachable-jogs.mjs`.
+2. **All crossings have hops — MET (session 9, `a84928e`).** Corpus-wide hop coverage is **236/236**
+   (every one of 118 geometric crossings hops from both sides; zero deficit). The last gap was the
+   vertex-crossing case (a crossing landing on a sibling's collinear waypoint) — fixed by merging
+   collinear runs before hop detection. Sweep: `/tmp/hop-coverage.mjs`.
+3. Ordering / crossing-reduction — **bonus**, not gating.
+
+## How to review in the live viewer
+
+```sh
+cd viewer && ARCHITEXT_DATA_DIR=/Users/jmachen/code/roboticus/docs/architext/data npm run dev
+# → http://127.0.0.1:4317 (Vite picks the next free port if taken)
+```
+
+Drive the left-nav **Flows** list (per-flow Flow Views). Screenshots time out on dense views —
+extract rendered geometry from the DOM instead: `g.flow-edge path.flow-line` `d`-attribute; a `Q`
+command is a rendered hop. Flow-card `.click()` is async (React) — read the result in a separate
+step.
+
+**Witness to confirm the session-9 fix:** open **Model inference and routing**. `record-route`
+(L6, →observability) descends the gutter at x≈1102 and now hops twice — over `route-local` (L4) at
+y≈492 and `local-provider-result` (L5) at y≈474. Both L4 and L5 hop once over L6. Previously these
+three rendered flat.
+
+## Known residual BONUS defects (UI-confirmed, do not gate the bar)
+
+- **skill-plugin steps 3 & 7 mount overlap** on `skill-plugin-system.left` (~1.5px apart, lines run
+  on top of each other) — mount distribution should spread same-face requests.
+- **T3 surface-selection jogs** — `memory-lifecycle` L7/L8 (curate pair bracket remote faces) and
+  `skill-plugin` L6 pick a crowded/remote face instead of the near one. Face *selection* in
+  `routeIntent` / `optimizeMountAssignments`. No T3 wrong-face detector exists yet.
+- **Pair-aware ordering / lane-order pass** — the spec'd final ordering pass (farthest target →
+  outermost lane; `record-route` → outermost) is unbuilt. Pure bonus now that bar 2 is met by the
+  renderer.
+- **Min-segment-length stubs** — 89 node-hugging segments under 12px. A legibility nicety.
+
+## The 3 failing tests — honest read
+
+1. **`route-ports.test.mjs:152` "single flow routes stay centered on their selected system map
+   surface."** Of its two assertions, `write-starter-data` passes; `write-metadata` fails because it
+   now mounts the **left face** of `target-repository` (`{810,94}`) instead of the old
+   **top-center** (`{878,76}`). This is a deliberate face-selection change from the overhaul, not a
+   crash — the test encodes a pixel-exact pre-overhaul expectation. **Maintainer call:** eyeball the
+   "Fresh data-only install" System Map flow and either bless the new face (update the assertion) or
+   treat it as a face-selection bug.
+2. **`routing-diagnostics.test.mjs:94` "dense fan-in diagnostics explain surface-capacity escape
+   endpoints."** Synthetic stress view (`Complex Fan-In`). Fails at the assertion that a
+   blocker-coplanar source escapes to a *perpendicular* (top/bottom) gutter; the router still exits
+   left/right here. Aspirational obstacle-aware-escape property, unmet on this synthetic case.
+3. **`routing-diagnostics.test.mjs:152` "semantic return gutters leave badge-sized clearance between
+   long parallel lanes."** Synthetic; asserts `closeParallelRuns == 0` (badge-sized clearance)
+   between long parallel lanes. Unmet spacing ideal on the synthetic case.
+
+Tests 2–3 live in `routing-diagnostics.test.mjs`, which is **new on this branch** — they are
+branch-authored quality targets the router does not yet hit on synthetic dense cases, not
+regressions against real corpus flows. Recommend deciding per test whether to (a) relax to the
+achieved behaviour, (b) keep as a known-failing aspiration, or (c) schedule as bonus work.
+
+## Parked
+
+- **Phase7-A WIP** is in `stash@{0}` (T6 integration + per-node-pair bridge stage + soft-cap + cost
+  telemetry; "regresses vs four-pass" — kept for the cost-calculus rework). Not part of this review.
+
+## Repro tools (all use flows.json steps + planDiagram, the production path)
+
+- `/tmp/hop-coverage.mjs` — corpus crossings vs rendered hops (236/236).
+- `/tmp/backtrack-scan.mjs` — proves the collinear merge is geometry-identity (303 routes, 0
+  backtracks).
+- `/tmp/mi-hops.mjs`, `/tmp/mi-dump.mjs` — per-route geometry/hops for model-inference.
+- `node viewer/tools/audit-route-crossings.mjs --data-dir <dir>` — committed pair-internal /
+  lane-order crossing sweep.
