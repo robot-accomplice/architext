@@ -3,6 +3,7 @@ import test from "node:test";
 import { planDiagram } from "../viewer/src/routing/planDiagram.js";
 import { diagramLayoutFor } from "../viewer/src/presentation/diagramLayout.js";
 import { pairInternalCrossings } from "../viewer/src/routing/routeDiagnostics.js";
+import { spreadUnitSlots } from "../viewer/src/routing/routeEdges.js";
 
 // Faithful fixture for the roboticus `model-inference` flow inside the `agent-turn-flow`
 // view — the exact case the maintainer's live review flagged for uneven mounts. The LLM
@@ -210,4 +211,61 @@ test("model-inference reciprocal pairs do not cross themselves", () => {
   }));
   const plan = planModelInference();
   assert.deepEqual(pairInternalCrossings(plan.routes, relationships), []);
+});
+
+// The skill-plugin-lifecycle flow (same view) mounts FIVE edges on skill-plugin-system's
+// left face: two reciprocal pairs (install-item/result with the websocket plane, and
+// use-skill/context with the unified pipeline) plus the lone persist-skill-state. Spacing
+// three unit CENTRES evenly across the 54px face leaves only ~13.5px between centres, and a
+// reciprocal pair is ~12px wide — so the two pairs' facing endpoints land ~1.5px apart and
+// render on top of each other. Distribution must reserve each unit's width so the GAPS
+// between unit edges stay legible.
+const SKILL_PLUGIN_STEPS = [
+  ["load-catalog", "skill-plugin-system", "sqlite-store"],
+  ["catalog-state-returned", "sqlite-store", "skill-plugin-system"],
+  ["install-item", "websocket-control-plane", "skill-plugin-system"],
+  ["install-result-returned", "skill-plugin-system", "websocket-control-plane"],
+  ["persist-skill-state", "skill-plugin-system", "sqlite-store"],
+  ["skill-state-confirmed", "sqlite-store", "skill-plugin-system"],
+  ["use-skill", "unified-pipeline", "skill-plugin-system"],
+  ["skill-context-returned", "skill-plugin-system", "unified-pipeline"]
+];
+
+function planSkillPlugin() {
+  const relationships = SKILL_PLUGIN_STEPS.map(([id, from, to], index) => ({
+    id, from, to, relationshipType: "flow", displayIndex: index + 1
+  }));
+  const layout = diagramLayoutFor(VIEW, relationships.length);
+  return planDiagram({
+    view: VIEW,
+    relationships,
+    visibleNodeIds: new Set(VIEW.lanes.flatMap((lane) => lane.nodeIds)),
+    style: "orthogonal",
+    ...layout
+  });
+}
+
+test("spreadUnitSlots reserves unit width so adjacent reciprocal pairs do not collide", () => {
+  // Zero-width (lone) units fall back to evenly spaced centres — identical to endpointSpreadOffset,
+  // so lone-only faces are unchanged.
+  assert.deepEqual(spreadUnitSlots([0, 0, 0], 54), [-13.5, 0, 13.5]);
+  // Three 12px-wide pairs (half-width 6) on a 54px face. Even centres would sit 13.5px apart,
+  // leaving only 1.5px between the pairs' facing endpoints. Width-aware slots even the edge gaps.
+  const slots = spreadUnitSlots([6, 6, 6], 54);
+  const facingGap = (slots[1] - 6) - (slots[0] + 6); // pair2 upper edge minus pair1 lower edge
+  assert.ok(facingGap >= 4, `adjacent reciprocal pairs must not collide, got ${facingGap}px`);
+});
+
+const MIN_LEGIBLE_MOUNT_GAP = 4;
+
+test("skill-plugin left face keeps its reciprocal-pair mounts from overlapping", () => {
+  const plan = planSkillPlugin();
+  const mounts = faceMounts(plan, "skill-plugin-system", "left");
+  assert.ok(mounts.length >= 4, `expected multiple left-face mounts, got ${mounts.length}`);
+  let minGap = Infinity;
+  for (let i = 1; i < mounts.length; i += 1) minGap = Math.min(minGap, mounts[i] - mounts[i - 1]);
+  assert.ok(
+    minGap >= MIN_LEGIBLE_MOUNT_GAP,
+    `adjacent left-face mounts must stay legibly apart, got ${minGap}px between ${JSON.stringify(mounts)}`
+  );
 });

@@ -893,6 +893,31 @@ function endpointSpreadOffset(index, count, rect, side) {
   return ((index + 1) / (count + 1) - 0.5) * sideLength;
 }
 
+// Even-GAP slot offsets (relative to the face centre) for units of the given half-widths.
+// endpointSpreadOffset evenly spaces unit CENTRES, which treats every unit as a zero-width
+// point — but a reciprocal pair is ~12px wide, so three pairs on a 54px face land 13.5px
+// centre-to-centre and their facing endpoints collide ~1.5px apart. This reserves each unit's
+// width so the GAPS between unit edges are equal instead. With all-zero half-widths it reduces
+// exactly to endpointSpreadOffset (lone-mount faces stay byte-identical). When the units cannot
+// fit (no slack), it falls back to even centres and lets the per-face guard handle the squeeze.
+export function spreadUnitSlots(halfWidths, sideLength) {
+  const count = halfWidths.length;
+  const content = halfWidths.reduce((sum, halfWidth) => sum + 2 * halfWidth, 0);
+  const slack = sideLength - content;
+  if (slack <= 0) {
+    return halfWidths.map((_, index) => ((index + 1) / (count + 1) - 0.5) * sideLength);
+  }
+  const gap = slack / (count + 1);
+  const slots = [];
+  let cursor = -sideLength / 2;
+  for (const halfWidth of halfWidths) {
+    cursor += gap + halfWidth;
+    slots.push(cursor);
+    cursor += halfWidth;
+  }
+  return slots;
+}
+
 function oppositeEndpointProjection(endpoint, routeById, input) {
   const oppositeNodeId = endpoint.endpointIndex === 0 ? endpoint.relationship.to : endpoint.relationship.from;
   const oppositeRect = input.nodeRects.get(oppositeNodeId);
@@ -1305,15 +1330,33 @@ function distributeSurfaceMountUnits(routeById, relationshipById, input) {
     // that would add a bend, a node collision, or a shared segment, so a mount that is off-centre
     // only because centring it would kink the edge is correctly left alone.
     if (units.length === 0) continue;
+    // Order units to minimise crossings: first by which opposite NODE they head to (its centre
+    // along this axis), then by where they actually LAND on that node. Two reciprocal bundles
+    // between the same node pair cross iff their endpoint orders differ on the two faces, so
+    // ordering by the far landing (not display index) keeps the bundles parallel. displayIndex
+    // and id only break exact geometric ties for a stable result.
+    const unitOppositeEndpoint = (unit) =>
+      unit.members.reduce((sum, member) => sum + oppositeRouteEndpointProjection(member, routeById), 0) / unit.members.length;
     units.sort((left, right) =>
       left.oppositeCenter - right.oppositeCenter ||
+      unitOppositeEndpoint(left) - unitOppositeEndpoint(right) ||
       (left.members[0].relationship.displayIndex ?? 0) - (right.members[0].relationship.displayIndex ?? 0) ||
       left.members[0].relationshipId.localeCompare(right.members[0].relationshipId));
+
+    // Reserve each unit's WIDTH (a reciprocal pair spans its two members; a lone mount is a
+    // point) so the gaps between unit edges are even — otherwise two pairs squeezed onto one
+    // face land their facing endpoints ~1.5px apart and render on top of each other.
+    const sideLength = side === "left" || side === "right" ? rect.height : rect.width;
+    const unitHalfWidths = units.map((unit) => {
+      const unitCenter = unit.members.reduce((sum, member) => sum + mountOf(member), 0) / unit.members.length;
+      return Math.max(0, ...unit.members.map((member) => Math.abs(mountOf(member) - unitCenter)));
+    });
+    const slots = spreadUnitSlots(unitHalfWidths, sideLength);
 
     const affected = [...new Set(endpoints.map((endpoint) => endpoint.relationshipId))];
     keepMountMovesUnlessWorse(routeById, relationshipById, input, affected, () => {
       units.forEach((unit, index) => {
-        const targetOffset = endpointSpreadOffset(index, units.length, rect, side);
+        const targetOffset = slots[index];
         // Keep a pair's internal spacing (its parallel gap) by translating both mounts to
         // the unit's slot; a single member just lands on the slot centre.
         const unitCenter = unit.members.reduce((sum, member) => sum + mountOf(member), 0) / unit.members.length;
