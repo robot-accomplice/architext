@@ -1258,6 +1258,53 @@ test("pathToSvgWithHops still renders a hop when the crossing is near a corner (
   assert.match(d, /\bQ\b/, "a crossing within HOP_RADIUS of a corner should still render a (smaller) hop");
 });
 
+test("pathToSvgWithHops hops a crossing that lands on the other route's collinear waypoint", () => {
+  // The other route's horizontal run carries a redundant collinear waypoint at x=160 (the gutter
+  // lane the vertical descends), splitting it into two segments whose shared endpoint is the
+  // crossing. A strict interior test drops this vertex crossing → flat. Merging the collinear run
+  // back into one segment (80→240) makes x=160 interior, so the crossing is hopped.
+  const d = pathToSvgWithHops(
+    [
+      { x: 160, y: 100 },
+      { x: 160, y: 300 }
+    ],
+    [
+      {
+        points: [
+          { x: 80, y: 200 },
+          { x: 160, y: 200 },
+          { x: 240, y: 200 }
+        ]
+      }
+    ]
+  );
+
+  assert.match(d, /\bQ\b/, "a crossing on the other route's collinear waypoint should still hop");
+});
+
+test("pathToSvgWithHops hops when the rendered route's own collinear waypoint splits the segment", () => {
+  // Same vertex crossing, mirrored: the rendered route itself carries the collinear waypoint at
+  // x=160, so neither of its split segments has the crossing as an interior point. Merging the
+  // rendered run restores the hop regardless of which paired route is drawn on top.
+  const d = pathToSvgWithHops(
+    [
+      { x: 80, y: 200 },
+      { x: 160, y: 200 },
+      { x: 240, y: 200 }
+    ],
+    [
+      {
+        points: [
+          { x: 160, y: 100 },
+          { x: 160, y: 300 }
+        ]
+      }
+    ]
+  );
+
+  assert.match(d, /\bQ\b/, "the rendered route's own collinear waypoint should not suppress the hop");
+});
+
 test("routeEdges routes multi-target fan-out deterministically", () => {
   const input = baseInput({
     relationships: [

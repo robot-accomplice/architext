@@ -31,16 +31,36 @@ function isSameRoute(points, route) {
   return route === points || route?.points === points;
 }
 
-function orthogonalCrossings(points, routes) {
+// Collapse redundant collinear waypoints into maximal straight runs. A point left on a straight
+// segment (e.g. the gutter-lane waypoint a sibling route descends through) splits that run in two,
+// so a crossing landing on it reads as a segment endpoint and is dropped by the strict interior
+// test in horizontalVerticalIntersection — the crossing renders flat. Merging restores the single
+// run so the crossing is interior and gets a hop. The removed points lie on their segment, so the
+// merged polyline draws the identical line; this only affects hop detection, never the geometry.
+function mergeCollinearPoints(points) {
+  if (!points || points.length < 3) return points ? [...points] : [];
+  const merged = [points[0]];
+  for (let index = 1; index < points.length - 1; index += 1) {
+    const previous = merged[merged.length - 1];
+    const current = points[index];
+    const next = points[index + 1];
+    const collinear =
+      (previous.x === current.x && current.x === next.x) ||
+      (previous.y === current.y && current.y === next.y);
+    if (!collinear) merged.push(current);
+  }
+  merged.push(points[points.length - 1]);
+  return merged;
+}
+
+function orthogonalCrossings(points, otherPolylines) {
   const crossings = new Map();
   for (let index = 0; index < points.length - 1; index += 1) {
     const start = points[index];
     const end = points[index + 1];
     if (start.x !== end.x && start.y !== end.y) continue;
 
-    for (const route of routes) {
-      if (isSameRoute(points, route)) continue;
-      const otherPoints = routePoints(route);
+    for (const otherPoints of otherPolylines) {
       if (!otherPoints?.length) continue;
       for (let usedIndex = 0; usedIndex < otherPoints.length - 1; usedIndex += 1) {
         const usedStart = otherPoints[usedIndex];
@@ -66,13 +86,20 @@ function orthogonalCrossings(points, routes) {
 }
 
 export function pathToSvgWithHops(points, previousRoutes) {
-  const crossings = orthogonalCrossings(points, previousRoutes);
-  if (crossings.size === 0) return pathToSvg(points);
+  const self = mergeCollinearPoints(points);
+  const otherPolylines = [];
+  for (const route of previousRoutes) {
+    if (isSameRoute(points, route)) continue;
+    const otherPoints = routePoints(route);
+    if (otherPoints?.length) otherPolylines.push(mergeCollinearPoints(otherPoints));
+  }
+  const crossings = orthogonalCrossings(self, otherPolylines);
+  if (crossings.size === 0) return pathToSvg(self);
 
-  const commands = [`M ${points[0].x} ${points[0].y}`];
-  for (let index = 0; index < points.length - 1; index += 1) {
-    const start = points[index];
-    const end = points[index + 1];
+  const commands = [`M ${self[0].x} ${self[0].y}`];
+  for (let index = 0; index < self.length - 1; index += 1) {
+    const start = self[index];
+    const end = self[index + 1];
     const segmentCrossings = (crossings.get(index) ?? []).sort((a, b) => (
       start.x === end.x
         ? Math.abs(a.y - start.y) - Math.abs(b.y - start.y)
