@@ -52,9 +52,19 @@ three rendered flat.
   of swapping. Corpus: total crossings **118 → 64**, pair-internal **24 → 10**, lane-order **11 → 6**,
   with identical total bends and zero shared segments (pure ordering, no added contortion). This is
   the practical core of the maintainer's "pair-aware ordering" ask, integrated with distribution.
-- **Remaining reorder opportunities** — 64 crossings remain; some are further reorderable (e.g.
-  same-source fan-outs), some are inherent cross-lane layout crossings, and pair-internal (10) is the
-  straightening pass's job. The gutter-lane "farthest target → outermost" rule is not yet applied.
+- **Remaining crossings (rendered views only — what users actually see).** Of the all-views 64, only
+  **27 are in reachable/rendered views** (the rest are phantom system-map projections of flows that
+  render in an authored view). The face-distribution reorder cut rendered crossings **48 → 27**.
+  Remaining rendered 27 break down as: **8 pair-internal** (the `straightenSelfCrossingPairs` pass's
+  job — these are its non-facing / multi-bend misses), **4 cross-lane** (different node pairs in
+  different lanes — inherent, not reorderable), and ~15 face-shared. The bounded face-distribution
+  reorder is *complete*; the remaining reorder levers are separate, larger subsystems:
+  - **Gutter-lane order** ("farthest target → outermost") — would fix `model-inference`
+    `record-route` crossing `route-local`/`local-provider-result`. Lives in candidate
+    selection/scoring (`gutterLaneValues` + `routeStrategies`), not face distribution. Deferred:
+    reworking candidate selection pre-release is high-risk for a bonus metric.
+  - **2-layer consistent ordering** for same-source-face bundles whose two faces still disagree after
+    the far-landing sort (needs an iterative barycenter-style pass).
 - **T3 surface-selection jogs** — `memory-lifecycle` L7/L8 and `skill-plugin` L6 pick a crowded/remote
   face instead of the near one. Face *selection* in `routeIntent` / `optimizeMountAssignments`.
 - **Two hop deficits** — `system-map/interactive-turn` and `system-map/mail-operations` each have a
