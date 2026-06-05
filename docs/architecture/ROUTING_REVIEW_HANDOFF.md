@@ -76,6 +76,28 @@ branch-authored quality targets the router does not yet hit on synthetic dense c
 regressions against real corpus flows. Recommend deciding per test whether to (a) relax to the
 achieved behaviour, (b) keep as a known-failing aspiration, or (c) schedule as bonus work.
 
+### Red #1 root cause (session-9 investigation — needs a maintainer design call)
+
+`write-metadata` (architext-cli → target-repository, same row) and `install-valid` (schema-validator
+→ target-repository) both resolve to `target-repository.left` via the forward-lane intent rule, so
+the left face carries two mounts (94 / 112). Two distinct problems compound:
+
+1. **`doglegCount` blind spot (a real bug, fixable in isolation).** `doglegCount`
+   (`routeMountModel.js:85`) derives `yDir = sign(to.y − from.y)`. For a same-row pair `yDir = 0`, so
+   *all* vertical excursion is uncharged. `write-metadata` wanders up to y=46 (above the row) and back
+   — an up-and-over the optimizer cannot see. A clean left-face path exists at excess≈9 vs the
+   current ≈105; fixing the blind spot (penalize off-axis excursion when the partner direction on
+   that axis is 0) would let the optimizer straighten it. This change is corpus-wide and should be
+   regression-checked on roboticus before landing.
+
+2. **Face-spread policy (a design call).** Straightening still leaves `write-metadata` on the *left*
+   face; the test wants the *top* face so each of the two edges is centered on its own surface. The
+   weighted cost model has no "spread a node's edges across faces for centering" term, and top
+   actually costs more length, so it prefers the stacked left face. **Decision needed:** add a
+   face-spread/centering preference (this is the T3 surface-selection work), or bless a clean stacked
+   left face and update the test's expectation to the straightened left-face mounts. Recommend the
+   maintainer eyeball "Fresh data-only install" on System Map and choose.
+
 ## Parked
 
 - **Phase7-A WIP** is in `stash@{0}` (T6 integration + per-node-pair bridge stage + soft-cap + cost
