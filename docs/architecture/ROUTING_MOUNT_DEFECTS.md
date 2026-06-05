@@ -21,11 +21,16 @@ flag.** This document is the catalog and the fix plan; fixing happens in a later
   product-knowledge-retrieval/cli-inventory-returned → agency-service, model-inference/prepare-request
   → media-services, tool-execution/verify-tool-claim → mcp-system; the 4th, tool-claim-verdict, is the
   parallel mirror of the forced verify-tool-claim).
-- **Bar 2 (hops): NOT MET.** model-inference **line 6** (record-route) crosses route-local and
-  local-provider-result exactly at their collinear port-stub elbow waypoints (x=1102, the same lane
-  record-route uses), and a crossing landing on a vertex is skipped by the hop detector → renders
-  flat. The adaptive-hop fix (`3cebc12`) only covers near-corner crossings that are still INTERIOR to
-  both segments, not vertex crossings.
+- **Bar 2 (hops): MET (session 9, `a84928e`).** The vertex-crossing miss is fixed by merging
+  collinear runs into maximal straight segments before hop detection (both the rendered route and
+  every other route), then rendering the hop path from the merged points. model-inference **line 6**
+  (record-route) now hops twice (over route-local at y=492 and local-provider-result at y=474) with
+  clean 6px arcs — live-DOM verified. Corpus-wide hop coverage is **236/236** (every one of 118
+  geometric crossings hopped from both sides; zero deficit vs a deficit before). The merge is a
+  geometry-identity transform here: a swept 303 routes contain **zero backtracks**, so removing a
+  point that lies on its segment cannot change the drawn line — it only restores the dropped interior
+  crossing. (The earlier adaptive-hop fix `3cebc12` only covered near-corner crossings still INTERIOR
+  to both segments; this covers the vertex case it could not.)
 
 **★ Two harness traps proven this session (validate against the rendered DOM, not these numbers):**
 1. **Phantom projections.** The viewer renders a flow only in flows-mode view TYPES
@@ -42,9 +47,10 @@ flag.** This document is the catalog and the fix plan; fixing happens in a later
    (memory-lifecycle lines 7 & 8 = curate pair on wrong faces; skill-plugin line 6).
 
 **Open defects (UI-confirmed) for the next session, in bar priority:**
-- **[BAR 2] line-6 missing hops** — fix EITHER hop-detection to merge collinear segments so a
-  vertex-crossing is treated as interior and gets a hop (renderer, low-risk), OR lane-order
-  record-route to the outermost lane so it stops crossing its siblings at their elbows.
+- **[BAR 2] line-6 missing hops — DONE (`a84928e`).** Took the renderer/merge-collinear option
+  (low-risk, geometry-identity). Bar 2 is now met corpus-wide. The lane-order alternative
+  (record-route → outermost lane) is still a legitimate BONUS ordering win but no longer needed for
+  the bar.
 - **[legibility] skill-plugin steps 3 & 7 mount overlap** on skill-plugin-system.left — mount
   distribution must spread same-face requests.
 - **[T3 / legibility] surface-selection jogs** — memory-lifecycle 7 & 8, skill-plugin 6 — face
