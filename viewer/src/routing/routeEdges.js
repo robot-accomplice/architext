@@ -1573,6 +1573,107 @@ function reduceCrossingsBySurfaceSwaps(routeById, relationshipById, input) {
 // (consistent winding), reconnecting at the shifted right-angle corners. Endpoints
 // shift ALONG their node surface (the first/last segment is the perpendicular stub),
 // so the mount stays on the same surface at a parallel offset.
+// Gutter-lane order: farthest target -> outermost lane. When several edges leave the same node
+// face and run perpendicular gutters to targets at different distances, the farthest-target edge
+// must take the OUTERMOST lane and a clearing mount so it brackets OVER the shorter ones instead of
+// slicing their stubs. The pair-spreading pushes reciprocal pairs onto outer lanes but leaves a
+// LONE long edge on the inner stub (model-inference record-route at x=1102 inside the route-local
+// pair at 1142/1154), so its descent crosses both. This pass finds such a lone crosser and reroutes
+// it just outside its siblings. Guarded: kept only if the edge's own crossings strictly drop with no
+// new node collision or shared segment, so it can only refine.
+function gutterLaneOf(route, perpAxis, alongAxis) {
+  let bestLen = -1;
+  let lane = null;
+  for (let index = 0; index < route.points.length - 1; index += 1) {
+    const a = route.points[index];
+    const b = route.points[index + 1];
+    if (a[perpAxis] === b[perpAxis]) {
+      const length = Math.abs(b[alongAxis] - a[alongAxis]);
+      if (length > bestLen) { bestLen = length; lane = a[perpAxis]; }
+    }
+  }
+  return lane;
+}
+
+function crossingsInvolving(routeById, relationshipId) {
+  const route = routeById.get(relationshipId);
+  let total = 0;
+  for (const [otherId, other] of routeById) {
+    if (otherId === relationshipId) continue;
+    total += crossingsBetween(route, other);
+  }
+  return total;
+}
+
+function orderGutterLanesByTarget(routeById, relationshipById, input) {
+  const LANE_GAP = 12;
+  const FACE_PAD = 6;
+  const faces = new Map();
+  for (const [relationshipId, route] of routeById) {
+    const relationship = relationshipById.get(relationshipId);
+    if (!relationship || relationship.relationshipType !== "flow" || !route.points?.length) continue;
+    for (const [nodeId, endpointIndex] of [[relationship.from, 0], [relationship.to, route.points.length - 1]]) {
+      const rect = input.nodeRects.get(nodeId);
+      if (!rect || rect.fixedPorts) continue;
+      const point = endpointIndex === 0 ? route.points[0] : route.points.at(-1);
+      const side = endpointSide(rect, point);
+      if (!sideNeedsPostSelectionCentering(side)) continue;
+      const key = sideEndpointKey(nodeId, side);
+      if (!faces.has(key)) faces.set(key, { rect, side, members: [] });
+      faces.get(key).members.push({ relationshipId, endpointIndex, route, relationship });
+    }
+  }
+  for (const { rect, side, members } of faces.values()) {
+    if (members.length < 3) continue; // need a lone edge plus a multi-lane neighbour set to nest past
+    const along = side === "left" || side === "right" ? "y" : "x";
+    const perp = along === "y" ? "x" : "y";
+    const faceEdge = side === "right" ? rect.x + rect.width : side === "left" ? rect.x
+      : side === "bottom" ? rect.y + rect.height : rect.y;
+    const away = side === "right" || side === "bottom" ? 1 : -1;
+    const faceLo = along === "y" ? rect.y : rect.x;
+    const faceHi = along === "y" ? rect.y + rect.height : rect.x + rect.width;
+    const faceCenter = (faceLo + faceHi) / 2;
+    for (const member of members) {
+      const far = member.endpointIndex === 0 ? member.route.points.at(-1) : member.route.points[0];
+      member.far = far;
+      // Reach = how far the gutter descends along the face axis (a same-column comb shares the perp
+      // edge, so distance lives on the along axis, not perpendicular).
+      member.reach = Math.abs(far[along] - faceCenter);
+      member.lane = gutterLaneOf(member.route, perp, along);
+    }
+    // The farthest-reaching edge that is NOT already outermost is the candidate to push out.
+    const reachable = members.filter((member) => member.lane != null && member.reach > 0);
+    if (reachable.length < 2) continue;
+    const farthest = reachable.reduce((best, member) => (member.reach > best.reach ? member : best));
+    const siblings = reachable.filter((member) => member !== farthest);
+    const outerMostSiblingLane = siblings.reduce((max, member) => Math.max(max, member.lane * away), -Infinity);
+    if (farthest.lane * away >= outerMostSiblingLane) continue; // already outermost — nothing to do
+    if (crossingsInvolving(routeById, farthest.relationshipId) === 0) continue; // not actually crossing
+
+    const newLane = faceEdge + (Math.abs(outerMostSiblingLane) - Math.abs(faceEdge) + LANE_GAP) * away;
+    // Clear past every sibling mount on the anti-target end of the face so the arm stays outside
+    // their gutters. Targets sit toward `combDir`; the bracket arm goes to the opposite end.
+    const combDir = Math.sign(farthest.far[along] - (faceLo + faceHi) / 2) || 1;
+    const clearingMount = combDir > 0 ? faceLo + FACE_PAD : faceHi - FACE_PAD;
+    const far = farthest.far;
+    const faceCorner = along === "y" ? { x: faceEdge, y: clearingMount } : { x: clearingMount, y: faceEdge };
+    const elbow = along === "y" ? { x: newLane, y: clearingMount } : { x: clearingMount, y: newLane };
+    const turn = along === "y" ? { x: newLane, y: far.y } : { x: far.x, y: newLane };
+    const sequence = [faceCorner, elbow, turn, { x: far.x, y: far.y }];
+    const points = farthest.endpointIndex === 0 ? sequence : [...sequence].reverse();
+
+    const saved = farthest.route;
+    const before = crossingsInvolving(routeById, farthest.relationshipId);
+    const beforeShared = sharedSegmentCountInvolving(routeById, [farthest.relationshipId]);
+    const candidate = routeWithPoints(saved, points);
+    routeById.set(farthest.relationshipId, candidate);
+    const worse = crossingsInvolving(routeById, farthest.relationshipId) >= before
+      || routeCollidesWithNonEndpoints(candidate, farthest.relationship, input)
+      || sharedSegmentCountInvolving(routeById, [farthest.relationshipId]) > beforeShared;
+    if (worse) routeById.set(farthest.relationshipId, saved);
+  }
+}
+
 function offsetOrthogonalPolyline(points, delta) {
   if (!points || points.length < 2) return points;
   const segments = [];
@@ -2070,6 +2171,9 @@ export function routeEdges(input) {
   if (style === "orthogonal") {
     onPhase("Straightening reciprocal pairs");
     straightenSelfCrossingPairs(relievedById, relationshipById, input);
+    // Gutter-lane order: push a lone farthest-target edge onto the outermost lane so it brackets
+    // over its shorter siblings instead of slicing their stubs (model-inference record-route).
+    orderGutterLanesByTarget(relievedById, relationshipById, input);
   }
   onPhase("Drawing hops over crossings");
   const displayRawRoutes = separatedRoutes.map(([relationshipId]) => [relationshipId, relievedById.get(relationshipId)]);

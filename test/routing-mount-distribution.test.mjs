@@ -3,7 +3,7 @@ import test from "node:test";
 import { planDiagram } from "../viewer/src/routing/planDiagram.js";
 import { diagramLayoutFor } from "../viewer/src/presentation/diagramLayout.js";
 import { pairInternalCrossings } from "../viewer/src/routing/routeDiagnostics.js";
-import { spreadUnitSlots } from "../viewer/src/routing/routeEdges.js";
+import { spreadUnitSlots, crossingsBetween } from "../viewer/src/routing/routeEdges.js";
 
 // Faithful fixture for the roboticus `model-inference` flow inside the `agent-turn-flow`
 // view — the exact case the maintainer's live review flagged for uneven mounts. The LLM
@@ -211,6 +211,18 @@ test("model-inference reciprocal pairs do not cross themselves", () => {
   }));
   const plan = planModelInference();
   assert.deepEqual(pairInternalCrossings(plan.routes, relationships), []);
+});
+
+// Gutter-lane order (farthest target -> outermost lane). record-route (llm -> observability) is a
+// LONE edge to the farthest node on llm's right face; the reciprocal route-local pair got spread
+// onto outer lanes (1142/1154) while record-route kept the inner stub (1102), so its long descent
+// sliced both of the pair's horizontal stubs. The farthest-target edge must take the OUTERMOST lane
+// and the clearing mount so it brackets over the shorter pair instead of crossing it.
+test("model-inference record-route brackets the farthest target without crossing its siblings", () => {
+  const plan = planModelInference();
+  const recordRoute = plan.routes.get("record-route");
+  assert.equal(crossingsBetween(recordRoute, plan.routes.get("route-local")), 0, "record-route must not cross route-local");
+  assert.equal(crossingsBetween(recordRoute, plan.routes.get("local-provider-result")), 0, "record-route must not cross local-provider-result");
 });
 
 // The skill-plugin-lifecycle flow (same view) mounts FIVE edges on skill-plugin-system's
