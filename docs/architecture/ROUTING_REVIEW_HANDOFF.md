@@ -1,9 +1,83 @@
 # Routing overhaul — review handoff
 
-Status: **release-gate bars met; ready for maintainer live-viewer review.** Branch
-`routing-overhaul`, 51 commits ahead of `main` (no upstream set yet). The routing module under
+Status: **release-gate bars met; PR #81 open; pushing for release.** Branch
+`routing-overhaul` (pushed, tracking `origin/routing-overhaul`). The routing module under
 `viewer/src/routing/` is effectively new on this branch (24 files, ~6.5k lines: a routing-engine
 extraction plus the mount-model, distribution, diagnostics, and hop work).
+
+---
+
+## ⮕ NEXT SESSION — START HERE (handover 2026-06-05, session 9)
+
+**State:** working tree clean, all pushed, PR https://github.com/robot-accomplice/architext/pull/81
+OPEN. Phase7-A WIP parked in `stash@{0}` (do not lose). Both release bars MET (0 avoidable doglegs;
+all crossings hop). Crossing-reduction (bonus) made big strides this session.
+
+**This session's work (all committed & pushed):**
+1. `a84928e` vertex-crossing hops — merge collinear runs before hop detection (bar 2 closed).
+2. `e26001a` distribution: width-aware spread (`spreadUnitSlots`) + crossing-minimizing unit order
+   (order by far-endpoint landing, not display index).
+3. `2b6b0b5` gutter-lane order (`orderGutterLanesByTarget`) — lone farthest-target edge takes the
+   outermost lane (fixes model-inference edge 6 / `record-route`). Guarded final pass.
+
+**Crossing metrics (roboticus), baseline → now:** rendered crossings **48 → 23**, all-views
+**118 → 54**, lane-order violations **11 → 3**, pair-internal **24 → 10**, with bends ~unchanged
+(571 → 569) and **0 shared segments** throughout — pure reordering, no added contortion.
+
+**CI is RED** (https://github.com/robot-accomplice/architext PR #81 `verify` job). 4 failures:
+- `routing-mount-cost.test.mjs` — **hardcoded local path** `const ROBO = "/Users/jmachen/code/
+  roboticus/…"` (line 6). Passes locally (roboticus is on this machine), fails CI. **Clear fix:**
+  convert to an in-repo fixture or skip-when-absent. Not a design call. Pre-existing (commit `7387f13`).
+- `single flow routes stay centered…` — asserts exact coords on the **system-map** projection of
+  `fresh-install`, but that flow renders in `dataflow`/`workflow` (authored views), so system-map is a
+  **phantom** users never see. Rescope the test to a rendered view, or relax. Root cause also has a
+  real `doglegCount` yDir=0 blind spot (see below) — fixable but optional.
+- `dense fan-in diagnostics…`, `semantic return gutters…` — branch-authored **synthetic aspirations**
+  the router doesn't meet; not corpus regressions. Relax to achieved behavior or keep known-failing.
+
+**Open work, prioritized for release:**
+1. **Green CI (path A, the maintainer chose this):** fix the hardcoded-path test (clear), then decide
+   the 3 reds (rescope/relax with justification — do NOT mask a real defect).
+2. **`memory-lifecycle` "still ugly" (maintainer-flagged in visual pass):** 3 crossings in the
+   Memory↔SQLite bundle. Partly **layout-forced** (3 nodes — product-knowledge, skill-plugin, mcp —
+   stacked between Memory and SQLite force the detour). Partly **face-selection / T3**: the `curate`
+   pair (curate-repair/curation-result, steps 7/8) spills onto remote faces (sqlite.top, memory.bottom)
+   instead of bracketing the east faces like the query pair. T3 = face SELECTION in
+   `routeIntent`/`optimizeMountAssignments`; no T3 detector exists yet.
+3. **Remaining reorder levers (exhaust before alternatives — maintainer rule):** (a) 2-layer
+   consistent ordering for same-source-face bundles whose two faces still disagree after the
+   far-landing sort (sameSourceFace rendered = 3); (b) more `orderGutterLanesByTarget` cases (it
+   currently handles a single lone crosser per face — could generalize to multi-edge combs); (c) the
+   8 rendered pair-internal crossings are `straightenSelfCrossingPairs`'s non-facing misses.
+
+**Maintainer rules (standing, do not violate):**
+- ALWAYS exhaust reordering to reduce crossings BEFORE alternative solutions (guards, layout), and
+  treat distribution(spread) + ordering as ONE crossing solution.
+- Validate EVERY routing change in the LIVE UI (the browser is the shared truth); the agent's
+  screenshots time out, so extract `g.flow-edge path.flow-line` `d`-attributes from the DOM instead.
+- Node geometry is NOT a routing lever (never resize nodes to fix edges).
+
+**How to run / verify (critical gotchas):**
+- Live viewer: `cd viewer && ARCHITEXT_DATA_DIR=/Users/jmachen/code/roboticus/docs/architext/data npm
+  run dev`. **A bare `npm run dev` serves NO data → the viewer drops into "recovery mode"** (the
+  ARCHITEXT_DATA_DIR env var is required; `vite.config.ts:61` returns early without it). This is NOT
+  data corruption.
+- Drive flows via the left-nav flow cards; flow-card `.click()` is async (React) — read selection in a
+  SEPARATE `browser_evaluate` call.
+- `viewer/src/routing/routeEdges.js` contains **NUL bytes** — plain `grep` silently skips it; use
+  `grep -a` / `grep -c`.
+- Run `git` pathspecs from the **repo root** (a `git stash push -- viewer/…` from inside `viewer/`
+  mis-resolves the path and can pop the wrong stash — happened this session, recovered).
+- The distribution guard `keepMountMovesUnlessWorse` checks bends/collision/shared-segment but NOT
+  crossings; the new `orderGutterLanesByTarget` has its own crossing-aware guard.
+- Repro/measure tools (all use flows.json steps + planDiagram, the production path):
+  `/tmp/reach-cross.mjs` (rendered-view crossings, classified), `/tmp/hop-coverage.mjs` (all-views
+  crossings + hop deficits), `/tmp/health.mjs` (bends + shared segments), `/tmp/classify.mjs`
+  (crossing buckets), `/tmp/mi-dump.mjs` (model-inference geometry),
+  `node viewer/tools/audit-route-crossings.mjs --data-dir <dir>` (pair-internal + lane-order, committed).
+- Tests: `npm test` (suite), `npm run test:benchmark` (benches 12/12), `architext validate`.
+
+---
 
 ## Validation (run 2026-06-05)
 
@@ -58,13 +132,15 @@ three rendered flat.
   Remaining rendered 27 break down as: **8 pair-internal** (the `straightenSelfCrossingPairs` pass's
   job — these are its non-facing / multi-bend misses), **4 cross-lane** (different node pairs in
   different lanes — inherent, not reorderable), and ~15 face-shared. The bounded face-distribution
-  reorder is *complete*; the remaining reorder levers are separate, larger subsystems:
-  - **Gutter-lane order** ("farthest target → outermost") — would fix `model-inference`
-    `record-route` crossing `route-local`/`local-provider-result`. Lives in candidate
-    selection/scoring (`gutterLaneValues` + `routeStrategies`), not face distribution. Deferred:
-    reworking candidate selection pre-release is high-risk for a bonus metric.
+  reorder is *complete*. (Post-comb-pass figures: rendered crossings now **23**, all-views **54**.)
+  Remaining reorder levers:
+  - ✅ **Gutter-lane order ("farthest target → outermost") — LANDED (`2b6b0b5`).**
+    `orderGutterLanesByTarget` reroutes a lone farthest-target crosser onto the outermost lane; fixed
+    `model-inference` `record-route` (edge 6), crossing-free, live-DOM verified. A guarded final pass
+    with its own crossing-aware guard — NOT a candidate-selection rework (lower risk than feared).
+    Could still generalize to multi-edge combs.
   - **2-layer consistent ordering** for same-source-face bundles whose two faces still disagree after
-    the far-landing sort (needs an iterative barycenter-style pass).
+    the far-landing sort (needs an iterative barycenter-style pass). Rendered sameSourceFace = 3.
 - **T3 surface-selection jogs** — `memory-lifecycle` L7/L8 and `skill-plugin` L6 pick a crowded/remote
   face instead of the near one. Face *selection* in `routeIntent` / `optimizeMountAssignments`.
 - **Two hop deficits** — `system-map/interactive-turn` and `system-map/mail-operations` each have a
