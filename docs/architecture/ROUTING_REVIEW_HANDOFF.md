@@ -44,14 +44,22 @@ three rendered flat.
 
 ## Known residual BONUS defects (UI-confirmed, do not gate the bar)
 
-- **skill-plugin steps 3 & 7 mount overlap** on `skill-plugin-system.left` (~1.5px apart, lines run
-  on top of each other) — mount distribution should spread same-face requests.
-- **T3 surface-selection jogs** — `memory-lifecycle` L7/L8 (curate pair bracket remote faces) and
-  `skill-plugin` L6 pick a crowded/remote face instead of the near one. Face *selection* in
-  `routeIntent` / `optimizeMountAssignments`. No T3 wrong-face detector exists yet.
-- **Pair-aware ordering / lane-order pass** — the spec'd final ordering pass (farthest target →
-  outermost lane; `record-route` → outermost) is unbuilt. Pure bonus now that bar 2 is met by the
-  renderer.
+- ✅ **skill-plugin steps 3 & 7 mount overlap — FIXED (`e26001a`).** Width-aware slot spacing
+  (`spreadUnitSlots`) reserves each unit's width so adjacent reciprocal pairs no longer collide;
+  left-face mounts now spread to 7.5px gaps (was 1.5px), live-DOM verified.
+- ✅ **Crossing-minimizing unit order — LANDED (`e26001a`).** The same pass now orders units by where
+  they LAND on the far node, so reciprocal bundles between the same node pair stay parallel instead
+  of swapping. Corpus: total crossings **118 → 64**, pair-internal **24 → 10**, lane-order **11 → 6**,
+  with identical total bends and zero shared segments (pure ordering, no added contortion). This is
+  the practical core of the maintainer's "pair-aware ordering" ask, integrated with distribution.
+- **Remaining reorder opportunities** — 64 crossings remain; some are further reorderable (e.g.
+  same-source fan-outs), some are inherent cross-lane layout crossings, and pair-internal (10) is the
+  straightening pass's job. The gutter-lane "farthest target → outermost" rule is not yet applied.
+- **T3 surface-selection jogs** — `memory-lifecycle` L7/L8 and `skill-plugin` L6 pick a crowded/remote
+  face instead of the near one. Face *selection* in `routeIntent` / `optimizeMountAssignments`.
+- **Two hop deficits** — `system-map/interactive-turn` and `system-map/mail-operations` each have a
+  few crossings that render flat. These appear only in the system-map projection (likely phantom for
+  flows that have an authored view); a hop-rendering edge case, not a crossing-count problem.
 - **Min-segment-length stubs** — 89 node-hugging segments under 12px. A legibility nicety.
 
 ## The 3 failing tests — honest read
