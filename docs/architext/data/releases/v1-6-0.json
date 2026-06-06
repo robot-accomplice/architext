@@ -1,25 +1,129 @@
 {
   "id": "v1-6-0",
   "version": "1.6.0",
-  "name": "Architext 1.6.0 Repository Intelligence",
-  "status": "planned",
-  "posture": "on-track",
-  "summary": "Architext 1.6.0 is reserved for repository intelligence, diagram ergonomics, and persistent architecture annotations.",
-  "targetWindow": "After 1.5.1",
-  "lastUpdated": "2026-05-27T16:30:00.000Z",
-  "updateSource": "1.6.0 candidate capture",
+  "name": "Architext 1.6.0 Routing Overhaul",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Architext 1.6.0 rebuilds orthogonal edge routing around a single weighted-sum mount-cost objective, reduces and hops diagram crossings, coordinates reciprocal pairs, and derives mount spacing from the rendered arrowhead instead of magic numbers. A sanitized high-complexity corpus and a fitness ratchet lock the gains against regression.",
+  "targetDate": "2026-06-06",
+  "lastUpdated": "2026-06-06T19:25:00.000Z",
+  "updateSource": "1.6.0 routing-overhaul release (PR #81)",
   "scope": {
-    "required": [],
-    "planned": [
+    "required": [
+      {
+        "id": "weighted-sum-mount-cost",
+        "title": "Single weighted-sum mount-cost objective",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Replace the tiered mount cost with one weighted-sum objective ordered doglegs > crossings > crowding, plus relief passes for crowded surfaces, soft over-capacity tolerance, and optimizer move scoring by strict crossings.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "orthogonal-routing-engine",
+        "dependsOn": [],
+        "evidence": [
+          "viewer/src/routing/routeMountModel.js",
+          "viewer/src/routing/routeConstants.js"
+        ]
+      },
+      {
+        "id": "crossing-reduction",
+        "title": "Crossing reduction and hop rendering",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Vertex-hop collinear merge, width-aware spread with crossing-minimizing unit order, gutter-lane ordering (farthest target takes the outermost lane), and a combinatorial swap-search; adaptive hop radius so every rendered crossing carries a hop.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "orthogonal-routing-engine",
+        "dependsOn": [
+          "weighted-sum-mount-cost"
+        ],
+        "evidence": [
+          "viewer/src/routing/routeEdges.js",
+          "viewer/src/routing/routeDiagnostics.js"
+        ]
+      },
+      {
+        "id": "reciprocal-pair-routing",
+        "title": "Reciprocal-pair coordination",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Pair request and return edges as parallel bundles, straighten self-crossing pairs, build nested gutter bridges, and distribute pair mounts atomically and evenly across shared faces.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "orthogonal-routing-engine",
+        "dependsOn": [
+          "weighted-sum-mount-cost"
+        ],
+        "evidence": [
+          "viewer/src/routing/routeReciprocal.js",
+          "test/routing-mount-distribution.test.mjs"
+        ]
+      },
+      {
+        "id": "arrowhead-derived-spacing",
+        "title": "Arrowhead-derived mount spacing",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Derive the minimum legible gap and surface capacity from the rendered arrowhead (half an arrowhead, 4px) instead of two disagreeing magic numbers, so reciprocal pairs stop splitting onto remote faces when they would have fit.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "orthogonal-routing-engine",
+        "dependsOn": [
+          "weighted-sum-mount-cost"
+        ],
+        "evidence": [
+          "viewer/src/routing/routeConstants.js",
+          "viewer/src/routing/routePorts.js"
+        ]
+      },
+      {
+        "id": "routing-corpus-ratchet",
+        "title": "High-complexity corpus and fitness ratchet",
+        "kind": "test",
+        "status": "complete",
+        "summary": "A sanitized in-repo routing corpus (66 nodes, 30 views, 15 flows) plus a frozen-baseline fitness ratchet and pair-internal and lane-order crossing detectors, wired into the benchmark gate so no change can silently make a complex diagram worse.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "routing-validation-harness",
+        "dependsOn": [],
+        "evidence": [
+          "test/fixtures/routing-corpus/",
+          "test/routing-corpus-fitness.test.mjs"
+        ]
+      },
+      {
+        "id": "routing-overlay-ergonomics",
+        "title": "Planning overlay narration and viewer fixes",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Narrate routing passes in the planning overlay, persist the steps-panel collapse state, keep overlays at the canvas z-index and fit them to content bounds, and restore the TypeScript build after the overlay change.",
+        "priority": "low",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "viewer-routing-ergonomics",
+        "dependsOn": [],
+        "evidence": [
+          "viewer/src/routing/usePlannedDiagram.js",
+          "viewer/src/presentation/"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [
       {
         "id": "repo-tree-view",
         "title": "Repository tree view",
         "kind": "feature",
-        "status": "planned",
-        "summary": "Add a top-level Repo Tree tab that helps users understand source layout, optionally color-coding folders tied to C4 or Flow responsibilities and leaving room for a future 3D graph projection.",
+        "status": "deferred",
+        "summary": "Top-level Repo Tree tab for source layout understanding. Reassigned to 1.7.0 Repository Intelligence; not part of the routing overhaul shipped in 1.6.0.",
         "source": "roadmap",
         "dateAdded": "2026-05-27T16:30:00.000Z",
-        "workstreamId": "repository-intelligence",
         "priority": "high",
         "dependsOn": []
       },
@@ -27,11 +131,10 @@
         "id": "repo-blast-radius-search",
         "title": "Repository blast-radius search",
         "kind": "feature",
-        "status": "planned",
-        "summary": "Provide search for filenames, components, or known code concepts so users can see where a concern reaches across repository files and architecture elements.",
+        "status": "deferred",
+        "summary": "Search for filenames, components, or code concepts to see where a concern reaches. Reassigned to 1.7.0 Repository Intelligence.",
         "source": "roadmap",
         "dateAdded": "2026-05-27T16:30:00.000Z",
-        "workstreamId": "repository-intelligence",
         "priority": "high",
         "dependsOn": []
       },
@@ -39,11 +142,10 @@
         "id": "diagram-spacing-controls",
         "title": "Diagram spacing controls",
         "kind": "feature",
-        "status": "planned",
-        "summary": "Add explicit ergonomics controls for diagram column width and sequence-diagram row spacing so users can improve readability without relying only on zoom.",
+        "status": "deferred",
+        "summary": "Explicit controls for diagram column width and sequence-diagram row spacing. Reassigned to 1.7.0.",
         "source": "roadmap",
         "dateAdded": "2026-05-27T16:30:00.000Z",
-        "workstreamId": "diagram-ergonomics",
         "priority": "medium",
         "dependsOn": []
       },
@@ -51,95 +153,128 @@
         "id": "persistent-architecture-element-notes",
         "title": "Persistent architecture element notes",
         "kind": "feature",
-        "status": "planned",
-        "summary": "Allow users to edit or annotate architecture elements and persist the notes in Architext JSON, including cases where a high-risk area is intentionally mitigated by the system being documented.",
+        "status": "deferred",
+        "summary": "Edit or annotate architecture elements and persist the notes in Architext JSON. Reassigned to 1.7.0.",
         "source": "roadmap",
         "dateAdded": "2026-05-27T16:30:00.000Z",
-        "workstreamId": "architecture-editing",
         "priority": "high",
         "dependsOn": []
       }
     ],
-    "stretch": [],
-    "deferred": [],
     "outOfScope": []
   },
   "workstreams": [
     {
-      "id": "repository-intelligence",
-      "name": "Repository Intelligence",
+      "id": "orthogonal-routing-engine",
+      "name": "Orthogonal Routing Engine",
       "owner": "maintainer",
-      "status": "planned",
-      "posture": "on-track",
-      "summary": "Expose repository structure and blast-radius understanding inside Architext.",
-      "progress": 0,
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Rebuild orthogonal edge routing on a single weighted-sum mount-cost objective with crossing reduction, reciprocal-pair coordination, and arrowhead-derived spacing.",
+      "progress": 100,
       "itemIds": [
-        "repo-tree-view",
-        "repo-blast-radius-search"
+        "weighted-sum-mount-cost",
+        "crossing-reduction",
+        "reciprocal-pair-routing",
+        "arrowhead-derived-spacing"
       ],
-      "evidence": []
+      "evidence": [
+        "viewer/src/routing/",
+        "npm run test:benchmark"
+      ]
     },
     {
-      "id": "diagram-ergonomics",
-      "name": "Diagram Ergonomics",
+      "id": "routing-validation-harness",
+      "name": "Routing Validation Harness",
       "owner": "maintainer",
-      "status": "planned",
-      "posture": "on-track",
-      "summary": "Add layout controls that change diagram spacing without changing semantic data.",
-      "progress": 0,
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Lock routing quality with an in-repo high-complexity corpus and a frozen-baseline fitness ratchet in the benchmark gate.",
+      "progress": 100,
       "itemIds": [
-        "diagram-spacing-controls"
+        "routing-corpus-ratchet"
       ],
-      "evidence": []
+      "evidence": [
+        "test/fixtures/routing-corpus/",
+        "test/routing-corpus-fitness.test.mjs"
+      ]
     },
     {
-      "id": "architecture-editing",
-      "name": "Architecture Editing",
+      "id": "viewer-routing-ergonomics",
+      "name": "Viewer Routing Ergonomics",
       "owner": "maintainer",
-      "status": "planned",
-      "posture": "on-track",
-      "summary": "Let users persist clarifying notes directly on architecture elements.",
-      "progress": 0,
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Surface routing passes in the planning overlay and tidy viewer overlay behavior without changing semantic data.",
+      "progress": 100,
       "itemIds": [
-        "persistent-architecture-element-notes"
+        "routing-overlay-ergonomics"
       ],
-      "evidence": []
+      "evidence": [
+        "viewer/src/presentation/"
+      ]
     }
   ],
   "blockers": [],
   "milestones": [
     {
-      "id": "repo-intelligence-shaped",
-      "label": "Repository intelligence shaped",
-      "status": "planned",
-      "targetWindow": "1.6.0 discovery",
+      "id": "mount-cost-unified",
+      "label": "Mount cost model unified",
+      "status": "complete",
+      "targetWindow": "1.6.0 routing overhaul",
       "order": 1,
       "itemIds": [
-        "repo-tree-view",
-        "repo-blast-radius-search"
+        "weighted-sum-mount-cost"
       ]
     },
     {
-      "id": "diagram-ergonomics-shaped",
-      "label": "Diagram ergonomics shaped",
-      "status": "planned",
-      "targetWindow": "1.6.0 discovery",
+      "id": "crossings-reduced",
+      "label": "Crossings reduced and hopped",
+      "status": "complete",
+      "targetWindow": "1.6.0 routing overhaul",
       "order": 2,
       "itemIds": [
-        "diagram-spacing-controls"
+        "crossing-reduction",
+        "reciprocal-pair-routing"
       ]
     },
     {
-      "id": "architecture-editing-shaped",
-      "label": "Architecture editing shaped",
-      "status": "planned",
-      "targetWindow": "1.6.0 discovery",
+      "id": "harness-landed",
+      "label": "Routing validation harness landed",
+      "status": "complete",
+      "targetWindow": "1.6.0 routing overhaul",
       "order": 3,
       "itemIds": [
-        "persistent-architecture-element-notes"
+        "routing-corpus-ratchet",
+        "arrowhead-derived-spacing"
+      ]
+    },
+    {
+      "id": "release-verified",
+      "label": "Release verified",
+      "status": "in-progress",
+      "targetWindow": "1.6.0 release",
+      "order": 4,
+      "itemIds": [
+        "routing-overlay-ergonomics"
       ]
     }
   ],
   "dependencies": [],
-  "evidence": []
+  "evidence": [
+    {
+      "id": "pr-81-routing-overhaul",
+      "label": "PR #81 routing-overhaul",
+      "href": "https://github.com/robot-accomplice/architext/pull/81",
+      "kind": "release-note",
+      "status": "in-progress"
+    },
+    {
+      "id": "release-gate-green",
+      "label": "release:check green (330/330 tests, benchmarks, corpus ratchet, build, UAT, pack smoke)",
+      "href": "package.json",
+      "kind": "test",
+      "status": "complete"
+    }
+  ]
 }

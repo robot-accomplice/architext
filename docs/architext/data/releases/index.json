@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-5-1",
+  "currentReleaseId": "v1-6-0",
   "releases": [
     {
       "id": "v1-1-2",
@@ -443,12 +443,33 @@
     {
       "id": "v1-6-0",
       "version": "1.6.0",
-      "name": "Architext 1.6.0 Repository Intelligence",
+      "name": "Architext 1.6.0 Routing Overhaul",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-06-06",
+      "lastUpdated": "2026-06-06T19:25:00.000Z",
+      "summary": "Architext 1.6.0 rebuilds orthogonal edge routing around a single weighted-sum mount-cost objective, reduces and hops diagram crossings, coordinates reciprocal pairs, and derives mount spacing from the rendered arrowhead instead of magic numbers. A sanitized high-complexity corpus and a fitness ratchet lock the gains against regression.",
+      "counts": {
+        "features": 7,
+        "bugFixes": 1,
+        "workstreams": 3,
+        "blockers": 0,
+        "complete": 6,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-6-0.json"
+    },
+    {
+      "id": "v1-7-0",
+      "version": "1.7.0",
+      "name": "Architext 1.7.0 Repository Intelligence",
       "status": "planned",
       "posture": "on-track",
-      "targetWindow": "After 1.5.1",
-      "lastUpdated": "2026-05-27T16:30:00.000Z",
-      "summary": "Architext 1.6.0 is reserved for repository intelligence, diagram ergonomics, and persistent architecture annotations.",
+      "targetWindow": "After 1.6.0",
+      "lastUpdated": "2026-06-06T19:25:00.000Z",
+      "summary": "Architext 1.7.0 is reserved for repository intelligence, diagram ergonomics, and persistent architecture annotations.",
       "counts": {
         "features": 4,
         "bugFixes": 0,
@@ -459,7 +480,7 @@
         "planned": 4,
         "stretch": 0
       },
-      "file": "v1-6-0.json"
+      "file": "v1-7-0.json"
     }
   ]
 }

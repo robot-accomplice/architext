@@ -1,0 +1,145 @@
+{
+  "id": "v1-7-0",
+  "version": "1.7.0",
+  "name": "Architext 1.7.0 Repository Intelligence",
+  "status": "planned",
+  "posture": "on-track",
+  "summary": "Architext 1.7.0 is reserved for repository intelligence, diagram ergonomics, and persistent architecture annotations.",
+  "targetWindow": "After 1.6.0",
+  "lastUpdated": "2026-06-06T19:25:00.000Z",
+  "updateSource": "1.7.0 candidate capture (relocated from 1.6.0 when 1.6.0 became the routing overhaul)",
+  "scope": {
+    "required": [],
+    "planned": [
+      {
+        "id": "repo-tree-view",
+        "title": "Repository tree view",
+        "kind": "feature",
+        "status": "planned",
+        "summary": "Add a top-level Repo Tree tab that helps users understand source layout, optionally color-coding folders tied to C4 or Flow responsibilities and leaving room for a future 3D graph projection.",
+        "source": "roadmap",
+        "dateAdded": "2026-05-27T16:30:00.000Z",
+        "workstreamId": "repository-intelligence",
+        "priority": "high",
+        "dependsOn": []
+      },
+      {
+        "id": "repo-blast-radius-search",
+        "title": "Repository blast-radius search",
+        "kind": "feature",
+        "status": "planned",
+        "summary": "Provide search for filenames, components, or known code concepts so users can see where a concern reaches across repository files and architecture elements.",
+        "source": "roadmap",
+        "dateAdded": "2026-05-27T16:30:00.000Z",
+        "workstreamId": "repository-intelligence",
+        "priority": "high",
+        "dependsOn": []
+      },
+      {
+        "id": "diagram-spacing-controls",
+        "title": "Diagram spacing controls",
+        "kind": "feature",
+        "status": "planned",
+        "summary": "Add explicit ergonomics controls for diagram column width and sequence-diagram row spacing so users can improve readability without relying only on zoom.",
+        "source": "roadmap",
+        "dateAdded": "2026-05-27T16:30:00.000Z",
+        "workstreamId": "diagram-ergonomics",
+        "priority": "medium",
+        "dependsOn": []
+      },
+      {
+        "id": "persistent-architecture-element-notes",
+        "title": "Persistent architecture element notes",
+        "kind": "feature",
+        "status": "planned",
+        "summary": "Allow users to edit or annotate architecture elements and persist the notes in Architext JSON, including cases where a high-risk area is intentionally mitigated by the system being documented.",
+        "source": "roadmap",
+        "dateAdded": "2026-05-27T16:30:00.000Z",
+        "workstreamId": "architecture-editing",
+        "priority": "high",
+        "dependsOn": []
+      }
+    ],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "repository-intelligence",
+      "name": "Repository Intelligence",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Expose repository structure and blast-radius understanding inside Architext.",
+      "progress": 0,
+      "itemIds": [
+        "repo-tree-view",
+        "repo-blast-radius-search"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "diagram-ergonomics",
+      "name": "Diagram Ergonomics",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Add layout controls that change diagram spacing without changing semantic data.",
+      "progress": 0,
+      "itemIds": [
+        "diagram-spacing-controls"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "architecture-editing",
+      "name": "Architecture Editing",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Let users persist clarifying notes directly on architecture elements.",
+      "progress": 0,
+      "itemIds": [
+        "persistent-architecture-element-notes"
+      ],
+      "evidence": []
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "repo-intelligence-shaped",
+      "label": "Repository intelligence shaped",
+      "status": "planned",
+      "targetWindow": "1.6.0 discovery",
+      "order": 1,
+      "itemIds": [
+        "repo-tree-view",
+        "repo-blast-radius-search"
+      ]
+    },
+    {
+      "id": "diagram-ergonomics-shaped",
+      "label": "Diagram ergonomics shaped",
+      "status": "planned",
+      "targetWindow": "1.6.0 discovery",
+      "order": 2,
+      "itemIds": [
+        "diagram-spacing-controls"
+      ]
+    },
+    {
+      "id": "architecture-editing-shaped",
+      "label": "Architecture editing shaped",
+      "status": "planned",
+      "targetWindow": "1.6.0 discovery",
+      "order": 3,
+      "itemIds": [
+        "persistent-architecture-element-notes"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": []
+}
