@@ -5,6 +5,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import { planDiagram } from "../../../viewer/src/routing/planDiagram.js";
+import { crossingsBetween } from "../../../viewer/src/routing/routeEdges.js";
 import { diagramLayoutFor } from "../../../viewer/src/presentation/diagramLayout.js";
 
 const DIR = dirname(fileURLToPath(import.meta.url));
@@ -12,15 +13,34 @@ const FLOW_VIEW_TYPES = new Set(["system-map", "flow-explorer", "workflow", "dat
 
 // Metrics that are gated. routes is a structural invariant; the rest are quality costs
 // where lower is better. findings/constraints/hops are derived/contextual and excluded.
+//
+// `crossings` is the TOTAL of rendered cross-edge intersections (every route pair), NOT
+// just the self-crossings pairInternalCrossings counts. The diagnostics object never
+// exposed this aggregate, so a change could redistribute crossings — clean one diagram,
+// dirty another — with zero net movement in any gated metric. That blind spot let a
+// capacity change regress two pristine flows from 0 to 4 crossings undetected. Gating the
+// aggregate closes it: any net increase, anywhere, now trips the ratchet.
 export const GATED_METRICS = [
   "routes",
   "bends",
+  "crossings",
   "pairInternalCrossings",
   "laneOrderViolations",
   "closeParallelRuns",
   "sharedSegments",
   "repeatedCrossings"
 ];
+
+// Total rendered cross-edge intersections across every route pair — the aggregate the
+// diagnostics object omits. Uses the same crossingsBetween the distribution tests use.
+function totalCrossings(routes) {
+  const all = [...routes.values()];
+  let total = 0;
+  for (let a = 0; a < all.length; a += 1) {
+    for (let b = a + 1; b < all.length; b += 1) total += crossingsBetween(all[a], all[b]);
+  }
+  return total;
+}
 
 function loadJson(name) {
   return JSON.parse(readFileSync(join(DIR, name), "utf8"));
@@ -63,7 +83,7 @@ export function computeCorpusMetrics() {
       diagnostics: true,
       ...diagramLayoutFor(view, relationships.length)
     });
-    const metrics = plan.diagnostics.metrics;
+    const metrics = { ...plan.diagnostics.metrics, crossings: totalCrossings(plan.routes) };
     result[flow.id] = Object.fromEntries(GATED_METRICS.map((key) => [key, metrics[key] ?? 0]));
   }
   return result;
