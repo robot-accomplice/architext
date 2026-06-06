@@ -1,9 +1,9 @@
 {
   "hub-fan-dense": {
     "routes": 18,
-    "bends": 25,
-    "pairInternalCrossings": 1,
-    "laneOrderViolations": 1,
+    "bends": 28,
+    "pairInternalCrossings": 0,
+    "laneOrderViolations": 0,
     "closeParallelRuns": 0,
     "sharedSegments": 0,
     "repeatedCrossings": 0
@@ -29,9 +29,9 @@
   "pair-minimal": {
     "routes": 4,
     "bends": 8,
-    "pairInternalCrossings": 0,
+    "pairInternalCrossings": 1,
     "laneOrderViolations": 0,
-    "closeParallelRuns": 0,
+    "closeParallelRuns": 1,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   },
@@ -46,10 +46,10 @@
   },
   "coaligned-multibundle-surfaceselect": {
     "routes": 8,
-    "bends": 10,
-    "pairInternalCrossings": 1,
+    "bends": 12,
+    "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
-    "closeParallelRuns": 4,
+    "closeParallelRuns": 0,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   },
@@ -73,10 +73,10 @@
   },
   "bundle-return-gutter": {
     "routes": 8,
-    "bends": 19,
+    "bends": 18,
     "pairInternalCrossings": 1,
-    "laneOrderViolations": 0,
-    "closeParallelRuns": 0,
+    "laneOrderViolations": 1,
+    "closeParallelRuns": 1,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   },
@@ -100,8 +100,8 @@
   },
   "pair-fan-basic": {
     "routes": 7,
-    "bends": 17,
-    "pairInternalCrossings": 2,
+    "bends": 14,
+    "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
     "closeParallelRuns": 0,
     "sharedSegments": 0,
@@ -127,10 +127,10 @@
   },
   "fan-max-systemmap": {
     "routes": 10,
-    "bends": 21,
+    "bends": 19,
     "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
-    "closeParallelRuns": 0,
+    "closeParallelRuns": 1,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   }

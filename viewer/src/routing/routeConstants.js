@@ -103,7 +103,18 @@ export const MOUNT_COST = {
   length: 6                        // base unit — per px of wire (polish)
 };
 
-export const MIN_LEGIBLE_GAP = 12;  // px; mounts closer than this read as one line
+// Flow arrowheads render from an SVG marker (markerWidth/markerHeight = 4, no markerUnits so
+// it scales by stroke width) on a stroke-width-2 line — see the <marker> defs in main.tsx and
+// `.flow-line` in styles.css — so the rendered arrowhead is 4 * 2 = 8px across its base.
+const ARROWHEAD_MARKER_UNITS = 4; // marker base span, perpendicular to the line
+const FLOW_STROKE_WIDTH = 2;      // px; .flow-line stroke-width (markerUnits defaults to strokeWidth)
+export const ARROWHEAD_WIDTH = ARROWHEAD_MARKER_UNITS * FLOW_STROKE_WIDTH; // 8px
+// The tightest gap at which two parallel lines still read as two. Derived from the rendered
+// arrowhead, not a guessed round number: half an arrowhead. This is the single readability
+// knob — raise the fraction for more breathing room, lower it to pack tighter. Governs mount
+// packing (capacity, via SURFACE_PORT_SPACING), the cramped penalty, and reciprocal lane spacing.
+export const MIN_LEGIBLE_GAP_ARROWHEADS = 0.5;
+export const MIN_LEGIBLE_GAP = ARROWHEAD_WIDTH * MIN_LEGIBLE_GAP_ARROWHEADS; // 4px
 export const MOUNT_MAX_ITERS = 8;   // aggregate-pass convergence bound
 export const RECIPROCAL_PARALLEL_OFFSET = 12; // px; lane gap when running a reciprocal return parallel to its request
 

@@ -1,9 +1,13 @@
 import { clamp } from "./routeGeometry.js";
+import { MIN_LEGIBLE_GAP } from "./routeConstants.js";
 
 export const SIDES = ["left", "right", "top", "bottom"];
 export const PORT_STUB = 18;
 export const PORT_SPACING = 6;
-export const SURFACE_PORT_SPACING = 9;
+// Mounts pack no tighter than the legibility floor. Same physical contract as MIN_LEGIBLE_GAP
+// (how close two parallel lines sit and still read as two), so it derives from the one constant
+// rather than carrying a second, silently-disagreeing magic number.
+export const SURFACE_PORT_SPACING = MIN_LEGIBLE_GAP;
 
 export function anchorFor(rect, side) {
   if (rect.sideAnchors?.[side]) return rect.sideAnchors[side];

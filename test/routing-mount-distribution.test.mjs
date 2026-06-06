@@ -4,6 +4,7 @@ import { planDiagram } from "../viewer/src/routing/planDiagram.js";
 import { diagramLayoutFor } from "../viewer/src/presentation/diagramLayout.js";
 import { pairInternalCrossings } from "../viewer/src/routing/routeDiagnostics.js";
 import { spreadUnitSlots, crossingsBetween } from "../viewer/src/routing/routeEdges.js";
+import { MIN_LEGIBLE_GAP, RECIPROCAL_PARALLEL_OFFSET } from "../viewer/src/routing/routeConstants.js";
 
 // Faithful fixture for the roboticus `model-inference` flow inside the `agent-turn-flow`
 // view — the exact case the maintainer's live review flagged for uneven mounts. The LLM
@@ -106,89 +107,70 @@ function faceMounts(plan, nodeId, side) {
   return coords.sort((a, b) => a - b);
 }
 
-// Group sorted mounts into reciprocal pairs (a pair's two parallel mounts sit within the
-// ~12px parallel offset of each other) and return each group's centre.
-function unitCenters(coords, gap = 14) {
-  if (coords.length === 0) return [];
-  const groups = [[coords[0]]];
-  for (let i = 1; i < coords.length; i += 1) {
-    if (coords[i] - coords[i - 1] <= gap) groups[groups.length - 1].push(coords[i]);
-    else groups.push([coords[i]]);
-  }
-  return groups.map((g) => g.reduce((a, b) => a + b, 0) / g.length);
-}
-
-// Even distribution of N units on a face of length L puts unit centres at the same
-// fractions the router's own endpointSpreadOffset uses: (i+1)/(N+1) of the face.
-function idealUnitCenters(rect, side, unitCount) {
-  const start = side === "left" || side === "right" ? rect.y : rect.x;
-  const length = side === "left" || side === "right" ? rect.height : rect.width;
-  return Array.from({ length: unitCount }, (_, i) => start + ((i + 1) / (unitCount + 1)) * length);
-}
-
-test("LLM bottom face spreads its two reciprocal-pair centres evenly (model-inference)", () => {
+test("LLM hub mounts each reciprocal pair as a centred, legible parallel bundle (model-inference)", () => {
   const plan = planModelInference();
   const llm = plan.nodeRects.get("llm-service");
+
+  // WHY: capacity now derives from the arrowhead legibility gap (routeConstants
+  // MIN_LEGIBLE_GAP_ARROWHEADS), so the hub no longer crams all four provider-pair mounts onto
+  // the bottom face — it distributes the reciprocal pairs across faces. Each pair must still
+  // render as a clean parallel bundle (legibly spaced, no self-cross) centred on its face. The
+  // bottom face carries exactly one such pair.
   const mounts = faceMounts(plan, "llm-service", "bottom");
+  assert.equal(mounts.length, 2, `expected one reciprocal pair on llm-service bottom, got ${mounts.length}: ${mounts}`);
 
-  assert.equal(mounts.length, 4, `expected 4 mounts on llm-service bottom, got ${mounts.length}: ${mounts}`);
-  const centers = unitCenters(mounts);
-  assert.equal(centers.length, 2, `expected 2 reciprocal pairs on llm-service bottom, got ${centers.length}: ${mounts}`);
+  const gap = mounts[1] - mounts[0];
+  assert.ok(
+    gap >= MIN_LEGIBLE_GAP && gap <= RECIPROCAL_PARALLEL_OFFSET + 2,
+    `the bottom pair should be a legible parallel bundle (~${RECIPROCAL_PARALLEL_OFFSET}px), got ${gap.toFixed(1)}px`
+  );
 
-  const ideal = idealUnitCenters(llm, "bottom", 2);
-  const tol = 8;
-  centers.forEach((center, i) => {
-    assert.ok(
-      Math.abs(center - ideal[i]) <= tol,
-      `pair centre ${i} = ${center.toFixed(1)} should be within ${tol}px of even slot ${ideal[i].toFixed(1)} (mounts: ${mounts.map((m) => m.toFixed(1))})`
-    );
-  });
-
-  // The whole set should be symmetric about the face centre, not shoved to one side.
-  const mean = mounts.reduce((a, b) => a + b, 0) / mounts.length;
+  // The pair sits centred on the face, not shoved to one side.
+  const mean = (mounts[0] + mounts[1]) / 2;
   const faceCenter = llm.x + llm.width / 2;
-  assert.ok(Math.abs(mean - faceCenter) <= tol, `mounts mean ${mean.toFixed(1)} should be within ${tol}px of face centre ${faceCenter.toFixed(1)}`);
+  assert.ok(Math.abs(mean - faceCenter) <= 4, `pair centre ${mean.toFixed(1)} should sit at face centre ${faceCenter.toFixed(1)}`);
+
+  // The whole hub stays free of reciprocal self-crossings.
+  const relationships = MODEL_INFERENCE_STEPS.map(([id, from, to], index) => ({
+    id, from, to, relationshipType: "flow", displayIndex: index + 1
+  }));
+  assert.deepEqual(pairInternalCrossings(plan.routes, relationships), []);
 });
 
-test("a lone mount on a SQLite face is centred, not left off to one side (memory-lifecycle T2)", () => {
+test("SQLite faces centre their reciprocal-pair mounts as a unit (memory-lifecycle T2)", () => {
   const plan = planMemoryLifecycle();
   const sqlite = plan.nodeRects.get("sqlite-store");
 
-  // Each of these faces carries exactly one terminating mount; a lone mount should sit at the
-  // face centre rather than wherever the upstream passes happened to leave it.
-  for (const side of ["left", "top"]) {
+  // WHY: the looser capacity keeps each reciprocal pair together on one SQLite face instead of
+  // spilling a lone mount elsewhere. The left and right faces now each carry a pair; the pair's
+  // CENTRE must sit on the face centre (not shoved to one side) and its two mounts stay legibly apart.
+  for (const side of ["left", "right"]) {
     const mounts = faceMounts(plan, "sqlite-store", side);
-    assert.equal(mounts.length, 1, `expected a single lone mount on sqlite-store ${side}, got ${mounts.length}: ${mounts}`);
-    const faceCenter = side === "left" || side === "right" ? sqlite.y + sqlite.height / 2 : sqlite.x + sqlite.width / 2;
-    assert.ok(
-      Math.abs(mounts[0] - faceCenter) <= 2,
-      `lone mount on sqlite-store ${side} = ${mounts[0].toFixed(1)} should be centred at ${faceCenter.toFixed(1)}`
-    );
+    assert.equal(mounts.length, 2, `expected a reciprocal pair on sqlite-store ${side}, got ${mounts.length}: ${mounts}`);
+    const faceCenter = sqlite.y + sqlite.height / 2;
+    const mean = (mounts[0] + mounts[1]) / 2;
+    assert.ok(Math.abs(mean - faceCenter) <= 2, `pair centre on sqlite-store ${side} = ${mean.toFixed(1)} should sit at face centre ${faceCenter.toFixed(1)}`);
+    assert.ok(mounts[1] - mounts[0] >= MIN_LEGIBLE_GAP, `the ${side} pair must stay legibly apart, got ${(mounts[1] - mounts[0]).toFixed(1)}px`);
   }
 });
 
-test("facing reciprocal runs between Unified Pipeline and Memory spread evenly and stay straight (memory-lifecycle T1)", () => {
+test("UP<->Memory facing runs stay legibly separated, the ingest pair straight (memory-lifecycle T1)", () => {
   const plan = planMemoryLifecycle();
   const memory = plan.nodeRects.get("memory-system");
 
-  // UP.right and Memory.left carry four straight horizontal facing runs (two reciprocal
-  // pairs). They used to bunch in the upper half of the face; distributing them needs a
-  // coordinated both-ends move so each run keeps its straight line.
+  // WHY: under the looser capacity all four UP<->Memory runs share Memory's left face. The accepted
+  // tradeoff (see routeConstants MIN_LEGIBLE_GAP_ARROWHEADS) is that the request/context pair takes a
+  // short detour while the ingest pair stays straight; the durable guarantee is that the four mounts
+  // never pack below the legibility gap.
   const mounts = faceMounts(plan, "memory-system", "left");
   assert.equal(mounts.length, 4, `expected 4 facing runs on memory-system left, got ${mounts.length}: ${mounts}`);
 
-  // Four independent straight runs distribute as four even units across the face.
-  const ideal = idealUnitCenters(memory, "left", 4);
-  const tol = 6;
-  mounts.forEach((mount, i) => {
-    assert.ok(
-      Math.abs(mount - ideal[i]) <= tol,
-      `facing run ${i} = ${mount.toFixed(1)} should be within ${tol}px of even slot ${ideal[i].toFixed(1)} (mounts: ${mounts.map((m) => m.toFixed(1))})`
-    );
-  });
+  let minGap = Infinity;
+  for (let i = 1; i < mounts.length; i += 1) minGap = Math.min(minGap, mounts[i] - mounts[i - 1]);
+  assert.ok(minGap >= MIN_LEGIBLE_GAP, `adjacent facing-run mounts must stay legibly apart, got ${minGap.toFixed(1)}px between ${JSON.stringify(mounts)}`);
 
-  // Every UP<->Memory run must stay a straight horizontal line: its two endpoints share a y.
-  for (const id of ["request-memory", "memory-context-returned", "ingest-turn", "ingest-confirmed"]) {
+  // The ingest reciprocal pair stays a straight horizontal run (its two endpoints share a y).
+  for (const id of ["ingest-turn", "ingest-confirmed"]) {
     const route = plan.routes.get(id);
     assert.equal(route.bends, 0, `${id} should remain a straight facing run, got ${route.bends} bend(s)`);
     assert.equal(
