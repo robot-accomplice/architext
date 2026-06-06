@@ -8,6 +8,7 @@ const ROUTING_LOADING_DELAY_MS = 1000;
  *   key: string;
  *   plan: any | null;
  *   planning: boolean;
+ *   phase: string;
  *   error: string | null;
  * }} PlannedDiagramState
  */
