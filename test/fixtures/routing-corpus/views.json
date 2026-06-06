@@ -1,0 +1,824 @@
+{
+  "views": [
+    {
+      "id": "system-map",
+      "name": "Corpus System Map",
+      "type": "system-map",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "actor-01",
+            "client-01",
+            "client-02",
+            "client-03",
+            "actor-02"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "service-02",
+            "service-03",
+            "service-01"
+          ]
+        },
+        {
+          "id": "lane-3",
+          "name": "Lane 3",
+          "nodeIds": [
+            "deployment-unit-01",
+            "service-04",
+            "service-07",
+            "worker-01"
+          ]
+        },
+        {
+          "id": "lane-4",
+          "name": "Lane 4",
+          "nodeIds": [
+            "service-05",
+            "service-06",
+            "service-15",
+            "service-09",
+            "service-10",
+            "service-11",
+            "service-12",
+            "service-13",
+            "service-08",
+            "service-14"
+          ]
+        },
+        {
+          "id": "lane-5",
+          "name": "Lane 5",
+          "nodeIds": [
+            "data-store-01",
+            "external-service-01",
+            "external-service-02",
+            "external-service-03",
+            "module-01"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "agent-turn-flow",
+      "name": "Agent Turn Flow",
+      "type": "flow-explorer",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "actor-01",
+            "client-01",
+            "client-02",
+            "client-03",
+            "service-03",
+            "service-01"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "service-04"
+          ]
+        },
+        {
+          "id": "lane-3",
+          "name": "Lane 3",
+          "nodeIds": [
+            "service-06",
+            "service-15",
+            "service-09",
+            "service-10",
+            "data-store-01"
+          ]
+        },
+        {
+          "id": "lane-4",
+          "name": "Lane 4",
+          "nodeIds": [
+            "service-05",
+            "external-service-01",
+            "external-service-02",
+            "service-14"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-context-roboticus",
+      "name": "Corpus C4 Context",
+      "type": "c4-context",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "actor-01",
+            "actor-02"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "software-system-01"
+          ]
+        },
+        {
+          "id": "lane-3",
+          "name": "Lane 3",
+          "nodeIds": [
+            "external-service-01",
+            "external-service-02"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-container-local-runtime",
+      "name": "Local Runtime Containers",
+      "type": "c4-container",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "actor-01"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "client-01",
+            "client-02"
+          ]
+        },
+        {
+          "id": "lane-3",
+          "name": "Lane 3",
+          "nodeIds": [
+            "deployment-unit-01",
+            "service-04"
+          ]
+        },
+        {
+          "id": "lane-4",
+          "name": "Lane 4",
+          "nodeIds": [
+            "data-store-01",
+            "service-08"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-container-dashboard-control",
+      "name": "Dashboard Control Containers",
+      "type": "c4-container",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "client-03"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "service-03"
+          ]
+        },
+        {
+          "id": "lane-3",
+          "name": "Lane 3",
+          "nodeIds": [
+            "service-04",
+            "worker-01"
+          ]
+        },
+        {
+          "id": "lane-4",
+          "name": "Lane 4",
+          "nodeIds": [
+            "data-store-01",
+            "service-08"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-container-public-api",
+      "name": "Public API Containers",
+      "type": "c4-container",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "client-03",
+            "actor-02"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "service-02"
+          ]
+        },
+        {
+          "id": "lane-3",
+          "name": "Lane 3",
+          "nodeIds": [
+            "service-03",
+            "service-04",
+            "service-05",
+            "service-14"
+          ]
+        },
+        {
+          "id": "lane-4",
+          "name": "Lane 4",
+          "nodeIds": [
+            "data-store-01"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-unified-pipeline-entry-and-policy",
+      "name": "Unified Pipeline Component Scope: Entry and Policy",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-02",
+            "module-03"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-unified-pipeline-context-tools-and-models",
+      "name": "Unified Pipeline Component Scope: Context and Tools",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-04",
+            "module-05"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-unified-pipeline-finalization",
+      "name": "Unified Pipeline Component Scope: Finalization",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-06",
+            "module-07"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-unified-pipeline-state-and-telemetry",
+      "name": "Unified Pipeline Component Scope: State and Telemetry",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-02",
+            "module-07",
+            "module-36"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-dashboard-control",
+      "name": "Dashboard Control Component Scope",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-08",
+            "module-09",
+            "module-31"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-agency-autonomy",
+      "name": "Agency and Autonomy Component Scope",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-10"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "module-11"
+          ]
+        },
+        {
+          "id": "lane-3",
+          "name": "Lane 3",
+          "nodeIds": [
+            "data-store-02"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-media-services-media-surfaces",
+      "name": "Voice Camera and Media Component Scope: Media Surfaces",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-31",
+            "module-22"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "module-12"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-media-services-media-runtime",
+      "name": "Voice Camera and Media Component Scope: Media Runtime",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-12",
+            "module-13",
+            "module-14",
+            "module-15"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-media-services-vision-and-turn",
+      "name": "Voice Camera and Media Component Scope: Vision and Turn",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-16",
+            "module-15",
+            "module-02"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-media-services-media-state",
+      "name": "Voice Camera and Media Component Scope: State and Evidence",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-12",
+            "module-28",
+            "module-36"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-llm-service",
+      "name": "LLM Service Component Scope",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-17",
+            "module-18",
+            "module-19"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "module-20"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-release-validation",
+      "name": "Release Validation Component Scope",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-01",
+            "data-store-03",
+            "module-20"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "dataflow-sensitive",
+      "name": "Sensitive Data Flow",
+      "type": "dataflow",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "actor-01",
+            "client-03",
+            "client-01",
+            "client-02",
+            "service-01"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "service-08",
+            "service-07",
+            "service-04",
+            "deployment-unit-01"
+          ]
+        },
+        {
+          "id": "lane-3",
+          "name": "Lane 3",
+          "nodeIds": [
+            "service-06",
+            "service-11",
+            "service-12",
+            "service-13",
+            "service-10"
+          ]
+        },
+        {
+          "id": "lane-4",
+          "name": "Lane 4",
+          "nodeIds": [
+            "data-store-01",
+            "service-05",
+            "external-service-01",
+            "external-service-02",
+            "service-14"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "deployment-local",
+      "name": "Local Deployment Topology",
+      "type": "deployment",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "actor-01",
+            "client-01",
+            "client-02",
+            "client-03",
+            "deployment-unit-01",
+            "data-store-01"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "external-service-03",
+            "external-service-02",
+            "service-11"
+          ]
+        },
+        {
+          "id": "lane-3",
+          "name": "Lane 3",
+          "nodeIds": [
+            "external-service-01",
+            "service-01",
+            "service-12"
+          ]
+        },
+        {
+          "id": "lane-4",
+          "name": "Lane 4",
+          "nodeIds": [
+            "module-01",
+            "service-14"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "risk-overlay",
+      "name": "Release Risk Overlay",
+      "type": "risk-overlay",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "service-02",
+            "service-03",
+            "service-01",
+            "client-01",
+            "client-02"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "service-04",
+            "service-05",
+            "worker-01",
+            "service-07",
+            "service-14"
+          ]
+        },
+        {
+          "id": "lane-3",
+          "name": "Lane 3",
+          "nodeIds": [
+            "data-store-01",
+            "service-06",
+            "service-08",
+            "service-12",
+            "service-11",
+            "service-13"
+          ]
+        },
+        {
+          "id": "lane-4",
+          "name": "Lane 4",
+          "nodeIds": [
+            "module-01",
+            "external-service-01",
+            "external-service-02",
+            "external-service-03"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "release-gate-flow",
+      "name": "Release Gate Flow",
+      "type": "sequence",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "actor-01",
+            "module-01",
+            "service-15"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "data-store-01",
+            "service-04",
+            "service-05",
+            "service-14"
+          ]
+        },
+        {
+          "id": "lane-3",
+          "name": "Lane 3",
+          "nodeIds": [
+            "client-03",
+            "client-01",
+            "client-02",
+            "service-11",
+            "service-12",
+            "external-service-03"
+          ]
+        },
+        {
+          "id": "lane-4",
+          "name": "Lane 4",
+          "nodeIds": [
+            "module-01",
+            "service-14"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-cli",
+      "name": "CLI Component Scope",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-21",
+            "module-22"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "module-28",
+            "module-29"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-tui",
+      "name": "TUI Component Scope",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-23",
+            "module-24"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "module-28"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-daemon-runtime",
+      "name": "Daemon Runtime Component Scope",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-26",
+            "module-25",
+            "module-27"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-config-keystore",
+      "name": "Config and Keystore Component Scope",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-28"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "module-29"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-web-dashboard",
+      "name": "Web Dashboard Component Scope",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-30",
+            "module-31"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "module-08",
+            "module-09"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-scheduler",
+      "name": "Scheduler Component Scope",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-32",
+            "module-33"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-api-server",
+      "name": "API Server Component Scope",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-34",
+            "module-35"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "module-08",
+            "module-09"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-observability-system",
+      "name": "Observability Component Scope",
+      "type": "c4-component",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "module-36",
+            "module-37"
+          ]
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,888 @@
+{
+  "flows": [
+    {
+      "id": "hub-fan-dense",
+      "name": "Hub Fan Dense",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "actor-01",
+          "to": "service-01",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "client-03",
+          "to": "service-03",
+          "action": "step 2",
+          "kind": "request"
+        },
+        {
+          "id": "step-3",
+          "from": "service-03",
+          "to": "service-04",
+          "action": "step 3",
+          "kind": "request"
+        },
+        {
+          "id": "step-4",
+          "from": "service-01",
+          "to": "service-04",
+          "action": "step 4",
+          "kind": "request"
+        },
+        {
+          "id": "step-5",
+          "from": "service-04",
+          "to": "data-store-01",
+          "action": "step 5",
+          "kind": "persistence"
+        },
+        {
+          "id": "step-6",
+          "from": "data-store-01",
+          "to": "service-04",
+          "action": "step 6",
+          "kind": "return",
+          "returnOf": "step-5"
+        },
+        {
+          "id": "step-7",
+          "from": "service-04",
+          "to": "service-06",
+          "action": "step 7",
+          "kind": "request"
+        },
+        {
+          "id": "step-8",
+          "from": "service-06",
+          "to": "service-04",
+          "action": "step 8",
+          "kind": "return",
+          "returnOf": "step-7"
+        },
+        {
+          "id": "step-9",
+          "from": "service-04",
+          "to": "service-10",
+          "action": "step 9",
+          "kind": "request"
+        },
+        {
+          "id": "step-10",
+          "from": "service-10",
+          "to": "service-04",
+          "action": "step 10",
+          "kind": "return",
+          "returnOf": "step-9"
+        },
+        {
+          "id": "step-11",
+          "from": "service-04",
+          "to": "service-05",
+          "action": "step 11",
+          "kind": "request"
+        },
+        {
+          "id": "step-12",
+          "from": "service-05",
+          "to": "service-04",
+          "action": "step 12",
+          "kind": "return",
+          "returnOf": "step-11"
+        },
+        {
+          "id": "step-13",
+          "from": "service-04",
+          "to": "data-store-01",
+          "action": "step 13",
+          "kind": "persistence"
+        },
+        {
+          "id": "step-14",
+          "from": "data-store-01",
+          "to": "service-04",
+          "action": "step 14",
+          "kind": "return",
+          "returnOf": "step-13"
+        },
+        {
+          "id": "step-15",
+          "from": "service-04",
+          "to": "service-03",
+          "action": "step 15",
+          "kind": "return",
+          "returnOf": "step-3"
+        },
+        {
+          "id": "step-16",
+          "from": "service-03",
+          "to": "client-03",
+          "action": "step 16",
+          "kind": "return",
+          "returnOf": "step-2"
+        },
+        {
+          "id": "step-17",
+          "from": "service-04",
+          "to": "service-01",
+          "action": "step 17",
+          "kind": "return",
+          "returnOf": "step-4"
+        },
+        {
+          "id": "step-18",
+          "from": "service-01",
+          "to": "actor-01",
+          "action": "step 18",
+          "kind": "return",
+          "returnOf": "step-1"
+        }
+      ]
+    },
+    {
+      "id": "pair-fan-compact",
+      "name": "Pair Fan Compact",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "client-03",
+          "to": "service-03",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "service-03",
+          "to": "data-store-01",
+          "action": "step 2"
+        },
+        {
+          "id": "step-3",
+          "from": "data-store-01",
+          "to": "service-03",
+          "action": "step 3"
+        },
+        {
+          "id": "step-4",
+          "from": "service-03",
+          "to": "client-03",
+          "action": "step 4"
+        },
+        {
+          "id": "step-5",
+          "from": "client-03",
+          "to": "service-03",
+          "action": "step 5"
+        },
+        {
+          "id": "step-6",
+          "from": "service-03",
+          "to": "service-08",
+          "action": "step 6"
+        },
+        {
+          "id": "step-7",
+          "from": "service-08",
+          "to": "service-03",
+          "action": "step 7"
+        },
+        {
+          "id": "step-8",
+          "from": "service-03",
+          "to": "client-03",
+          "action": "step 8"
+        }
+      ]
+    },
+    {
+      "id": "pair-chain-linear",
+      "name": "Pair Chain Linear",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "actor-01",
+          "to": "client-01",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "client-01",
+          "to": "data-store-01",
+          "action": "step 2"
+        },
+        {
+          "id": "step-3",
+          "from": "data-store-01",
+          "to": "client-01",
+          "action": "step 3"
+        },
+        {
+          "id": "step-4",
+          "from": "client-02",
+          "to": "service-04",
+          "action": "step 4"
+        },
+        {
+          "id": "step-5",
+          "from": "service-04",
+          "to": "client-02",
+          "action": "step 5"
+        },
+        {
+          "id": "step-6",
+          "from": "client-01",
+          "to": "actor-01",
+          "action": "step 6"
+        }
+      ]
+    },
+    {
+      "id": "pair-minimal",
+      "name": "Pair Minimal",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "actor-02",
+          "to": "service-02",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "service-02",
+          "to": "data-store-01",
+          "action": "step 2"
+        },
+        {
+          "id": "step-3",
+          "from": "data-store-01",
+          "to": "service-02",
+          "action": "step 3"
+        },
+        {
+          "id": "step-4",
+          "from": "service-02",
+          "to": "actor-02",
+          "action": "step 4"
+        }
+      ]
+    },
+    {
+      "id": "fan-coaligned-selfcross",
+      "name": "Fan Coaligned Selfcross",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "service-04",
+          "to": "service-05",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "service-05",
+          "to": "external-service-01",
+          "action": "step 2"
+        },
+        {
+          "id": "step-3",
+          "from": "external-service-01",
+          "to": "service-05",
+          "action": "step 3"
+        },
+        {
+          "id": "step-4",
+          "from": "service-05",
+          "to": "external-service-02",
+          "action": "step 4"
+        },
+        {
+          "id": "step-5",
+          "from": "external-service-02",
+          "to": "service-05",
+          "action": "step 5"
+        },
+        {
+          "id": "step-6",
+          "from": "service-05",
+          "to": "service-14",
+          "action": "step 6"
+        },
+        {
+          "id": "step-7",
+          "from": "service-05",
+          "to": "service-04",
+          "action": "step 7"
+        }
+      ]
+    },
+    {
+      "id": "coaligned-multibundle-surfaceselect",
+      "name": "Coaligned Multibundle Surfaceselect",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "service-04",
+          "to": "service-06",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "service-06",
+          "to": "data-store-01",
+          "action": "step 2"
+        },
+        {
+          "id": "step-3",
+          "from": "data-store-01",
+          "to": "service-06",
+          "action": "step 3"
+        },
+        {
+          "id": "step-4",
+          "from": "service-06",
+          "to": "service-04",
+          "action": "step 4"
+        },
+        {
+          "id": "step-5",
+          "from": "service-04",
+          "to": "service-06",
+          "action": "step 5"
+        },
+        {
+          "id": "step-6",
+          "from": "service-06",
+          "to": "service-04",
+          "action": "step 6"
+        },
+        {
+          "id": "step-7",
+          "from": "service-06",
+          "to": "data-store-01",
+          "action": "step 7"
+        },
+        {
+          "id": "step-8",
+          "from": "data-store-01",
+          "to": "service-06",
+          "action": "step 8"
+        }
+      ]
+    },
+    {
+      "id": "bundle-coaligned",
+      "name": "Bundle Coaligned",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "worker-01",
+          "to": "data-store-01",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "data-store-01",
+          "to": "worker-01",
+          "action": "step 2"
+        },
+        {
+          "id": "step-3",
+          "from": "worker-01",
+          "to": "service-04",
+          "action": "step 3"
+        },
+        {
+          "id": "step-4",
+          "from": "service-04",
+          "to": "worker-01",
+          "action": "step 4"
+        },
+        {
+          "id": "step-5",
+          "from": "worker-01",
+          "to": "service-01",
+          "action": "step 5"
+        },
+        {
+          "id": "step-6",
+          "from": "service-01",
+          "to": "worker-01",
+          "action": "step 6"
+        },
+        {
+          "id": "step-7",
+          "from": "worker-01",
+          "to": "data-store-01",
+          "action": "step 7"
+        },
+        {
+          "id": "step-8",
+          "from": "data-store-01",
+          "to": "worker-01",
+          "action": "step 8"
+        }
+      ]
+    },
+    {
+      "id": "fan-quad-reciprocal",
+      "name": "Fan Quad Reciprocal",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "service-07",
+          "to": "service-06",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "service-06",
+          "to": "service-07",
+          "action": "step 2"
+        },
+        {
+          "id": "step-3",
+          "from": "service-07",
+          "to": "service-08",
+          "action": "step 3"
+        },
+        {
+          "id": "step-4",
+          "from": "service-08",
+          "to": "service-07",
+          "action": "step 4"
+        },
+        {
+          "id": "step-5",
+          "from": "service-07",
+          "to": "service-04",
+          "action": "step 5"
+        },
+        {
+          "id": "step-6",
+          "from": "service-04",
+          "to": "service-07",
+          "action": "step 6"
+        },
+        {
+          "id": "step-7",
+          "from": "service-07",
+          "to": "data-store-01",
+          "action": "step 7"
+        },
+        {
+          "id": "step-8",
+          "from": "data-store-01",
+          "to": "service-07",
+          "action": "step 8"
+        }
+      ]
+    },
+    {
+      "id": "bundle-return-gutter",
+      "name": "Bundle Return Gutter",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "service-09",
+          "to": "data-store-01",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "data-store-01",
+          "to": "service-09",
+          "action": "step 2"
+        },
+        {
+          "id": "step-3",
+          "from": "service-03",
+          "to": "service-09",
+          "action": "step 3"
+        },
+        {
+          "id": "step-4",
+          "from": "service-09",
+          "to": "service-03",
+          "action": "step 4"
+        },
+        {
+          "id": "step-5",
+          "from": "service-09",
+          "to": "data-store-01",
+          "action": "step 5"
+        },
+        {
+          "id": "step-6",
+          "from": "data-store-01",
+          "to": "service-09",
+          "action": "step 6"
+        },
+        {
+          "id": "step-7",
+          "from": "service-04",
+          "to": "service-09",
+          "action": "step 7"
+        },
+        {
+          "id": "step-8",
+          "from": "service-09",
+          "to": "service-04",
+          "action": "step 8"
+        }
+      ]
+    },
+    {
+      "id": "pair-chain-short",
+      "name": "Pair Chain Short",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "service-04",
+          "to": "service-10",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "service-10",
+          "to": "data-store-01",
+          "action": "step 2"
+        },
+        {
+          "id": "step-3",
+          "from": "data-store-01",
+          "to": "service-10",
+          "action": "step 3"
+        },
+        {
+          "id": "step-4",
+          "from": "service-10",
+          "to": "service-04",
+          "action": "step 4"
+        },
+        {
+          "id": "step-5",
+          "from": "service-04",
+          "to": "service-14",
+          "action": "step 5"
+        },
+        {
+          "id": "step-6",
+          "from": "service-14",
+          "to": "service-04",
+          "action": "step 6"
+        }
+      ]
+    },
+    {
+      "id": "fan-parallel-bundle",
+      "name": "Fan Parallel Bundle",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "actor-01",
+          "to": "service-11",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "actor-01",
+          "to": "service-11",
+          "action": "step 2"
+        },
+        {
+          "id": "step-3",
+          "from": "service-11",
+          "to": "actor-01",
+          "action": "step 3"
+        },
+        {
+          "id": "step-4",
+          "from": "client-03",
+          "to": "service-11",
+          "action": "step 4"
+        },
+        {
+          "id": "step-5",
+          "from": "service-11",
+          "to": "client-03",
+          "action": "step 5"
+        },
+        {
+          "id": "step-6",
+          "from": "service-11",
+          "to": "service-05",
+          "action": "step 6"
+        },
+        {
+          "id": "step-7",
+          "from": "service-05",
+          "to": "service-11",
+          "action": "step 7"
+        },
+        {
+          "id": "step-8",
+          "from": "service-11",
+          "to": "service-04",
+          "action": "step 8"
+        },
+        {
+          "id": "step-9",
+          "from": "service-04",
+          "to": "service-11",
+          "action": "step 9"
+        },
+        {
+          "id": "step-10",
+          "from": "service-11",
+          "to": "actor-01",
+          "action": "step 10"
+        }
+      ]
+    },
+    {
+      "id": "pair-fan-basic",
+      "name": "Pair Fan Basic",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "actor-01",
+          "to": "service-08",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "service-08",
+          "to": "service-12",
+          "action": "step 2"
+        },
+        {
+          "id": "step-3",
+          "from": "service-12",
+          "to": "service-08",
+          "action": "step 3"
+        },
+        {
+          "id": "step-4",
+          "from": "service-12",
+          "to": "service-01",
+          "action": "step 4"
+        },
+        {
+          "id": "step-5",
+          "from": "service-01",
+          "to": "service-12",
+          "action": "step 5"
+        },
+        {
+          "id": "step-6",
+          "from": "service-12",
+          "to": "actor-01",
+          "action": "step 6"
+        },
+        {
+          "id": "step-7",
+          "from": "actor-01",
+          "to": "service-12",
+          "action": "step 7"
+        }
+      ]
+    },
+    {
+      "id": "pair-single-multiedge",
+      "name": "Pair Single Multiedge",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "client-03",
+          "to": "service-03",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "service-03",
+          "to": "client-03",
+          "action": "step 2"
+        },
+        {
+          "id": "step-3",
+          "from": "deployment-unit-01",
+          "to": "service-03",
+          "action": "step 3"
+        },
+        {
+          "id": "step-4",
+          "from": "service-03",
+          "to": "client-03",
+          "action": "step 4"
+        },
+        {
+          "id": "step-5",
+          "from": "client-01",
+          "to": "actor-01",
+          "action": "step 5"
+        }
+      ]
+    },
+    {
+      "id": "bracket-intermediates",
+      "name": "Bracket Intermediates",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "service-04",
+          "to": "service-15",
+          "action": "step 1"
+        },
+        {
+          "id": "step-2",
+          "from": "service-15",
+          "to": "data-store-01",
+          "action": "step 2"
+        },
+        {
+          "id": "step-3",
+          "from": "data-store-01",
+          "to": "service-15",
+          "action": "step 3"
+        },
+        {
+          "id": "step-4",
+          "from": "service-15",
+          "to": "service-08",
+          "action": "step 4"
+        },
+        {
+          "id": "step-5",
+          "from": "service-08",
+          "to": "service-15",
+          "action": "step 5"
+        },
+        {
+          "id": "step-6",
+          "from": "service-15",
+          "to": "service-04",
+          "action": "step 6"
+        },
+        {
+          "id": "step-7",
+          "from": "service-04",
+          "to": "service-15",
+          "action": "step 7"
+        },
+        {
+          "id": "step-8",
+          "from": "service-15",
+          "to": "client-01",
+          "action": "step 8"
+        },
+        {
+          "id": "step-9",
+          "from": "client-01",
+          "to": "service-15",
+          "action": "step 9"
+        },
+        {
+          "id": "step-10",
+          "from": "service-04",
+          "to": "actor-01",
+          "action": "step 10"
+        }
+      ]
+    },
+    {
+      "id": "fan-max-systemmap",
+      "name": "Fan Max Systemmap",
+      "status": "implemented",
+      "steps": [
+        {
+          "id": "step-1",
+          "from": "module-01",
+          "to": "data-store-01",
+          "action": "step 1",
+          "kind": "request"
+        },
+        {
+          "id": "step-2",
+          "from": "data-store-01",
+          "to": "module-01",
+          "action": "step 2",
+          "kind": "return",
+          "returnOf": "step-1"
+        },
+        {
+          "id": "step-3",
+          "from": "module-01",
+          "to": "service-04",
+          "action": "step 3",
+          "kind": "request"
+        },
+        {
+          "id": "step-4",
+          "from": "service-04",
+          "to": "module-01",
+          "action": "step 4",
+          "kind": "return",
+          "returnOf": "step-3"
+        },
+        {
+          "id": "step-5",
+          "from": "actor-01",
+          "to": "module-01",
+          "action": "step 5",
+          "kind": "request"
+        },
+        {
+          "id": "step-6",
+          "from": "module-01",
+          "to": "external-service-03",
+          "action": "step 6",
+          "kind": "request"
+        },
+        {
+          "id": "step-7",
+          "from": "external-service-03",
+          "to": "module-01",
+          "action": "step 7",
+          "kind": "return",
+          "returnOf": "step-6"
+        },
+        {
+          "id": "step-8",
+          "from": "module-01",
+          "to": "actor-01",
+          "action": "step 8",
+          "kind": "return",
+          "returnOf": "step-5"
+        },
+        {
+          "id": "step-9",
+          "from": "module-01",
+          "to": "service-14",
+          "action": "step 9",
+          "kind": "request"
+        },
+        {
+          "id": "step-10",
+          "from": "service-14",
+          "to": "module-01",
+          "action": "step 10",
+          "kind": "return",
+          "returnOf": "step-9"
+        }
+      ]
+    }
+  ]
+}
