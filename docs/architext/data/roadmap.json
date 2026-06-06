@@ -301,7 +301,7 @@
       "status": "planned",
       "priority": "high",
       "section": "Repository Intelligence",
-      "targetReleaseId": "v1-7-0",
+      "targetReleaseId": "v1-6-1",
       "dateAdded": "2026-05-27T16:30:00.000Z"
     },
     {
@@ -312,7 +312,7 @@
       "status": "planned",
       "priority": "high",
       "section": "Repository Intelligence",
-      "targetReleaseId": "v1-7-0",
+      "targetReleaseId": "v1-6-1",
       "dateAdded": "2026-05-27T16:30:00.000Z"
     },
     {
@@ -323,7 +323,7 @@
       "status": "planned",
       "priority": "medium",
       "section": "Diagram Ergonomics",
-      "targetReleaseId": "v1-7-0",
+      "targetReleaseId": "v1-6-1",
       "dateAdded": "2026-05-27T16:30:00.000Z"
     },
     {
@@ -334,7 +334,7 @@
       "status": "planned",
       "priority": "high",
       "section": "Architecture Editing",
-      "targetReleaseId": "v1-7-0",
+      "targetReleaseId": "v1-6-1",
       "dateAdded": "2026-05-27T16:30:00.000Z"
     }
   ]

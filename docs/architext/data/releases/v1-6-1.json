@@ -1,13 +1,13 @@
 {
-  "id": "v1-7-0",
-  "version": "1.7.0",
-  "name": "Architext 1.7.0 Repository Intelligence",
+  "id": "v1-6-1",
+  "version": "1.6.1",
+  "name": "Architext 1.6.1 Repository Intelligence and Diagram Config",
   "status": "planned",
   "posture": "on-track",
-  "summary": "Architext 1.7.0 is reserved for repository intelligence, diagram ergonomics, and persistent architecture annotations.",
+  "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), and folds in minor UI cleanup.",
   "targetWindow": "After 1.6.0",
   "lastUpdated": "2026-06-06T19:25:00.000Z",
-  "updateSource": "1.7.0 candidate capture (relocated from 1.6.0 when 1.6.0 became the routing overhaul)",
+  "updateSource": "1.6.1 plan (deferred 1.6.0 scope + diagram config + UI cleanup)",
   "scope": {
     "required": [],
     "planned": [
@@ -58,6 +58,30 @@
         "workstreamId": "architecture-editing",
         "priority": "high",
         "dependsOn": []
+      },
+      {
+        "id": "diagram-parameter-user-config",
+        "title": "User-configurable diagram parameters",
+        "kind": "feature",
+        "status": "planned",
+        "summary": "Move hardcoded diagram parameters (e.g. minimum legible gap as an arrowhead fraction, spacing, column width) into user-adjustable configuration persisted under ~/.architext, so projects can tune layout without code changes.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "diagram-ergonomics",
+        "priority": "high",
+        "dependsOn": []
+      },
+      {
+        "id": "minor-ui-cleanup",
+        "title": "Minor UI cleanup",
+        "kind": "chore",
+        "status": "planned",
+        "summary": "Assorted minor viewer UI cleanup items collected during the routing overhaul review.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "ui-polish",
+        "priority": "low",
+        "dependsOn": []
       }
     ],
     "stretch": [],
@@ -88,7 +112,8 @@
       "summary": "Add layout controls that change diagram spacing without changing semantic data.",
       "progress": 0,
       "itemIds": [
-        "diagram-spacing-controls"
+        "diagram-spacing-controls",
+        "diagram-parameter-user-config"
       ],
       "evidence": []
     },
@@ -102,6 +127,19 @@
       "progress": 0,
       "itemIds": [
         "persistent-architecture-element-notes"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "ui-polish",
+      "name": "UI Polish",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Minor viewer UI cleanup.",
+      "progress": 0,
+      "itemIds": [
+        "minor-ui-cleanup"
       ],
       "evidence": []
     }

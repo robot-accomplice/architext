@@ -462,25 +462,25 @@
       "file": "v1-6-0.json"
     },
     {
-      "id": "v1-7-0",
-      "version": "1.7.0",
-      "name": "Architext 1.7.0 Repository Intelligence",
+      "id": "v1-6-1",
+      "version": "1.6.1",
+      "name": "Architext 1.6.1 Repository Intelligence and Diagram Config",
       "status": "planned",
       "posture": "on-track",
       "targetWindow": "After 1.6.0",
       "lastUpdated": "2026-06-06T19:25:00.000Z",
-      "summary": "Architext 1.7.0 is reserved for repository intelligence, diagram ergonomics, and persistent architecture annotations.",
+      "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), and folds in minor UI cleanup.",
       "counts": {
-        "features": 4,
+        "features": 5,
         "bugFixes": 0,
-        "workstreams": 3,
+        "workstreams": 4,
         "blockers": 0,
         "complete": 0,
         "inProgress": 0,
-        "planned": 4,
+        "planned": 6,
         "stretch": 0
       },
-      "file": "v1-7-0.json"
+      "file": "v1-6-1.json"
     }
   ]
 }
