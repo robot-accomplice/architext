@@ -4,10 +4,10 @@
   "name": "Architext 1.6.0 Routing Overhaul",
   "status": "implementing",
   "posture": "release-candidate",
-  "summary": "Architext 1.6.0 rebuilds orthogonal edge routing around a single weighted-sum mount-cost objective, reduces and hops diagram crossings, coordinates reciprocal pairs, and derives mount spacing from the rendered arrowhead instead of magic numbers. A sanitized high-complexity corpus and a fitness ratchet lock the gains against regression.",
+  "summary": "Architext 1.6.0 rebuilds orthogonal edge routing around a single weighted-sum mount-cost objective, reduces and hops diagram crossings, coordinates reciprocal pairs, and derives mount spacing from the rendered arrowhead instead of magic numbers. A sanitized high-complexity corpus and a fitness ratchet lock the gains against regression. Also absorbs the audit-remediation and source/target-split work originally tracked as 1.5.1 (1.5.1 never shipped).",
   "targetDate": "2026-06-06",
   "lastUpdated": "2026-06-06T19:25:00.000Z",
-  "updateSource": "1.6.0 routing-overhaul release (PR #81)",
+  "updateSource": "1.6.0 routing-overhaul release (PR #81); absorbs the unshipped 1.5.1 scope",
   "scope": {
     "required": [
       {
@@ -111,6 +111,59 @@
           "viewer/src/routing/usePlannedDiagram.js",
           "viewer/src/presentation/"
         ]
+      },
+      {
+        "id": "package-source-target-split",
+        "title": "Package source and target data split",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Move package-owned viewer source, schemas, validator, and Vite project out of docs/architext so sync cleanup cannot collide with Architext's own source tree.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-27T15:30:00.000Z",
+        "workstreamId": "source-target-boundaries",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/PACKAGE_SOURCE_TARGET_DATA_SPLIT.md",
+          "viewer",
+          "package.json",
+          "src/adapters/cli/architext-cli.mjs"
+        ]
+      },
+      {
+        "id": "remaining-audit-remediation",
+        "title": "Remaining audit remediation",
+        "kind": "bug-fix",
+        "status": "in-progress",
+        "summary": "Finish unresolved high, medium, and low audit findings from the superpowers remediation plan without regressing routing, lifecycle, validation, or release workflows.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-27T15:30:00.000Z",
+        "workstreamId": "audit-hardening",
+        "dependsOn": [],
+        "evidence": [
+          "docs/superpowers/plans/2026-05-27-architext-audit-remediation.md",
+          "npm test",
+          "npm run verify"
+        ]
+      },
+      {
+        "id": "release-verification",
+        "title": "Release verification",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Run validation, full tests, build, routing benchmark, UAT, package dry-run, and packed CLI smoke checks before release.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-27T15:30:00.000Z",
+        "workstreamId": "release-gates",
+        "dependsOn": [
+          "package-source-target-split",
+          "remaining-audit-remediation"
+        ],
+        "evidence": [
+          "docs/architecture/RELEASE_1_5_1_SUCCESS_CRITERIA.md"
+        ]
       }
     ],
     "planned": [],
@@ -212,6 +265,52 @@
       ],
       "evidence": [
         "viewer/src/presentation/"
+      ]
+    },
+    {
+      "id": "source-target-boundaries",
+      "name": "Source Target Boundaries",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Keep package-owned source separate from target-owned architecture data.",
+      "progress": 100,
+      "itemIds": [
+        "package-source-target-split"
+      ],
+      "evidence": [
+        "docs/architecture/PACKAGE_SOURCE_TARGET_DATA_SPLIT.md",
+        "npm pack --dry-run --json"
+      ]
+    },
+    {
+      "id": "audit-hardening",
+      "name": "Audit Hardening",
+      "owner": "maintainer",
+      "status": "in-progress",
+      "posture": "on-track",
+      "summary": "Finish remaining audit-remediation items with focused tests and behavior-preserving refactors.",
+      "progress": 70,
+      "itemIds": [
+        "remaining-audit-remediation"
+      ],
+      "evidence": [
+        "docs/superpowers/plans/2026-05-27-architext-audit-remediation.md"
+      ]
+    },
+    {
+      "id": "release-gates",
+      "name": "Release Gates",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Prove the package remains buildable, shippable, and usable after the audit sweep.",
+      "progress": 100,
+      "itemIds": [
+        "release-verification"
+      ],
+      "evidence": [
+        "docs/architecture/RELEASE_1_5_1_SUCCESS_CRITERIA.md"
       ]
     }
   ],
