@@ -1163,18 +1163,47 @@ function sharedSegmentCountInvolving(routeById, ids) {
   return total;
 }
 
+// Total rendered crossings that touch any of `ids`, counted against EVERY route — a mount
+// move shifts an edge's whole path, so it can cross an edge on another face, not just one in
+// this face's set. Mirrors sharedSegmentCountInvolving's dedup so a crossing between two
+// affected edges is counted once.
+function crossingCountInvolving(routeById, ids) {
+  const idSet = new Set(ids);
+  let total = 0;
+  for (const id of ids) {
+    const route = routeById.get(id);
+    if (!route) continue;
+    for (const [otherId, otherRoute] of routeById) {
+      if (otherId === id) continue;
+      if (idSet.has(otherId) && otherId < id) continue;
+      total += crossingsBetween(route, otherRoute);
+    }
+  }
+  return total;
+}
+
 // Shared guard for the distribution passes: run `applyMoves` (which mutates the routes named
 // in `ids` within routeById), then keep the result only if it added no bend, no node
-// collision, and no shared visible segment; otherwise restore the saved routes. This is the
-// one place the "a redistribution may only refine" policy lives.
+// collision, no shared visible segment, and NO CROSSING; otherwise restore the saved routes.
+// This is the one place the "a redistribution may only refine" policy lives. The crossing
+// check is what stops an even-spacing move from trading a crossing for symmetry — without it,
+// distributeSurfaceMountUnits could re-home a reciprocal pair onto a gutter that crosses the
+// neighbouring traffic (0 -> 4 crossings) purely to even the face, a regression the optimizer
+// had already cleared.
 function keepMountMovesUnlessWorse(routeById, relationshipById, input, ids, applyMoves) {
   const saved = ids.map((id) => [id, routeById.get(id)]);
   const beforeBends = saved.reduce((sum, [, route]) => sum + (route.bends ?? 0), 0);
   const beforeShared = sharedSegmentCountInvolving(routeById, ids);
+  const beforeCrossings = crossingCountInvolving(routeById, ids);
   applyMoves();
   const afterBends = ids.reduce((sum, id) => sum + (routeById.get(id).bends ?? 0), 0);
   const collides = ids.some((id) => routeCollidesWithNonEndpoints(routeById.get(id), relationshipById.get(id), input));
-  if (collides || afterBends > beforeBends || sharedSegmentCountInvolving(routeById, ids) > beforeShared) {
+  if (
+    collides ||
+    afterBends > beforeBends ||
+    sharedSegmentCountInvolving(routeById, ids) > beforeShared ||
+    crossingCountInvolving(routeById, ids) > beforeCrossings
+  ) {
     for (const [id, route] of saved) routeById.set(id, route);
     return false;
   }

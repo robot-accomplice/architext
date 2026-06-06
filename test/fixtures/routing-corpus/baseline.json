@@ -82,8 +82,8 @@
   "bundle-return-gutter": {
     "routes": 8,
     "bends": 18,
-    "crossings": 10,
-    "pairInternalCrossings": 1,
+    "crossings": 5,
+    "pairInternalCrossings": 0,
     "laneOrderViolations": 1,
     "closeParallelRuns": 1,
     "sharedSegments": 0,
