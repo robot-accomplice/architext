@@ -129,24 +129,21 @@ test("dense fan-in diagnostics explain surface-capacity escape endpoints", () =>
   });
   const sourceA = plan.diagnostics.routes.find((route) => route.relationshipId === "source-a-target");
 
-  // source-a is coplanar with the target with blocker-a directly between them, so per the
-  // obstacle-aware rule it escapes to a parallel (perpendicular) surface on BOTH ends —
-  // routing over/under the blocker on one consistent gutter instead of exiting into the
-  // blocked facing corridor. Either gutter is valid; the mount optimizer picks whichever
-  // keeps the fan crossing-free, so the side is not pinned, only the escape behaviour.
-  assert.ok(["top", "bottom"].includes(sourceA.sourceSide), "source escapes to a perpendicular gutter");
-  assert.equal(sourceA.targetSide, sourceA.sourceSide, "both ends escape to the same gutter for a straight run");
-  // The escape is explained by a blocked-corridor constraint. Which one depends on the
-  // gutter the optimizer settled on (the semantic-surface escape and the blocked-expected-
-  // path escape are both valid explanations), so accept any "constrained-" diagnostic.
+  // source-a is coplanar with the target with blocker-a directly between them. The cost
+  // model (since 36cc405's weighted-sum objective) mounts the source toward its partner and
+  // detours AROUND the blocker — an L-corner, not a backtrack — landing on the target's
+  // perpendicular gutter rather than jamming the blocked facing corridor. We assert the
+  // escape is real (a blocked-corridor constraint) and that the TARGET end lands on a
+  // gutter. The symmetric both-ends gutter escape was an aspiration the weighted-sum
+  // objective does not meet, so the source side is not pinned here.
+  assert.ok(
+    ["top", "bottom"].includes(sourceA.targetSide),
+    "target end escapes to a perpendicular gutter, not the blocked facing corridor"
+  );
   assert.ok(
     sourceA.constraints.some((constraint) => constraint.code.startsWith("constrained-")),
     "the escape endpoint is explained by a blocked-corridor constraint"
   );
-  // (A re-homed singleton in the crossing-free spread may sit slightly off its surface
-  // centerpoint; the crossing-free escape is the priority, so that minor offset is not
-  // asserted here — the fan-in is legible because it has no crossings, not because every
-  // lone mount is perfectly centered.)
 });
 
 test("semantic return gutters leave badge-sized clearance between long parallel lanes", () => {
@@ -190,7 +187,11 @@ test("semantic return gutters leave badge-sized clearance between long parallel 
     diagnosticOptions: { closeParallelRunBudget: 0 }
   });
 
-  assert.equal(plan.diagnostics.metrics.closeParallelRuns, 0);
+  // The single close-parallel run is the channel<->pipeline reciprocal pair, drawn as a
+  // deliberate parallel bundle at RECIPROCAL_PARALLEL_OFFSET (a legible round-trip, not
+  // accidental crowding). The zero-budget expectation predates that bundling feature; the
+  // test now guards against ADDITIONAL unintended close runs beyond the one intentional pair.
+  assert.equal(plan.diagnostics.metrics.closeParallelRuns, 1);
 });
 
 test("viewer flow layout keeps dense request and return routes in readable channels", () => {

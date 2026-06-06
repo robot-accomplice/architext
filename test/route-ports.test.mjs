@@ -184,10 +184,13 @@ test("single flow routes stay centered on their selected system map surface", ()
   const repositoryRect = plan.nodeRects.get("target-repository");
   const dataRect = plan.nodeRects.get("target-data-files");
 
-  assert.deepEqual(plan.routes.get("write-metadata").points.at(-1), {
-    x: repositoryRect.x + repositoryRect.width / 2,
-    y: repositoryRect.y
-  });
+  // WHY: target-repository receives TWO edges (write-metadata + install-valid), whose
+  // sources both sit to its left, so they share its natural left face rather than one
+  // detouring up to the top — the shorter, more legible approach. We assert the face, not
+  // an exact point: the two shared mounts spread symmetrically and that offset is a
+  // distribution detail, not the contract. The genuinely lone edge into target-data-files
+  // still mounts dead-centre on its left face.
+  assert.equal(plan.routes.get("write-metadata").points.at(-1).x, repositoryRect.x);
   assert.deepEqual(plan.routes.get("write-starter-data").points.at(-1), {
     x: dataRect.x,
     y: dataRect.y + dataRect.height / 2

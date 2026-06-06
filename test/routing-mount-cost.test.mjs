@@ -1,11 +1,17 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { planDiagram } from "../viewer/src/routing/planDiagram.js";
 
-const ROBO = "/Users/jmachen/code/roboticus/docs/architext/data";
-const flows = JSON.parse(readFileSync(`${ROBO}/flows.json`, "utf8")).flows;
-const views = JSON.parse(readFileSync(`${ROBO}/views.json`, "utf8")).views;
+// These checks pin mount-cost behaviour against the external roboticus corpus, which
+// is not vendored into this repo. Point ROBOTICUS_DATA_DIR at a checkout to run them;
+// otherwise they SKIP loudly (a TAP `# SKIP`, never a silent pass) so CI on machines
+// without the corpus stays green without masking the assertions.
+const ROBO = process.env.ROBOTICUS_DATA_DIR ?? "/Users/jmachen/code/roboticus/docs/architext/data";
+const corpusPresent = existsSync(`${ROBO}/flows.json`) && existsSync(`${ROBO}/views.json`);
+const skip = corpusPresent ? false : `roboticus corpus not found at ${ROBO} (set ROBOTICUS_DATA_DIR)`;
+const flows = corpusPresent ? JSON.parse(readFileSync(`${ROBO}/flows.json`, "utf8")).flows : [];
+const views = corpusPresent ? JSON.parse(readFileSync(`${ROBO}/views.json`, "utf8")).views : [];
 
 function planInteractiveTurn() {
   const view = views.find((v) => v.id === "agent-turn-flow");
@@ -52,7 +58,7 @@ function crossingsForId(plan, id) {
   return total;
 }
 
-test("reciprocal pair request-model/model-response routes crossing-free (legibility)", () => {
+test("reciprocal pair request-model/model-response routes crossing-free (legibility)", { skip }, () => {
   const plan = planInteractiveTurn();
   // WHY: routing this pair through the hub's crowded southern fan-out is illegible;
   // a clean route (the open surface) costs zero crossings. Currently 8 (4 each).
@@ -60,7 +66,7 @@ test("reciprocal pair request-model/model-response routes crossing-free (legibil
   assert.equal(crossingsForId(plan, "model-response"), 0, "model-response must not cross other edges");
 });
 
-test("no surface is left over capacity", () => {
+test("no surface is left over capacity", { skip }, () => {
   const plan = planInteractiveTurn();
   // WHY: an over-capacity surface forces mounts closer than legible; the model
   // must relieve it by moving the marginal endpoint to a clean surface.
@@ -68,7 +74,7 @@ test("no surface is left over capacity", () => {
   assert.equal(overCapacity.length, 0, `over-capacity surfaces: ${JSON.stringify(overCapacity)}`);
 });
 
-test("planning is idempotent (byte-identical on replan)", () => {
+test("planning is idempotent (byte-identical on replan)", { skip }, () => {
   const a = planInteractiveTurn();
   const b = planInteractiveTurn();
   const dump = (plan) => [...plan.routes.entries()]
