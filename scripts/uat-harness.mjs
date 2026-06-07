@@ -10,7 +10,7 @@ import { createViewerRequestHandler } from "../src/adapters/cli/architext-cli.mj
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const sourceDataDir = path.join(repoRoot, "docs", "architext", "data");
-const viewerIndex = path.join(repoRoot, "docs", "architext", "dist", "index.html");
+const viewerIndex = path.join(repoRoot, "viewer", "dist", "index.html");
 const releaseIndex = JSON.parse(readFileSync(path.join(sourceDataDir, "releases", "index.json"), "utf8"));
 const currentRelease = releaseIndex.releases.find((release) => release.id === releaseIndex.currentReleaseId);
 const currentReleaseHeading = new RegExp(`Architext ${currentRelease.version.replaceAll(".", "\\.")}`);

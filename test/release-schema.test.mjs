@@ -2,11 +2,11 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import test from "node:test";
-import Ajv2020 from "../docs/architext/node_modules/ajv/dist/2020.js";
-import addFormats from "../docs/architext/node_modules/ajv-formats/dist/index.js";
+import Ajv2020 from "ajv/dist/2020.js";
+import addFormats from "ajv-formats";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const schema = JSON.parse(readFileSync(path.join(repoRoot, "docs", "architext", "schema", "release-detail.schema.json"), "utf8"));
+const schema = JSON.parse(readFileSync(path.join(repoRoot, "viewer", "schema", "release-detail.schema.json"), "utf8"));
 
 function validator() {
   const ajv = new Ajv2020({ allErrors: true, strict: true });

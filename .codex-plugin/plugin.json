@@ -1,0 +1,39 @@
+{
+  "name": "architext",
+  "version": "1.5.0",
+  "description": "Maintain machine-readable architecture documentation and Release Truth for repositories that use docs/architext/data JSON or the architext CLI.",
+  "author": {
+    "name": "Robot Accomplice",
+    "url": "https://github.com/robot-accomplice"
+  },
+  "homepage": "https://github.com/robot-accomplice/architext#readme",
+  "repository": "https://github.com/robot-accomplice/architext",
+  "license": "MIT",
+  "keywords": [
+    "architecture",
+    "c4",
+    "dataflow",
+    "documentation",
+    "llm",
+    "schema"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Architext",
+    "shortDescription": "Maintain architecture maps and Release Truth.",
+    "longDescription": "Architext helps Codex keep machine-readable architecture documentation, C4 views, data movement, project rules, roadmap, and Release Truth current for repositories that use docs/architext/data JSON or the architext CLI.",
+    "developerName": "Robot Accomplice",
+    "category": "Productivity",
+    "capabilities": [
+      "Architecture documentation",
+      "Release planning",
+      "Validation"
+    ],
+    "websiteURL": "https://github.com/robot-accomplice/architext#readme",
+    "defaultPrompt": [
+      "Use Architext to validate this repository.",
+      "Update the architecture map for this change.",
+      "Review Release Truth for the current scope."
+    ]
+  }
+}

@@ -1,12 +1,4 @@
-function releaseItems(detail) {
-  return [
-    ...detail.scope.required,
-    ...detail.scope.planned,
-    ...detail.scope.stretch,
-    ...detail.scope.deferred,
-    ...detail.scope.outOfScope
-  ];
-}
+import { releaseItems } from "./release-scopes.mjs";
 
 function countStatus(items, status) {
   return items.filter((item) => item.status === status).length;

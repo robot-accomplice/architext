@@ -19,7 +19,7 @@ function serveStatePathForTarget(target) {
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const cli = path.join(repoRoot, "tools", "architext-adopt.mjs");
-const viewerDist = path.join(repoRoot, "docs", "architext", "dist");
+const viewerDist = path.join(repoRoot, "viewer", "dist");
 const viewerIndex = path.join(viewerDist, "index.html");
 
 function run(args, cwd = repoRoot) {

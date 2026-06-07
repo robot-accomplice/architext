@@ -413,7 +413,7 @@
       "id": "release-packaging",
       "name": "Release packaging",
       "status": "implemented",
-      "summary": "Architext ships the global CLI, package-owned viewer, schemas, and starter templates as a major semver release.",
+      "summary": "Architext ships the global CLI, package-owned viewer, schemas, starter templates, and Codex plugin metadata as a semver release.",
       "trigger": "Maintainer prepares a release.",
       "actors": [
         "maintainer"
@@ -435,14 +435,15 @@
           "from": "maintainer",
           "to": "package-artifacts",
           "action": "runPackageDryRun",
-          "summary": "Maintainer verifies npm package contents exclude target generated artifacts.",
+          "summary": "Maintainer verifies npm package contents include plugin metadata and exclude target generated artifacts.",
           "data": [
             "package-assets"
           ]
         }
       ],
       "guarantees": [
-        "1.0.0 marks the breaking distribution model change."
+        "1.0.0 marks the breaking distribution model change.",
+        ".codex-plugin and skills are included in package dry-run output."
       ],
       "failureBehavior": [
         "Package contents mismatch blocks release."

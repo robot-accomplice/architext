@@ -7,7 +7,31 @@ import test from "node:test";
 import { createViewerRequestHandler } from "../src/adapters/cli/architext-cli.mjs";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
-const template = path.join(repoRoot, "docs", "architext");
+const viewerTemplate = path.join(repoRoot, "viewer");
+const templateData = path.join(repoRoot, "docs", "architext", "data");
+const copiedTemplateEntries = [
+  "AGENTS_APPENDIX.md",
+  "LLM_ARCHITEXT.md",
+  "README.md",
+  "index.html",
+  "package-lock.json",
+  "package.json",
+  "public",
+  "schema",
+  "src",
+  "tools",
+  "tsconfig.json",
+  "vite.config.ts"
+];
+
+async function writeLegacyCopiedInstall(target) {
+  const legacyDir = path.join(target, "docs", "architext");
+  await mkdir(legacyDir, { recursive: true });
+  for (const entry of copiedTemplateEntries) {
+    await cp(path.join(viewerTemplate, entry), path.join(legacyDir, entry), { recursive: true });
+  }
+  await cp(templateData, path.join(legacyDir, "data"), { recursive: true });
+}
 
 async function withServer(handler, callback) {
   const server = createServer(handler);
@@ -92,6 +116,28 @@ test("serve handler treats malformed data paths as not found", async () => {
   }
 });
 
+test("serve handler rejects data path traversal attempts without reading outside target data", async () => {
+  const target = await mkdtemp(path.join(tmpdir(), "architext-serve-"));
+  try {
+    const targetDataDir = path.join(target, "docs", "architext", "data");
+    await mkdir(targetDataDir, { recursive: true });
+    await writeFile(path.join(target, "package.json"), "{\"leaked\":true}\n");
+
+    await withServer(createViewerRequestHandler({ target, targetDataDir, watchHub: { attach() {} } }), async (origin) => {
+      for (const pathname of ["/data/..%2f..%2f..%2fpackage.json", "/data/%2e%2e%2f%2e%2e%2f%2e%2e%2fpackage.json"]) {
+        const response = await fetch(`${origin}${pathname}`);
+        const body = await response.text();
+
+        assert.equal(response.status, 404);
+        assert.equal(body, "Not found");
+        assert.doesNotMatch(body, /leaked/);
+      }
+    });
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
 test("serve handler returns JSON for unknown API routes", async () => {
   const target = await mkdtemp(path.join(tmpdir(), "architext-serve-"));
   try {
@@ -102,6 +148,25 @@ test("serve handler returns JSON for unknown API routes", async () => {
       assert.equal(response.status, 404);
       assert.match(response.headers.get("content-type") ?? "", /application\/json/);
       assert.deepEqual(body, { error: "Unknown Architext API route: /api/not-real" });
+    });
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test("serve handler returns ok false envelopes for release and rules API failures", async () => {
+  const target = await mkdtemp(path.join(tmpdir(), "architext-serve-"));
+  try {
+    await withServer(createViewerRequestHandler({ target, watchHub: { attach() {} }, mutationToken: "secret" }), async (origin) => {
+      for (const pathname of ["/api/release-plans", "/api/rules"]) {
+        const response = await authorizedPost(origin, pathname, {});
+        const body = await response.json();
+
+        assert.equal(response.status, 200);
+        assert.equal(body.ok, false);
+        assert.equal(body.reload, false);
+        assert.match(body.error, /Architext|ENOENT|requires|rules/i);
+      }
     });
   } finally {
     await rm(target, { recursive: true, force: true });
@@ -179,7 +244,7 @@ test("serve handler exposes recovery status for invalid targets", async () => {
 test("serve handler reports malformed data as structured recovery status", async () => {
   const target = await mkdtemp(path.join(tmpdir(), "architext-serve-"));
   try {
-    await cp(template, path.join(target, "docs", "architext"), { recursive: true });
+    await writeLegacyCopiedInstall(target);
     await writeFile(path.join(target, "docs", "architext", "data", "nodes.json"), "{ invalid json\n");
     await withServer(createViewerRequestHandler({ target, watchHub: { attach() {} } }), async (origin) => {
       const response = await fetch(`${origin}/api/status`);

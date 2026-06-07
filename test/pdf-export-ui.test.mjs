@@ -6,7 +6,7 @@ import {
   pdfExportReadyMessage,
   pdfExportUnavailableMessage,
   requestPdfExport
-} from "../docs/architext/src/presentation/pdfExportModel.js";
+} from "../viewer/src/presentation/pdfExportModel.js";
 
 function cssBlock(source, marker) {
   const markerIndex = source.indexOf(marker);
@@ -77,7 +77,7 @@ test("PDF export reports unavailable browser print support", () => {
 });
 
 test("PDF export print styles preserve the active diagram artifact", () => {
-  const styleSource = readFileSync(new URL("../docs/architext/src/styles.css", import.meta.url), "utf8");
+  const styleSource = readFileSync(new URL("../viewer/src/styles.css", import.meta.url), "utf8");
   const rules = cssRules(cssBlock(styleSource, "@media print"));
   const hiddenChrome = ruleForSelector(rules, ".diagram-controls");
   const diagramArea = ruleForSelector(rules, ".diagram-area");
@@ -94,19 +94,41 @@ test("PDF export print styles preserve the active diagram artifact", () => {
 });
 
 test("diagram legend renders above the contained canvas viewport", () => {
-  const styleSource = readFileSync(new URL("../docs/architext/src/styles.css", import.meta.url), "utf8");
+  const styleSource = readFileSync(new URL("../viewer/src/styles.css", import.meta.url), "utf8");
   const diagramHeader = cssBlock(styleSource, ".diagram-header {");
   const legendPanel = cssBlock(styleSource, ".legend > div {");
 
   assert.match(diagramHeader, /position:\s*relative/);
-  assert.match(diagramHeader, /z-index:\s*40/);
+  assert.match(diagramHeader, /z-index:\s*var\(--z-header-overlay\)/);
   assert.match(diagramHeader, /overflow:\s*visible/);
   assert.match(legendPanel, /position:\s*absolute/);
-  assert.match(legendPanel, /z-index:\s*45/);
+  assert.match(legendPanel, /z-index:\s*var\(--z-floating-panel\)/);
+});
+
+test("app-level notices and toggles use explicit overlay layers above canvas paint", () => {
+  const styleSource = readFileSync(new URL("../viewer/src/styles.css", import.meta.url), "utf8");
+
+  assert.match(cssBlock(styleSource, ":root {"), /--z-canvas-overlay:\s*20/);
+  assert.match(cssBlock(styleSource, ":root {"), /--z-app-notice:\s*70/);
+  assert.match(cssBlock(styleSource, ".data-refresh-notice {"), /z-index:\s*var\(--z-app-notice\)/);
+  assert.match(cssBlock(styleSource, ".side-toggle {"), /z-index:\s*var\(--z-panel-toggle\)/);
+  assert.match(cssBlock(styleSource, ".data-issue-backdrop {"), /z-index:\s*var\(--z-modal\)/);
+  assert.match(cssBlock(styleSource, ".routing-loading-overlay,\n.routing-planning-error {"), /z-index:\s*var\(--z-canvas-overlay\)/);
+});
+
+test("release trend chart fills its container without distortion", () => {
+  const styleSource = readFileSync(new URL("../viewer/src/styles.css", import.meta.url), "utf8");
+  const releaseChart = cssBlock(styleSource, ".release-history svg {");
+
+  assert.match(releaseChart, /display:\s*block/);
+  assert.match(releaseChart, /width:\s*100%/);
+  assert.match(releaseChart, /height:\s*auto/);
+  assert.match(releaseChart, /aspect-ratio:\s*1200 \/ 240/);
+  assert.match(releaseChart, /overflow:\s*visible/);
 });
 
 test("diagram legend icons preserve node type colors", () => {
-  const styleSource = readFileSync(new URL("../docs/architext/src/styles.css", import.meta.url), "utf8");
+  const styleSource = readFileSync(new URL("../viewer/src/styles.css", import.meta.url), "utf8");
 
   assert.match(cssBlock(styleSource, ".legend-icon.actor,\n.node-card.actor .node-icon {"), /color:\s*var\(--pink\)/);
   assert.match(cssBlock(styleSource, ".legend-icon.software-system,\n.node-card.software-system .node-icon {"), /color:\s*var\(--cyan\)/);

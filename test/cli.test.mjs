@@ -9,8 +9,23 @@ import test from "node:test";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const cli = path.join(repoRoot, "tools", "architext-adopt.mjs");
-const template = path.join(repoRoot, "docs", "architext");
+const viewerTemplate = path.join(repoRoot, "viewer");
+const templateData = path.join(repoRoot, "docs", "architext", "data");
 const packageVersion = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8")).version;
+const copiedTemplateEntries = [
+  "AGENTS_APPENDIX.md",
+  "LLM_ARCHITEXT.md",
+  "README.md",
+  "index.html",
+  "package-lock.json",
+  "package.json",
+  "public",
+  "schema",
+  "src",
+  "tools",
+  "tsconfig.json",
+  "vite.config.ts"
+];
 
 function run(args, cwd = repoRoot) {
   return execFileSync(process.execPath, [cli, ...args], {
@@ -39,6 +54,15 @@ function cleanup(dir) {
 
 function writeJson(file, value) {
   writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+async function writeLegacyCopiedInstall(target) {
+  const legacyDir = path.join(target, "docs", "architext");
+  await mkdir(legacyDir, { recursive: true });
+  for (const entry of copiedTemplateEntries) {
+    await cp(path.join(viewerTemplate, entry), path.join(legacyDir, entry), { recursive: true });
+  }
+  await cp(templateData, path.join(legacyDir, "data"), { recursive: true });
 }
 
 test("sync installs data-only Architext into a fresh repository", () => {
@@ -83,8 +107,7 @@ test("sync caps generated starter project slugs", async () => {
 test("sync migrates copied installs without rewriting architecture data", async () => {
   const target = tempRepo();
   try {
-    await mkdir(path.join(target, "docs"), { recursive: true });
-    await cp(template, path.join(target, "docs", "architext"), { recursive: true });
+    await writeLegacyCopiedInstall(target);
     const beforeManifest = readFileSync(path.join(target, "docs", "architext", "data", "manifest.json"), "utf8");
     writeFileSync(path.join(target, "AGENTS.md"), "Intro\n\n## Architext Architecture Documentation\n\nOld copied instructions. Run cd docs/architext && npm run validate and edit docs/architext/src.\n\n## Other\n\nKeep this.\n");
 
@@ -260,6 +283,11 @@ test("doctor and sync migrate model-specific instruction rules into Rules data",
     assert.match(syncDryRun, /Doctor repairs available/);
     assert.match(syncDryRun, /Would apply doctor repairs/);
     assert.match(syncDryRun, /migrate instruction rule: Prefer deterministic CLI repairs over manual JSON/);
+
+    const sync = run(["sync", target, "--yes", "--branch", "none"]);
+    assert.doesNotMatch(sync, /Doctor repairs available/);
+    assert.match(sync, /Doctor repairs: none/);
+    assert.match(readFileSync(path.join(target, ".cursorrules"), "utf8"), /docs\/architext\/data\/rules\.json/);
   } finally {
     cleanup(target);
   }

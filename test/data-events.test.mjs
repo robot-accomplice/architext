@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { subscribeToDataEvents } from "../docs/architext/src/adapters/dataEvents.js";
+import { subscribeToDataEvents } from "../viewer/src/adapters/dataEvents.js";
 
 test("data event adapter routes valid and invalid server events", () => {
   const events = [];

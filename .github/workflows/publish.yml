@@ -61,7 +61,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            docs/architext/package-lock.json
+            viewer/package-lock.json
 
       - name: Confirm package version
         shell: bash
@@ -74,7 +74,7 @@ jobs:
         run: npm ci
 
       - name: Install viewer workspace dependencies
-        run: npm ci --prefix docs/architext
+        run: npm ci --prefix viewer
 
       - name: Install browser dependencies
         run: npx playwright install chromium --with-deps

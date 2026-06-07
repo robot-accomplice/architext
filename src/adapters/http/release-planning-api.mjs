@@ -1,22 +1,13 @@
 import { readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { validateReleaseReferences } from "../../domain/architecture-model/references.mjs";
+import { releaseItems } from "../../domain/architecture-model/release-scopes.mjs";
 import {
   approveReleasePlan,
   buildReleasePlan,
   mergeExistingReleasePlan,
   saveReleasePlanDraft
 } from "../../domain/architecture-model/release-planning.mjs";
-
-function releaseItems(detail) {
-  return [
-    ...detail.scope.required,
-    ...detail.scope.planned,
-    ...detail.scope.stretch,
-    ...detail.scope.deferred,
-    ...detail.scope.outOfScope
-  ];
-}
 
 function releaseFileForVersion(version) {
   return `v${version.replaceAll(".", "-")}.json`;

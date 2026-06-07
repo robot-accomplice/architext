@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { modeShowsOrderedFlow, modeUsesStructuralRelationships } from "../docs/architext/src/presentation/viewModes.js";
+import { modeShowsOrderedFlow, modeUsesStructuralRelationships } from "../viewer/src/presentation/viewModes.js";
 
 test("view modes expose ordered flow overlays only when step definitions are shown", () => {
   assert.equal(modeShowsOrderedFlow("flows"), true);

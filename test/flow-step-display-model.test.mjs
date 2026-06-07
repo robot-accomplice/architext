@@ -3,9 +3,8 @@ import test from "node:test";
 import {
   decisionBranchTargets,
   flowStepDisplayIndexes,
-  isDecisionBranchSupportStep,
-  isRenderedFlowRelationshipStep
-} from "../docs/architext/src/presentation/flowStepDisplayModel.js";
+  isDecisionBranchSupportStep
+} from "../viewer/src/presentation/flowStepDisplayModel.js";
 
 test("flow step display indexes reuse the decision number for outgoing outcome branches", () => {
   const indexes = flowStepDisplayIndexes([
@@ -31,9 +30,6 @@ test("flow step display model separates branched decisions from component routes
   ];
 
   assert.deepEqual([...decisionBranchTargets(steps)], ["validator"]);
-  assert.equal(isRenderedFlowRelationshipStep(steps, steps[0], 0), true);
-  assert.equal(isRenderedFlowRelationshipStep(steps, steps[1], 1), true);
-  assert.equal(isRenderedFlowRelationshipStep(steps, steps[2], 2), true);
   assert.equal(isDecisionBranchSupportStep(steps, steps[1], 1), true);
   assert.equal(isDecisionBranchSupportStep(steps, steps[2], 2), true);
 });

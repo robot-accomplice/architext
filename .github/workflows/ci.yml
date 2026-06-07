@@ -22,13 +22,13 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            docs/architext/package-lock.json
+            viewer/package-lock.json
 
       - name: Install package dependencies
         run: npm ci
 
       - name: Install viewer workspace dependencies
-        run: npm ci --prefix docs/architext
+        run: npm ci --prefix viewer
 
       - name: Run CLI tests
         run: npm test
