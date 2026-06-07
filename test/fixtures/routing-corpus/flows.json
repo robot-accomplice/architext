@@ -2,885 +2,732 @@
   "flows": [
     {
       "id": "hub-fan-dense",
-      "name": "Hub Fan Dense",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "actor-01",
-          "to": "service-01",
-          "action": "step 1"
+          "id": "s077",
+          "from": "n39",
+          "to": "n22"
         },
         {
-          "id": "step-2",
-          "from": "client-03",
-          "to": "service-03",
-          "action": "step 2",
+          "id": "s113",
+          "from": "n62",
+          "to": "n63",
           "kind": "request"
         },
         {
-          "id": "step-3",
-          "from": "service-03",
-          "to": "service-04",
-          "action": "step 3",
+          "id": "s026",
+          "from": "n63",
+          "to": "n59",
           "kind": "request"
         },
         {
-          "id": "step-4",
-          "from": "service-01",
-          "to": "service-04",
-          "action": "step 4",
+          "id": "s059",
+          "from": "n22",
+          "to": "n59",
           "kind": "request"
         },
         {
-          "id": "step-5",
-          "from": "service-04",
-          "to": "data-store-01",
-          "action": "step 5",
+          "id": "s085",
+          "from": "n59",
+          "to": "n49",
           "kind": "persistence"
         },
         {
-          "id": "step-6",
-          "from": "data-store-01",
-          "to": "service-04",
-          "action": "step 6",
+          "id": "s104",
+          "from": "n49",
+          "to": "n59",
           "kind": "return",
-          "returnOf": "step-5"
+          "returnOf": "s085"
         },
         {
-          "id": "step-7",
-          "from": "service-04",
-          "to": "service-06",
-          "action": "step 7",
+          "id": "s088",
+          "from": "n59",
+          "to": "n36",
           "kind": "request"
         },
         {
-          "id": "step-8",
-          "from": "service-06",
-          "to": "service-04",
-          "action": "step 8",
+          "id": "s018",
+          "from": "n36",
+          "to": "n59",
           "kind": "return",
-          "returnOf": "step-7"
+          "returnOf": "s088"
         },
         {
-          "id": "step-9",
-          "from": "service-04",
-          "to": "service-10",
-          "action": "step 9",
+          "id": "s035",
+          "from": "n59",
+          "to": "n33",
           "kind": "request"
         },
         {
-          "id": "step-10",
-          "from": "service-10",
-          "to": "service-04",
-          "action": "step 10",
+          "id": "s116",
+          "from": "n33",
+          "to": "n59",
           "kind": "return",
-          "returnOf": "step-9"
+          "returnOf": "s035"
         },
         {
-          "id": "step-11",
-          "from": "service-04",
-          "to": "service-05",
-          "action": "step 11",
+          "id": "s084",
+          "from": "n59",
+          "to": "n30",
           "kind": "request"
         },
         {
-          "id": "step-12",
-          "from": "service-05",
-          "to": "service-04",
-          "action": "step 12",
+          "id": "s058",
+          "from": "n30",
+          "to": "n59",
           "kind": "return",
-          "returnOf": "step-11"
+          "returnOf": "s084"
         },
         {
-          "id": "step-13",
-          "from": "service-04",
-          "to": "data-store-01",
-          "action": "step 13",
+          "id": "s064",
+          "from": "n59",
+          "to": "n49",
           "kind": "persistence"
         },
         {
-          "id": "step-14",
-          "from": "data-store-01",
-          "to": "service-04",
-          "action": "step 14",
+          "id": "s066",
+          "from": "n49",
+          "to": "n59",
           "kind": "return",
-          "returnOf": "step-13"
+          "returnOf": "s064"
         },
         {
-          "id": "step-15",
-          "from": "service-04",
-          "to": "service-03",
-          "action": "step 15",
+          "id": "s122",
+          "from": "n59",
+          "to": "n63",
           "kind": "return",
-          "returnOf": "step-3"
+          "returnOf": "s026"
         },
         {
-          "id": "step-16",
-          "from": "service-03",
-          "to": "client-03",
-          "action": "step 16",
+          "id": "s121",
+          "from": "n63",
+          "to": "n62",
           "kind": "return",
-          "returnOf": "step-2"
+          "returnOf": "s113"
         },
         {
-          "id": "step-17",
-          "from": "service-04",
-          "to": "service-01",
-          "action": "step 17",
+          "id": "s037",
+          "from": "n59",
+          "to": "n22",
           "kind": "return",
-          "returnOf": "step-4"
+          "returnOf": "s059"
         },
         {
-          "id": "step-18",
-          "from": "service-01",
-          "to": "actor-01",
-          "action": "step 18",
+          "id": "s027",
+          "from": "n22",
+          "to": "n39",
           "kind": "return",
-          "returnOf": "step-1"
+          "returnOf": "s077"
         }
       ]
     },
     {
       "id": "pair-fan-compact",
-      "name": "Pair Fan Compact",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "client-03",
-          "to": "service-03",
-          "action": "step 1"
+          "id": "s114",
+          "from": "n62",
+          "to": "n63"
         },
         {
-          "id": "step-2",
-          "from": "service-03",
-          "to": "data-store-01",
-          "action": "step 2"
+          "id": "s008",
+          "from": "n63",
+          "to": "n49"
         },
         {
-          "id": "step-3",
-          "from": "data-store-01",
-          "to": "service-03",
-          "action": "step 3"
+          "id": "s107",
+          "from": "n49",
+          "to": "n63"
         },
         {
-          "id": "step-4",
-          "from": "service-03",
-          "to": "client-03",
-          "action": "step 4"
+          "id": "s073",
+          "from": "n63",
+          "to": "n62"
         },
         {
-          "id": "step-5",
-          "from": "client-03",
-          "to": "service-03",
-          "action": "step 5"
+          "id": "s102",
+          "from": "n62",
+          "to": "n63"
         },
         {
-          "id": "step-6",
-          "from": "service-03",
-          "to": "service-08",
-          "action": "step 6"
+          "id": "s025",
+          "from": "n63",
+          "to": "n11"
         },
         {
-          "id": "step-7",
-          "from": "service-08",
-          "to": "service-03",
-          "action": "step 7"
+          "id": "s019",
+          "from": "n11",
+          "to": "n63"
         },
         {
-          "id": "step-8",
-          "from": "service-03",
-          "to": "client-03",
-          "action": "step 8"
+          "id": "s072",
+          "from": "n63",
+          "to": "n62"
         }
       ]
     },
     {
       "id": "pair-chain-linear",
-      "name": "Pair Chain Linear",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "actor-01",
-          "to": "client-01",
-          "action": "step 1"
+          "id": "s043",
+          "from": "n39",
+          "to": "n08"
         },
         {
-          "id": "step-2",
-          "from": "client-01",
-          "to": "data-store-01",
-          "action": "step 2"
+          "id": "s009",
+          "from": "n08",
+          "to": "n49"
         },
         {
-          "id": "step-3",
-          "from": "data-store-01",
-          "to": "client-01",
-          "action": "step 3"
+          "id": "s049",
+          "from": "n49",
+          "to": "n08"
         },
         {
-          "id": "step-4",
-          "from": "client-02",
-          "to": "service-04",
-          "action": "step 4"
+          "id": "s098",
+          "from": "n55",
+          "to": "n59"
         },
         {
-          "id": "step-5",
-          "from": "service-04",
-          "to": "client-02",
-          "action": "step 5"
+          "id": "s047",
+          "from": "n59",
+          "to": "n55"
         },
         {
-          "id": "step-6",
-          "from": "client-01",
-          "to": "actor-01",
-          "action": "step 6"
+          "id": "s081",
+          "from": "n08",
+          "to": "n39"
         }
       ]
     },
     {
       "id": "pair-minimal",
-      "name": "Pair Minimal",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "actor-02",
-          "to": "service-02",
-          "action": "step 1"
+          "id": "s101",
+          "from": "n21",
+          "to": "n05"
         },
         {
-          "id": "step-2",
-          "from": "service-02",
-          "to": "data-store-01",
-          "action": "step 2"
+          "id": "s024",
+          "from": "n05",
+          "to": "n49"
         },
         {
-          "id": "step-3",
-          "from": "data-store-01",
-          "to": "service-02",
-          "action": "step 3"
+          "id": "s004",
+          "from": "n49",
+          "to": "n05"
         },
         {
-          "id": "step-4",
-          "from": "service-02",
-          "to": "actor-02",
-          "action": "step 4"
+          "id": "s089",
+          "from": "n05",
+          "to": "n21"
         }
       ]
     },
     {
       "id": "fan-coaligned-selfcross",
-      "name": "Fan Coaligned Selfcross",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "service-04",
-          "to": "service-05",
-          "action": "step 1"
+          "id": "s069",
+          "from": "n59",
+          "to": "n30"
         },
         {
-          "id": "step-2",
-          "from": "service-05",
-          "to": "external-service-01",
-          "action": "step 2"
+          "id": "s091",
+          "from": "n30",
+          "to": "n23"
         },
         {
-          "id": "step-3",
-          "from": "external-service-01",
-          "to": "service-05",
-          "action": "step 3"
+          "id": "s016",
+          "from": "n23",
+          "to": "n30"
         },
         {
-          "id": "step-4",
-          "from": "service-05",
-          "to": "external-service-02",
-          "action": "step 4"
+          "id": "s092",
+          "from": "n30",
+          "to": "n31"
         },
         {
-          "id": "step-5",
-          "from": "external-service-02",
-          "to": "service-05",
-          "action": "step 5"
+          "id": "s048",
+          "from": "n31",
+          "to": "n30"
         },
         {
-          "id": "step-6",
-          "from": "service-05",
-          "to": "service-14",
-          "action": "step 6"
+          "id": "s079",
+          "from": "n30",
+          "to": "n38"
         },
         {
-          "id": "step-7",
-          "from": "service-05",
-          "to": "service-04",
-          "action": "step 7"
+          "id": "s090",
+          "from": "n30",
+          "to": "n59"
         }
       ]
     },
     {
       "id": "coaligned-multibundle-surfaceselect",
-      "name": "Coaligned Multibundle Surfaceselect",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "service-04",
-          "to": "service-06",
-          "action": "step 1"
+          "id": "s083",
+          "from": "n59",
+          "to": "n36"
         },
         {
-          "id": "step-2",
-          "from": "service-06",
-          "to": "data-store-01",
-          "action": "step 2"
+          "id": "s074",
+          "from": "n36",
+          "to": "n49"
         },
         {
-          "id": "step-3",
-          "from": "data-store-01",
-          "to": "service-06",
-          "action": "step 3"
+          "id": "s057",
+          "from": "n49",
+          "to": "n36"
         },
         {
-          "id": "step-4",
-          "from": "service-06",
-          "to": "service-04",
-          "action": "step 4"
+          "id": "s056",
+          "from": "n36",
+          "to": "n59"
         },
         {
-          "id": "step-5",
-          "from": "service-04",
-          "to": "service-06",
-          "action": "step 5"
+          "id": "s040",
+          "from": "n59",
+          "to": "n36"
         },
         {
-          "id": "step-6",
-          "from": "service-06",
-          "to": "service-04",
-          "action": "step 6"
+          "id": "s039",
+          "from": "n36",
+          "to": "n59"
         },
         {
-          "id": "step-7",
-          "from": "service-06",
-          "to": "data-store-01",
-          "action": "step 7"
+          "id": "s021",
+          "from": "n36",
+          "to": "n49"
         },
         {
-          "id": "step-8",
-          "from": "data-store-01",
-          "to": "service-06",
-          "action": "step 8"
+          "id": "s022",
+          "from": "n49",
+          "to": "n36"
         }
       ]
     },
     {
       "id": "bundle-coaligned",
-      "name": "Bundle Coaligned",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "worker-01",
-          "to": "data-store-01",
-          "action": "step 1"
+          "id": "s046",
+          "from": "n45",
+          "to": "n49"
         },
         {
-          "id": "step-2",
-          "from": "data-store-01",
-          "to": "worker-01",
-          "action": "step 2"
+          "id": "s030",
+          "from": "n49",
+          "to": "n45"
         },
         {
-          "id": "step-3",
-          "from": "worker-01",
-          "to": "service-04",
-          "action": "step 3"
+          "id": "s034",
+          "from": "n45",
+          "to": "n59"
         },
         {
-          "id": "step-4",
-          "from": "service-04",
-          "to": "worker-01",
-          "action": "step 4"
+          "id": "s044",
+          "from": "n59",
+          "to": "n45"
         },
         {
-          "id": "step-5",
-          "from": "worker-01",
-          "to": "service-01",
-          "action": "step 5"
+          "id": "s063",
+          "from": "n45",
+          "to": "n22"
         },
         {
-          "id": "step-6",
-          "from": "service-01",
-          "to": "worker-01",
-          "action": "step 6"
+          "id": "s062",
+          "from": "n22",
+          "to": "n45"
         },
         {
-          "id": "step-7",
-          "from": "worker-01",
-          "to": "data-store-01",
-          "action": "step 7"
+          "id": "s078",
+          "from": "n45",
+          "to": "n49"
         },
         {
-          "id": "step-8",
-          "from": "data-store-01",
-          "to": "worker-01",
-          "action": "step 8"
+          "id": "s036",
+          "from": "n49",
+          "to": "n45"
         }
       ]
     },
     {
       "id": "fan-quad-reciprocal",
-      "name": "Fan Quad Reciprocal",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "service-07",
-          "to": "service-06",
-          "action": "step 1"
+          "id": "s029",
+          "from": "n03",
+          "to": "n36"
         },
         {
-          "id": "step-2",
-          "from": "service-06",
-          "to": "service-07",
-          "action": "step 2"
+          "id": "s010",
+          "from": "n36",
+          "to": "n03"
         },
         {
-          "id": "step-3",
-          "from": "service-07",
-          "to": "service-08",
-          "action": "step 3"
+          "id": "s014",
+          "from": "n03",
+          "to": "n11"
         },
         {
-          "id": "step-4",
-          "from": "service-08",
-          "to": "service-07",
-          "action": "step 4"
+          "id": "s068",
+          "from": "n11",
+          "to": "n03"
         },
         {
-          "id": "step-5",
-          "from": "service-07",
-          "to": "service-04",
-          "action": "step 5"
+          "id": "s033",
+          "from": "n03",
+          "to": "n59"
         },
         {
-          "id": "step-6",
-          "from": "service-04",
-          "to": "service-07",
-          "action": "step 6"
+          "id": "s001",
+          "from": "n59",
+          "to": "n03"
         },
         {
-          "id": "step-7",
-          "from": "service-07",
-          "to": "data-store-01",
-          "action": "step 7"
+          "id": "s005",
+          "from": "n03",
+          "to": "n49"
         },
         {
-          "id": "step-8",
-          "from": "data-store-01",
-          "to": "service-07",
-          "action": "step 8"
+          "id": "s000",
+          "from": "n49",
+          "to": "n03"
         }
       ]
     },
     {
       "id": "bundle-return-gutter",
-      "name": "Bundle Return Gutter",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "service-09",
-          "to": "data-store-01",
-          "action": "step 1"
+          "id": "s045",
+          "from": "n48",
+          "to": "n49"
         },
         {
-          "id": "step-2",
-          "from": "data-store-01",
-          "to": "service-09",
-          "action": "step 2"
+          "id": "s013",
+          "from": "n49",
+          "to": "n48"
         },
         {
-          "id": "step-3",
-          "from": "service-03",
-          "to": "service-09",
-          "action": "step 3"
+          "id": "s041",
+          "from": "n63",
+          "to": "n48"
         },
         {
-          "id": "step-4",
-          "from": "service-09",
-          "to": "service-03",
-          "action": "step 4"
+          "id": "s042",
+          "from": "n48",
+          "to": "n63"
         },
         {
-          "id": "step-5",
-          "from": "service-09",
-          "to": "data-store-01",
-          "action": "step 5"
+          "id": "s065",
+          "from": "n48",
+          "to": "n49"
         },
         {
-          "id": "step-6",
-          "from": "data-store-01",
-          "to": "service-09",
-          "action": "step 6"
+          "id": "s106",
+          "from": "n49",
+          "to": "n48"
         },
         {
-          "id": "step-7",
-          "from": "service-04",
-          "to": "service-09",
-          "action": "step 7"
+          "id": "s119",
+          "from": "n59",
+          "to": "n48"
         },
         {
-          "id": "step-8",
-          "from": "service-09",
-          "to": "service-04",
-          "action": "step 8"
+          "id": "s105",
+          "from": "n48",
+          "to": "n59"
         }
       ]
     },
     {
       "id": "pair-chain-short",
-      "name": "Pair Chain Short",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "service-04",
-          "to": "service-10",
-          "action": "step 1"
+          "id": "s100",
+          "from": "n59",
+          "to": "n33"
         },
         {
-          "id": "step-2",
-          "from": "service-10",
-          "to": "data-store-01",
-          "action": "step 2"
+          "id": "s097",
+          "from": "n33",
+          "to": "n49"
         },
         {
-          "id": "step-3",
-          "from": "data-store-01",
-          "to": "service-10",
-          "action": "step 3"
+          "id": "s118",
+          "from": "n49",
+          "to": "n33"
         },
         {
-          "id": "step-4",
-          "from": "service-10",
-          "to": "service-04",
-          "action": "step 4"
+          "id": "s117",
+          "from": "n33",
+          "to": "n59"
         },
         {
-          "id": "step-5",
-          "from": "service-04",
-          "to": "service-14",
-          "action": "step 5"
+          "id": "s120",
+          "from": "n59",
+          "to": "n38"
         },
         {
-          "id": "step-6",
-          "from": "service-14",
-          "to": "service-04",
-          "action": "step 6"
+          "id": "s115",
+          "from": "n38",
+          "to": "n59"
         }
       ]
     },
     {
       "id": "fan-parallel-bundle",
-      "name": "Fan Parallel Bundle",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "actor-01",
-          "to": "service-11",
-          "action": "step 1"
+          "id": "s099",
+          "from": "n39",
+          "to": "n35"
         },
         {
-          "id": "step-2",
-          "from": "actor-01",
-          "to": "service-11",
-          "action": "step 2"
+          "id": "s011",
+          "from": "n39",
+          "to": "n35"
         },
         {
-          "id": "step-3",
-          "from": "service-11",
-          "to": "actor-01",
-          "action": "step 3"
+          "id": "s012",
+          "from": "n35",
+          "to": "n39"
         },
         {
-          "id": "step-4",
-          "from": "client-03",
-          "to": "service-11",
-          "action": "step 4"
+          "id": "s060",
+          "from": "n62",
+          "to": "n35"
         },
         {
-          "id": "step-5",
-          "from": "service-11",
-          "to": "client-03",
-          "action": "step 5"
+          "id": "s061",
+          "from": "n35",
+          "to": "n62"
         },
         {
-          "id": "step-6",
-          "from": "service-11",
-          "to": "service-05",
-          "action": "step 6"
+          "id": "s070",
+          "from": "n35",
+          "to": "n30"
         },
         {
-          "id": "step-7",
-          "from": "service-05",
-          "to": "service-11",
-          "action": "step 7"
+          "id": "s054",
+          "from": "n30",
+          "to": "n35"
         },
         {
-          "id": "step-8",
-          "from": "service-11",
-          "to": "service-04",
-          "action": "step 8"
+          "id": "s020",
+          "from": "n35",
+          "to": "n59"
         },
         {
-          "id": "step-9",
-          "from": "service-04",
-          "to": "service-11",
-          "action": "step 9"
+          "id": "s055",
+          "from": "n59",
+          "to": "n35"
         },
         {
-          "id": "step-10",
-          "from": "service-11",
-          "to": "actor-01",
-          "action": "step 10"
+          "id": "s111",
+          "from": "n35",
+          "to": "n39"
         }
       ]
     },
     {
       "id": "pair-fan-basic",
-      "name": "Pair Fan Basic",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "actor-01",
-          "to": "service-08",
-          "action": "step 1"
+          "id": "s017",
+          "from": "n39",
+          "to": "n11"
         },
         {
-          "id": "step-2",
-          "from": "service-08",
-          "to": "service-12",
-          "action": "step 2"
+          "id": "s007",
+          "from": "n11",
+          "to": "n32"
         },
         {
-          "id": "step-3",
-          "from": "service-12",
-          "to": "service-08",
-          "action": "step 3"
+          "id": "s051",
+          "from": "n32",
+          "to": "n11"
         },
         {
-          "id": "step-4",
-          "from": "service-12",
-          "to": "service-01",
-          "action": "step 4"
+          "id": "s076",
+          "from": "n32",
+          "to": "n22"
         },
         {
-          "id": "step-5",
-          "from": "service-01",
-          "to": "service-12",
-          "action": "step 5"
+          "id": "s050",
+          "from": "n22",
+          "to": "n32"
         },
         {
-          "id": "step-6",
-          "from": "service-12",
-          "to": "actor-01",
-          "action": "step 6"
+          "id": "s103",
+          "from": "n32",
+          "to": "n39"
         },
         {
-          "id": "step-7",
-          "from": "actor-01",
-          "to": "service-12",
-          "action": "step 7"
+          "id": "s052",
+          "from": "n39",
+          "to": "n32"
         }
       ]
     },
     {
       "id": "pair-single-multiedge",
-      "name": "Pair Single Multiedge",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "client-03",
-          "to": "service-03",
-          "action": "step 1"
+          "id": "s038",
+          "from": "n62",
+          "to": "n63"
         },
         {
-          "id": "step-2",
-          "from": "service-03",
-          "to": "client-03",
-          "action": "step 2"
+          "id": "s023",
+          "from": "n63",
+          "to": "n62"
         },
         {
-          "id": "step-3",
-          "from": "deployment-unit-01",
-          "to": "service-03",
-          "action": "step 3"
+          "id": "s031",
+          "from": "n16",
+          "to": "n63"
         },
         {
-          "id": "step-4",
-          "from": "service-03",
-          "to": "client-03",
-          "action": "step 4"
+          "id": "s032",
+          "from": "n63",
+          "to": "n62"
         },
         {
-          "id": "step-5",
-          "from": "client-01",
-          "to": "actor-01",
-          "action": "step 5"
+          "id": "s082",
+          "from": "n08",
+          "to": "n39"
         }
       ]
     },
     {
       "id": "bracket-intermediates",
-      "name": "Bracket Intermediates",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "service-04",
-          "to": "service-15",
-          "action": "step 1"
+          "id": "s002",
+          "from": "n59",
+          "to": "n43"
         },
         {
-          "id": "step-2",
-          "from": "service-15",
-          "to": "data-store-01",
-          "action": "step 2"
+          "id": "s075",
+          "from": "n43",
+          "to": "n49"
         },
         {
-          "id": "step-3",
-          "from": "data-store-01",
-          "to": "service-15",
-          "action": "step 3"
+          "id": "s109",
+          "from": "n49",
+          "to": "n43"
         },
         {
-          "id": "step-4",
-          "from": "service-15",
-          "to": "service-08",
-          "action": "step 4"
+          "id": "s086",
+          "from": "n43",
+          "to": "n11"
         },
         {
-          "id": "step-5",
-          "from": "service-08",
-          "to": "service-15",
-          "action": "step 5"
+          "id": "s110",
+          "from": "n11",
+          "to": "n43"
         },
         {
-          "id": "step-6",
-          "from": "service-15",
-          "to": "service-04",
-          "action": "step 6"
+          "id": "s087",
+          "from": "n43",
+          "to": "n59"
         },
         {
-          "id": "step-7",
-          "from": "service-04",
-          "to": "service-15",
-          "action": "step 7"
+          "id": "s006",
+          "from": "n59",
+          "to": "n43"
         },
         {
-          "id": "step-8",
-          "from": "service-15",
-          "to": "client-01",
-          "action": "step 8"
+          "id": "s028",
+          "from": "n43",
+          "to": "n08"
         },
         {
-          "id": "step-9",
-          "from": "client-01",
-          "to": "service-15",
-          "action": "step 9"
+          "id": "s015",
+          "from": "n08",
+          "to": "n43"
         },
         {
-          "id": "step-10",
-          "from": "service-04",
-          "to": "actor-01",
-          "action": "step 10"
+          "id": "s003",
+          "from": "n59",
+          "to": "n39"
         }
       ]
     },
     {
       "id": "fan-max-systemmap",
-      "name": "Fan Max Systemmap",
-      "status": "implemented",
       "steps": [
         {
-          "id": "step-1",
-          "from": "module-01",
-          "to": "data-store-01",
-          "action": "step 1",
+          "id": "s096",
+          "from": "n51",
+          "to": "n49",
           "kind": "request"
         },
         {
-          "id": "step-2",
-          "from": "data-store-01",
-          "to": "module-01",
-          "action": "step 2",
+          "id": "s112",
+          "from": "n49",
+          "to": "n51",
           "kind": "return",
-          "returnOf": "step-1"
+          "returnOf": "s096"
         },
         {
-          "id": "step-3",
-          "from": "module-01",
-          "to": "service-04",
-          "action": "step 3",
+          "id": "s095",
+          "from": "n51",
+          "to": "n59",
           "kind": "request"
         },
         {
-          "id": "step-4",
-          "from": "service-04",
-          "to": "module-01",
-          "action": "step 4",
+          "id": "s108",
+          "from": "n59",
+          "to": "n51",
           "kind": "return",
-          "returnOf": "step-3"
+          "returnOf": "s095"
         },
         {
-          "id": "step-5",
-          "from": "actor-01",
-          "to": "module-01",
-          "action": "step 5",
+          "id": "s093",
+          "from": "n39",
+          "to": "n51",
           "kind": "request"
         },
         {
-          "id": "step-6",
-          "from": "module-01",
-          "to": "external-service-03",
-          "action": "step 6",
+          "id": "s094",
+          "from": "n51",
+          "to": "n40",
           "kind": "request"
         },
         {
-          "id": "step-7",
-          "from": "external-service-03",
-          "to": "module-01",
-          "action": "step 7",
+          "id": "s067",
+          "from": "n40",
+          "to": "n51",
           "kind": "return",
-          "returnOf": "step-6"
+          "returnOf": "s094"
         },
         {
-          "id": "step-8",
-          "from": "module-01",
-          "to": "actor-01",
-          "action": "step 8",
+          "id": "s053",
+          "from": "n51",
+          "to": "n39",
           "kind": "return",
-          "returnOf": "step-5"
+          "returnOf": "s093"
         },
         {
-          "id": "step-9",
-          "from": "module-01",
-          "to": "service-14",
-          "action": "step 9",
+          "id": "s071",
+          "from": "n51",
+          "to": "n38",
           "kind": "request"
         },
         {
-          "id": "step-10",
-          "from": "service-14",
-          "to": "module-01",
-          "action": "step 10",
+          "id": "s080",
+          "from": "n38",
+          "to": "n51",
           "kind": "return",
-          "returnOf": "step-9"
+          "returnOf": "s071"
         }
       ]
     }

@@ -71,27 +71,27 @@
   },
   "fan-quad-reciprocal": {
     "routes": 8,
-    "bends": 14,
+    "bends": 10,
     "crossings": 0,
     "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
-    "closeParallelRuns": 0,
+    "closeParallelRuns": 1,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   },
   "bundle-return-gutter": {
     "routes": 8,
-    "bends": 18,
-    "crossings": 5,
+    "bends": 15,
+    "crossings": 0,
     "pairInternalCrossings": 0,
-    "laneOrderViolations": 1,
-    "closeParallelRuns": 1,
+    "laneOrderViolations": 0,
+    "closeParallelRuns": 2,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   },
   "pair-chain-short": {
     "routes": 6,
-    "bends": 10,
+    "bends": 6,
     "crossings": 0,
     "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
@@ -101,7 +101,7 @@
   },
   "fan-parallel-bundle": {
     "routes": 10,
-    "bends": 18,
+    "bends": 20,
     "crossings": 0,
     "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
@@ -141,11 +141,11 @@
   },
   "fan-max-systemmap": {
     "routes": 10,
-    "bends": 19,
+    "bends": 21,
     "crossings": 0,
     "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
-    "closeParallelRuns": 1,
+    "closeParallelRuns": 0,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   }

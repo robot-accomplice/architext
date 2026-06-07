@@ -11,22 +11,31 @@ does, while leaking none of the source project's actual architecture.
   (lanes), `flows.json` (steps: `from`/`to`/`kind`/`returnOf`/`outcome`). All domain
   prose (summaries, responsibilities, security, data handled, …) was dropped — it is
   irrelevant to routing and is the only thing that would leak the source design.
-- **Identifiers are neutralized**: nodes become `<type>-NN` (e.g. `data-store-01`),
-  lanes become `lane-N`, steps become `step-N`. Structure — lane membership and order,
-  step order, edge direction, `kind`, `returnOf` — is preserved exactly.
+- **Identifiers are neutralized but ORDER-PRESERVING**: nodes become `n##`, steps become
+  `s###`, lanes/views become `view-*`/`lane-*`. The rank in each id is the position of the
+  original identifier in sorted order, so the neutral ids sort into the **exact same order**
+  as the originals. Structure — lane membership and order, step order, edge direction,
+  `kind`, `returnOf`, `outcome` — is preserved exactly.
 - **Flows are relabeled by routing objective** (see below), so a failing test names the
   routing case that broke.
 
 ## Fidelity
 
 Routing geometry comes only from view lanes + flow steps (`planDiagram` never reads
-`nodes.json`). Because structure is preserved, every flow reproduces the source's
-routing **signature** — identical route count, bend count, and crossing count
-(15/15 verified). Mount coordinates differ by sub-lane amounts only, because the router
-uses identifier order as a deterministic tiebreak; the structural challenges and defect
-signatures are unchanged.
+`nodes.json`). The router also uses **identifier order as a deterministic tiebreak**, and the
+current router is sensitive enough to mount position that a tiebreak flip can change bends and
+crossings — not just sub-lane coordinates. So the ids here are **order-preserving** (see above):
+neutral ids sort identically to the originals, which makes every flow reproduce the source's
+routing signature **exactly** — identical route count, bend count, AND crossing count, verified
+15/15 against the source on the current router.
 
-This is a frozen fixture. Do not hand-edit; if the source corpus changes, regenerate.
+> An earlier revision neutralized ids to `<type>-NN`, which reordered the tiebreak and silently
+> diverged from the source (5/15 flows, e.g. `bundle-return-gutter` rendered 5 crossings where
+> the source has 0). Preserving sort order is what keeps the bed honest. If you re-sanitize,
+> keep the order-preserving mapping or re-verify 15/15 parity.
+
+This is a frozen fixture. Do not hand-edit; if the source corpus changes, regenerate with an
+order-preserving id map and re-verify parity.
 
 ## Flow taxonomy (objective → what it guards)
 

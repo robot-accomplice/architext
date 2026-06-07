@@ -1,334 +1,268 @@
 {
   "nodes": [
     {
-      "id": "actor-01",
-      "type": "actor",
-      "name": "Actor 01"
+      "id": "n39",
+      "type": "actor"
     },
     {
-      "id": "client-01",
-      "type": "client",
-      "name": "Client 01"
+      "id": "n08",
+      "type": "client"
     },
     {
-      "id": "client-02",
-      "type": "client",
-      "name": "Client 02"
+      "id": "n55",
+      "type": "client"
     },
     {
-      "id": "client-03",
-      "type": "client",
-      "name": "Client 03"
+      "id": "n62",
+      "type": "client"
     },
     {
-      "id": "actor-02",
-      "type": "actor",
-      "name": "Actor 02"
+      "id": "n21",
+      "type": "actor"
     },
     {
-      "id": "software-system-01",
-      "type": "software-system",
-      "name": "Software System 01"
+      "id": "n44",
+      "type": "software-system"
     },
     {
-      "id": "service-01",
-      "type": "service",
-      "name": "Service 01"
+      "id": "n22",
+      "type": "service"
     },
     {
-      "id": "deployment-unit-01",
-      "type": "deployment-unit",
-      "name": "Deployment Unit 01"
+      "id": "n16",
+      "type": "deployment-unit"
     },
     {
-      "id": "service-02",
-      "type": "service",
-      "name": "Service 02"
+      "id": "n05",
+      "type": "service"
     },
     {
-      "id": "service-03",
-      "type": "service",
-      "name": "Service 03"
+      "id": "n63",
+      "type": "service"
     },
     {
-      "id": "service-04",
-      "type": "service",
-      "name": "Service 04"
+      "id": "n59",
+      "type": "service"
     },
     {
-      "id": "service-05",
-      "type": "service",
-      "name": "Service 05"
+      "id": "n30",
+      "type": "service"
     },
     {
-      "id": "external-service-01",
-      "type": "external-service",
-      "name": "External Service 01"
+      "id": "n23",
+      "type": "external-service"
     },
     {
-      "id": "external-service-02",
-      "type": "external-service",
-      "name": "External Service 02"
+      "id": "n31",
+      "type": "external-service"
     },
     {
-      "id": "data-store-01",
-      "type": "data-store",
-      "name": "Data Store 01"
+      "id": "n49",
+      "type": "data-store"
     },
     {
-      "id": "service-06",
-      "type": "service",
-      "name": "Service 06"
+      "id": "n36",
+      "type": "service"
     },
     {
-      "id": "worker-01",
-      "type": "worker",
-      "name": "Worker 01"
+      "id": "n45",
+      "type": "worker"
     },
     {
-      "id": "service-07",
-      "type": "service",
-      "name": "Service 07"
+      "id": "n03",
+      "type": "service"
     },
     {
-      "id": "service-08",
-      "type": "service",
-      "name": "Service 08"
+      "id": "n11",
+      "type": "service"
     },
     {
-      "id": "service-09",
-      "type": "service",
-      "name": "Service 09"
+      "id": "n48",
+      "type": "service"
     },
     {
-      "id": "service-10",
-      "type": "service",
-      "name": "Service 10"
+      "id": "n33",
+      "type": "service"
     },
     {
-      "id": "service-11",
-      "type": "service",
-      "name": "Service 11"
+      "id": "n35",
+      "type": "service"
     },
     {
-      "id": "service-12",
-      "type": "service",
-      "name": "Service 12"
+      "id": "n32",
+      "type": "service"
     },
     {
-      "id": "service-13",
-      "type": "service",
-      "name": "Service 13"
+      "id": "n61",
+      "type": "service"
     },
     {
-      "id": "service-14",
-      "type": "service",
-      "name": "Service 14"
+      "id": "n38",
+      "type": "service"
     },
     {
-      "id": "service-15",
-      "type": "service",
-      "name": "Service 15"
+      "id": "n43",
+      "type": "service"
     },
     {
-      "id": "module-01",
-      "type": "module",
-      "name": "Module 01"
+      "id": "n51",
+      "type": "module"
     },
     {
-      "id": "module-02",
-      "type": "module",
-      "name": "Module 02"
+      "id": "n41",
+      "type": "module"
     },
     {
-      "id": "module-03",
-      "type": "module",
-      "name": "Module 03"
+      "id": "n58",
+      "type": "module"
     },
     {
-      "id": "module-04",
-      "type": "module",
-      "name": "Module 04"
+      "id": "n13",
+      "type": "module"
     },
     {
-      "id": "module-05",
-      "type": "module",
-      "name": "Module 05"
+      "id": "n52",
+      "type": "module"
     },
     {
-      "id": "module-06",
-      "type": "module",
-      "name": "Module 06"
+      "id": "n24",
+      "type": "module"
     },
     {
-      "id": "module-07",
-      "type": "module",
-      "name": "Module 07"
+      "id": "n42",
+      "type": "module"
     },
     {
-      "id": "module-08",
-      "type": "module",
-      "name": "Module 08"
+      "id": "n65",
+      "type": "module"
     },
     {
-      "id": "module-09",
-      "type": "module",
-      "name": "Module 09"
+      "id": "n64",
+      "type": "module"
     },
     {
-      "id": "module-10",
-      "type": "module",
-      "name": "Module 10"
+      "id": "n02",
+      "type": "module"
     },
     {
-      "id": "module-11",
-      "type": "module",
-      "name": "Module 11"
+      "id": "n01",
+      "type": "module"
     },
     {
-      "id": "data-store-02",
-      "type": "data-store",
-      "name": "Data Store 02"
+      "id": "n00",
+      "type": "data-store"
     },
     {
-      "id": "module-12",
-      "type": "module",
-      "name": "Module 12"
+      "id": "n34",
+      "type": "module"
     },
     {
-      "id": "module-13",
-      "type": "module",
-      "name": "Module 13"
+      "id": "n50",
+      "type": "module"
     },
     {
-      "id": "module-14",
-      "type": "module",
-      "name": "Module 14"
+      "id": "n54",
+      "type": "module"
     },
     {
-      "id": "module-15",
-      "type": "module",
-      "name": "Module 15"
+      "id": "n07",
+      "type": "module"
     },
     {
-      "id": "module-16",
-      "type": "module",
-      "name": "Module 16"
+      "id": "n60",
+      "type": "module"
     },
     {
-      "id": "module-17",
-      "type": "module",
-      "name": "Module 17"
+      "id": "n29",
+      "type": "module"
     },
     {
-      "id": "module-18",
-      "type": "module",
-      "name": "Module 18"
+      "id": "n28",
+      "type": "module"
     },
     {
-      "id": "module-19",
-      "type": "module",
-      "name": "Module 19"
+      "id": "n27",
+      "type": "module"
     },
     {
-      "id": "module-20",
-      "type": "module",
-      "name": "Module 20"
+      "id": "n46",
+      "type": "module"
     },
     {
-      "id": "data-store-03",
-      "type": "data-store",
-      "name": "Data Store 03"
+      "id": "n26",
+      "type": "data-store"
     },
     {
-      "id": "external-service-03",
-      "type": "external-service",
-      "name": "External Service 03"
+      "id": "n40",
+      "type": "external-service"
     },
     {
-      "id": "module-21",
-      "type": "module",
-      "name": "Module 21"
+      "id": "n09",
+      "type": "module"
     },
     {
-      "id": "module-22",
-      "type": "module",
-      "name": "Module 22"
+      "id": "n10",
+      "type": "module"
     },
     {
-      "id": "module-23",
-      "type": "module",
-      "name": "Module 23"
+      "id": "n57",
+      "type": "module"
     },
     {
-      "id": "module-24",
-      "type": "module",
-      "name": "Module 24"
+      "id": "n56",
+      "type": "module"
     },
     {
-      "id": "module-25",
-      "type": "module",
-      "name": "Module 25"
+      "id": "n18",
+      "type": "module"
     },
     {
-      "id": "module-26",
-      "type": "module",
-      "name": "Module 26"
+      "id": "n17",
+      "type": "module"
     },
     {
-      "id": "module-27",
-      "type": "module",
-      "name": "Module 27"
+      "id": "n15",
+      "type": "module"
     },
     {
-      "id": "module-28",
-      "type": "module",
-      "name": "Module 28"
+      "id": "n12",
+      "type": "module"
     },
     {
-      "id": "module-29",
-      "type": "module",
-      "name": "Module 29"
+      "id": "n47",
+      "type": "module"
     },
     {
-      "id": "module-30",
-      "type": "module",
-      "name": "Module 30"
+      "id": "n19",
+      "type": "module"
     },
     {
-      "id": "module-31",
-      "type": "module",
-      "name": "Module 31"
+      "id": "n20",
+      "type": "module"
     },
     {
-      "id": "module-32",
-      "type": "module",
-      "name": "Module 32"
+      "id": "n14",
+      "type": "module"
     },
     {
-      "id": "module-33",
-      "type": "module",
-      "name": "Module 33"
+      "id": "n25",
+      "type": "module"
     },
     {
-      "id": "module-34",
-      "type": "module",
-      "name": "Module 34"
+      "id": "n04",
+      "type": "module"
     },
     {
-      "id": "module-35",
-      "type": "module",
-      "name": "Module 35"
+      "id": "n06",
+      "type": "module"
     },
     {
-      "id": "module-36",
-      "type": "module",
-      "name": "Module 36"
+      "id": "n53",
+      "type": "module"
     },
     {
-      "id": "module-37",
-      "type": "module",
-      "name": "Module 37"
+      "id": "n37",
+      "type": "module"
     }
   ]
 }
