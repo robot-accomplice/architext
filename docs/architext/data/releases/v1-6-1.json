@@ -2,12 +2,12 @@
   "id": "v1-6-1",
   "version": "1.6.1",
   "name": "Architext 1.6.1 Repository Intelligence and Diagram Config",
-  "status": "planned",
+  "status": "implementing",
   "posture": "on-track",
-  "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), and folds in minor UI cleanup.",
+  "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), folds in the App-component decomposition and crowded-face routing refinements deferred from 1.6.0, and includes minor UI cleanup.",
   "targetWindow": "After 1.6.0",
-  "lastUpdated": "2026-06-06T19:25:00.000Z",
-  "updateSource": "1.6.1 plan (deferred 1.6.0 scope + diagram config + UI cleanup)",
+  "lastUpdated": "2026-06-07T15:05:54.000Z",
+  "updateSource": "1.6.1 kickoff: folded the two remaining 1.6.0 deferrals (App-component decomposition, crowded-face surface refinements) into scope and started diagram-parameter-user-config.",
   "scope": {
     "required": [],
     "planned": [
@@ -63,7 +63,7 @@
         "id": "diagram-parameter-user-config",
         "title": "User-configurable diagram parameters",
         "kind": "feature",
-        "status": "planned",
+        "status": "in-progress",
         "summary": "Move hardcoded diagram parameters (e.g. minimum legible gap as an arrowhead fraction, spacing, column width) into user-adjustable configuration persisted under ~/.architext, so projects can tune layout without code changes.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-06T19:25:00.000Z",
@@ -80,6 +80,30 @@
         "source": "ad-hoc",
         "dateAdded": "2026-06-06T19:25:00.000Z",
         "workstreamId": "ui-polish",
+        "priority": "low",
+        "dependsOn": []
+      },
+      {
+        "id": "crowded-face-surface-refinements",
+        "title": "Crowded-face surface-selection refinements",
+        "kind": "feature",
+        "status": "planned",
+        "summary": "Two single-flow surface-selection niceties on faces carrying 5-6 edges, carried into 1.6.1 from 1.6.0. They were not taken inside the 1.6.0 cut because the diagrams were already clean (legible, zero crossings, zero sub-floor merges) and the fixes need distribution-pass surgery (re-spreading a crowded face so a moved pair lands >= the legibility floor from its neighbours) that carries regression risk to the 13 clean corpus flows. (1) skill-plugin-lifecycle: unify the use-skill/return pair onto unified-pipeline.south (line 7 currently mounts east); blocked by 6 edges on skill-plugin-system.west. (2) mail-operations: the config<->mail and operator<->mail pairs cross near mail-service, and the 9px approach legs (legible under the 4px standard) could spread further.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-07T00:00:00.000Z",
+        "workstreamId": "routing-polish",
+        "priority": "low",
+        "dependsOn": []
+      },
+      {
+        "id": "app-component-decomposition",
+        "title": "Decompose the App god-component",
+        "kind": "chore",
+        "status": "planned",
+        "summary": "Extract App (viewer/src/main.tsx) into useArchitextModel / useDiagramViewport / useNavigation hooks. Carried into 1.6.1 from 1.6.0. It was not taken inside the 1.6.0 cut because it is a structural refactor with NO behavior change (not a correctness or release blocker), the viewer source relocated since the audit plan was written (docs/architext/src -> viewer/src) so it needs re-scoping against the new layout, and there is no automated UI harness for App so it carries manual-verification risk best taken outside a release cut.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-07T00:00:00.000Z",
+        "workstreamId": "viewer-refactor",
         "priority": "low",
         "dependsOn": []
       }
@@ -107,7 +131,7 @@
       "id": "diagram-ergonomics",
       "name": "Diagram Ergonomics",
       "owner": "maintainer",
-      "status": "planned",
+      "status": "in-progress",
       "posture": "on-track",
       "summary": "Add layout controls that change diagram spacing without changing semantic data.",
       "progress": 0,
@@ -140,6 +164,32 @@
       "progress": 0,
       "itemIds": [
         "minor-ui-cleanup"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "routing-polish",
+      "name": "Routing Polish",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Finish the crowded-face surface-selection niceties deferred from the 1.6.0 routing overhaul.",
+      "progress": 0,
+      "itemIds": [
+        "crowded-face-surface-refinements"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "viewer-refactor",
+      "name": "Viewer Refactor",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Structural, behavior-preserving refactors of the viewer, starting with decomposing the App god-component.",
+      "progress": 0,
+      "itemIds": [
+        "app-component-decomposition"
       ],
       "evidence": []
     }
