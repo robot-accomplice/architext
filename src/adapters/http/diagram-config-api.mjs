@@ -6,9 +6,14 @@
 
 import path from "node:path";
 import os from "node:os";
-import { readFile as fsReadFile } from "node:fs/promises";
+import { readFile as fsReadFile, mkdir, writeFile } from "node:fs/promises";
 import { architextDir } from "../../domain/lifecycle/target-layout.mjs";
-import { resolveDiagramConfig } from "../../domain/diagram-config/diagram-config.mjs";
+import {
+  DIAGRAM_CONFIG_FIELDS,
+  SECTION_LABELS,
+  diffDiagramConfigFromDefaults,
+  resolveDiagramConfig
+} from "../../domain/diagram-config/diagram-config.mjs";
 
 export function userDiagramConfigPath(homedir = os.homedir()) {
   return path.join(homedir, ".architext", "config.json");
@@ -51,4 +56,32 @@ export async function loadDiagramConfig(target, { homedir = os.homedir() } = {})
     userConfigPath: userDiagramConfigPath(homedir),
     projectConfigPath: projectDiagramConfigPath(target)
   });
+}
+
+// GET /api/config payload: the resolved config plus the field/section spec that
+// drives the config UI (single source of truth — the viewer renders controls
+// from this rather than duplicating ranges/labels).
+export async function diagramConfigGetPayload(target, { homedir = os.homedir() } = {}) {
+  const { config, warnings } = await loadDiagramConfig(target, { homedir });
+  return { diagram: config, warnings, fields: DIAGRAM_CONFIG_FIELDS, sections: SECTION_LABELS };
+}
+
+function diagramConfigPathForScope(scope, target, homedir) {
+  if (scope === "user") return userDiagramConfigPath(homedir);
+  if (scope === "project") return projectDiagramConfigPath(target);
+  throw new Error(`Unknown diagram config scope "${scope}" (expected "project" or "user").`);
+}
+
+// POST /api/config: persist the supplied (effective) config to the chosen
+// layer, writing only the fields that differ from defaults so the file stays
+// minimal and precedence stays meaningful. Returns the re-resolved config.
+export async function writeDiagramConfig({ scope, target, diagram, homedir = os.homedir(), writeFileFn = writeFile, mkdirFn = mkdir }) {
+  const file = diagramConfigPathForScope(scope, target, homedir);
+  // Normalize/clamp the incoming values, then reduce to non-default overrides.
+  const { config: normalized } = resolveDiagramConfig([{ raw: diagram, source: `${scope} config` }]);
+  const overrides = diffDiagramConfigFromDefaults(normalized);
+  await mkdirFn(path.dirname(file), { recursive: true });
+  await writeFileFn(file, `${JSON.stringify(overrides, null, 2)}\n`, "utf8");
+  const resolved = await loadDiagramConfig(target, { homedir });
+  return { ok: true, scope, file, written: overrides, diagram: resolved.config, warnings: resolved.warnings };
 }

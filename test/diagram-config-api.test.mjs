@@ -1,9 +1,13 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, rm, readFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import {
   resolveDiagramConfigFromFiles,
   userDiagramConfigPath,
-  projectDiagramConfigPath
+  projectDiagramConfigPath,
+  writeDiagramConfig
 } from "../src/adapters/http/diagram-config-api.mjs";
 
 function fakeReader(files) {
@@ -60,6 +64,50 @@ test("malformed JSON degrades to a warning and falls through (never throws)", as
   });
   assert.equal(config.layout.laneWidth, 333); // project still applies
   assert.ok(warnings.some((w) => /not valid JSON/.test(w)));
+});
+
+test("writeDiagramConfig persists only non-default overrides and re-resolves", async () => {
+  const target = await mkdtemp(path.join(tmpdir(), "ax-cfg-"));
+  const home = await mkdtemp(path.join(tmpdir(), "ax-home-"));
+  try {
+    const result = await writeDiagramConfig({
+      scope: "project",
+      target,
+      homedir: home,
+      diagram: { layout: { laneWidth: 300, nodeWidth: 136 }, zoom: { minFitZoom: 0.15, maxFitZoom: 1.6 } }
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.scope, "project");
+    // Only the field that differs from default is written.
+    const onDisk = JSON.parse(await readFile(projectDiagramConfigPath(target), "utf8"));
+    assert.deepEqual(onDisk, { layout: { laneWidth: 300 } });
+    // Re-resolved effective config reflects the save (empty home => no user layer).
+    assert.equal(result.diagram.layout.laneWidth, 300);
+    assert.equal(result.diagram.layout.nodeWidth, 136);
+  } finally {
+    await rm(target, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("writeDiagramConfig clamps out-of-range values before persisting", async () => {
+  const target = await mkdtemp(path.join(tmpdir(), "ax-cfg-"));
+  const home = await mkdtemp(path.join(tmpdir(), "ax-home-"));
+  try {
+    await writeDiagramConfig({ scope: "user", target, homedir: home, diagram: { layout: { laneWidth: 99999 } } });
+    const onDisk = JSON.parse(await readFile(userDiagramConfigPath(home), "utf8"));
+    assert.equal(onDisk.layout.laneWidth, 800); // clamped to max
+  } finally {
+    await rm(target, { recursive: true, force: true });
+    await rm(home, { recursive: true, force: true });
+  }
+});
+
+test("writeDiagramConfig rejects an unknown scope", async () => {
+  await assert.rejects(
+    () => writeDiagramConfig({ scope: "global", target: "/x", diagram: {} }),
+    /Unknown diagram config scope/
+  );
 });
 
 test("an unreadable file (non-ENOENT) warns rather than crashing", async () => {

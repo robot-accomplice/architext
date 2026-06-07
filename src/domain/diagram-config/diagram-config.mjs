@@ -13,33 +13,41 @@
 // bounds, and the single legibility-gap arrowhead fraction that the whole router
 // derives mount spacing from. Cost-model weights are intentionally NOT exposed.
 
-// Field specification: section -> field -> { default, min, max }.
-// The single source of truth for which parameters are configurable and their
-// safe ranges. Defaults mirror the hardcoded viewer values exactly so that an
-// absent or empty config reproduces current rendering byte-for-byte.
+// Field specification: section -> field -> { default, min, max, step, unit, label }.
+// The single source of truth for which parameters are configurable, their safe
+// ranges, and how the config UI renders each control. Defaults mirror the
+// hardcoded viewer values exactly so that an absent or empty config reproduces
+// current rendering byte-for-byte. Section labels live in SECTION_LABELS.
 export const DIAGRAM_CONFIG_FIELDS = {
   layout: {
-    nodeWidth: { default: 136, min: 40, max: 600 },
-    nodeHeight: { default: 54, min: 20, max: 400 },
-    laneWidth: { default: 210, min: 60, max: 800 },
-    rowGap: { default: 102, min: 20, max: 600 },
-    routeGutter: { default: 132, min: 20, max: 600 },
-    marginY: { default: 104, min: 0, max: 600 }
+    laneWidth: { default: 210, min: 60, max: 800, step: 2, unit: "px", label: "Column width" },
+    rowGap: { default: 102, min: 20, max: 600, step: 2, unit: "px", label: "Row gap" },
+    nodeWidth: { default: 136, min: 40, max: 600, step: 2, unit: "px", label: "Node width" },
+    nodeHeight: { default: 54, min: 20, max: 400, step: 2, unit: "px", label: "Node height" },
+    routeGutter: { default: 132, min: 20, max: 600, step: 2, unit: "px", label: "Route gutter" },
+    marginY: { default: 104, min: 0, max: 600, step: 2, unit: "px", label: "Top margin" }
   },
   sequence: {
-    participantWidth: { default: 146, min: 40, max: 800 },
-    rowHeight: { default: 56, min: 16, max: 400 },
-    marginX: { default: 28, min: 0, max: 400 }
+    participantWidth: { default: 146, min: 40, max: 800, step: 2, unit: "px", label: "Participant column width" },
+    rowHeight: { default: 56, min: 16, max: 400, step: 2, unit: "px", label: "Message row height" },
+    marginX: { default: 28, min: 0, max: 400, step: 2, unit: "px", label: "Side margin" }
   },
   zoom: {
-    minFitZoom: { default: 0.15, min: 0.01, max: 1 },
-    maxFitZoom: { default: 1.6, min: 0.5, max: 8 }
+    minFitZoom: { default: 0.15, min: 0.01, max: 1, step: 0.01, unit: "×", label: "Minimum fit zoom" },
+    maxFitZoom: { default: 1.6, min: 0.5, max: 8, step: 0.1, unit: "×", label: "Maximum fit zoom" }
   },
   legibility: {
     // Fraction of a rendered arrowhead width (8px) used as the minimum gap at
     // which two parallel lines still read as two. 0.5 -> 4px, matching 1.6.0.
-    gapArrowheads: { default: 0.5, min: 0, max: 4 }
+    gapArrowheads: { default: 0.5, min: 0, max: 4, step: 0.05, unit: "arrowheads", label: "Parallel-line gap" }
   }
+};
+
+export const SECTION_LABELS = {
+  layout: "Layout & spacing",
+  sequence: "Sequence diagram",
+  zoom: "Fit zoom",
+  legibility: "Line legibility"
 };
 
 export function defaultDiagramConfig() {
@@ -116,4 +124,25 @@ export function resolveDiagramConfig(layers = []) {
     config.zoom = { ...defaultDiagramConfig().zoom };
   }
   return { config, warnings };
+}
+
+// Reduce a (full or partial) config to only the fields that differ from the
+// built-in defaults, dropping empty sections. Used when persisting from the UI
+// so a saved config.json carries just the user's real overrides — keeping the
+// precedence chain meaningful (an unset field still falls through to a lower
+// layer) and the file minimal. Returns {} when nothing differs.
+export function diffDiagramConfigFromDefaults(config) {
+  const overrides = {};
+  if (config == null || typeof config !== "object") return overrides;
+  for (const [section, fields] of Object.entries(DIAGRAM_CONFIG_FIELDS)) {
+    const provided = config[section];
+    if (provided == null || typeof provided !== "object") continue;
+    for (const [field, spec] of Object.entries(fields)) {
+      const value = provided[field];
+      if (typeof value === "number" && Number.isFinite(value) && value !== spec.default) {
+        (overrides[section] ??= {})[field] = value;
+      }
+    }
+  }
+  return overrides;
 }

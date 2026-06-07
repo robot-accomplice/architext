@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   DIAGRAM_CONFIG_FIELDS,
   defaultDiagramConfig,
+  diffDiagramConfigFromDefaults,
   normalizeDiagramConfigLayer,
   resolveDiagramConfig
 } from "../src/domain/diagram-config/diagram-config.mjs";
@@ -87,6 +88,17 @@ test("warnings from every layer are aggregated", () => {
     { raw: { layout: { laneWidth: "x" } }, source: "project" }
   ]);
   assert.equal(warnings.length, 2);
+});
+
+test("diffFromDefaults keeps only changed fields and drops empty sections", () => {
+  const full = defaultDiagramConfig();
+  full.layout.laneWidth = 300; // changed
+  const overrides = diffDiagramConfigFromDefaults(full);
+  assert.deepEqual(overrides, { layout: { laneWidth: 300 } });
+});
+
+test("diffFromDefaults of an all-default config is empty", () => {
+  assert.deepEqual(diffDiagramConfigFromDefaults(defaultDiagramConfig()), {});
 });
 
 test("an inverted fit-zoom window reverts the zoom section to defaults", () => {
