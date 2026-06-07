@@ -9,19 +9,35 @@ Use this skill to keep Architext's machine-readable architecture model current.
 Architext data is project-owned JSON, usually under `docs/architext/data/`.
 The local viewer is a projection of that data, not the source of truth.
 
+## Source Of Truth: Code, Not Docs
+
+Derive your understanding of the project's architecture from the **source code
+only**. Existing architecture documentation — prose READMEs, design docs,
+diagrams, comments, and even prior Architext claims — may be stale, aspirational,
+or wrong; never treat any of it as authoritative for what the system actually is.
+Read the code to determine real component responsibilities, flows, data movement,
+runtime dependencies, and trust boundaries. Existing documents are unverified
+hints at most: verify every claim against the code, and when code and a document
+disagree, **the code wins**.
+
+This governs your model of the *target project's* architecture. It does **not**
+override Architext's own usage policy — `LLM_ARCHITEXT.md`, the schema, and this
+skill still govern *how* you record what you find in code.
+
 ## Core Workflow
 
 1. Read the existing Architext data before editing it.
-2. Read source files and project docs before changing architecture claims.
+2. Derive architecture claims from the source code; do not import them from
+   existing prose documentation. Verify any doc-sourced hint against the code.
 3. Update architecture documentation before claiming implementation work is complete.
 4. Reuse existing IDs for existing concepts.
 5. Create nodes before referencing them from flows, views, risks, decisions, releases, or rules.
 6. Validate after every Architext data change.
 7. Do not claim Architext is current if validation failed or was skipped.
 
-Prefer source-backed claims. When extracting architecture from code, first draft
-proposed JSON changes with source paths and confidence notes. Do not replace
-validation with extracted claims.
+Architecture claims must be code-derived and source-backed. When extracting
+architecture from code, first draft proposed JSON changes with source paths and
+confidence notes. Do not replace validation with extracted claims.
 
 ## Files To Inspect
 
