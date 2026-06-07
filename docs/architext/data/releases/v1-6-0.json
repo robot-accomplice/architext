@@ -6,7 +6,7 @@
   "posture": "release-candidate",
   "summary": "Architext 1.6.0 rebuilds orthogonal edge routing around a single weighted-sum mount-cost objective, reduces and hops diagram crossings, coordinates reciprocal pairs, and derives mount spacing from the rendered arrowhead instead of magic numbers. A sanitized high-complexity corpus and a fitness ratchet lock the gains against regression. Also absorbs the audit-remediation and source/target-split work originally tracked as 1.5.1 (1.5.1 never shipped).",
   "targetDate": "2026-06-06",
-  "lastUpdated": "2026-06-06T19:25:00.000Z",
+  "lastUpdated": "2026-06-07T00:00:00.000Z",
   "updateSource": "1.6.0 routing-overhaul release (PR #81); absorbs the unshipped 1.5.1 scope",
   "scope": {
     "required": [
@@ -134,8 +134,8 @@
         "id": "remaining-audit-remediation",
         "title": "Remaining audit remediation",
         "kind": "bug-fix",
-        "status": "in-progress",
-        "summary": "Finish unresolved high, medium, and low audit findings from the superpowers remediation plan without regressing routing, lifecycle, validation, or release workflows.",
+        "status": "complete",
+        "summary": "Finish the HIGH correctness/robustness audit items: byte-snapshot rollback in rules-api, full plan cache key (planInputKey), serve-state delete only on parse/ENOENT, gate auto-update under --yes, centralize routeConstants, single guarded-selection wrapper, and de-flake the serve port-reuse race (serve-lifecycle 5/5 green). The remaining App god-component decomposition is a no-behavior-change refactor, split out as a deferred item.",
         "priority": "high",
         "source": "ad-hoc",
         "dateAdded": "2026-05-27T15:30:00.000Z",
@@ -212,6 +212,17 @@
         "dateAdded": "2026-05-27T16:30:00.000Z",
         "priority": "high",
         "dependsOn": []
+      },
+      {
+        "id": "app-component-decomposition",
+        "title": "Decompose the App god-component",
+        "kind": "chore",
+        "status": "deferred",
+        "summary": "Extract App (viewer/src/main.tsx) into useArchitextModel / useDiagramViewport / useNavigation hooks. Deferred from 1.6.0 because it is a structural refactor with NO behavior change (not a correctness or release blocker), the viewer source relocated since the audit plan was written (docs/architext/src -> viewer/src) so it needs re-scoping against the new layout, and there is no automated UI harness for App so it carries manual-verification risk best taken outside a release cut. Target 1.6.1.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-07T00:00:00.000Z",
+        "priority": "low",
+        "dependsOn": []
       }
     ],
     "outOfScope": []
@@ -287,10 +298,10 @@
       "id": "audit-hardening",
       "name": "Audit Hardening",
       "owner": "maintainer",
-      "status": "in-progress",
-      "posture": "on-track",
-      "summary": "Finish remaining audit-remediation items with focused tests and behavior-preserving refactors.",
-      "progress": 70,
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "HIGH correctness/robustness audit items closed; the App-decomposition refactor is deferred.",
+      "progress": 100,
       "itemIds": [
         "remaining-audit-remediation"
       ],

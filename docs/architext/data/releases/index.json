@@ -426,15 +426,15 @@
       "status": "implementing",
       "posture": "release-candidate",
       "targetDate": "2026-06-06",
-      "lastUpdated": "2026-06-06T19:25:00.000Z",
+      "lastUpdated": "2026-06-07T00:00:00.000Z",
       "summary": "Architext 1.6.0 rebuilds orthogonal edge routing around a single weighted-sum mount-cost objective, reduces and hops diagram crossings, coordinates reciprocal pairs, and derives mount spacing from the rendered arrowhead instead of magic numbers. A sanitized high-complexity corpus and a fitness ratchet lock the gains against regression. Also absorbs the audit-remediation and source/target-split work originally tracked as 1.5.1 (1.5.1 never shipped).",
       "counts": {
         "features": 7,
         "bugFixes": 2,
         "workstreams": 6,
         "blockers": 0,
-        "complete": 8,
-        "inProgress": 1,
+        "complete": 9,
+        "inProgress": 0,
         "planned": 0,
         "stretch": 0
       },
