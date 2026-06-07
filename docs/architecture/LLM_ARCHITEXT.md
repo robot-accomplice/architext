@@ -9,6 +9,16 @@ Architext JSON files are the machine-readable architecture source of truth for
 the project. They describe components, dataflows, deployment/runtime structure,
 data classification, risks, and architecture decisions.
 
+Derive what you record in those JSON files from the **source code only**.
+Existing architecture documentation — prose READMEs, design docs, diagrams,
+comments, and even prior Architext claims — may be stale, aspirational, or wrong;
+do not treat any of it as authoritative for what the system actually is. Read the
+code to determine real responsibilities, flows, data movement, dependencies, and
+trust boundaries. Treat existing documents as unverified hints at most, verify
+every claim against the code, and when code and a document disagree, the code
+wins. (This is about the architecture you record; this contract and the schema
+still govern how you record it.)
+
 `docs/architext/data/manifest.json` records the Architext data schema version.
 That version tracks the JSON data contract, not the installed CLI/package
 version. Additive schema changes may ship in minor releases; breaking schema
