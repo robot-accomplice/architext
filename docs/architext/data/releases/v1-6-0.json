@@ -223,6 +223,17 @@
         "dateAdded": "2026-06-07T00:00:00.000Z",
         "priority": "low",
         "dependsOn": []
+      },
+      {
+        "id": "crowded-face-surface-refinements",
+        "title": "Crowded-face surface-selection refinements",
+        "kind": "feature",
+        "status": "deferred",
+        "summary": "Two single-flow surface-selection niceties on faces carrying 5-6 edges, deferred because the diagrams are already clean (legible, zero crossings, zero sub-floor merges) and the fixes need distribution-pass surgery (re-spreading a crowded face so a moved pair lands >= the legibility floor from its neighbours) that carries regression risk to the 13 clean corpus flows — not worth taking inside a release cut. (1) skill-plugin-lifecycle: unify the use-skill/return pair onto unified-pipeline.south (line 7 currently mounts east); blocked by 6 edges on skill-plugin-system.west. (2) mail-operations: the config<->mail and operator<->mail pairs cross near mail-service, and the 9px approach legs (legible under the 4px standard) could spread further. Target 1.6.1.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-07T00:00:00.000Z",
+        "priority": "low",
+        "dependsOn": []
       }
     ],
     "outOfScope": []
