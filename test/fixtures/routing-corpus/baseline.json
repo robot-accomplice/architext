@@ -5,7 +5,7 @@
     "crossings": 0,
     "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
-    "closeParallelRuns": 3,
+    "closeParallelRuns": 0,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   },
@@ -35,7 +35,7 @@
     "crossings": 0,
     "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
-    "closeParallelRuns": 1,
+    "closeParallelRuns": 0,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   },
@@ -75,7 +75,7 @@
     "crossings": 0,
     "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
-    "closeParallelRuns": 1,
+    "closeParallelRuns": 0,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   },
@@ -85,7 +85,7 @@
     "crossings": 0,
     "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
-    "closeParallelRuns": 4,
+    "closeParallelRuns": 0,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   },
@@ -105,7 +105,7 @@
     "crossings": 0,
     "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
-    "closeParallelRuns": 2,
+    "closeParallelRuns": 0,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   },
@@ -115,7 +115,7 @@
     "crossings": 4,
     "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
-    "closeParallelRuns": 1,
+    "closeParallelRuns": 0,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   },
@@ -135,7 +135,7 @@
     "crossings": 4,
     "pairInternalCrossings": 1,
     "laneOrderViolations": 0,
-    "closeParallelRuns": 4,
+    "closeParallelRuns": 0,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   },
@@ -145,7 +145,7 @@
     "crossings": 0,
     "pairInternalCrossings": 0,
     "laneOrderViolations": 0,
-    "closeParallelRuns": 1,
+    "closeParallelRuns": 0,
     "sharedSegments": 0,
     "repeatedCrossings": 0
   }

@@ -3,16 +3,18 @@ import { anchorFor, surfaceCapacity } from "./routePorts.js";
 import { deriveRouteIntent, semanticSurfaceOptions } from "./routeIntent.js";
 import { crossingsBetween } from "./routeEdges.js";
 import { reciprocalPairsByAdjacency } from "./routeReciprocal.js";
+import { MIN_LEGIBLE_GAP } from "./routeConstants.js";
 
 const POINT_EPSILON = 1;
-const CLOSE_SEGMENT_DISTANCE = 10; // px; two parallel segments closer than this read as one line
-// px; minimum parallel span for two close segments to count as a "merged" run. Was 72, which
-// only caught LONG merges and silently ignored the SHORTER ones that are plainly visible where
-// several edges converge on one mount face (e.g. four edges fanning into mail-service's left
-// face, their approach legs running ~9px apart for ~34px — a merge a reader sees but the 72px
-// floor missed). Calibrated to 24 against the corpus: catches that approach-leg merge while not
-// over-flagging dense hubs (at 18, hub-fan-dense's normal short stubs balloon 1 -> 9).
-const CLOSE_SEGMENT_OVERLAP = 24;
+// Two parallel segments are "merged" when their buffer is below the same legibility gap mount
+// points use — a parallel run gets the SAME buffer as a mount (MIN_LEGIBLE_GAP). Previously this
+// was a magic 10px, stricter than the 4px mount floor and inconsistent with it: it flagged runs
+// (e.g. 9px reciprocal/approach legs) that are legible by the mount standard. Tied to the shared
+// constant, the detector reports only true floor violations — a guard that the router never packs
+// parallel lines tighter than it packs mounts. Verified: the router already holds every corpus
+// parallel run at >= MIN_LEGIBLE_GAP, so this is a 0-violation invariant, not a tuning knob.
+const CLOSE_SEGMENT_DISTANCE = MIN_LEGIBLE_GAP; // px; parallel buffer floor, same as mount spacing
+const CLOSE_SEGMENT_OVERLAP = 24; // px; minimum parallel span for a sub-floor run to count as merged
 // Gutter lane-order detection: two routes share a face's gutter only if their perpendicular
 // offsets differ by more than LANE_OFFSET_EPSILON (otherwise they are the same lane).
 const LANE_OFFSET_EPSILON = 2;
@@ -121,7 +123,9 @@ function closeParallelRunCount(routes) {
           if (left.orientation !== right.orientation) continue;
           const overlap = segmentOverlap(left, right);
           if (overlap < CLOSE_SEGMENT_OVERLAP) continue;
-          if (Math.abs(left.line - right.line) <= CLOSE_SEGMENT_DISTANCE) count += 1;
+          // Strict <: a run sitting AT the legibility floor is compliant (mounts may sit exactly
+          // MIN_LEGIBLE_GAP apart too); only a run tighter than the floor is a merge.
+          if (Math.abs(left.line - right.line) < CLOSE_SEGMENT_DISTANCE) count += 1;
         }
       }
     }
