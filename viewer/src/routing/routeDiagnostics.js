@@ -6,15 +6,16 @@ import { reciprocalPairsByAdjacency } from "./routeReciprocal.js";
 import { MIN_LEGIBLE_GAP } from "./routeConstants.js";
 
 const POINT_EPSILON = 1;
-// Two parallel segments are "merged" when their buffer is below the same legibility gap mount
-// points use — a parallel run gets the SAME buffer as a mount (MIN_LEGIBLE_GAP). Previously this
-// was a magic 10px, stricter than the 4px mount floor and inconsistent with it: it flagged runs
-// (e.g. 9px reciprocal/approach legs) that are legible by the mount standard. Tied to the shared
-// constant, the detector reports only true floor violations — a guard that the router never packs
-// parallel lines tighter than it packs mounts. Verified: the router already holds every corpus
-// parallel run at >= MIN_LEGIBLE_GAP, so this is a 0-violation invariant, not a tuning knob.
+// Two parallel segments are "merged" wherever they run closer than the same legibility gap mount
+// points use — a parallel run gets the SAME buffer as a mount (MIN_LEGIBLE_GAP). This is the
+// invariant: the space between two parallel lines, AT ANY POINT along their length, must be >=
+// the floor. So there is deliberately NO minimum-span threshold — a sub-floor stretch counts no
+// matter how short. A previous version required a 72px (then 24px) overlap, which silently missed
+// short parallelism that arises AFTER a 90-degree bend (two lines turn and briefly run alongside).
+// Any positive overlap below the floor is a violation; a single shared corner point (overlap 0) is
+// not, since it has no length. Verified: the router already holds every corpus run at >= the floor,
+// so this is a 0-violation guard, not a tuning knob.
 const CLOSE_SEGMENT_DISTANCE = MIN_LEGIBLE_GAP; // px; parallel buffer floor, same as mount spacing
-const CLOSE_SEGMENT_OVERLAP = 24; // px; minimum parallel span for a sub-floor run to count as merged
 // Gutter lane-order detection: two routes share a face's gutter only if their perpendicular
 // offsets differ by more than LANE_OFFSET_EPSILON (otherwise they are the same lane).
 const LANE_OFFSET_EPSILON = 2;
@@ -122,9 +123,10 @@ function closeParallelRunCount(routes) {
         for (const right of axisAlignedSegments(routeEntries[rightIndex][1])) {
           if (left.orientation !== right.orientation) continue;
           const overlap = segmentOverlap(left, right);
-          if (overlap < CLOSE_SEGMENT_OVERLAP) continue;
+          if (overlap <= 0) continue; // need a real parallel stretch, not a single shared corner point
           // Strict <: a run sitting AT the legibility floor is compliant (mounts may sit exactly
-          // MIN_LEGIBLE_GAP apart too); only a run tighter than the floor is a merge.
+          // MIN_LEGIBLE_GAP apart too); only a run tighter than the floor is a merge. No span gate —
+          // a sub-floor stretch counts at any length (e.g. a brief alignment after a 90-degree bend).
           if (Math.abs(left.line - right.line) < CLOSE_SEGMENT_DISTANCE) count += 1;
         }
       }
