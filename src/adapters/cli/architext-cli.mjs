@@ -24,6 +24,7 @@ import { withTargetWriteLock } from "./write-lock.mjs";
 import { createDataWatchHub } from "../http/data-watch-hub.mjs";
 import { approveReleasePlanRequest as approveReleasePlanApiRequest } from "../http/release-planning-api.mjs";
 import { updateRulesRequest as updateRulesApiRequest } from "../http/rules-api.mjs";
+import { loadDiagramConfig } from "../http/diagram-config-api.mjs";
 import { c4DrilldownIssues, c4IssuesForView, repairC4Views } from "../../domain/architecture-model/c4-quality.mjs";
 import { generatedReleaseIndex, releaseIndexGenerationChanges } from "../../domain/architecture-model/release-history.mjs";
 import { doctorRepairCategories, doctorRepairsForStatus } from "../../domain/lifecycle/doctor-repairs.mjs";
@@ -1361,6 +1362,15 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
 
       if (url.pathname === "/api/session" && request.method === "GET") {
         sendJson(response, 200, { mutationToken });
+        return;
+      }
+
+      if (url.pathname === "/api/config" && request.method === "GET") {
+        const { config, warnings } = await loadDiagramConfig(target);
+        if (warnings.length) {
+          console.warn(`[architext] diagram config:\n  ${warnings.join("\n  ")}`);
+        }
+        sendJson(response, 200, { diagram: config, warnings });
         return;
       }
 
