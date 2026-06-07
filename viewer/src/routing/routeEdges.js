@@ -1498,6 +1498,77 @@ function straightenSelfCrossingPairs(routeById, relationshipById, input) {
   }
 }
 
+// Companion to straightenSelfCrossingPairs for the case it cannot reach: a reciprocal pair
+// (A->B and B->A) that crosses itself while running as a same-side "U-bundle" — both ends on
+// the same side family (both top/bottom or both left/right) on nodes that DON'T overlap on the
+// run axis, so no straight run is valid and straightening bails. Such a pair is ordered
+// independently at its two mount points; when the two orders are not mirrored, one line's
+// return leg crosses the other's gutter run (the external-api delegate/result case: both ends
+// mount the bottom face ordered the same way, so the inner return crosses the outer request).
+// The fix is holistic ordering across the pair's two mounts: swap the pair's two mounts at the
+// end where doing so removes the crossing, mirroring that end against the other. Guarded
+// identically — reverted unless the crossings touching the pair strictly drop with no new node
+// collision or shared segment, so it can only help or no-op.
+function mirrorSelfCrossingBundles(routeById, relationshipById, input) {
+  const relationships = [...relationshipById.values()].filter((relationship) => relationship.relationshipType === "flow");
+  const crossingsTouching = (ids) => {
+    const idSet = new Set(ids);
+    const entries = [...routeById.entries()];
+    let total = 0;
+    for (let i = 0; i < entries.length; i += 1) {
+      for (let j = i + 1; j < entries.length; j += 1) {
+        if (!idSet.has(entries[i][0]) && !idSet.has(entries[j][0])) continue;
+        total += crossingsBetween(entries[i][1], entries[j][1]);
+      }
+    }
+    return total;
+  };
+  // Swap the along-face coordinate (terminal mount + its perpendicular stub) of two routes at
+  // a shared node end, so their order at that end flips.
+  const swapMount = (idA, aIsStart, idB, bIsStart, axis) => {
+    const ra = routeById.get(idA), rb = routeById.get(idB);
+    const pa = ra.points.map((point) => ({ ...point }));
+    const pb = rb.points.map((point) => ({ ...point }));
+    const aTerm = aIsStart ? 0 : pa.length - 1, aStub = aIsStart ? 1 : pa.length - 2;
+    const bTerm = bIsStart ? 0 : pb.length - 1, bStub = bIsStart ? 1 : pb.length - 2;
+    const ca = pa[aTerm][axis], cb = pb[bTerm][axis];
+    pa[aTerm][axis] = cb; if (pa[aStub]) pa[aStub][axis] = cb;
+    pb[bTerm][axis] = ca; if (pb[bStub]) pb[bStub][axis] = ca;
+    routeById.set(idA, routeWithPoints(ra, pa, ra.controls));
+    routeById.set(idB, routeWithPoints(rb, pb, rb.controls));
+  };
+  const vert = (side) => side === "top" || side === "bottom";
+  const horiz = (side) => side === "left" || side === "right";
+  for (const [idA, idB] of reciprocalPairsByAdjacency(relationships)) {
+    const routeA = routeById.get(idA);
+    const routeB = routeById.get(idB);
+    if (!routeA || !routeB || crossingsBetween(routeA, routeB) === 0) continue;
+    const relationship = relationshipById.get(idA);
+    const fromRect = input.nodeRects.get(relationship.from);
+    const toRect = input.nodeRects.get(relationship.to);
+    if (!fromRect || !toRect || fromRect.fixedPorts || toRect.fixedPorts) continue;
+    const fromSide = endpointSide(fromRect, routeA.points[0]);
+    const toSide = endpointSide(toRect, routeA.points.at(-1));
+    if (!((vert(fromSide) && vert(toSide)) || (horiz(fromSide) && horiz(toSide)))) continue;
+    const axis = vert(fromSide) ? "x" : "y";
+    // A (from->to) and B (to->from). At node `from`: A's start and B's end. At node `to`: A's
+    // end and B's start. Try the from-node swap, then the to-node swap; keep the first that helps.
+    for (const [aIsStart, bIsStart] of [[true, false], [false, true]]) {
+      const ids = [idA, idB];
+      const saved = ids.map((id) => [id, routeById.get(id)]);
+      const beforeCrossings = crossingsTouching(ids);
+      const beforeShared = sharedSegmentCountInvolving(routeById, ids);
+      swapMount(idA, aIsStart, idB, bIsStart, axis);
+      const collides = ids.some((id) => routeCollidesWithNonEndpoints(routeById.get(id), relationshipById.get(id), input));
+      if (collides || crossingsTouching(ids) >= beforeCrossings || sharedSegmentCountInvolving(routeById, ids) > beforeShared) {
+        for (const [id, route] of saved) routeById.set(id, route);
+        continue;
+      }
+      break; // kept an improving swap
+    }
+  }
+}
+
 function crossingsBetween(routeA, routeB) {
   const segmentsA = axisAlignedSegments(routeA);
   const segmentsB = axisAlignedSegments(routeB);
@@ -2200,6 +2271,9 @@ export function routeEdges(input) {
   if (style === "orthogonal") {
     onPhase("Straightening reciprocal pairs");
     straightenSelfCrossingPairs(relievedById, relationshipById, input);
+    // Same-side U-bundle pairs straighten can't reach (non-overlapping nodes, no straight run):
+    // mirror the mount order at one end so the pair nests instead of crossing itself.
+    mirrorSelfCrossingBundles(relievedById, relationshipById, input);
     // Gutter-lane order: push a lone farthest-target edge onto the outermost lane so it brackets
     // over its shorter siblings instead of slicing their stubs (model-inference record-route).
     orderGutterLanesByTarget(relievedById, relationshipById, input);
