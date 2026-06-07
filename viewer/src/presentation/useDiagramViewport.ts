@@ -7,6 +7,7 @@ import {
   writeRoutingStylePreference
 } from "../adapters/browserPreferences.js";
 import { measuredDiagramFitZoom } from "./diagramFit.js";
+import type { DiagramConfig } from "./diagramConfigContext.js";
 import type { DiagramTransform, RoutingStyle, ViewportSize } from "../domain/architectureTypes.js";
 
 function useElementSize<T extends HTMLElement>() {
@@ -30,11 +31,13 @@ function useElementSize<T extends HTMLElement>() {
 export function useDiagramViewport({
   localStorage,
   locationSearch,
-  windowObject = window
+  windowObject = window,
+  zoomConfig = null
 }: {
   localStorage: Storage;
   locationSearch: string;
   windowObject?: Window;
+  zoomConfig?: DiagramConfig["zoom"] | null;
 }) {
   const [navCollapsed, setNavCollapsed] = useState(() => readBooleanPreference(localStorage, "architext-left-collapsed"));
   const [rightCollapsed, setRightCollapsed] = useState(() => readBooleanPreference(localStorage, "architext-right-collapsed"));
@@ -84,7 +87,7 @@ export function useDiagramViewport({
   const fitDisplayedDiagram = () => {
     setDiagramTransform((value) => ({
       ...value,
-      zoom: measuredDiagramFitZoom(diagramViewportRef.current)
+      zoom: measuredDiagramFitZoom(diagramViewportRef.current, zoomConfig)
     }));
   };
 

@@ -20,7 +20,11 @@ export function calculateFitZoom({
   return Math.max(minZoom, Math.min(maxZoom, Number(fit.toFixed(2))));
 }
 
-export function measuredDiagramFitZoom(viewportElement) {
+/**
+ * @param {Element|null} [viewportElement]
+ * @param {{minFitZoom?:number,maxFitZoom?:number}|null} [zoomConfig]
+ */
+export function measuredDiagramFitZoom(viewportElement, zoomConfig = null) {
   const shell = viewportElement?.querySelector(".map-shell");
   const canvas = shell?.querySelector(".scaled-canvas-extent");
   // Fit the drawn CONTENT, not the full canvas (which carries outer margins and empty lanes);
@@ -29,6 +33,9 @@ export function measuredDiagramFitZoom(viewportElement) {
     viewportWidth: shell?.clientWidth,
     viewportHeight: shell?.clientHeight,
     canvasWidth: canvas?.dataset.contentWidth ?? canvas?.dataset.canvasWidth,
-    canvasHeight: canvas?.dataset.contentHeight ?? canvas?.dataset.canvasHeight
+    canvasHeight: canvas?.dataset.contentHeight ?? canvas?.dataset.canvasHeight,
+    // Omit when unset so calculateFitZoom keeps its MIN/MAX_FIT_ZOOM defaults.
+    ...(typeof zoomConfig?.minFitZoom === "number" ? { minZoom: zoomConfig.minFitZoom } : {}),
+    ...(typeof zoomConfig?.maxFitZoom === "number" ? { maxZoom: zoomConfig.maxFitZoom } : {})
   });
 }

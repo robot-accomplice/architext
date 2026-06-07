@@ -29,6 +29,8 @@ import { postRulesAction } from "./presentation/rulesClient.js";
 import { useUnsavedEditorGuard } from "./presentation/unsavedEditorGuard.js";
 import { useArchitextModel, type RecoveryResult } from "./presentation/useArchitextModel.js";
 import { useDiagramViewport } from "./presentation/useDiagramViewport.js";
+import { DiagramConfigContext, useDiagramConfig, type DiagramConfig } from "./presentation/diagramConfigContext.js";
+import { fetchDiagramConfig } from "./adapters/fetchDiagramConfig.js";
 import { pdfExportControlLabel, requestPdfExport } from "./presentation/pdfExportModel.js";
 import { StepRoute } from "./presentation/StepRoute.js";
 import { sequenceActivationSpans, sequenceStepMessageKind, stepRouteClassName } from "./presentation/stepRouteModel.js";
@@ -1085,6 +1087,17 @@ function App() {
   const [selectedRuleCategory, setSelectedRuleCategory] = useState("all");
   const [newRuleDraftRequest, setNewRuleDraftRequest] = useState<{ id: number; category: string } | null>(null);
   const [riskFilter, setRiskFilter] = useState("all");
+  // User-configurable diagram parameters, fetched once from architext serve.
+  // Null until loaded (and when served without the API, e.g. a static build);
+  // every consumer falls back to hardcoded defaults, so null is always safe.
+  const [diagramConfig, setDiagramConfig] = useState<DiagramConfig | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchDiagramConfig().then((config) => {
+      if (!cancelled) setDiagramConfig(config);
+    });
+    return () => { cancelled = true; };
+  }, []);
   const {
     debugRouting,
     diagramTransform,
@@ -1101,7 +1114,8 @@ function App() {
     setRoutingStyle
   } = useDiagramViewport({
     localStorage,
-    locationSearch: window.location.search
+    locationSearch: window.location.search,
+    zoomConfig: diagramConfig?.zoom ?? null
   });
   const editorStates = useMemo(() => [
     { id: "release-planning", label: "Release Planning", dirty: releasePlanningDirty },
@@ -1441,6 +1455,7 @@ function App() {
   };
 
   return (
+    <DiagramConfigContext.Provider value={diagramConfig}>
     <div className={`app ${navCollapsed ? "left-collapsed" : ""} ${rightCollapsed ? "right-collapsed" : ""} ${diagramTransform.focused ? "diagram-focused" : ""}`}>
       <header className="topbar">
         <div>
@@ -1722,6 +1737,7 @@ function App() {
         )}
       </aside>
     </div>
+    </DiagramConfigContext.Provider>
   );
 }
 
@@ -2085,6 +2101,7 @@ function SystemMap({
   onSelectRelationship: (relationship: Relationship) => void;
   onSelectNode: (id: Id) => void;
 }) {
+  const diagramConfig = useDiagramConfig();
   const visibleNodeIds = useMemo(() => new Set(view.lanes.flatMap((lane) => lane.nodeIds)), [view]);
   const flowNodeIds = useMemo(
     () => new Set(activeFlow ? activeFlow.steps.flatMap((step) => [step.from, step.to]) : Array.from(visibleNodeIds)),
@@ -2141,7 +2158,7 @@ function SystemMap({
     });
   }, [activeFlow, view]);
 
-  const layout = diagramLayoutFor(view, showStructuralConnections ? structuralRelationships.length : flowRelationships.length);
+  const layout = diagramLayoutFor(view, showStructuralConnections ? structuralRelationships.length : flowRelationships.length, diagramConfig?.layout);
   const {
     nodeWidth,
     nodeHeight,
@@ -2806,10 +2823,11 @@ function SequenceDiagram({
   onSelectRelationship: (relationship: Relationship) => void;
   onSelectStep: (stepId: Id) => void;
 }) {
+  const sequenceConfig = useDiagramConfig()?.sequence;
   const participantIds = Array.from(new Set(activeFlow.steps.flatMap((step) => [step.from, step.to])));
-  const participantWidth = 146;
-  const rowHeight = 56;
-  const marginX = 28;
+  const participantWidth = sequenceConfig?.participantWidth ?? 146;
+  const rowHeight = sequenceConfig?.rowHeight ?? 56;
+  const marginX = sequenceConfig?.marginX ?? 28;
   const headerY = 18;
   const messageStartY = 68;
   const width = marginX * 2 + participantIds.length * participantWidth;
