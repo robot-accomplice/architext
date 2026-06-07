@@ -5,8 +5,14 @@ import { crossingsBetween } from "./routeEdges.js";
 import { reciprocalPairsByAdjacency } from "./routeReciprocal.js";
 
 const POINT_EPSILON = 1;
-const CLOSE_SEGMENT_DISTANCE = 10;
-const CLOSE_SEGMENT_OVERLAP = 72;
+const CLOSE_SEGMENT_DISTANCE = 10; // px; two parallel segments closer than this read as one line
+// px; minimum parallel span for two close segments to count as a "merged" run. Was 72, which
+// only caught LONG merges and silently ignored the SHORTER ones that are plainly visible where
+// several edges converge on one mount face (e.g. four edges fanning into mail-service's left
+// face, their approach legs running ~9px apart for ~34px — a merge a reader sees but the 72px
+// floor missed). Calibrated to 24 against the corpus: catches that approach-leg merge while not
+// over-flagging dense hubs (at 18, hub-fan-dense's normal short stubs balloon 1 -> 9).
+const CLOSE_SEGMENT_OVERLAP = 24;
 // Gutter lane-order detection: two routes share a face's gutter only if their perpendicular
 // offsets differ by more than LANE_OFFSET_EPSILON (otherwise they are the same lane).
 const LANE_OFFSET_EPSILON = 2;

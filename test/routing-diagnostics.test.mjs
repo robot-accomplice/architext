@@ -237,11 +237,13 @@ test("viewer flow layout keeps dense request and return routes in readable chann
     diagnosticOptions: { closeParallelRunBudget: 0 }
   });
 
-  // The blocked request/return pair (request-model / model-response) is relieved onto a
-  // parallel north-gutter bridge (see below); after the post-relief re-spread and lane
-  // separation the two lanes read as fully distinct, so the diagram has no close-parallel
-  // runs at all.
-  assert.equal(plan.diagnostics.metrics.closeParallelRuns, 0);
+  // This dense flow has three SHORT merges where pipeline's context-column traffic packs at
+  // the mount-spacing floor (4-6px apart for 29-58px): resolve-session ∥ tool-evidence-returned,
+  // session-resolved ∥ persistence-confirmed, and retrieve-context ∥ execute-tools. The old
+  // CLOSE_SEGMENT_OVERLAP=72 floor hid every run under 72px, so this test asserted a FALSE 0;
+  // the threshold now catches those visible merges (see routeDiagnostics). Asserting the true
+  // count guards against ADDITIONAL merges while honestly recording the three this layout has.
+  assert.equal(plan.diagnostics.metrics.closeParallelRuns, 3);
   assertOrthogonalRouteSet(plan);
   assert.equal(plan.diagnostics.findings.filter((finding) => finding.code?.startsWith("non-facing")).length, 0);
   const receiveMessage = plan.diagnostics.routes.find((route) => route.relationshipId === "receive-message");
