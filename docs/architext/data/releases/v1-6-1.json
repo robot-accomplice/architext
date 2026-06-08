@@ -6,8 +6,8 @@
   "posture": "on-track",
   "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), folds in the App-component decomposition and crowded-face routing refinements deferred from 1.6.0, and includes minor UI cleanup.",
   "targetWindow": "After 1.6.0",
-  "lastUpdated": "2026-06-08T08:06:02.000Z",
-  "updateSource": "1.6.1: logged two routing-engine defects (decision-branch routing, dense-flow hang) to routing-polish from live-UI review; recorded diagram-config delivered scope + gap-knob deferral.",
+  "lastUpdated": "2026-06-08T10:07:27.000Z",
+  "updateSource": "1.6.1: decision-branch-routing fixed and verified in live UI; dense-flow hang still open in routing-polish.",
   "scope": {
     "required": [],
     "planned": [
@@ -111,8 +111,8 @@
         "id": "decision-branch-routing",
         "title": "Fix decision-diamond branch routing",
         "kind": "bug-fix",
-        "status": "planned",
-        "summary": "The viewer renders decision-diamond branches poorly, exposed by the first decision example in the corpus (feature-showcase). Evidence (rendered geometry): both outcome branches share one segment out of the diamond (485,199)->(772,199) instead of fanning, and each overshoots its target node by ~36px and doubles back (approved ->(772,145)->(736,145); rejected ->(772,224)->(736,224)) — a dogleg/stub of the class 1.6.0 eliminated for normal edges. Decision-branch routing was never exercised before because no diagram had a decision. Fan the branches from the diamond and remove the overshoot.",
+        "status": "complete",
+        "summary": "The viewer renders decision-diamond branches poorly, exposed by the first decision example in the corpus (feature-showcase). Evidence (rendered geometry): both outcome branches share one segment out of the diamond (485,199)->(772,199) instead of fanning, and each overshoots its target node by ~36px and doubles back (approved ->(772,145)->(736,145); rejected ->(772,224)->(736,224)) — a dogleg/stub of the class 1.6.0 eliminated for normal edges. Decision-branch routing was never exercised before because no diagram had a decision. Fan the branches from the diamond and remove the overshoot. FIXED (commit 3ddc153): root cause was preferredDecisionBranchEndSide returning the same side as the exit for forward-column branches, so the router mounted the targets far face and wrapped back. Now mounts the facing side; branches fan from distinct tips; node-facing point reserved (supports up to 3 outcomes); diamond reconnected to its node with a node-colour-matched connector. Verified in the live UI via DOM geometry (0 overshoot, 0 staircase) + unit tests.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-08T08:06:02.000Z",
         "workstreamId": "routing-polish",
