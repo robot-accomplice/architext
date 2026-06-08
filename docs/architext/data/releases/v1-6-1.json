@@ -6,8 +6,8 @@
   "posture": "on-track",
   "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), folds in the App-component decomposition and crowded-face routing refinements deferred from 1.6.0, and includes minor UI cleanup.",
   "targetWindow": "After 1.6.0",
-  "lastUpdated": "2026-06-07T15:05:54.000Z",
-  "updateSource": "1.6.1 kickoff: folded the two remaining 1.6.0 deferrals (App-component decomposition, crowded-face surface refinements) into scope and started diagram-parameter-user-config.",
+  "lastUpdated": "2026-06-08T08:06:02.000Z",
+  "updateSource": "1.6.1: logged two routing-engine defects (decision-branch routing, dense-flow hang) to routing-polish from live-UI review; recorded diagram-config delivered scope + gap-knob deferral.",
   "scope": {
     "required": [],
     "planned": [
@@ -64,7 +64,7 @@
         "title": "User-configurable diagram parameters",
         "kind": "feature",
         "status": "in-progress",
-        "summary": "Move hardcoded diagram parameters (e.g. minimum legible gap as an arrowhead fraction, spacing, column width) into user-adjustable configuration persisted under ~/.architext, so projects can tune layout without code changes.",
+        "summary": "Move hardcoded diagram parameters (e.g. minimum legible gap as an arrowhead fraction, spacing, column width) into user-adjustable configuration persisted under ~/.architext, so projects can tune layout without code changes. DELIVERED: layout (column width, row gap, node size, route gutter, top margin), sequence-diagram spacing, and fit-zoom bounds are user-configurable via ~/.architext/config.json + docs/architext/config.json and a live-preview settings panel (Save to project/user). DEFERRED: the legibility-gap arrowhead-fraction knob is split to routing-polish because applying it requires threading MIN_LEGIBLE_GAP_ARROWHEADS through the router (routing-engine work), not just view config; the config field is accepted/persisted but not yet applied.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-06T19:25:00.000Z",
         "workstreamId": "diagram-ergonomics",
@@ -105,6 +105,30 @@
         "dateAdded": "2026-06-07T00:00:00.000Z",
         "workstreamId": "viewer-refactor",
         "priority": "low",
+        "dependsOn": []
+      },
+      {
+        "id": "decision-branch-routing",
+        "title": "Fix decision-diamond branch routing",
+        "kind": "bug-fix",
+        "status": "planned",
+        "summary": "The viewer renders decision-diamond branches poorly, exposed by the first decision example in the corpus (feature-showcase). Evidence (rendered geometry): both outcome branches share one segment out of the diamond (485,199)->(772,199) instead of fanning, and each overshoots its target node by ~36px and doubles back (approved ->(772,145)->(736,145); rejected ->(772,224)->(736,224)) — a dogleg/stub of the class 1.6.0 eliminated for normal edges. Decision-branch routing was never exercised before because no diagram had a decision. Fan the branches from the diamond and remove the overshoot.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-08T08:06:02.000Z",
+        "workstreamId": "routing-polish",
+        "priority": "high",
+        "dependsOn": []
+      },
+      {
+        "id": "dense-flow-large-view-hang",
+        "title": "Router hangs on dense flow in a large/loose view",
+        "kind": "bug-fix",
+        "status": "planned",
+        "summary": "planDiagram infinite-loops (reproduced in Node, exit 124) when a dense flow is rendered in a large, loosely-fitting view — e.g. hub-fan-dense (18 steps, 8 reciprocal pairs) in the corpus view-1 (Agent Turn Flow). The fitness gate never catches it because computeCorpusMetrics plans each flow in its TIGHT view (renderedViewFor); the live viewer lands flows[0] in its first compatible authored view, which can be large. A hang is worse than a bad route. Add a hard bound / budget so routing always terminates.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-08T08:06:02.000Z",
+        "workstreamId": "routing-polish",
+        "priority": "high",
         "dependsOn": []
       }
     ],
@@ -176,7 +200,9 @@
       "summary": "Finish the crowded-face surface-selection niceties deferred from the 1.6.0 routing overhaul.",
       "progress": 0,
       "itemIds": [
-        "crowded-face-surface-refinements"
+        "crowded-face-surface-refinements",
+        "decision-branch-routing",
+        "dense-flow-large-view-hang"
       ],
       "evidence": []
     },
