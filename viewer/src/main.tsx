@@ -31,6 +31,9 @@ import { useArchitextModel, type RecoveryResult } from "./presentation/useArchit
 import { useDiagramViewport } from "./presentation/useDiagramViewport.js";
 import { DiagramConfigContext, useDiagramConfig, type DiagramConfig } from "./presentation/diagramConfigContext.js";
 import { fetchDiagramConfig } from "./adapters/fetchDiagramConfig.js";
+import { DiagramConfigPanel, type DiagramFieldsSpec, type DiagramSectionLabels } from "./presentation/DiagramConfigPanel.js";
+import { DIAGRAM_FIELD_SPEC, DIAGRAM_SECTION_LABELS } from "./presentation/diagramFieldSpec.js";
+import { postDiagramConfig } from "./presentation/diagramConfigClient.js";
 import { pdfExportControlLabel, requestPdfExport } from "./presentation/pdfExportModel.js";
 import { StepRoute } from "./presentation/StepRoute.js";
 import { sequenceActivationSpans, sequenceStepMessageKind, stepRouteClassName } from "./presentation/stepRouteModel.js";
@@ -1087,17 +1090,61 @@ function App() {
   const [selectedRuleCategory, setSelectedRuleCategory] = useState("all");
   const [newRuleDraftRequest, setNewRuleDraftRequest] = useState<{ id: number; category: string } | null>(null);
   const [riskFilter, setRiskFilter] = useState("all");
-  // User-configurable diagram parameters, fetched once from architext serve.
-  // Null until loaded (and when served without the API, e.g. a static build);
-  // every consumer falls back to hardcoded defaults, so null is always safe.
-  const [diagramConfig, setDiagramConfig] = useState<DiagramConfig | null>(null);
+  // User-configurable diagram parameters. configPayload holds the server response
+  // { diagram, fields, sections }; configDraft holds unsaved live-preview edits.
+  // The effective config (draft over saved) feeds both the diagram and the
+  // settings panel. Null until loaded / on static builds -> hardcoded defaults.
+  const [configPayload, setConfigPayload] = useState<{ diagram: DiagramConfig; fields: DiagramFieldsSpec; sections: DiagramSectionLabels } | null>(null);
+  const [configDraft, setConfigDraft] = useState<DiagramConfig | null>(null);
+  const [configPanelOpen, setConfigPanelOpen] = useState(false);
+  const [configBusy, setConfigBusy] = useState(false);
+  const [configMessage, setConfigMessage] = useState<string | null>(null);
   useEffect(() => {
     let cancelled = false;
-    fetchDiagramConfig().then((config) => {
-      if (!cancelled) setDiagramConfig(config);
+    fetchDiagramConfig().then((payload) => {
+      if (!cancelled) setConfigPayload(payload);
     });
     return () => { cancelled = true; };
   }, []);
+  const savedConfig = configPayload?.diagram ?? null;
+  const effectiveConfig = configDraft ?? savedConfig;
+
+  const updateConfigField = useCallback((section: string, field: string, next: number) => {
+    setConfigDraft((current) => {
+      const base = (current ?? savedConfig ?? {}) as Record<string, Record<string, number>>;
+      return { ...base, [section]: { ...base[section], [field]: next } } as DiagramConfig;
+    });
+  }, [savedConfig]);
+
+  const resetConfigToDefaults = useCallback(() => {
+    const fields = configPayload?.fields;
+    if (!fields) return;
+    const defaults: Record<string, Record<string, number>> = {};
+    for (const [section, sectionFields] of Object.entries(fields)) {
+      defaults[section] = Object.fromEntries(
+        Object.entries(sectionFields).map(([field, spec]) => [field, spec.default])
+      );
+    }
+    setConfigDraft(defaults as DiagramConfig);
+  }, [configPayload]);
+
+  const revertConfig = useCallback(() => setConfigDraft(null), []);
+
+  const saveConfig = useCallback(async (scope: "project" | "user") => {
+    if (!effectiveConfig) return;
+    setConfigBusy(true);
+    setConfigMessage(null);
+    try {
+      const result = await postDiagramConfig(mutationFetch, { scope, diagram: effectiveConfig });
+      setConfigPayload((prev) => (prev ? { ...prev, diagram: result.diagram as DiagramConfig } : prev));
+      setConfigDraft(null);
+      setConfigMessage(scope === "user" ? "Saved to ~/.architext/config.json." : "Saved to docs/architext/config.json.");
+    } catch (error) {
+      setConfigMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setConfigBusy(false);
+    }
+  }, [effectiveConfig]);
   const {
     debugRouting,
     diagramTransform,
@@ -1115,7 +1162,7 @@ function App() {
   } = useDiagramViewport({
     localStorage,
     locationSearch: window.location.search,
-    zoomConfig: diagramConfig?.zoom ?? null
+    zoomConfig: effectiveConfig?.zoom ?? null
   });
   const editorStates = useMemo(() => [
     { id: "release-planning", label: "Release Planning", dirty: releasePlanningDirty },
@@ -1455,7 +1502,7 @@ function App() {
   };
 
   return (
-    <DiagramConfigContext.Provider value={diagramConfig}>
+    <DiagramConfigContext.Provider value={effectiveConfig}>
     <div className={`app ${navCollapsed ? "left-collapsed" : ""} ${rightCollapsed ? "right-collapsed" : ""} ${diagramTransform.focused ? "diagram-focused" : ""}`}>
       <header className="topbar">
         <div>
@@ -1605,6 +1652,7 @@ function App() {
                 onReset={() => setDiagramTransform((value) => ({ ...value, zoom: 1 }))}
                 onToggleFocus={toggleDiagramFocus}
                 onExportPdf={exportActiveViewPdf}
+                onOpenSettings={() => setConfigPanelOpen(true)}
               />
               <details className="legend">
                 <summary>Legend</summary>
@@ -1736,6 +1784,21 @@ function App() {
           />
         )}
       </aside>
+      {configPanelOpen ? (
+        <DiagramConfigPanel
+          fields={configPayload?.fields ?? DIAGRAM_FIELD_SPEC}
+          sections={configPayload?.sections ?? DIAGRAM_SECTION_LABELS}
+          value={effectiveConfig ?? {}}
+          saved={savedConfig ?? {}}
+          busy={configBusy}
+          message={configMessage}
+          onChange={updateConfigField}
+          onSave={saveConfig}
+          onRevert={revertConfig}
+          onResetDefaults={resetConfigToDefaults}
+          onClose={() => setConfigPanelOpen(false)}
+        />
+      ) : null}
     </div>
     </DiagramConfigContext.Provider>
   );
@@ -2035,7 +2098,8 @@ function DiagramControls({
   onFit,
   onReset,
   onToggleFocus,
-  onExportPdf
+  onExportPdf,
+  onOpenSettings
 }: {
   transform: DiagramTransform;
   routingStyle: RoutingStyle;
@@ -2046,6 +2110,7 @@ function DiagramControls({
   onReset: () => void;
   onToggleFocus: () => void;
   onExportPdf: () => void;
+  onOpenSettings: () => void;
 }) {
   return (
     <div className="diagram-controls" aria-label="Diagram controls">
@@ -2067,6 +2132,15 @@ function DiagramControls({
       <button type="button" onClick={onFit}>Fit</button>
       <button type="button" onClick={onReset}>Reset</button>
       <button type="button" onClick={onToggleFocus}>{transform.focused ? "Exit focus" : "Focus"}</button>
+      <button
+        type="button"
+        className="diagram-settings-button"
+        onClick={onOpenSettings}
+        title="Diagram spacing & layout settings"
+        aria-label="Open diagram settings"
+      >
+        <span aria-hidden="true">⚙</span> Spacing
+      </button>
       <button type="button" onClick={onExportPdf}>{pdfExportControlLabel}</button>
     </div>
   );

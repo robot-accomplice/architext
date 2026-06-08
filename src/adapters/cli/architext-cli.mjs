@@ -1371,6 +1371,9 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
         if (payload.warnings.length) {
           console.warn(`[architext] diagram config:\n  ${payload.warnings.join("\n  ")}`);
         }
+        // Never cache: a stale payload (e.g. from before the field spec shipped)
+        // would leave the settings panel without controls.
+        response.setHeader("Cache-Control", "no-store");
         sendJson(response, 200, payload);
         return;
       }
