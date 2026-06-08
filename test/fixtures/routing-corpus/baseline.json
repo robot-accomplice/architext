@@ -148,5 +148,15 @@
     "closeParallelRuns": 0,
     "sharedSegments": 0,
     "repeatedCrossings": 0
+  },
+  "feature-showcase": {
+    "routes": 8,
+    "bends": 6,
+    "crossings": 0,
+    "pairInternalCrossings": 0,
+    "laneOrderViolations": 0,
+    "closeParallelRuns": 0,
+    "sharedSegments": 0,
+    "repeatedCrossings": 0
   }
 }

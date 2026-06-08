@@ -119,6 +119,46 @@
           "kind": "return",
           "returnOf": "s077"
         }
+      ],
+      "sequenceFrames": [
+        {
+          "id": "hfd-frame-retry",
+          "type": "retry",
+          "label": "Retry tool call",
+          "stepIds": [
+            "s088",
+            "s018"
+          ]
+        },
+        {
+          "id": "hfd-frame-optional",
+          "type": "optional",
+          "label": "If cache miss",
+          "stepIds": [
+            "s035",
+            "s116"
+          ]
+        },
+        {
+          "id": "hfd-frame-loop",
+          "type": "loop",
+          "label": "For each gate",
+          "stepIds": [
+            "s084",
+            "s058"
+          ]
+        },
+        {
+          "id": "hfd-frame-tx",
+          "type": "transaction",
+          "label": "Persist and confirm",
+          "stepIds": [
+            "s085",
+            "s104",
+            "s064",
+            "s066"
+          ]
+        }
       ]
     },
     {
@@ -728,6 +768,59 @@
           "to": "n51",
           "kind": "return",
           "returnOf": "s071"
+        }
+      ]
+    },
+    {
+      "id": "feature-showcase",
+      "steps": [
+        {
+          "id": "sc-start",
+          "from": "n90",
+          "to": "n91",
+          "kind": "start"
+        },
+        {
+          "id": "sc-decide",
+          "from": "n91",
+          "to": "n92",
+          "kind": "decision"
+        },
+        {
+          "id": "sc-approved",
+          "from": "n92",
+          "to": "n93",
+          "outcome": "approved"
+        },
+        {
+          "id": "sc-rejected",
+          "from": "n92",
+          "to": "n94",
+          "outcome": "rejected"
+        },
+        {
+          "id": "sc-async",
+          "from": "n93",
+          "to": "n95",
+          "kind": "async"
+        },
+        {
+          "id": "sc-persist",
+          "from": "n95",
+          "to": "n96",
+          "kind": "persistence"
+        },
+        {
+          "id": "sc-artifact",
+          "from": "n93",
+          "to": "n96",
+          "kind": "artifact"
+        },
+        {
+          "id": "sc-stop",
+          "from": "n94",
+          "to": "n96",
+          "kind": "stop"
         }
       ]
     }
