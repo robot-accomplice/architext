@@ -53,8 +53,8 @@ export function DiagramConfigPanel({
   return (
     <aside className="diagram-config-panel" aria-label="Diagram settings">
       <header className="diagram-config-header">
-        <h3>Diagram settings</h3>
-        <button type="button" className="quiet-action" onClick={onClose} aria-label="Close diagram settings">×</button>
+        <h3>Diagram configuration</h3>
+        <button type="button" className="quiet-action" onClick={onClose} aria-label="Close diagram configuration">×</button>
       </header>
 
       <div className="diagram-config-body">

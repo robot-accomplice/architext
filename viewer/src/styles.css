@@ -2399,11 +2399,21 @@ select:disabled {
 }
 
 .decision-node-connector {
-  stroke: var(--orange);
+  stroke: var(--purple);
   stroke-width: 1.5;
   stroke-linecap: round;
   pointer-events: none;
 }
+
+/* Match the connection line to its affiliated node's colour (mirrors .node-card). */
+.decision-node-connector.actor { stroke: var(--pink); }
+.decision-node-connector.software-system { stroke: var(--cyan); }
+.decision-node-connector.client { stroke: var(--blue); }
+.decision-node-connector.service,
+.decision-node-connector.worker { stroke: var(--purple); }
+.decision-node-connector.queue { stroke: var(--orange); }
+.decision-node-connector.data-store { stroke: var(--green); }
+.decision-node-connector.external-service { stroke: var(--muted); }
 
 .decision-node-connector.selected {
   stroke: var(--flow-selected);
@@ -3827,16 +3837,23 @@ select:disabled {
   z-index: var(--z-modal);
 }
 
-/* Diagram settings launch button — accented so it reads as a settings entry */
-.diagram-settings-button {
-  border-color: color-mix(in srgb, var(--cyan) 70%, var(--line));
+/* Top-level Config entry — a cross-concern action beside the mode tabs */
+.topbar-config-button {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  border: 1px solid color-mix(in srgb, var(--cyan) 70%, var(--line));
+  border-radius: 6px;
   color: var(--cyan);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 12px;
   font-weight: 700;
+  letter-spacing: 0.05em;
   white-space: nowrap;
 }
 
-.diagram-settings-button:hover,
-.diagram-settings-button:focus {
+.topbar-config-button:hover,
+.topbar-config-button:focus {
   border-color: var(--cyan);
   background: color-mix(in srgb, var(--cyan) 14%, var(--panel-2));
 }

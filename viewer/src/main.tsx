@@ -33,6 +33,7 @@ import { DiagramConfigContext, useDiagramConfig, type DiagramConfig } from "./pr
 import { fetchDiagramConfig } from "./adapters/fetchDiagramConfig.js";
 import { DiagramConfigPanel, type DiagramFieldsSpec, type DiagramSectionLabels } from "./presentation/DiagramConfigPanel.js";
 import { DIAGRAM_FIELD_SPEC, DIAGRAM_SECTION_LABELS } from "./presentation/diagramFieldSpec.js";
+import { nodeLanePosition, preferredDecisionBranchSide, preferredDecisionBranchEndSide } from "./presentation/decisionBranchModel.js";
 import { postDiagramConfig } from "./presentation/diagramConfigClient.js";
 import { pdfExportControlLabel, requestPdfExport } from "./presentation/pdfExportModel.js";
 import { StepRoute } from "./presentation/StepRoute.js";
@@ -175,6 +176,10 @@ function decisionRouteRect(rect: { x: number; y: number; width: number; height: 
   };
 }
 
+// Connector from the affiliated node down to the diamond's node-facing (top) tip.
+// The diamond sits below its node, so the TOP point is the node side; branches
+// only ever use the other three tips (left/right/bottom), so they never collide
+// with this connection.
 function decisionConnectorRoute(decisionNode: { componentId: Id; rect: { x: number; y: number; width: number; height: number } }, componentRect: { x: number; y: number; width: number; height: number }) {
   const x = componentRect.x + componentRect.width / 2;
   const decisionTop = decisionTip(decisionNode.rect, "top");
@@ -186,42 +191,6 @@ function decisionConnectorRoute(decisionNode: { componentId: Id; rect: { x: numb
   };
 }
 
-function nodeLanePosition(view: View, nodeId: Id) {
-  for (let laneIndex = 0; laneIndex < view.lanes.length; laneIndex += 1) {
-    const rowIndex = view.lanes[laneIndex].nodeIds.indexOf(nodeId);
-    if (rowIndex >= 0) return { laneIndex, rowIndex };
-  }
-  return null;
-}
-
-function preferredDecisionBranchSide(view: View, decisionNode: { laneIndex: number; rowIndex: number }, targetNodeId: Id): RouteSide {
-  const target = nodeLanePosition(view, targetNodeId);
-  if (!target) return "right";
-  const deltaLane = target.laneIndex - decisionNode.laneIndex;
-  const deltaRow = target.rowIndex - decisionNode.rowIndex;
-  if (deltaLane !== 0) return deltaLane < 0 ? "left" : "right";
-  if (deltaRow < 0) return "left";
-  if (deltaRow > 0) return "bottom";
-  if (deltaLane !== 0) return deltaLane < 0 ? "left" : "right";
-  return "right";
-}
-
-function oppositeSide(side: RouteSide): RouteSide {
-  if (side === "left") return "right";
-  if (side === "right") return "left";
-  if (side === "top") return "bottom";
-  return "top";
-}
-
-function preferredDecisionBranchEndSide(view: View, decisionNode: { laneIndex: number; rowIndex: number }, targetNodeId: Id, startSide: RouteSide): RouteSide {
-  const target = nodeLanePosition(view, targetNodeId);
-  if (target && target.laneIndex === decisionNode.laneIndex) {
-    if (target.rowIndex < decisionNode.rowIndex) return "left";
-    if (target.rowIndex > decisionNode.rowIndex) return "top";
-  }
-  if (startSide === "right") return "right";
-  return oppositeSide(startSide);
-}
 
 function byId<T extends { id: Id }>(items: T[]): Map<Id, T> {
   return new Map(items.map((item) => [item.id, item]));
@@ -1527,6 +1496,15 @@ function App() {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            className="topbar-config-button"
+            onClick={() => setConfigPanelOpen(true)}
+            title="Configure diagram spacing, layout, and zoom"
+            aria-label="Open diagram configuration"
+          >
+            <span aria-hidden="true">⚙</span> Config
+          </button>
         </div>
       </header>
       {dataNotice && !dataIssue ? (
@@ -1652,7 +1630,6 @@ function App() {
                 onReset={() => setDiagramTransform((value) => ({ ...value, zoom: 1 }))}
                 onToggleFocus={toggleDiagramFocus}
                 onExportPdf={exportActiveViewPdf}
-                onOpenSettings={() => setConfigPanelOpen(true)}
               />
               <details className="legend">
                 <summary>Legend</summary>
@@ -2098,8 +2075,7 @@ function DiagramControls({
   onFit,
   onReset,
   onToggleFocus,
-  onExportPdf,
-  onOpenSettings
+  onExportPdf
 }: {
   transform: DiagramTransform;
   routingStyle: RoutingStyle;
@@ -2110,7 +2086,6 @@ function DiagramControls({
   onReset: () => void;
   onToggleFocus: () => void;
   onExportPdf: () => void;
-  onOpenSettings: () => void;
 }) {
   return (
     <div className="diagram-controls" aria-label="Diagram controls">
@@ -2132,15 +2107,6 @@ function DiagramControls({
       <button type="button" onClick={onFit}>Fit</button>
       <button type="button" onClick={onReset}>Reset</button>
       <button type="button" onClick={onToggleFocus}>{transform.focused ? "Exit focus" : "Focus"}</button>
-      <button
-        type="button"
-        className="diagram-settings-button"
-        onClick={onOpenSettings}
-        title="Diagram spacing & layout settings"
-        aria-label="Open diagram settings"
-      >
-        <span aria-hidden="true">⚙</span> Spacing
-      </button>
       <button type="button" onClick={onExportPdf}>{pdfExportControlLabel}</button>
     </div>
   );
@@ -2420,10 +2386,11 @@ function SystemMap({
             if (!componentRect) return null;
             const connector = decisionConnectorRoute(decisionNode, componentRect);
             const isSelected = selectedStepDisplayIndex === decisionNode.displayIndex;
+            const connectorNodeType = nodesById.get(decisionNode.componentId)?.type ?? "";
             return (
               <line
                 key={`${decisionNode.id}:connector`}
-                className={isSelected ? "decision-node-connector selected" : "decision-node-connector"}
+                className={`decision-node-connector ${connectorNodeType}${isSelected ? " selected" : ""}`}
                 x1={connector.points[0].x}
                 y1={connector.points[0].y}
                 x2={connector.points[1].x}
