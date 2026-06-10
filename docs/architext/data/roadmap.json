@@ -309,7 +309,7 @@
       "title": "Repository blast-radius search",
       "summary": "Provide search for filenames, components, or known code concepts so users can see where a concern reaches across repository files and architecture elements.",
       "kind": "feature",
-      "status": "planned",
+      "status": "complete",
       "priority": "high",
       "section": "Repository Intelligence",
       "targetReleaseId": "v1-6-1",
