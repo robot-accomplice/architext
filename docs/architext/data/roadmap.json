@@ -340,12 +340,13 @@
     {
       "id": "go-rewrite-cli-backend",
       "title": "Rewrite the CLI and backend in Go (remove Node from the product)",
-      "summary": "Reimplement the architext CLI, schema/reference validator, local serve HTTP server, and lifecycle commands (sync, doctor, migrate, status) in Go, shipped as a single self-contained static binary that embeds the prebuilt viewer assets (go:embed). The driver is eliminating Node and its largely unvettable npm dependency/supply-chain surface from the end product: users would install one signed binary with no Node runtime and no transitive npm packages at runtime. Scope keeps the existing React viewer as-is (served from the embedded build); this is a major version (2.0) effort that must preserve the JSON data contract and exact validation parity (port the ajv schemas + reference checks, with a conformance corpus proving identical accept/reject behavior across the Node and Go validators). Residual to note honestly: building the viewer still uses npm/Vite at build time, so this removes Node from what ships and runs, not from the dev/build toolchain; a later full-viewer rewrite would be a separate, larger initiative. Sequencing: schedule after the 1.6.x feature/design work lands and the data contract is stable, since a contract change mid-port doubles the work.",
+      "summary": "Reimplement the architext CLI, schema/reference validator, local serve HTTP server, and lifecycle commands (sync, doctor, migrate, status) in Go, shipped as a single self-contained static binary that embeds the prebuilt viewer assets (go:embed). The driver is eliminating Node and its largely unvettable npm dependency/supply-chain surface from the end product: users would install one signed binary with no Node runtime and no transitive npm packages at runtime. Scope keeps the existing React viewer as-is (served from the embedded build); targeted at 1.7.0 — a minor release is defensible because the JSON data contract and CLI surface are preserved exactly (only the implementation language and distribution change); it must preserve the JSON data contract and exact validation parity (port the ajv schemas + reference checks, with a conformance corpus proving identical accept/reject behavior across the Node and Go validators). Residual to note honestly: building the viewer still uses npm/Vite at build time, so this removes Node from what ships and runs, not from the dev/build toolchain; a later full-viewer rewrite would be a separate, larger initiative. Sequencing: schedule after the 1.6.x feature/design work lands and the data contract is stable, since a contract change mid-port doubles the work.",
       "kind": "architecture",
       "status": "planned",
       "priority": "high",
       "section": "Go Rewrite",
-      "dateAdded": "2026-06-10T00:00:00.000Z"
+      "dateAdded": "2026-06-10T00:00:00.000Z",
+      "targetReleaseId": "v1-7-0"
     },
     {
       "id": "design-language-consolidation",
