@@ -3488,10 +3488,18 @@ select:disabled {
 
 .note-item {
   border: 1px solid var(--line);
+  border-left: 3px solid var(--note-accent, var(--line));
   border-radius: 6px;
   padding: 8px 10px;
   background: color-mix(in srgb, var(--panel-2) 60%, transparent);
 }
+
+/* Category-colored left rail, same accent language as the rest of the app, so
+   mitigation/caveat/todo/note read at a glance — not just from the small badge. */
+.note-item.cat-mitigation { --note-accent: var(--green, #35ff96); }
+.note-item.cat-caveat { --note-accent: var(--orange, #ff9f1a); }
+.note-item.cat-todo { --note-accent: var(--yellow, #fed639); }
+.note-item.cat-note { --note-accent: var(--blue, #5aa0ff); }
 
 .note-meta {
   display: flex;
@@ -3523,6 +3531,15 @@ select:disabled {
   margin-left: auto;
   display: inline-flex;
   gap: 6px;
+  /* De-emphasize edit/delete in a read-mostly list; bring them forward on
+     hover/focus. Dimmed (not hidden) so they stay discoverable on touch. */
+  opacity: 0.4;
+  transition: opacity 0.12s;
+}
+
+.note-item:hover .note-actions,
+.note-item:focus-within .note-actions {
+  opacity: 1;
 }
 
 .note-body {

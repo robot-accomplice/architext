@@ -81,7 +81,7 @@ export function NotesSection({ targetKind, targetId, notes, onSave, onDelete }: 
 
       <ul className="notes-list">
         {mine.map((note) => (
-          <li key={note.id} className="note-item">
+          <li key={note.id} className={`note-item cat-${note.category}`}>
             {draft?.id === note.id ? (
               <NoteEditor draft={draft} setDraft={setDraft} onSave={save} onCancel={cancel} busy={busy} />
             ) : (
