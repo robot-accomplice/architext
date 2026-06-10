@@ -350,9 +350,9 @@
     {
       "id": "design-language-consolidation",
       "title": "Consolidate viewer modes onto the shared design language",
-      "summary": "Migrate every mode (detail panel, left nav, diagram toolbar, steps, rules, release truth, repo tree, blast radius, notes) onto the shared .overline and .accent-surface primitives and the --c4-* type-color source defined in viewer/DESIGN.md. Fix the C4_COLOR worker mismatch (yellow in diagram tokens vs purple in repoTreeColors.js), converge the three accent-rail variable names, and unify chips/count pills. Run as one consolidation after the 1.6.1 feature PRs merge so it is coherent and visually verifiable rather than split across branches.",
+      "summary": "Consolidate the viewer modes onto the shared design language in viewer/DESIGN.md. DELIVERED: (1) component-type color is now single-sourced from the --c4-* tokens in C4_COLOR (repoTreeColors.js), fixing the worker mismatch (was purple in the views vs yellow in the diagram) and adding --c4-system/--c4-queue tokens + matching .c4-node classes so diagram and views agree for every type; (2) the colored left rail is one custom property --accent across detail/notes/blast (was three names --section-accent/--card-accent/--note-accent); (3) section-label tracking converged onto var(--overline-tracking) for the drifting headers (repo-tree col header, blast section titles, diagram-config headers, kanban headers). DEFERRED (low value / high churn): rewriting each mode's existing markup to use the literal .overline / .accent-surface utility classes (the tokens already give the shared treatment without the churn) and a full chip/count-pill component unification (cosmetically consistent already); revisit only if a future mode needs them. Verified live on the corpus: worker rgb(255,210,31), section-label tracking 0.08em, all accent rails render; 392/392 tests, validate clean.",
       "kind": "chore",
-      "status": "planned",
+      "status": "complete",
       "priority": "medium",
       "section": "Design System",
       "dateAdded": "2026-06-10T00:00:00.000Z"

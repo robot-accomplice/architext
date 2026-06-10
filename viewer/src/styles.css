@@ -27,6 +27,8 @@
   --c4-external: #b9cacb;
   --c4-deployment: #ff9f1a;
   --c4-module: #35ff96;
+  --c4-system: #00e5ff;
+  --c4-queue: #ff9f1a;
   --shadow: none;
   --z-canvas-overlay: 20;
   --z-header-overlay: 40;
@@ -1719,7 +1721,7 @@ select:disabled {
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--overline-tracking);
   text-transform: uppercase;
 }
 
@@ -2921,6 +2923,18 @@ select:disabled {
   background: linear-gradient(90deg, rgba(109, 227, 147, 0.14), rgba(30, 32, 35, 0.96) 62%);
 }
 
+.c4-node.software-system {
+  border-color: rgba(0, 219, 233, 0.5);
+  border-left-color: var(--c4-system);
+  background: linear-gradient(90deg, rgba(0, 219, 233, 0.16), rgba(30, 32, 35, 0.96) 62%);
+}
+
+.c4-node.queue {
+  border-color: rgba(246, 169, 77, 0.5);
+  border-left-color: var(--c4-queue);
+  background: linear-gradient(90deg, rgba(246, 169, 77, 0.16), rgba(30, 32, 35, 0.96) 62%);
+}
+
 .c4-node small {
   display: -webkit-box;
   overflow: hidden;
@@ -3296,11 +3310,11 @@ select:disabled {
 
 .detail-index a {
   flex: 0 1 auto;
-  --section-accent: var(--blue);
+  --accent: var(--blue);
   padding: 3px 6px;
-  border: 1px solid color-mix(in srgb, var(--section-accent) 35%, var(--line));
-  color: color-mix(in srgb, var(--section-accent) 70%, var(--muted));
-  background: color-mix(in srgb, var(--section-accent) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
+  color: color-mix(in srgb, var(--accent) 70%, var(--muted));
+  background: color-mix(in srgb, var(--accent) 5%, transparent);
   font-family: var(--font-mono);
   font-size: 11px;
   text-decoration: none;
@@ -3309,44 +3323,44 @@ select:disabled {
 .detail-index a:hover,
 .detail-index a:focus {
   color: var(--ink);
-  border-color: var(--section-accent, var(--blue));
-  background: color-mix(in srgb, var(--section-accent, var(--blue)) 12%, transparent);
+  border-color: var(--accent, var(--blue));
+  background: color-mix(in srgb, var(--accent, var(--blue)) 12%, transparent);
 }
 
 .detail-index a[href="#summary"] {
-  --section-accent: var(--blue);
+  --accent: var(--blue);
 }
 
 .detail-index a[href="#runtime"] {
-  --section-accent: var(--green);
+  --accent: var(--green);
 }
 
 .detail-index a[href="#interfaces"] {
-  --section-accent: var(--cyan);
+  --accent: var(--cyan);
 }
 
 .detail-index a[href="#data"] {
-  --section-accent: var(--purple);
+  --accent: var(--purple);
 }
 
 .detail-index a[href="#security"] {
-  --section-accent: var(--yellow);
+  --accent: var(--yellow);
 }
 
 .detail-index a[href="#observability"] {
-  --section-accent: #7df4ff;
+  --accent: #7df4ff;
 }
 
 .detail-index a[href="#risks"] {
-  --section-accent: var(--red);
+  --accent: var(--red);
 }
 
 .detail-index a[href="#decisions"] {
-  --section-accent: #b9cacb;
+  --accent: #b9cacb;
 }
 
 .detail-index a[href="#verification"] {
-  --section-accent: var(--green);
+  --accent: var(--green);
 }
 
 .badge {
@@ -3439,16 +3453,16 @@ select:disabled {
 }
 
 .detail-section {
-  --section-accent: var(--line-strong);
+  --accent: var(--line-strong);
   position: relative;
   padding: 10px 0 10px 10px;
   border-top: 1px solid var(--line);
-  border-left: 2px solid color-mix(in srgb, var(--section-accent) 60%, transparent);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--section-accent) 7%, transparent), transparent 42%);
+  border-left: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 7%, transparent), transparent 42%);
 }
 
 /* Element notes editor (DetailPanel) */
-.notes-section { --section-accent: var(--cyan); }
+.notes-section { --accent: var(--cyan); }
 
 .notes-head {
   display: flex;
@@ -3488,7 +3502,7 @@ select:disabled {
 
 .note-item {
   border: 1px solid var(--line);
-  border-left: 3px solid var(--note-accent, var(--line));
+  border-left: 3px solid var(--accent, var(--line));
   border-radius: 6px;
   padding: 8px 10px;
   background: color-mix(in srgb, var(--panel-2) 60%, transparent);
@@ -3496,10 +3510,10 @@ select:disabled {
 
 /* Category-colored left rail, same accent language as the rest of the app, so
    mitigation/caveat/todo/note read at a glance — not just from the small badge. */
-.note-item.cat-mitigation { --note-accent: var(--green, #35ff96); }
-.note-item.cat-caveat { --note-accent: var(--orange, #ff9f1a); }
-.note-item.cat-todo { --note-accent: var(--yellow, #fed639); }
-.note-item.cat-note { --note-accent: var(--blue, #5aa0ff); }
+.note-item.cat-mitigation { --accent: var(--green, #35ff96); }
+.note-item.cat-caveat { --accent: var(--orange, #ff9f1a); }
+.note-item.cat-todo { --accent: var(--yellow, #fed639); }
+.note-item.cat-note { --accent: var(--blue, #5aa0ff); }
 
 .note-meta {
   display: flex;
@@ -3593,44 +3607,44 @@ select:disabled {
 }
 
 .detail-section#summary {
-  --section-accent: var(--blue);
+  --accent: var(--blue);
 }
 
 .detail-section#runtime {
-  --section-accent: var(--green);
+  --accent: var(--green);
 }
 
 .detail-section#interfaces {
-  --section-accent: var(--cyan);
+  --accent: var(--cyan);
 }
 
 .detail-section#data {
-  --section-accent: var(--purple);
+  --accent: var(--purple);
 }
 
 .detail-section#security {
-  --section-accent: var(--yellow);
+  --accent: var(--yellow);
 }
 
 .detail-section#observability {
-  --section-accent: #7df4ff;
+  --accent: #7df4ff;
 }
 
 .detail-section#risks {
-  --section-accent: var(--red);
+  --accent: var(--red);
 }
 
 .detail-section#decisions {
-  --section-accent: #b9cacb;
+  --accent: #b9cacb;
 }
 
 .detail-section#verification {
-  --section-accent: var(--green);
+  --accent: var(--green);
 }
 
 .detail-section h3 {
   margin: 0 0 6px;
-  color: var(--section-accent);
+  color: var(--accent);
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.08em;
@@ -4085,7 +4099,7 @@ select:disabled {
   color: var(--muted);
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: var(--overline-tracking);
 }
 
 .repo-colhead-name {
@@ -4449,10 +4463,10 @@ select:disabled {
 .blast-section {
   padding: 12px 14px;
   border: 1px solid var(--line);
-  border-left: 3px solid color-mix(in srgb, var(--card-accent, var(--line)) 80%, transparent);
+  border-left: 3px solid color-mix(in srgb, var(--accent, var(--line)) 80%, transparent);
   border-radius: 8px;
   background:
-    linear-gradient(90deg, color-mix(in srgb, var(--card-accent, transparent) 8%, transparent), transparent 60%),
+    linear-gradient(90deg, color-mix(in srgb, var(--accent, transparent) 8%, transparent), transparent 60%),
     color-mix(in srgb, var(--panel-2) 40%, transparent);
 }
 
@@ -4464,7 +4478,7 @@ select:disabled {
   font-family: var(--font-mono);
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: var(--overline-tracking);
   color: var(--muted);
 }
 
@@ -4476,9 +4490,9 @@ select:disabled {
   height: 16px;
   padding: 0 5px;
   border-radius: 8px;
-  background: color-mix(in srgb, var(--card-accent, var(--line)) 18%, var(--panel-2));
-  border: 1px solid color-mix(in srgb, var(--card-accent, var(--line)) 45%, transparent);
-  color: var(--card-accent, var(--dim));
+  background: color-mix(in srgb, var(--accent, var(--line)) 18%, var(--panel-2));
+  border: 1px solid color-mix(in srgb, var(--accent, var(--line)) 45%, transparent);
+  color: var(--accent, var(--dim));
   font-family: var(--font-mono);
   font-size: 10px;
 }
@@ -4627,7 +4641,7 @@ button.blast-chip.node:hover { background: color-mix(in srgb, var(--panel-2) 70%
   margin: 0 0 8px;
   font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--overline-tracking);
   color: var(--dim);
 }
 
