@@ -306,7 +306,9 @@ select:disabled {
 
 .mode-tabs {
   display: flex;
-  flex-wrap: nowrap;
+  /* Wrap so the mode tabs reflow onto a second row at narrow widths instead of
+     running off-screen (the topbar has no horizontal scroll). */
+  flex-wrap: wrap;
   gap: 2px;
   justify-content: flex-end;
 }
