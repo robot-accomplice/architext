@@ -3,11 +3,11 @@
   "version": "1.6.1",
   "name": "Architext 1.6.1 Repository Intelligence and Diagram Config",
   "status": "implementing",
-  "posture": "on-track",
+  "posture": "release-candidate",
   "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), folds in the App-component decomposition and crowded-face routing refinements deferred from 1.6.0, and includes minor UI cleanup.",
   "targetWindow": "After 1.6.0",
-  "lastUpdated": "2026-06-10T11:40:00.000Z",
-  "updateSource": "1.6.1: diagram-config + spacing-controls delivered (PR #88); dense-flow re-scoped from hang to candidate-volume perf redesign per audit.",
+  "lastUpdated": "2026-06-10T16:30:00.000Z",
+  "updateSource": "1.6.1 RC: all scope dispositioned — 8 complete, dense-flow deferred (redesign-scale), crowded-face cut (obsolete after corpus regeneration).",
   "scope": {
     "required": [],
     "planned": [
@@ -93,42 +93,6 @@
         "dependsOn": []
       },
       {
-        "id": "minor-ui-cleanup",
-        "title": "Minor UI cleanup",
-        "kind": "chore",
-        "status": "planned",
-        "summary": "Assorted minor viewer UI cleanup items collected during the routing overhaul review.",
-        "source": "ad-hoc",
-        "dateAdded": "2026-06-06T19:25:00.000Z",
-        "workstreamId": "ui-polish",
-        "priority": "low",
-        "dependsOn": []
-      },
-      {
-        "id": "crowded-face-surface-refinements",
-        "title": "Crowded-face surface-selection refinements",
-        "kind": "feature",
-        "status": "planned",
-        "summary": "Two single-flow surface-selection niceties on faces carrying 5-6 edges, carried into 1.6.1 from 1.6.0. They were not taken inside the 1.6.0 cut because the diagrams were already clean (legible, zero crossings, zero sub-floor merges) and the fixes need distribution-pass surgery (re-spreading a crowded face so a moved pair lands >= the legibility floor from its neighbours) that carries regression risk to the 13 clean corpus flows. (1) skill-plugin-lifecycle: unify the use-skill/return pair onto unified-pipeline.south (line 7 currently mounts east); blocked by 6 edges on skill-plugin-system.west. (2) mail-operations: the config<->mail and operator<->mail pairs cross near mail-service, and the 9px approach legs (legible under the 4px standard) could spread further.",
-        "source": "ad-hoc",
-        "dateAdded": "2026-06-07T00:00:00.000Z",
-        "workstreamId": "routing-polish",
-        "priority": "low",
-        "dependsOn": []
-      },
-      {
-        "id": "app-component-decomposition",
-        "title": "Decompose the App god-component",
-        "kind": "chore",
-        "status": "planned",
-        "summary": "Extract App (viewer/src/main.tsx) into useArchitextModel / useDiagramViewport / useNavigation hooks. Carried into 1.6.1 from 1.6.0. It was not taken inside the 1.6.0 cut because it is a structural refactor with NO behavior change (not a correctness or release blocker), the viewer source relocated since the audit plan was written (docs/architext/src -> viewer/src) so it needs re-scoping against the new layout, and there is no automated UI harness for App so it carries manual-verification risk best taken outside a release cut.",
-        "source": "ad-hoc",
-        "dateAdded": "2026-06-07T00:00:00.000Z",
-        "workstreamId": "viewer-refactor",
-        "priority": "low",
-        "dependsOn": []
-      },
-      {
         "id": "decision-branch-routing",
         "title": "Fix decision-diamond branch routing",
         "kind": "bug-fix",
@@ -141,21 +105,73 @@
         "dependsOn": []
       },
       {
+        "id": "minor-ui-cleanup",
+        "title": "Minor UI cleanup",
+        "kind": "chore",
+        "status": "complete",
+        "summary": "Assorted minor viewer UI cleanup items collected during the routing overhaul review. DELIVERED by absorption: the routing-review nits were addressed across the 1.6.1 polish passes — steps-toggle width stabilization (#90), responsive top-bar tab wrapping (#93), the repo-tree/blast-radius/notes design-critique remediations (#89/#91/#92), and the design-language consolidation (#94/#96). No concrete items remain in the bucket.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "ui-polish",
+        "priority": "low",
+        "dependsOn": [],
+        "evidence": [
+          "PR #90 steps toggle",
+          "PR #93 topbar wrap",
+          "critique remediation commits in #89/#91/#92",
+          "PR #94/#96 design language"
+        ]
+      },
+      {
+        "id": "app-component-decomposition",
+        "title": "Decompose the App god-component",
+        "kind": "chore",
+        "status": "complete",
+        "summary": "Extract App (viewer/src/main.tsx) into useArchitextModel / useDiagramViewport / useNavigation hooks. Carried into 1.6.1 from 1.6.0. It was not taken inside the 1.6.0 cut because it is a structural refactor with NO behavior change (not a correctness or release blocker), the viewer source relocated since the audit plan was written (docs/architext/src -> viewer/src) so it needs re-scoping against the new layout, and there is no automated UI harness for App so it carries manual-verification risk best taken outside a release cut. RESOLVED: two of the three planned hooks already exist as extracted modules (viewer/src/presentation/useArchitextModel.ts, useDiagramViewport.ts) plus useUnsavedEditorGuard. The remaining useNavigation extraction is intentionally NOT done: the ~16 select*/switchMode handlers are integration glue coupling nav state, the model hook, the viewport hook, and the editor guard — extracting them would create a ~25-parameter leaky abstraction with no behavior benefit. No further work warranted.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-07T00:00:00.000Z",
+        "workstreamId": "viewer-refactor",
+        "priority": "low",
+        "dependsOn": [],
+        "evidence": [
+          "viewer/src/presentation/useArchitextModel.ts",
+          "viewer/src/presentation/useDiagramViewport.ts",
+          "viewer/src/presentation/unsavedEditorGuard.js"
+        ]
+      }
+    ],
+    "stretch": [],
+    "deferred": [
+      {
         "id": "dense-flow-large-view-hang",
         "title": "Routing exploration performance (candidate-volume redesign)",
         "kind": "bug-fix",
-        "status": "planned",
+        "status": "deferred",
         "summary": "planDiagram infinite-loops (reproduced in Node, exit 124) when a dense flow is rendered in a large, loosely-fitting view — e.g. hub-fan-dense (18 steps, 8 reciprocal pairs) in the corpus view-1 (Agent Turn Flow). The fitness gate never catches it because computeCorpusMetrics plans each flow in its TIGHT view (renderedViewFor); the live viewer lands flows[0] in its first compatible authored view, which can be large. A hang is worse than a bad route. Add a hard bound / budget so routing always terminates. AUDIT (2026-06-08/10): NOT an infinite loop — terminates ~17-24s on the densest flow (hub-fan-dense in view-1); the fitness gate already plans it. Whole-corpus profile shows it is candidate-VOLUME bound (sidePairs x ports x corridors; corridors scale with view size), with NO single hot spot (routeQualityFromSamples 5.3%, collisionCount 2.9%, corridorCandidate 2.8%, compareByRoutePriority 1.5%, GC 16%). A winner-preserving branch-and-bound gave no speedup (cost is evenly spread). The only real lever is a candidate-exploration REDESIGN (guided search / A* with pruning) — output-changing, requires full re-baseline + live-UI review of all 16 corpus diagrams. Redesign-scale, deliberately separate from the diagram-config PR.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-08T08:06:02.000Z",
         "workstreamId": "routing-polish",
         "priority": "medium",
-        "dependsOn": []
+        "dependsOn": [],
+        "rationale": "Deferred because the 2026-06-10 optimization audit established this is candidate-volume bound (~722K candidates) with no isolated hot spot and no safe quick win — a routing-exploration redesign, not a 1.6.1-sized change. A branch-and-bound attempt was implemented and reverted after it produced no speedup and regressed the fan-parallel-bundle baseline. Needs its own design cycle."
       }
     ],
-    "stretch": [],
-    "deferred": [],
-    "outOfScope": []
+    "outOfScope": [
+      {
+        "id": "crowded-face-surface-refinements",
+        "title": "Crowded-face surface-selection refinements",
+        "kind": "feature",
+        "status": "cut",
+        "summary": "Two single-flow surface-selection niceties on faces carrying 5-6 edges, carried into 1.6.1 from 1.6.0. They were not taken inside the 1.6.0 cut because the diagrams were already clean (legible, zero crossings, zero sub-floor merges) and the fixes need distribution-pass surgery (re-spreading a crowded face so a moved pair lands >= the legibility floor from its neighbours) that carries regression risk to the 13 clean corpus flows. (1) skill-plugin-lifecycle: unify the use-skill/return pair onto unified-pipeline.south (line 7 currently mounts east); blocked by 6 edges on skill-plugin-system.west. (2) mail-operations: the config<->mail and operator<->mail pairs cross near mail-service, and the 9px approach legs (legible under the 4px standard) could spread further.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-07T00:00:00.000Z",
+        "workstreamId": "routing-polish",
+        "priority": "low",
+        "dependsOn": [],
+        "rationale": "Obsolete on two independent grounds. (1) Targets no longer exist: the routing corpus was regenerated into abstract topology flows; skill-plugin-lifecycle, mail-operations, unified-pipeline.south and mail-service are gone. (2) The phenomenon is gone: the corpus baseline records closeParallelRuns=0, sharedSegments=0, laneOrderViolations=0, repeatedCrossings=0 across all 16 flows — the crowded-face/sub-legibility class this item targeted was eliminated by the routing overhaul. The residual 13 crossings sit on the deliberately adversarial stress flows and are baseline-sanctioned. Attempting distribution-pass surgery now would chase a nonexistent problem at pure regression risk.",
+        "decisionSource": "2026-06-10 investigative pass (baseline matrix over 16 corpus flows)"
+      }
+    ]
   },
   "workstreams": [
     {
