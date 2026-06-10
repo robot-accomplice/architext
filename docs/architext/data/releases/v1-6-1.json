@@ -6,8 +6,8 @@
   "posture": "on-track",
   "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), folds in the App-component decomposition and crowded-face routing refinements deferred from 1.6.0, and includes minor UI cleanup.",
   "targetWindow": "After 1.6.0",
-  "lastUpdated": "2026-06-08T10:07:27.000Z",
-  "updateSource": "1.6.1: decision-branch-routing fixed and verified in live UI; dense-flow hang still open in routing-polish.",
+  "lastUpdated": "2026-06-10T08:43:10.000Z",
+  "updateSource": "1.6.1: diagram-config + spacing-controls delivered (PR #88); dense-flow re-scoped from hang to candidate-volume perf redesign per audit.",
   "scope": {
     "required": [],
     "planned": [
@@ -39,8 +39,8 @@
         "id": "diagram-spacing-controls",
         "title": "Diagram spacing controls",
         "kind": "feature",
-        "status": "planned",
-        "summary": "Add explicit ergonomics controls for diagram column width and sequence-diagram row spacing so users can improve readability without relying only on zoom.",
+        "status": "complete",
+        "summary": "Add explicit ergonomics controls for diagram column width and sequence-diagram row spacing so users can improve readability without relying only on zoom. DELIVERED by the diagram configuration panel (column width + row/sequence spacing live-preview controls, Save to project/user). Folded into diagram-parameter-user-config.",
         "source": "roadmap",
         "dateAdded": "2026-05-27T16:30:00.000Z",
         "workstreamId": "diagram-ergonomics",
@@ -63,7 +63,7 @@
         "id": "diagram-parameter-user-config",
         "title": "User-configurable diagram parameters",
         "kind": "feature",
-        "status": "in-progress",
+        "status": "complete",
         "summary": "Move hardcoded diagram parameters (e.g. minimum legible gap as an arrowhead fraction, spacing, column width) into user-adjustable configuration persisted under ~/.architext, so projects can tune layout without code changes. DELIVERED: layout (column width, row gap, node size, route gutter, top margin), sequence-diagram spacing, and fit-zoom bounds are user-configurable via ~/.architext/config.json + docs/architext/config.json and a live-preview settings panel (Save to project/user). DEFERRED: the legibility-gap arrowhead-fraction knob is split to routing-polish because applying it requires threading MIN_LEGIBLE_GAP_ARROWHEADS through the router (routing-engine work), not just view config; the config field is accepted/persisted but not yet applied.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-06T19:25:00.000Z",
@@ -121,14 +121,14 @@
       },
       {
         "id": "dense-flow-large-view-hang",
-        "title": "Router hangs on dense flow in a large/loose view",
+        "title": "Routing exploration performance (candidate-volume redesign)",
         "kind": "bug-fix",
         "status": "planned",
-        "summary": "planDiagram infinite-loops (reproduced in Node, exit 124) when a dense flow is rendered in a large, loosely-fitting view — e.g. hub-fan-dense (18 steps, 8 reciprocal pairs) in the corpus view-1 (Agent Turn Flow). The fitness gate never catches it because computeCorpusMetrics plans each flow in its TIGHT view (renderedViewFor); the live viewer lands flows[0] in its first compatible authored view, which can be large. A hang is worse than a bad route. Add a hard bound / budget so routing always terminates.",
+        "summary": "planDiagram infinite-loops (reproduced in Node, exit 124) when a dense flow is rendered in a large, loosely-fitting view — e.g. hub-fan-dense (18 steps, 8 reciprocal pairs) in the corpus view-1 (Agent Turn Flow). The fitness gate never catches it because computeCorpusMetrics plans each flow in its TIGHT view (renderedViewFor); the live viewer lands flows[0] in its first compatible authored view, which can be large. A hang is worse than a bad route. Add a hard bound / budget so routing always terminates. AUDIT (2026-06-08/10): NOT an infinite loop — terminates ~17-24s on the densest flow (hub-fan-dense in view-1); the fitness gate already plans it. Whole-corpus profile shows it is candidate-VOLUME bound (sidePairs x ports x corridors; corridors scale with view size), with NO single hot spot (routeQualityFromSamples 5.3%, collisionCount 2.9%, corridorCandidate 2.8%, compareByRoutePriority 1.5%, GC 16%). A winner-preserving branch-and-bound gave no speedup (cost is evenly spread). The only real lever is a candidate-exploration REDESIGN (guided search / A* with pruning) — output-changing, requires full re-baseline + live-UI review of all 16 corpus diagrams. Redesign-scale, deliberately separate from the diagram-config PR.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-08T08:06:02.000Z",
         "workstreamId": "routing-polish",
-        "priority": "high",
+        "priority": "medium",
         "dependsOn": []
       }
     ],

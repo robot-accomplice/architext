@@ -448,16 +448,16 @@
       "status": "implementing",
       "posture": "on-track",
       "targetWindow": "After 1.6.0",
-      "lastUpdated": "2026-06-08T10:07:27.000Z",
+      "lastUpdated": "2026-06-10T08:43:10.000Z",
       "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), folds in the App-component decomposition and crowded-face routing refinements deferred from 1.6.0, and includes minor UI cleanup.",
       "counts": {
         "features": 6,
         "bugFixes": 2,
         "workstreams": 6,
         "blockers": 0,
-        "complete": 1,
-        "inProgress": 1,
-        "planned": 8,
+        "complete": 3,
+        "inProgress": 0,
+        "planned": 7,
         "stretch": 0
       },
       "file": "v1-6-1.json"
