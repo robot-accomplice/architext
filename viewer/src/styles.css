@@ -364,6 +364,11 @@ select:disabled {
 .left-nav {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
+  /* Constrain the single column to the panel width (min 0) so long, unbreakable
+     content (e.g. full file paths in the Blast Radius file list) ellipsizes
+     within the panel instead of growing the column and spilling past the
+     divider. */
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .app.left-collapsed .left-nav {
