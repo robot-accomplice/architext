@@ -1721,7 +1721,7 @@ select:disabled {
   color: var(--muted);
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.06em;
+  letter-spacing: var(--overline-tracking);
   text-transform: uppercase;
 }
 
@@ -4099,7 +4099,7 @@ select:disabled {
   color: var(--muted);
   font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: var(--overline-tracking);
 }
 
 .repo-colhead-name {
@@ -4478,7 +4478,7 @@ select:disabled {
   font-family: var(--font-mono);
   font-size: 11px;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: var(--overline-tracking);
   color: var(--muted);
 }
 
@@ -4641,7 +4641,7 @@ button.blast-chip.node:hover { background: color-mix(in srgb, var(--panel-2) 70%
   margin: 0 0 8px;
   font-size: 12px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--overline-tracking);
   color: var(--dim);
 }
 
