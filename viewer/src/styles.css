@@ -3118,6 +3118,12 @@ select:disabled {
   gap: 6px;
 }
 
+/* Hold a stable box for the toggle so it doesn't resize when the label
+   swaps between "Hide steps" and the (slightly wider) "Show steps". */
+.steps-actions button {
+  min-width: 100px;
+}
+
 .step-list {
   display: flex;
   gap: 6px;
