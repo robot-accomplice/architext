@@ -1831,6 +1831,19 @@ function App() {
   );
 }
 
+// Compact node-type label for the search result list — long C4 types clip in
+// the narrow nav, so collapse them to short tokens.
+const SHORT_NODE_KIND: Record<string, string> = {
+  "software-system": "system",
+  "external-service": "external",
+  "data-store": "store",
+  "deployment-unit": "deploy",
+  "trust-boundary": "trust"
+};
+function shortNodeKind(type: string): string {
+  return SHORT_NODE_KIND[type] ?? type;
+}
+
 function LeftPanel({
   mode,
   query,
@@ -1903,17 +1916,20 @@ function LeftPanel({
       <>
         <div className="panel-head">
           <h2>Blast Radius</h2>
-          <p>Search a component, file, or concept to see everything it reaches.</p>
+          <p>Search to see what an element reaches.</p>
         </div>
         <div className="repo-nav-section">
-          <input
-            type="search"
-            className="blast-search"
-            placeholder="Search components, files, concepts…"
-            value={blastQuery}
-            onChange={(event) => onBlastQueryChange(event.target.value)}
-            autoFocus
-          />
+          <div className="blast-search-wrap">
+            <DiagramIcon icon="search" className="blast-search-icon" />
+            <input
+              type="search"
+              className="blast-search"
+              placeholder="Search components, files…"
+              value={blastQuery}
+              onChange={(event) => onBlastQueryChange(event.target.value)}
+              autoFocus
+            />
+          </div>
         </div>
         {trimmed ? (
           <>
@@ -1925,7 +1941,7 @@ function LeftPanel({
                     <li key={c.id}>
                       <button type="button" className={`blast-result${c.id === blastFocusId ? " active" : ""}`} onClick={() => onFocusBlastNode(c.id)}>
                         <span className="blast-result-name">{c.name}</span>
-                        <span className="blast-result-kind">{c.type}</span>
+                        <span className="blast-result-kind">{shortNodeKind(c.type)}</span>
                       </button>
                     </li>
                   ))}

@@ -65,6 +65,7 @@ export function BlastRadiusWorkspace({ radius, hasQuery, onFocusNode, onSelectFl
         <p className="blast-reach">Reaches {reachCount} element{reachCount === 1 ? "" : "s"} across the repository.</p>
       </header>
 
+      <div className="blast-sections">
       <Section title="Owns files" count={r.ownedFiles.length}>
         <ul className="blast-files">
           {r.ownedFiles.map((f: { path: string; size: number | null }) => (
@@ -118,6 +119,7 @@ export function BlastRadiusWorkspace({ radius, hasQuery, onFocusNode, onSelectFl
           ))}
         </ul>
       </Section>
+      </div>
     </div>
   );
 }
