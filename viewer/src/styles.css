@@ -3874,7 +3874,9 @@ select:disabled {
 .repo-tree-body {
   flex: 1 1 auto;
   overflow-y: auto;
-  padding: 8px 0;
+  /* No top padding: the sticky header must sit flush against the scroll-container
+     top, otherwise rows scroll through the gap above it. */
+  padding: 0 0 8px;
   font-family: var(--font-mono);
   font-size: 12px;
 }
@@ -3895,8 +3897,9 @@ select:disabled {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 10px 6px 0;
-  margin-bottom: 4px;
+  /* Spacing lives inside the opaque box (not a transparent margin) so nothing
+     shows through above or below the header while scrolling. */
+  padding: 8px 10px 6px 0;
   background: var(--panel);
   border-bottom: 1px solid var(--line);
   color: var(--muted);
