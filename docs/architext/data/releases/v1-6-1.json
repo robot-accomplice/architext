@@ -6,7 +6,7 @@
   "posture": "on-track",
   "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), folds in the App-component decomposition and crowded-face routing refinements deferred from 1.6.0, and includes minor UI cleanup.",
   "targetWindow": "After 1.6.0",
-  "lastUpdated": "2026-06-10T08:43:10.000Z",
+  "lastUpdated": "2026-06-10T09:15:00.000Z",
   "updateSource": "1.6.1: diagram-config + spacing-controls delivered (PR #88); dense-flow re-scoped from hang to candidate-volume perf redesign per audit.",
   "scope": {
     "required": [],
@@ -15,13 +15,20 @@
         "id": "repo-tree-view",
         "title": "Repository tree view",
         "kind": "feature",
-        "status": "planned",
-        "summary": "Add a top-level Repo Tree tab that helps users understand source layout, optionally color-coding folders tied to C4 or Flow responsibilities and leaving room for a future 3D graph projection.",
+        "status": "complete",
+        "summary": "Add a top-level Repo Tree tab that helps users understand source layout, optionally color-coding folders tied to C4 or Flow responsibilities and leaving room for a future 3D graph projection. DELIVERED: a Repo Tree top-bar mode listing the repository's tracked files (git ls-files, filesystem fallback excluding node_modules/dist/.git) as a folder tree, each path colored by the architecture node that owns it via node.sourcePaths (longest-prefix match). C4-type and Flow color lenses toggle the palette; folders show a dominant/mixed owner hint; clicking an owned file selects its component in the detail panel.",
         "source": "roadmap",
         "dateAdded": "2026-05-27T16:30:00.000Z",
         "workstreamId": "repository-intelligence",
         "priority": "high",
-        "dependsOn": []
+        "dependsOn": [],
+        "evidence": [
+          "src/adapters/http/repo-tree-api.mjs + /api/repo-tree endpoint (git/filesystem file enumeration)",
+          "viewer/src/presentation/repoTreeModel.js (tree build + longest-prefix owner resolution)",
+          "viewer/src/presentation/RepoTreeWorkspace.tsx (C4/Flow color lenses, file->node selection)",
+          "test/repo-tree-api.test.mjs + test/repo-tree-model.test.mjs (8 tests)",
+          "Live corpus-fixture review: 33 files attributed, both lenses, file->node detail panel, 0 console errors"
+        ]
       },
       {
         "id": "repo-blast-radius-search",

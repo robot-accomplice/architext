@@ -4,6 +4,7 @@ const MODE_DEFINITIONS = [
   { id: "c4", label: "C4", aliases: ["c4"], viewTypes: ["c4-context", "c4-container", "c4-component", "c4-code"] },
   { id: "deployment", label: "Deployment", aliases: ["deployment"], viewTypes: ["deployment"] },
   { id: "data-risks", label: "Data/Risks", aliases: ["datarisks", "data-risks"], viewTypes: ["risk-overlay", "dataflow"] },
+  { id: "repo-tree", label: "Repo Tree", aliases: ["repotree", "repo-tree", "repo"], viewTypes: [] },
   { id: "release-truth", label: "Release Truth", aliases: ["releasetruth", "release-truth"], viewTypes: [] },
   { id: "rules", label: "Rules", aliases: ["rules"], viewTypes: [] }
 ];
@@ -37,6 +38,7 @@ export function modeForView(view) {
 export function viewBelongsToMode(view, mode) {
   if (mode === "release-truth") return true;
   if (mode === "rules") return true;
+  if (mode === "repo-tree") return true;
   return Boolean(view && modeViewTypes[mode]?.includes(view.type));
 }
 
@@ -47,6 +49,7 @@ export function viewTypesForMode(mode) {
 export function defaultViewForMode(mode, views, fallback) {
   if (mode === "release-truth") return fallback;
   if (mode === "rules") return fallback;
+  if (mode === "repo-tree") return fallback;
   const types = viewTypesForMode(mode);
   return views.find((view) => types.includes(view.type)) ?? fallback;
 }
