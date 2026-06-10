@@ -31,6 +31,8 @@ import { useArchitextModel, type RecoveryResult } from "./presentation/useArchit
 import { useDiagramViewport } from "./presentation/useDiagramViewport.js";
 import { DiagramConfigContext, useDiagramConfig, type DiagramConfig } from "./presentation/diagramConfigContext.js";
 import { fetchDiagramConfig } from "./adapters/fetchDiagramConfig.js";
+import { fetchRepoTree } from "./adapters/fetchRepoTree.js";
+import { RepoTreeWorkspace } from "./presentation/RepoTreeWorkspace.js";
 import { DiagramConfigPanel, type DiagramFieldsSpec, type DiagramSectionLabels } from "./presentation/DiagramConfigPanel.js";
 import { DIAGRAM_FIELD_SPEC, DIAGRAM_SECTION_LABELS } from "./presentation/diagramFieldSpec.js";
 import { nodeLanePosition, preferredDecisionBranchSide, preferredDecisionBranchEndSide } from "./presentation/decisionBranchModel.js";
@@ -1066,6 +1068,7 @@ function App() {
   const [configPayload, setConfigPayload] = useState<{ diagram: DiagramConfig; fields: DiagramFieldsSpec; sections: DiagramSectionLabels } | null>(null);
   const [configDraft, setConfigDraft] = useState<DiagramConfig | null>(null);
   const [configPanelOpen, setConfigPanelOpen] = useState(false);
+  const [repoTree, setRepoTree] = useState<{ files: string[]; source?: string } | null>(null);
   const [configBusy, setConfigBusy] = useState(false);
   const [configMessage, setConfigMessage] = useState<string | null>(null);
   useEffect(() => {
@@ -1075,6 +1078,15 @@ function App() {
     });
     return () => { cancelled = true; };
   }, []);
+  // Lazily fetch the repo file list the first time the Repo Tree tab is opened.
+  useEffect(() => {
+    if (activeMode !== "repo-tree" || repoTree) return;
+    let cancelled = false;
+    fetchRepoTree().then((result) => {
+      if (!cancelled) setRepoTree(result ?? { files: [] });
+    });
+    return () => { cancelled = true; };
+  }, [activeMode, repoTree]);
   const savedConfig = configPayload?.diagram ?? null;
   const effectiveConfig = configDraft ?? savedConfig;
 
@@ -1231,6 +1243,7 @@ function App() {
   const isSequenceView = activeMode === "sequence";
   const isReleaseTruthView = activeMode === "release-truth";
   const isRulesView = activeMode === "rules";
+  const isRepoTreeView = activeMode === "repo-tree";
   const showOrderedFlow = modeShowsOrderedFlow(activeMode);
   const showStructuralConnections = modeUsesStructuralRelationships(activeMode);
   const showStepSummary = showOrderedFlow;
@@ -1587,7 +1600,15 @@ function App() {
       </aside>
 
       <main className="diagram-area">
-        {isRulesView ? (
+        {isRepoTreeView ? (
+          <RepoTreeWorkspace
+            files={repoTree?.files ?? []}
+            source={repoTree?.source}
+            nodes={model.nodes}
+            flows={model.flows}
+            onSelectNode={selectNode}
+          />
+        ) : isRulesView ? (
           <RulesWorkspace
             rules={model.rules ?? []}
             selectedRule={selectedRule}
@@ -1832,6 +1853,17 @@ function LeftPanel({
   onSelectRuleCategory: (category: string) => void;
   onAddRuleCategory: () => void;
 }) {
+  if (mode === "repo-tree") {
+    return (
+      <>
+        <div className="panel-head">
+          <h2>Repo Tree</h2>
+          <p>The repository's tracked files, colored by the architecture node that owns each path. Click a file to inspect its component.</p>
+        </div>
+      </>
+    );
+  }
+
   if (mode === "rules") {
     const categories = ruleCategories(rules ?? []);
     return (

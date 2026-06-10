@@ -25,6 +25,7 @@ import { createDataWatchHub } from "../http/data-watch-hub.mjs";
 import { approveReleasePlanRequest as approveReleasePlanApiRequest } from "../http/release-planning-api.mjs";
 import { updateRulesRequest as updateRulesApiRequest } from "../http/rules-api.mjs";
 import { diagramConfigGetPayload, writeDiagramConfig } from "../http/diagram-config-api.mjs";
+import { repoTreeApiRequest } from "../http/repo-tree-api.mjs";
 import { c4DrilldownIssues, c4IssuesForView, repairC4Views } from "../../domain/architecture-model/c4-quality.mjs";
 import { generatedReleaseIndex, releaseIndexGenerationChanges } from "../../domain/architecture-model/release-history.mjs";
 import { doctorRepairCategories, doctorRepairsForStatus } from "../../domain/lifecycle/doctor-repairs.mjs";
@@ -1375,6 +1376,16 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
         // would leave the settings panel without controls.
         response.setHeader("Cache-Control", "no-store");
         sendJson(response, 200, payload);
+        return;
+      }
+
+      if (url.pathname === "/api/repo-tree" && request.method === "GET") {
+        try {
+          response.setHeader("Cache-Control", "no-store");
+          sendJson(response, 200, await repoTreeApiRequest(target));
+        } catch (error) {
+          sendJson(response, 200, { files: [], source: "error", error: error.message });
+        }
         return;
       }
 

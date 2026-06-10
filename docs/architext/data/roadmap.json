@@ -298,7 +298,7 @@
       "title": "Repository tree view",
       "summary": "Add a top-level Repo Tree tab that helps users understand source layout, optionally color-coding folders tied to C4 or Flow responsibilities and leaving room for a future 3D graph projection.",
       "kind": "feature",
-      "status": "planned",
+      "status": "complete",
       "priority": "high",
       "section": "Repository Intelligence",
       "targetReleaseId": "v1-6-1",

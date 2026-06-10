@@ -3858,6 +3858,122 @@ select:disabled {
   background: color-mix(in srgb, var(--cyan) 14%, var(--panel-2));
 }
 
+/* Repo Tree view */
+.repo-tree-workspace {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+}
+
+.repo-tree-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 4px 4px 12px;
+  border-bottom: 1px solid var(--line);
+}
+
+.repo-tree-lens {
+  display: inline-flex;
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.repo-tree-lens button {
+  border: none;
+  border-radius: 0;
+  padding: 6px 12px;
+  background: transparent;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.repo-tree-lens button.active {
+  background: color-mix(in srgb, var(--cyan) 16%, var(--panel-2));
+  color: var(--cyan);
+}
+
+.repo-tree-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 8px 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.repo-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 8px;
+  line-height: 1.7;
+  border-radius: 4px;
+}
+
+.repo-tree-row.dir,
+.repo-tree-row.file.owned {
+  cursor: pointer;
+}
+
+.repo-tree-row:hover {
+  background: var(--panel-2);
+}
+
+.repo-caret {
+  flex: 0 0 auto;
+  width: 10px;
+  color: var(--dim);
+  transition: transform 0.1s;
+}
+
+.repo-caret.collapsed {
+  transform: rotate(-90deg);
+}
+
+.repo-swatch {
+  flex: 0 0 auto;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  border: 1px solid var(--line);
+}
+
+.repo-swatch.dir {
+  border-radius: 50%;
+}
+
+.repo-name {
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+.repo-name.dir {
+  font-weight: 700;
+}
+
+.repo-owner {
+  margin-left: auto;
+  color: var(--dim);
+  font-size: 11px;
+  white-space: nowrap;
+  padding-left: 16px;
+}
+
+.repo-owner.muted {
+  font-style: italic;
+}
+
+.repo-tree-empty {
+  color: var(--dim);
+  padding: 16px 8px;
+}
+
 /* Diagram settings panel (user-configurable diagram parameters) */
 .diagram-config-panel {
   position: fixed;
