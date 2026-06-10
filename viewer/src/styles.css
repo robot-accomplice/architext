@@ -27,6 +27,8 @@
   --c4-external: #b9cacb;
   --c4-deployment: #ff9f1a;
   --c4-module: #35ff96;
+  --c4-system: #00e5ff;
+  --c4-queue: #ff9f1a;
   --shadow: none;
   --z-canvas-overlay: 20;
   --z-header-overlay: 40;
@@ -2919,6 +2921,18 @@ select:disabled {
   border-color: rgba(109, 227, 147, 0.48);
   border-left-color: var(--c4-module);
   background: linear-gradient(90deg, rgba(109, 227, 147, 0.14), rgba(30, 32, 35, 0.96) 62%);
+}
+
+.c4-node.software-system {
+  border-color: rgba(0, 219, 233, 0.5);
+  border-left-color: var(--c4-system);
+  background: linear-gradient(90deg, rgba(0, 219, 233, 0.16), rgba(30, 32, 35, 0.96) 62%);
+}
+
+.c4-node.queue {
+  border-color: rgba(246, 169, 77, 0.5);
+  border-left-color: var(--c4-queue);
+  background: linear-gradient(90deg, rgba(246, 169, 77, 0.16), rgba(30, 32, 35, 0.96) 62%);
 }
 
 .c4-node small {

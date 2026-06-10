@@ -2,16 +2,19 @@
 // left-nav legend both import from here so a node's color and its legend swatch
 // can never drift apart.
 
-// C4 lens: owning node type -> the existing diagram color palette.
+// C4 lens: owning node type -> the canonical --c4-* type tokens, the single
+// source of truth shared with the C4 diagram node colors (see DESIGN.md). Do
+// not substitute raw palette vars here — that drift is what made a worker node
+// yellow in the diagram but purple in Repo Tree / Blast Radius.
 export const C4_COLOR = {
-  actor: "var(--pink)",
-  "software-system": "var(--cyan)",
-  client: "var(--blue)",
-  service: "var(--purple)",
-  worker: "var(--purple)",
-  queue: "var(--orange)",
-  "data-store": "var(--green)",
-  "external-service": "var(--muted)",
+  actor: "var(--c4-actor)",
+  "software-system": "var(--c4-system)",
+  client: "var(--c4-client)",
+  service: "var(--c4-service)",
+  worker: "var(--c4-worker)",
+  queue: "var(--c4-queue)",
+  "data-store": "var(--c4-data)",
+  "external-service": "var(--c4-external)",
   module: "var(--c4-module)",
   "deployment-unit": "var(--c4-deployment)"
 };
