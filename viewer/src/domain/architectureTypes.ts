@@ -345,7 +345,7 @@ export type Selection =
   | { kind: "release-item"; itemId: Id }
   | { kind: "rule"; id: Id };
 
-export type Mode = "flows" | "sequence" | "c4" | "deployment" | "data-risks" | "repo-tree" | "release-truth" | "rules";
+export type Mode = "flows" | "sequence" | "c4" | "deployment" | "data-risks" | "repo-tree" | "blast-radius" | "release-truth" | "rules";
 export type RoutingStyle = "orthogonal" | "spline" | "straight";
 
 export type DiagramTransform = {

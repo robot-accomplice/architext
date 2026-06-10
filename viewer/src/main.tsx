@@ -34,6 +34,8 @@ import { fetchDiagramConfig } from "./adapters/fetchDiagramConfig.js";
 import { fetchRepoTree } from "./adapters/fetchRepoTree.js";
 import { RepoTreeWorkspace } from "./presentation/RepoTreeWorkspace.js";
 import { ownerLegend } from "./presentation/repoTreeColors.js";
+import { BlastRadiusWorkspace } from "./presentation/BlastRadiusWorkspace.js";
+import { searchRepository, blastRadiusForNode } from "./presentation/blastRadius.js";
 import { DiagramConfigPanel, type DiagramFieldsSpec, type DiagramSectionLabels } from "./presentation/DiagramConfigPanel.js";
 import { DIAGRAM_FIELD_SPEC, DIAGRAM_SECTION_LABELS } from "./presentation/diagramFieldSpec.js";
 import { nodeLanePosition, preferredDecisionBranchSide, preferredDecisionBranchEndSide } from "./presentation/decisionBranchModel.js";
@@ -1071,6 +1073,8 @@ function App() {
   const [configPanelOpen, setConfigPanelOpen] = useState(false);
   const [repoTree, setRepoTree] = useState<{ files: Array<{ path: string; size: number | null; mtime: number | null }>; source?: string } | null>(null);
   const [repoTreeLens, setRepoTreeLens] = useState<"c4" | "flow">("c4");
+  const [blastQuery, setBlastQuery] = useState("");
+  const [blastFocusId, setBlastFocusId] = useState<Id | null>(null);
   const [configBusy, setConfigBusy] = useState(false);
   const [configMessage, setConfigMessage] = useState<string | null>(null);
   useEffect(() => {
@@ -1080,9 +1084,10 @@ function App() {
     });
     return () => { cancelled = true; };
   }, []);
-  // Lazily fetch the repo file list the first time the Repo Tree tab is opened.
+  // Lazily fetch the repo file list the first time Repo Tree or Blast Radius
+  // (which maps files to owning components) is opened.
   useEffect(() => {
-    if (activeMode !== "repo-tree" || repoTree) return;
+    if ((activeMode !== "repo-tree" && activeMode !== "blast-radius") || repoTree) return;
     let cancelled = false;
     fetchRepoTree().then((result) => {
       if (!cancelled) setRepoTree(result ?? { files: [] });
@@ -1246,6 +1251,12 @@ function App() {
   const isReleaseTruthView = activeMode === "release-truth";
   const isRulesView = activeMode === "rules";
   const isRepoTreeView = activeMode === "repo-tree";
+  const isBlastView = activeMode === "blast-radius";
+  // Cheap derivations (tens of nodes/files) — plain consts, not hooks, so they
+  // sit after the model guard without breaking hook order.
+  const blastFiles = repoTree?.files ?? [];
+  const blastSearchResults = isBlastView ? searchRepository(model, blastFiles, blastQuery) : { components: [], files: [] };
+  const blastRadius = isBlastView && blastFocusId ? blastRadiusForNode(model, blastFiles, blastFocusId) : null;
   const showOrderedFlow = modeShowsOrderedFlow(activeMode);
   const showStructuralConnections = modeUsesStructuralRelationships(activeMode);
   const showStepSummary = showOrderedFlow;
@@ -1592,6 +1603,11 @@ function App() {
             onRiskFilterChange={setRiskFilter}
             repoTreeLens={repoTreeLens}
             onRepoTreeLensChange={setRepoTreeLens}
+            blastQuery={blastQuery}
+            onBlastQueryChange={setBlastQuery}
+            blastSearchResults={blastSearchResults}
+            blastFocusId={blastFocusId}
+            onFocusBlastNode={(id: Id) => { setBlastFocusId(id); selectNode(id); }}
             onSelectFlow={selectFlow}
             onSelectView={selectView}
             onSelectNode={selectNode}
@@ -1604,7 +1620,15 @@ function App() {
       </aside>
 
       <main className="diagram-area">
-        {isRepoTreeView ? (
+        {isBlastView ? (
+          <BlastRadiusWorkspace
+            radius={blastRadius}
+            hasQuery={blastQuery.trim().length > 0}
+            onFocusNode={(id) => { setBlastFocusId(id); selectNode(id); }}
+            onSelectFlow={(id) => { setActiveMode("flows"); selectFlow(id); }}
+            onSelectView={selectView}
+          />
+        ) : isRepoTreeView ? (
           <RepoTreeWorkspace
             files={repoTree?.files ?? []}
             source={repoTree?.source}
@@ -1827,6 +1851,11 @@ function LeftPanel({
   onRiskFilterChange,
   repoTreeLens,
   onRepoTreeLensChange,
+  blastQuery,
+  onBlastQueryChange,
+  blastSearchResults,
+  blastFocusId,
+  onFocusBlastNode,
   onSelectFlow,
   onSelectView,
   onSelectNode,
@@ -1854,6 +1883,11 @@ function LeftPanel({
   onRiskFilterChange: (value: string) => void;
   repoTreeLens: "c4" | "flow";
   onRepoTreeLensChange: (lens: "c4" | "flow") => void;
+  blastQuery: string;
+  onBlastQueryChange: (value: string) => void;
+  blastSearchResults: { components: Array<{ id: Id; name: string; type: string }>; files: Array<{ path: string; ownerId: Id | null; ownerName: string | null }> };
+  blastFocusId: Id | null;
+  onFocusBlastNode: (id: Id) => void;
   onSelectFlow: (id: Id) => void;
   onSelectView: (id: Id) => void;
   onSelectNode: (id: Id) => void;
@@ -1862,6 +1896,73 @@ function LeftPanel({
   onSelectRuleCategory: (category: string) => void;
   onAddRuleCategory: () => void;
 }) {
+  if (mode === "blast-radius") {
+    const { components, files: fileHits } = blastSearchResults;
+    const trimmed = blastQuery.trim();
+    return (
+      <>
+        <div className="panel-head">
+          <h2>Blast Radius</h2>
+          <p>Search a component, file, or concept to see everything it reaches.</p>
+        </div>
+        <div className="repo-nav-section">
+          <input
+            type="search"
+            className="blast-search"
+            placeholder="Search components, files, concepts…"
+            value={blastQuery}
+            onChange={(event) => onBlastQueryChange(event.target.value)}
+            autoFocus
+          />
+        </div>
+        {trimmed ? (
+          <>
+            <div className="repo-nav-section">
+              <h3 className="repo-nav-title">Components<span className="blast-count">{components.length}</span></h3>
+              {components.length ? (
+                <ul className="blast-results">
+                  {components.map((c) => (
+                    <li key={c.id}>
+                      <button type="button" className={`blast-result${c.id === blastFocusId ? " active" : ""}`} onClick={() => onFocusBlastNode(c.id)}>
+                        <span className="blast-result-name">{c.name}</span>
+                        <span className="blast-result-kind">{c.type}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="repo-legend-empty">No components match.</p>}
+            </div>
+            <div className="repo-nav-section">
+              <h3 className="repo-nav-title">Files<span className="blast-count">{fileHits.length}</span></h3>
+              {fileHits.length ? (
+                <ul className="blast-results">
+                  {fileHits.map((f) => (
+                    <li key={f.path}>
+                      <button
+                        type="button"
+                        className="blast-result file"
+                        disabled={!f.ownerId}
+                        title={f.ownerId ? `Owned by ${f.ownerName}` : "Not mapped to a component"}
+                        onClick={() => f.ownerId && onFocusBlastNode(f.ownerId)}
+                      >
+                        <span className="blast-result-name">{f.path}</span>
+                        <span className="blast-result-kind">{f.ownerName ?? "unmapped"}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : <p className="repo-legend-empty">No files match.</p>}
+            </div>
+          </>
+        ) : (
+          <div className="repo-nav-section">
+            <p className="repo-legend-empty">Start typing to search the repository.</p>
+          </div>
+        )}
+      </>
+    );
+  }
+
   if (mode === "repo-tree") {
     const legend = ownerLegend(nodes, allFlows, repoTreeLens);
     return (
