@@ -6,7 +6,7 @@
   "posture": "on-track",
   "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), folds in the App-component decomposition and crowded-face routing refinements deferred from 1.6.0, and includes minor UI cleanup.",
   "targetWindow": "After 1.6.0",
-  "lastUpdated": "2026-06-10T11:00:00.000Z",
+  "lastUpdated": "2026-06-10T11:40:00.000Z",
   "updateSource": "1.6.1: diagram-config + spacing-controls delivered (PR #88); dense-flow re-scoped from hang to candidate-volume perf redesign per audit.",
   "scope": {
     "required": [],
@@ -64,13 +64,21 @@
         "id": "persistent-architecture-element-notes",
         "title": "Persistent architecture element notes",
         "kind": "feature",
-        "status": "planned",
-        "summary": "Allow users to edit or annotate architecture elements and persist the notes in Architext JSON, including cases where a high-risk area is intentionally mitigated by the system being documented.",
+        "status": "complete",
+        "summary": "Allow users to edit or annotate architecture elements and persist the notes in Architext JSON, including cases where a high-risk area is intentionally mitigated by the system being documented. DELIVERED: notes are a new optional data file (notes.json + manifest.files.notes, additive to the manifest schema) keyed by target {kind, id} with a category (note/mitigation/caveat/todo), body, and timestamps. The viewer detail panel gains a Notes section with add/edit/delete; writes POST /api/notes, which self-bootstraps manifest.files.notes + notes.json on first use and applies the write under the target lock with write->validate->rollback. The validator + viewer reference checks enforce that a note's target id exists. DEFERRED: the editor is exposed on node and flow detail panels (the selectable elements); risk/decision/view targeting is model- and validation-ready but not yet exposed in the UI because those elements are not independently selectable in the viewer yet (exposing them is a separate selection-surface change), so risk annotation is currently recorded on the owning component.",
         "source": "roadmap",
         "dateAdded": "2026-05-27T16:30:00.000Z",
         "workstreamId": "architecture-editing",
         "priority": "high",
-        "dependsOn": []
+        "dependsOn": [],
+        "evidence": [
+          "viewer/schema/notes.schema.json + manifest.schema.json files.notes (additive)",
+          "src/domain/architecture-model/notes.mjs + src/adapters/http/notes-api.mjs (self-bootstrap, write-validate-rollback) + CLI /api/notes",
+          "viewer/tools/validate-architext.mjs + references.mjs notes target validation",
+          "viewer NotesSection.tsx + DetailPanel (node + flow); fetchArchitectureData loads notes",
+          "test/notes-model.test.mjs + test/notes-api.test.mjs (6 tests); full suite 368/368",
+          "Live corpus review: add+delete on a flow persisted, validated, reloaded, rendered; node detail renders the same editor; 0 console errors. Also fixed /data/* Cache-Control: no-store so post-write reloads are not stale."
+        ]
       },
       {
         "id": "diagram-parameter-user-config",

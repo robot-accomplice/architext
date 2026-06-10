@@ -1,0 +1,47 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architext.local/schema/notes.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["notes"],
+  "properties": {
+    "notes": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/note" }
+    }
+  },
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
+    "note": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "target", "category", "body", "createdAt", "updatedAt"],
+      "properties": {
+        "id": { "$ref": "#/$defs/id" },
+        "target": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["kind", "id"],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": ["node", "flow", "decision", "risk", "view", "data-class"]
+            },
+            "id": { "type": "string", "minLength": 1 }
+          }
+        },
+        "category": {
+          "type": "string",
+          "enum": ["note", "mitigation", "caveat", "todo"]
+        },
+        "body": { "type": "string", "minLength": 1 },
+        "author": { "type": "string" },
+        "createdAt": { "type": "string", "minLength": 1 },
+        "updatedAt": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}

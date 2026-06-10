@@ -20,8 +20,22 @@ export type Manifest = {
     rules?: string;
     roadmap?: string;
     releases?: string;
+    notes?: string;
   };
   notes: string[];
+};
+
+export type NoteTargetKind = "node" | "flow" | "decision" | "risk" | "view" | "data-class";
+export type NoteCategory = "note" | "mitigation" | "caveat" | "todo";
+
+export type ElementNote = {
+  id: Id;
+  target: { kind: NoteTargetKind; id: Id };
+  category: NoteCategory;
+  body: string;
+  author?: string;
+  createdAt: string;
+  updatedAt: string;
 };
 
 export type NodeType =
@@ -312,6 +326,7 @@ export type Model = {
   rules?: RuleItem[];
   roadmap?: RoadmapItem[];
   releases?: ReleaseModel;
+  notes?: ElementNote[];
 };
 
 export type Relationship = {

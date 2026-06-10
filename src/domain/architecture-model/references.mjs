@@ -68,6 +68,18 @@ export function validateArchitectureReferences(model) {
     }
   }
 
+  if (Array.isArray(model.notes)) {
+    const idsByKind = {
+      node: nodeIds, flow: flowIds, decision: decisionIds,
+      risk: riskIds, view: viewIds, "data-class": dataIds
+    };
+    for (const note of model.notes) {
+      const known = idsByKind[note.target?.kind];
+      if (!known) errors.push(`note ${note.id}.target.kind "${note.target?.kind}" is unknown`);
+      else requireKnown(note.target.id, known, `note ${note.id}.target (${note.target.kind})`);
+    }
+  }
+
   if (model.releases) {
     validateReleaseReferences(model.releases, errors, { requireAllDetails: false });
   }

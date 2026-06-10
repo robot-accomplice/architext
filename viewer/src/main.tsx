@@ -26,6 +26,8 @@ import { DiagramIcon } from "./presentation/DiagramIcon.js";
 import { iconForNodeType, iconForStep } from "./presentation/diagramIconModel.js";
 import { decisionBranchTargets, flowStepDisplayIndexes, isDecisionBranchSupportStep } from "./presentation/flowStepDisplayModel.js";
 import { postRulesAction } from "./presentation/rulesClient.js";
+import { postNotesAction } from "./presentation/notesClient.js";
+import { NotesSection } from "./presentation/NotesSection.js";
 import { useUnsavedEditorGuard } from "./presentation/unsavedEditorGuard.js";
 import { useArchitextModel, type RecoveryResult } from "./presentation/useArchitextModel.js";
 import { useDiagramViewport } from "./presentation/useDiagramViewport.js";
@@ -74,6 +76,7 @@ import type {
   DataClass,
   Decision,
   DiagramTransform,
+  ElementNote,
   Flow,
   FlowStep,
   Id,
@@ -1393,6 +1396,15 @@ function App() {
     });
   };
 
+  const saveNote = async (note: ElementNote) => {
+    await postNotesAction(mutationFetch, { action: "update", note });
+    await reloadArchitectureData();
+  };
+  const deleteNoteById = async (id: Id) => {
+    await postNotesAction(mutationFetch, { action: "delete", id });
+    await reloadArchitectureData();
+  };
+
   const selectRule = (id: Id) => {
     guardedSelect(() => {
       setSelection({ kind: "rule", id });
@@ -1806,6 +1818,9 @@ function App() {
             selection={selection}
             selectedStep={selectedStep}
             activeFlow={activeFlow}
+            notes={model.notes ?? []}
+            onSaveNote={saveNote}
+            onDeleteNote={deleteNoteById}
             onSelectNode={selectNode}
             onSelectFlow={selectFlow}
           />
@@ -3235,6 +3250,9 @@ function DetailPanel({
   selection,
   selectedStep,
   activeFlow,
+  notes,
+  onSaveNote,
+  onDeleteNote,
   onSelectNode,
   onSelectFlow
 }: {
@@ -3248,6 +3266,9 @@ function DetailPanel({
   selection: Selection | null;
   selectedStep: FlowStep | null | undefined;
   activeFlow: Flow;
+  notes: ElementNote[];
+  onSaveNote: (note: ElementNote) => Promise<void>;
+  onDeleteNote: (id: Id) => Promise<void>;
   onSelectNode: (id: Id) => void;
   onSelectFlow: (id: Id) => void;
 }) {
@@ -3305,6 +3326,7 @@ function DetailPanel({
         <DecisionList decisions={decisions} />
         <RiskList risks={risks} />
         <FieldList title="Verification" items={node.verification} />
+        <NotesSection targetKind="node" targetId={node.id} notes={notes} onSave={onSaveNote} onDelete={onDeleteNote} />
       </DetailShell>
     );
   }
@@ -3347,6 +3369,7 @@ function DetailPanel({
       <FieldList title="Observability" items={flow.observability} />
       <FieldList title="Known gaps" items={flow.knownGaps} />
       <FieldList title="Verification" items={flow.verification} />
+      <NotesSection targetKind="flow" targetId={flow.id} notes={notes} onSave={onSaveNote} onDelete={onDeleteNote} />
     </DetailShell>
   );
 }
