@@ -1,9 +1,34 @@
 import React, { useMemo, useState } from "react";
 import { buildRepoTree, buildOwnerIndex, resolveOwner, dominantOwner } from "./repoTreeModel.js";
 import { buildFlowColorMap, colorForOwner } from "./repoTreeColors.js";
-import { fileTypeLabel, formatSize, formatRelativeTime } from "./repoTreeFormat.js";
+import { fileIconSpec, formatSize, formatRelativeTime } from "./repoTreeFormat.js";
 import { DiagramIcon } from "./DiagramIcon.js";
 import type { ArchNode, Flow, Id } from "../domain/architectureTypes.js";
+
+// Bundled technology brand logos (Devicon, vendored). Vite inlines the URLs at
+// build time so the viewer needs no network to render file-type icons.
+const BRAND_ICONS = import.meta.glob("../assets/file-icons/*.svg", {
+  eager: true,
+  query: "?url",
+  import: "default"
+}) as Record<string, string>;
+const brandUrlByKey = new Map<string, string>(
+  Object.entries(BRAND_ICONS).map(([path, url]) => [path.replace(/.*\/([^/]+)\.svg$/, "$1"), url])
+);
+
+function FileIcon({ name }: { name: string }) {
+  const spec = fileIconSpec(name);
+  if (spec.kind === "brand") {
+    const url = brandUrlByKey.get(spec.key);
+    if (url) return <img className="repo-file-img" src={url} alt="" aria-hidden="true" />;
+  }
+  const glyph = spec.kind === "glyph" ? spec : { icon: "code", color: undefined };
+  return (
+    <span className="repo-icon" style={{ color: glyph.color }}>
+      <DiagramIcon icon={glyph.icon} className="repo-glyph" />
+    </span>
+  );
+}
 
 type Lens = "c4" | "flow";
 type TreeNode = {
@@ -45,7 +70,6 @@ export function RepoTreeWorkspace({ files, source, nodes, flows, lens, onSelectN
     if (node.type === "file") {
       const owner = resolveOwner(node.path, ownerIndex);
       const color = ownerColor(owner);
-      const typeLabel = fileTypeLabel(node.name);
       return (
         <div
           key={node.path}
@@ -58,9 +82,7 @@ export function RepoTreeWorkspace({ files, source, nodes, flows, lens, onSelectN
         >
           <span className="repo-indent" style={{ width: indent }} />
           <span className="repo-caret-slot" />
-          {typeLabel
-            ? <span className="repo-badge">{typeLabel}</span>
-            : <span className="repo-icon"><DiagramIcon icon="file" className="repo-glyph" /></span>}
+          <FileIcon name={node.name} />
           <span className="repo-name">{node.name}</span>
           <span className="repo-meta repo-size">{formatSize(node.size ?? null)}</span>
           <span className="repo-meta repo-time">{formatRelativeTime(node.mtime ?? null, now)}</span>

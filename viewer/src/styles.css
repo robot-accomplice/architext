@@ -3924,36 +3924,25 @@ select:disabled {
   transform: rotate(-90deg);
 }
 
+/* Icon column: a vendored technology brand logo (.repo-file-img) for languages,
+   or a stroke glyph (.repo-glyph) tinted per file-type family. Folders inherit
+   the muted default; tinted file glyphs set their own color inline. */
 .repo-icon {
   flex: 0 0 auto;
   display: inline-flex;
+  color: var(--muted);
 }
 
 .repo-glyph {
-  width: 15px;
-  height: 15px;
-  color: var(--muted);
+  width: 16px;
+  height: 16px;
 }
 
-/* File-type badge: a small fixed-width monospace token (TS / JSON / MD …) that
-   conveys the technology without branded multicolor logos. Color is reserved
-   for the owner accent + legend, so the badge stays monochrome. */
-.repo-badge {
+.repo-file-img {
   flex: 0 0 auto;
-  box-sizing: border-box;
-  min-width: 36px;
+  width: 16px;
   height: 16px;
-  padding: 0 4px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: var(--panel-2);
-  color: var(--muted);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
+  display: block;
 }
 
 .repo-name {

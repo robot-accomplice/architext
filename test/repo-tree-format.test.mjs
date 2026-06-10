@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { fileTypeLabel, fileCategory, formatSize, formatRelativeTime } from "../viewer/src/presentation/repoTreeFormat.js";
+import { fileTypeLabel, fileCategory, fileIconSpec, formatSize, formatRelativeTime } from "../viewer/src/presentation/repoTreeFormat.js";
 
 test("fileTypeLabel maps known extensions and falls back to uppercase", () => {
   assert.equal(fileTypeLabel("admin.ts"), "TS");
@@ -24,6 +24,22 @@ test("fileCategory groups by technology family", () => {
   assert.equal(fileCategory("a.css"), "style");
   assert.equal(fileCategory("a.svg"), "asset");
   assert.equal(fileCategory("LICENSE"), "other");
+});
+
+test("fileIconSpec resolves brand logos, tinted glyphs, specials, and generic", () => {
+  assert.deepEqual(fileIconSpec("admin.ts"), { kind: "brand", key: "typescript" });
+  assert.deepEqual(fileIconSpec("App.tsx"), { kind: "brand", key: "react" });
+  assert.deepEqual(fileIconSpec("server.py"), { kind: "brand", key: "python" });
+  // monochrome-on-dark types fall back to a tinted glyph, not a brand logo
+  assert.equal(fileIconSpec("data.json").kind, "glyph");
+  assert.equal(fileIconSpec("data.json").icon, "braces");
+  assert.equal(fileIconSpec("README.md").icon, "markdown");
+  assert.equal(fileIconSpec("config.yml").icon, "hash");
+  // special filenames + generic fallback
+  assert.deepEqual(fileIconSpec("Dockerfile"), { kind: "brand", key: "docker" });
+  assert.equal(fileIconSpec("LICENSE").icon, "file");
+  // every glyph spec carries a tint color
+  assert.match(fileIconSpec("x.svg").color, /^#/);
 });
 
 test("formatSize renders bytes/KB/MB and blanks null", () => {
