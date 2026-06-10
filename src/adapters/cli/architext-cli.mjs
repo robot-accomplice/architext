@@ -24,6 +24,7 @@ import { withTargetWriteLock } from "./write-lock.mjs";
 import { createDataWatchHub } from "../http/data-watch-hub.mjs";
 import { approveReleasePlanRequest as approveReleasePlanApiRequest } from "../http/release-planning-api.mjs";
 import { updateRulesRequest as updateRulesApiRequest } from "../http/rules-api.mjs";
+import { updateNotesRequest as updateNotesApiRequest } from "../http/notes-api.mjs";
 import { diagramConfigGetPayload, writeDiagramConfig } from "../http/diagram-config-api.mjs";
 import { repoTreeApiRequest } from "../http/repo-tree-api.mjs";
 import { c4DrilldownIssues, c4IssuesForView, repairC4Views } from "../../domain/architecture-model/c4-quality.mjs";
@@ -1153,6 +1154,7 @@ function isMutatingApiRequest(pathname, method) {
     "/api/sync-repair",
     "/api/release-plans",
     "/api/rules",
+    "/api/notes",
     "/api/config"
   ].includes(pathname);
 }
@@ -1192,6 +1194,18 @@ async function approveReleasePlanRequest(target, payload) {
 
 async function updateRulesRequest(target, payload) {
   return updateRulesApiRequest({
+    target,
+    payload,
+    dataDir,
+    readJson,
+    writeJson,
+    validateTarget,
+    withTargetWriteLock
+  });
+}
+
+async function updateNotesRequest(target, payload) {
+  return updateNotesApiRequest({
     target,
     payload,
     dataDir,
@@ -1452,6 +1466,16 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
         return;
       }
 
+      if (url.pathname === "/api/notes" && request.method === "POST") {
+        try {
+          const result = await updateNotesRequest(target, await requestJson(request));
+          sendJson(response, 200, result);
+        } catch (error) {
+          sendJson(response, 200, { ok: false, mode: "notes", error: error.message, reload: false });
+        }
+        return;
+      }
+
       if (url.pathname.startsWith("/api/")) {
         sendJson(response, 404, { error: `Unknown Architext API route: ${url.pathname}` });
         return;
@@ -1464,6 +1488,9 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
           response.end("Not found");
           return;
         }
+        // Architecture data is user-editable at runtime (rules/notes/config
+        // writes); never let the browser serve a stale copy after a save.
+        response.setHeader("Cache-Control", "no-store");
         await sendFile(response, dataFile);
         return;
       }

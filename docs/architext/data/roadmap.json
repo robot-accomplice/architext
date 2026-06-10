@@ -331,7 +331,7 @@
       "title": "Persistent architecture element notes",
       "summary": "Allow users to edit or annotate architecture elements and persist the notes in Architext JSON, including cases where a high-risk area is intentionally mitigated by the system being documented.",
       "kind": "feature",
-      "status": "planned",
+      "status": "complete",
       "priority": "high",
       "section": "Architecture Editing",
       "targetReleaseId": "v1-6-1",

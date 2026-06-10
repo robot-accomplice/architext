@@ -36,6 +36,9 @@ export async function loadArchitectureModel(fetcher = fetch) {
   const rules = manifest.files.rules
     ? await fetchJson(fetcher, base + manifest.files.rules)
     : undefined;
+  const notes = manifest.files.notes
+    ? await fetchJson(fetcher, base + manifest.files.notes)
+    : undefined;
 
   const model = {
     manifest,
@@ -47,6 +50,7 @@ export async function loadArchitectureModel(fetcher = fetch) {
     risks: risks.risks,
     ...(rules ? { rules: rules.rules } : {}),
     ...(roadmap ? { roadmap: roadmap.items } : {}),
+    ...(notes ? { notes: notes.notes } : {}),
     ...(releases ? { releases } : {})
   };
   const errors = validateArchitectureReferences(model);

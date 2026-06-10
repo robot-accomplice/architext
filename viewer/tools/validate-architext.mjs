@@ -41,7 +41,8 @@ const schemaFiles = {
   risks: "risks.schema.json",
   glossary: "glossary.schema.json",
   rules: "rules.schema.json",
-  roadmap: "roadmap.schema.json"
+  roadmap: "roadmap.schema.json",
+  notes: "notes.schema.json"
 };
 
 const releaseSchemaFiles = {
@@ -130,6 +131,17 @@ function validateReferences(model, errors) {
     for (const nodeId of risk.relatedNodes) requireKnown(nodeId, nodeIds, `risk ${risk.id}.relatedNodes`, errors);
     for (const flowId of risk.relatedFlows) requireKnown(flowId, flowIds, `risk ${risk.id}.relatedFlows`, errors);
   }
+
+  if (model.notes) {
+    const idsByKind = {
+      node: nodeIds, flow: flowIds, decision: decisionIds,
+      risk: riskIds, view: viewIds, "data-class": dataIds
+    };
+    for (const note of model.notes.notes) {
+      const known = idsByKind[note.target.kind];
+      requireKnown(note.target.id, known, `note ${note.id}.target (${note.target.kind})`, errors);
+    }
+  }
 }
 
 function main() {
@@ -154,6 +166,7 @@ function main() {
   const releases = manifest.files.releases ? readReleases(dataDir, manifest.files.releases) : null;
   const roadmap = manifest.files.roadmap ? readJson(path.join(dataDir, manifest.files.roadmap)) : null;
   const rules = manifest.files.rules ? readJson(path.join(dataDir, manifest.files.rules)) : null;
+  const notes = manifest.files.notes ? readJson(path.join(dataDir, manifest.files.notes)) : null;
   const model = {
     manifest,
     nodes: readJson(path.join(dataDir, manifest.files.nodes)),
@@ -165,6 +178,7 @@ function main() {
     glossary: readJson(path.join(dataDir, manifest.files.glossary)),
     ...(rules ? { rules } : {}),
     ...(roadmap ? { roadmap } : {}),
+    ...(notes ? { notes } : {}),
     ...(releases ? { releases } : {})
   };
 
@@ -173,6 +187,7 @@ function main() {
   for (const [key, schema] of Object.entries(schemas)) {
     if (key === "roadmap" && !model.roadmap) continue;
     if (key === "rules" && !model.rules) continue;
+    if (key === "notes" && !model.notes) continue;
     const validate = ajv.getSchema(schema.$id);
     const value = key === "dataClassification" ? model.dataClassification : model[key];
     if (!validate(value)) {
@@ -190,6 +205,7 @@ function main() {
   requireUnique(model.risks.risks, "risks", errors);
   if (model.roadmap) requireUnique(model.roadmap.items, "roadmap.items", errors);
   if (model.rules) requireUnique(model.rules.rules, "rules", errors);
+  if (model.notes) requireUnique(model.notes.notes, "notes", errors);
   validateReferences(model, errors);
 
   if (model.releases) {
