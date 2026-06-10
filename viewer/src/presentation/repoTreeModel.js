@@ -2,9 +2,11 @@
 // list and resolves which architecture node "owns" a path (via node.sourcePaths)
 // so the UI can colour files/folders by C4 type or by Flow responsibility.
 
-// Build a nested tree from flat repo-relative paths.
-// Each node: { name, path, type: "dir"|"file", children?: [] }. Dirs first, then
-// files, both alphabetical — a stable, file-explorer-like order.
+// Build a nested tree from a flat list of files. Each entry is either a
+// repo-relative path string or an object { path, size, mtime }; file nodes carry
+// the size/mtime through for the metadata columns.
+// Each node: { name, path, type: "dir"|"file", size?, mtime?, children? }. Dirs
+// first, then files, both alphabetical — a stable, file-explorer-like order.
 export function buildRepoTree(files) {
   const root = { name: "", path: "", type: "dir", children: [] };
   const dirIndex = new Map([["", root]]);
@@ -21,11 +23,19 @@ export function buildRepoTree(files) {
     return dir;
   };
 
-  for (const file of files) {
-    if (!file) continue;
-    const slash = file.lastIndexOf("/");
-    const dir = ensureDir(slash === -1 ? "" : file.slice(0, slash));
-    dir.children.push({ name: slash === -1 ? file : file.slice(slash + 1), path: file, type: "file" });
+  for (const entry of files) {
+    if (!entry) continue;
+    const filePath = typeof entry === "string" ? entry : entry.path;
+    if (!filePath) continue;
+    const slash = filePath.lastIndexOf("/");
+    const dir = ensureDir(slash === -1 ? "" : filePath.slice(0, slash));
+    dir.children.push({
+      name: slash === -1 ? filePath : filePath.slice(slash + 1),
+      path: filePath,
+      type: "file",
+      size: typeof entry === "string" ? null : entry.size ?? null,
+      mtime: typeof entry === "string" ? null : entry.mtime ?? null
+    });
   }
 
   const sortChildren = (node) => {

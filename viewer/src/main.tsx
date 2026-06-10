@@ -33,6 +33,7 @@ import { DiagramConfigContext, useDiagramConfig, type DiagramConfig } from "./pr
 import { fetchDiagramConfig } from "./adapters/fetchDiagramConfig.js";
 import { fetchRepoTree } from "./adapters/fetchRepoTree.js";
 import { RepoTreeWorkspace } from "./presentation/RepoTreeWorkspace.js";
+import { ownerLegend } from "./presentation/repoTreeColors.js";
 import { DiagramConfigPanel, type DiagramFieldsSpec, type DiagramSectionLabels } from "./presentation/DiagramConfigPanel.js";
 import { DIAGRAM_FIELD_SPEC, DIAGRAM_SECTION_LABELS } from "./presentation/diagramFieldSpec.js";
 import { nodeLanePosition, preferredDecisionBranchSide, preferredDecisionBranchEndSide } from "./presentation/decisionBranchModel.js";
@@ -1068,7 +1069,8 @@ function App() {
   const [configPayload, setConfigPayload] = useState<{ diagram: DiagramConfig; fields: DiagramFieldsSpec; sections: DiagramSectionLabels } | null>(null);
   const [configDraft, setConfigDraft] = useState<DiagramConfig | null>(null);
   const [configPanelOpen, setConfigPanelOpen] = useState(false);
-  const [repoTree, setRepoTree] = useState<{ files: string[]; source?: string } | null>(null);
+  const [repoTree, setRepoTree] = useState<{ files: Array<{ path: string; size: number | null; mtime: number | null }>; source?: string } | null>(null);
+  const [repoTreeLens, setRepoTreeLens] = useState<"c4" | "flow">("c4");
   const [configBusy, setConfigBusy] = useState(false);
   const [configMessage, setConfigMessage] = useState<string | null>(null);
   useEffect(() => {
@@ -1588,6 +1590,8 @@ function App() {
             activeRuleCategory={selectedRuleCategory}
             riskFilter={riskFilter}
             onRiskFilterChange={setRiskFilter}
+            repoTreeLens={repoTreeLens}
+            onRepoTreeLensChange={setRepoTreeLens}
             onSelectFlow={selectFlow}
             onSelectView={selectView}
             onSelectNode={selectNode}
@@ -1606,6 +1610,7 @@ function App() {
             source={repoTree?.source}
             nodes={model.nodes}
             flows={model.flows}
+            lens={repoTreeLens}
             onSelectNode={selectNode}
           />
         ) : isRulesView ? (
@@ -1820,6 +1825,8 @@ function LeftPanel({
   activeRuleCategory,
   riskFilter,
   onRiskFilterChange,
+  repoTreeLens,
+  onRepoTreeLensChange,
   onSelectFlow,
   onSelectView,
   onSelectNode,
@@ -1845,6 +1852,8 @@ function LeftPanel({
   activeRuleCategory: string;
   riskFilter: string;
   onRiskFilterChange: (value: string) => void;
+  repoTreeLens: "c4" | "flow";
+  onRepoTreeLensChange: (lens: "c4" | "flow") => void;
   onSelectFlow: (id: Id) => void;
   onSelectView: (id: Id) => void;
   onSelectNode: (id: Id) => void;
@@ -1854,11 +1863,34 @@ function LeftPanel({
   onAddRuleCategory: () => void;
 }) {
   if (mode === "repo-tree") {
+    const legend = ownerLegend(nodes, allFlows, repoTreeLens);
     return (
       <>
         <div className="panel-head">
           <h2>Repo Tree</h2>
           <p>The repository's tracked files, colored by the architecture node that owns each path. Click a file to inspect its component.</p>
+        </div>
+        <div className="repo-nav-section">
+          <h3 className="repo-nav-title">Color by</h3>
+          <div className="repo-lens-toggle" role="group" aria-label="Color lens">
+            <button type="button" className={repoTreeLens === "c4" ? "active" : ""} onClick={() => onRepoTreeLensChange("c4")}>C4 type</button>
+            <button type="button" className={repoTreeLens === "flow" ? "active" : ""} onClick={() => onRepoTreeLensChange("flow")}>Flow</button>
+          </div>
+        </div>
+        <div className="repo-nav-section">
+          <h3 className="repo-nav-title">{repoTreeLens === "c4" ? "Component types" : "Flows"}</h3>
+          {legend.length ? (
+            <ul className="repo-legend">
+              {legend.map((entry) => (
+                <li key={entry.key} className="repo-legend-item">
+                  <span className="repo-legend-swatch" style={{ background: entry.color }} />
+                  <span className="repo-legend-label">{entry.label}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="repo-legend-empty">No owned paths yet. Map files with <code>sourcePaths</code> on architecture nodes.</p>
+          )}
         </div>
       </>
     );

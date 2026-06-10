@@ -9,6 +9,19 @@ test("buildRepoTree nests paths, dirs before files, alphabetical", () => {
   assert.deepEqual(src.children.map((c) => `${c.type}:${c.name}`), ["dir:lib", "file:a.js", "file:b.js"]);
 });
 
+test("buildRepoTree carries size/mtime from object entries onto file nodes", () => {
+  const root = buildRepoTree([
+    { path: "src/a.js", size: 120, mtime: 999 },
+    { path: "README.md", size: 4, mtime: 5 }
+  ]);
+  const a = root.children.find((c) => c.name === "src").children[0];
+  assert.equal(a.size, 120);
+  assert.equal(a.mtime, 999);
+  // string entries still work, with null metadata
+  const stringTree = buildRepoTree(["x.js"]);
+  assert.equal(stringTree.children[0].size, null);
+});
+
 test("resolveOwner picks the longest matching sourcePath (file beats folder)", () => {
   const nodes = [
     { id: "router", type: "service", sourcePaths: ["src/routing"] },
