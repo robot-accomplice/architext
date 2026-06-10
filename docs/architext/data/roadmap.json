@@ -346,6 +346,16 @@
       "priority": "high",
       "section": "Go Rewrite",
       "dateAdded": "2026-06-10T00:00:00.000Z"
+    },
+    {
+      "id": "design-language-consolidation",
+      "title": "Consolidate viewer modes onto the shared design language",
+      "summary": "Migrate every mode (detail panel, left nav, diagram toolbar, steps, rules, release truth, repo tree, blast radius, notes) onto the shared .overline and .accent-surface primitives and the --c4-* type-color source defined in viewer/DESIGN.md. Fix the C4_COLOR worker mismatch (yellow in diagram tokens vs purple in repoTreeColors.js), converge the three accent-rail variable names, and unify chips/count pills. Run as one consolidation after the 1.6.1 feature PRs merge so it is coherent and visually verifiable rather than split across branches.",
+      "kind": "chore",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Design System",
+      "dateAdded": "2026-06-10T00:00:00.000Z"
     }
   ]
 }
