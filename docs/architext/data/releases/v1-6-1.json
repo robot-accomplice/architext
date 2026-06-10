@@ -6,7 +6,7 @@
   "posture": "on-track",
   "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), folds in the App-component decomposition and crowded-face routing refinements deferred from 1.6.0, and includes minor UI cleanup.",
   "targetWindow": "After 1.6.0",
-  "lastUpdated": "2026-06-10T09:15:00.000Z",
+  "lastUpdated": "2026-06-10T11:00:00.000Z",
   "updateSource": "1.6.1: diagram-config + spacing-controls delivered (PR #88); dense-flow re-scoped from hang to candidate-volume perf redesign per audit.",
   "scope": {
     "required": [],
@@ -34,13 +34,19 @@
         "id": "repo-blast-radius-search",
         "title": "Repository blast-radius search",
         "kind": "feature",
-        "status": "planned",
-        "summary": "Provide search for filenames, components, or known code concepts so users can see where a concern reaches across repository files and architecture elements.",
+        "status": "complete",
+        "summary": "Provide search for filenames, components, or known code concepts so users can see where a concern reaches across repository files and architecture elements. DELIVERED: a Blast Radius top-bar mode. Searching ranks component matches (name/id/sourcePath/summary/responsibilities) and file matches (resolved to their owning component). Focusing a component shows its full reach: owned files, forward dependencies, reverse dependents (nodes whose dependencies include it), participating flows (related + step endpoints), decisions, risks, data handled, and views. Component chips re-focus the panel; flow/view chips navigate out; the detail panel stays in sync.",
         "source": "roadmap",
         "dateAdded": "2026-05-27T16:30:00.000Z",
         "workstreamId": "repository-intelligence",
         "priority": "high",
-        "dependsOn": []
+        "dependsOn": [],
+        "evidence": [
+          "viewer/src/presentation/blastRadius.js (searchRepository + blastRadiusForNode, incl. reverse-dependency resolution)",
+          "viewer/src/presentation/BlastRadiusWorkspace.tsx + LeftPanel blast-radius branch (search + reach panel)",
+          "test/blast-radius.test.mjs (5 tests)",
+          "Live corpus review: search -> focus (Auth reaches 14 elements) -> chip re-focus (forward + reverse deps) -> flow navigation, 0 console errors"
+        ]
       },
       {
         "id": "diagram-spacing-controls",

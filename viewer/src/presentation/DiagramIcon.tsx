@@ -24,6 +24,7 @@ const iconPaths: Record<string, string> = {
   process: "M5 7h14v10H5z M8 10h8 M8 14h5",
   queue: "M5 6h14 M5 12h14 M5 18h14 M8 4v4 M8 10v4 M8 16v4",
   return: "M9 7l-5 5 5 5 M4 12h11a5 5 0 0 0 0-10h-2",
+  search: "M11 4a7 7 0 1 0 0 14 7 7 0 0 0 0-14 M16 16l5 5",
   service: "M5 5h14v14H5z M8 9h8 M8 13h8 M8 17h4",
   shield: "M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z",
   start: "M8 5l10 7-10 7z",
