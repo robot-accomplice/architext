@@ -132,7 +132,17 @@ export function RepoTreeWorkspace({ files, source, nodes, flows, lens, onSelectN
       </div>
       <div className="repo-tree-body">
         <div className="repo-tree-inner">
-          {files.length ? renderNode(tree, 0) : (
+          {files.length ? (
+            <>
+              <div className="repo-tree-colhead" aria-hidden="true">
+                <span className="repo-colhead-name">Name</span>
+                <span className="repo-meta repo-size">Size</span>
+                <span className="repo-meta repo-time">Modified</span>
+                <span className="repo-owner repo-colhead-owner">Owner</span>
+              </div>
+              {renderNode(tree, 0)}
+            </>
+          ) : (
             <p className="repo-tree-empty">No files found. Run <code>architext serve</code> inside a git repository.</p>
           )}
         </div>
