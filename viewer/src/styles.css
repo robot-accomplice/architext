@@ -3885,7 +3885,7 @@ select:disabled {
    metadata together in a readable column instead of flinging the owner to the
    far right edge. */
 .repo-tree-inner {
-  max-width: 860px;
+  max-width: 1100px;
 }
 
 /* Column headers — same flex/gap/widths as a row so the labels sit exactly over
@@ -3939,6 +3939,17 @@ select:disabled {
 
 .repo-indent {
   flex: 0 0 auto;
+  align-self: stretch;
+  /* Faint vertical guide at each nesting level (one per 14px depth step), like
+     an IDE file tree — aids hierarchy reading and tracking a row to its
+     metadata. */
+  background-image: repeating-linear-gradient(
+    to right,
+    transparent 0,
+    transparent 13px,
+    color-mix(in srgb, var(--line) 70%, transparent) 13px,
+    color-mix(in srgb, var(--line) 70%, transparent) 14px
+  );
 }
 
 .repo-caret,
@@ -4001,16 +4012,19 @@ select:disabled {
 }
 
 .repo-size {
-  width: 58px;
+  width: 52px;
 }
 
 .repo-time {
-  width: 46px;
+  width: 44px;
 }
 
+/* Fixed width keeps the size/modified columns vertically aligned between the
+   header and every row (the name is the only flexible cell). Slimmer than
+   before to give filenames more room. */
 .repo-owner {
   flex: 0 0 auto;
-  width: 132px;
+  width: 104px;
   color: var(--dim);
   font-size: 11px;
   text-align: right;
