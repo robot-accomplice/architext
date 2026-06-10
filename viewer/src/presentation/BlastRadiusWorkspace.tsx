@@ -14,7 +14,7 @@ const nodeColor = (type: string) => (C4_COLOR as Record<string, string>)[type] ?
 function Section({ title, count, accent, children }: { title: string; count: number; accent: string; children: React.ReactNode }) {
   if (!count) return null;
   return (
-    <section className="blast-section" style={{ ["--card-accent" as string]: accent }}>
+    <section className="blast-section" style={{ ["--accent" as string]: accent }}>
       <h3 className="blast-section-title">{title}<span className="blast-count">{count}</span></h3>
       {children}
     </section>

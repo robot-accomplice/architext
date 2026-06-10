@@ -80,7 +80,7 @@ const categoryAccents = [
   "var(--pink)",
   "var(--orange)",
   "var(--c4-client)",
-  "var(--section-accent)"
+  "var(--accent)"
 ];
 
 export function ruleCategoryAccent(category = "") {
