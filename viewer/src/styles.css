@@ -4251,8 +4251,9 @@ select:disabled {
 }
 
 .blast-head {
-  padding: 8px 4px 16px;
+  padding: 8px 4px 16px 12px;
   border-bottom: 1px solid var(--line);
+  border-left: 3px solid var(--node-accent, var(--line-strong));
   margin-bottom: 8px;
 }
 
@@ -4262,7 +4263,7 @@ select:disabled {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: var(--muted);
+  color: var(--node-accent, var(--muted));
 }
 
 .blast-reach {
@@ -4274,8 +4275,11 @@ select:disabled {
 .blast-section {
   padding: 12px 14px;
   border: 1px solid var(--line);
+  border-left: 3px solid color-mix(in srgb, var(--card-accent, var(--line)) 80%, transparent);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--panel-2) 40%, transparent);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--card-accent, transparent) 8%, transparent), transparent 60%),
+    color-mix(in srgb, var(--panel-2) 40%, transparent);
 }
 
 .blast-section-title {
@@ -4298,9 +4302,9 @@ select:disabled {
   height: 16px;
   padding: 0 5px;
   border-radius: 8px;
-  background: var(--panel-2);
-  border: 1px solid var(--line);
-  color: var(--dim);
+  background: color-mix(in srgb, var(--card-accent, var(--line)) 18%, var(--panel-2));
+  border: 1px solid color-mix(in srgb, var(--card-accent, var(--line)) 45%, transparent);
+  color: var(--card-accent, var(--dim));
   font-family: var(--font-mono);
   font-size: 10px;
 }
@@ -4337,6 +4341,12 @@ button.blast-chip:hover {
   height: 13px;
   color: var(--muted);
 }
+
+/* Node chips are tinted by C4 type (inline border + color); the icon inherits
+   that tint while the label stays ink for readability. */
+.blast-chip.node .blast-chip-icon { color: inherit; }
+.blast-chip.node > span { color: var(--ink); }
+button.blast-chip.node:hover { background: color-mix(in srgb, var(--panel-2) 70%, transparent); }
 
 .blast-files {
   list-style: none;
