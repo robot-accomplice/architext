@@ -29,6 +29,12 @@ import { postRulesAction } from "./presentation/rulesClient.js";
 import { useUnsavedEditorGuard } from "./presentation/unsavedEditorGuard.js";
 import { useArchitextModel, type RecoveryResult } from "./presentation/useArchitextModel.js";
 import { useDiagramViewport } from "./presentation/useDiagramViewport.js";
+import { DiagramConfigContext, useDiagramConfig, type DiagramConfig } from "./presentation/diagramConfigContext.js";
+import { fetchDiagramConfig } from "./adapters/fetchDiagramConfig.js";
+import { DiagramConfigPanel, type DiagramFieldsSpec, type DiagramSectionLabels } from "./presentation/DiagramConfigPanel.js";
+import { DIAGRAM_FIELD_SPEC, DIAGRAM_SECTION_LABELS } from "./presentation/diagramFieldSpec.js";
+import { nodeLanePosition, preferredDecisionBranchSide, preferredDecisionBranchEndSide } from "./presentation/decisionBranchModel.js";
+import { postDiagramConfig } from "./presentation/diagramConfigClient.js";
 import { pdfExportControlLabel, requestPdfExport } from "./presentation/pdfExportModel.js";
 import { StepRoute } from "./presentation/StepRoute.js";
 import { sequenceActivationSpans, sequenceStepMessageKind, stepRouteClassName } from "./presentation/stepRouteModel.js";
@@ -170,6 +176,10 @@ function decisionRouteRect(rect: { x: number; y: number; width: number; height: 
   };
 }
 
+// Connector from the affiliated node down to the diamond's node-facing (top) tip.
+// The diamond sits below its node, so the TOP point is the node side; branches
+// only ever use the other three tips (left/right/bottom), so they never collide
+// with this connection.
 function decisionConnectorRoute(decisionNode: { componentId: Id; rect: { x: number; y: number; width: number; height: number } }, componentRect: { x: number; y: number; width: number; height: number }) {
   const x = componentRect.x + componentRect.width / 2;
   const decisionTop = decisionTip(decisionNode.rect, "top");
@@ -181,42 +191,6 @@ function decisionConnectorRoute(decisionNode: { componentId: Id; rect: { x: numb
   };
 }
 
-function nodeLanePosition(view: View, nodeId: Id) {
-  for (let laneIndex = 0; laneIndex < view.lanes.length; laneIndex += 1) {
-    const rowIndex = view.lanes[laneIndex].nodeIds.indexOf(nodeId);
-    if (rowIndex >= 0) return { laneIndex, rowIndex };
-  }
-  return null;
-}
-
-function preferredDecisionBranchSide(view: View, decisionNode: { laneIndex: number; rowIndex: number }, targetNodeId: Id): RouteSide {
-  const target = nodeLanePosition(view, targetNodeId);
-  if (!target) return "right";
-  const deltaLane = target.laneIndex - decisionNode.laneIndex;
-  const deltaRow = target.rowIndex - decisionNode.rowIndex;
-  if (deltaLane !== 0) return deltaLane < 0 ? "left" : "right";
-  if (deltaRow < 0) return "left";
-  if (deltaRow > 0) return "bottom";
-  if (deltaLane !== 0) return deltaLane < 0 ? "left" : "right";
-  return "right";
-}
-
-function oppositeSide(side: RouteSide): RouteSide {
-  if (side === "left") return "right";
-  if (side === "right") return "left";
-  if (side === "top") return "bottom";
-  return "top";
-}
-
-function preferredDecisionBranchEndSide(view: View, decisionNode: { laneIndex: number; rowIndex: number }, targetNodeId: Id, startSide: RouteSide): RouteSide {
-  const target = nodeLanePosition(view, targetNodeId);
-  if (target && target.laneIndex === decisionNode.laneIndex) {
-    if (target.rowIndex < decisionNode.rowIndex) return "left";
-    if (target.rowIndex > decisionNode.rowIndex) return "top";
-  }
-  if (startSide === "right") return "right";
-  return oppositeSide(startSide);
-}
 
 function byId<T extends { id: Id }>(items: T[]): Map<Id, T> {
   return new Map(items.map((item) => [item.id, item]));
@@ -1085,6 +1059,61 @@ function App() {
   const [selectedRuleCategory, setSelectedRuleCategory] = useState("all");
   const [newRuleDraftRequest, setNewRuleDraftRequest] = useState<{ id: number; category: string } | null>(null);
   const [riskFilter, setRiskFilter] = useState("all");
+  // User-configurable diagram parameters. configPayload holds the server response
+  // { diagram, fields, sections }; configDraft holds unsaved live-preview edits.
+  // The effective config (draft over saved) feeds both the diagram and the
+  // settings panel. Null until loaded / on static builds -> hardcoded defaults.
+  const [configPayload, setConfigPayload] = useState<{ diagram: DiagramConfig; fields: DiagramFieldsSpec; sections: DiagramSectionLabels } | null>(null);
+  const [configDraft, setConfigDraft] = useState<DiagramConfig | null>(null);
+  const [configPanelOpen, setConfigPanelOpen] = useState(false);
+  const [configBusy, setConfigBusy] = useState(false);
+  const [configMessage, setConfigMessage] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    fetchDiagramConfig().then((payload) => {
+      if (!cancelled) setConfigPayload(payload);
+    });
+    return () => { cancelled = true; };
+  }, []);
+  const savedConfig = configPayload?.diagram ?? null;
+  const effectiveConfig = configDraft ?? savedConfig;
+
+  const updateConfigField = useCallback((section: string, field: string, next: number) => {
+    setConfigDraft((current) => {
+      const base = (current ?? savedConfig ?? {}) as Record<string, Record<string, number>>;
+      return { ...base, [section]: { ...base[section], [field]: next } } as DiagramConfig;
+    });
+  }, [savedConfig]);
+
+  const resetConfigToDefaults = useCallback(() => {
+    const fields = configPayload?.fields;
+    if (!fields) return;
+    const defaults: Record<string, Record<string, number>> = {};
+    for (const [section, sectionFields] of Object.entries(fields)) {
+      defaults[section] = Object.fromEntries(
+        Object.entries(sectionFields).map(([field, spec]) => [field, spec.default])
+      );
+    }
+    setConfigDraft(defaults as DiagramConfig);
+  }, [configPayload]);
+
+  const revertConfig = useCallback(() => setConfigDraft(null), []);
+
+  const saveConfig = useCallback(async (scope: "project" | "user") => {
+    if (!effectiveConfig) return;
+    setConfigBusy(true);
+    setConfigMessage(null);
+    try {
+      const result = await postDiagramConfig(mutationFetch, { scope, diagram: effectiveConfig });
+      setConfigPayload((prev) => (prev ? { ...prev, diagram: result.diagram as DiagramConfig } : prev));
+      setConfigDraft(null);
+      setConfigMessage(scope === "user" ? "Saved to ~/.architext/config.json." : "Saved to docs/architext/config.json.");
+    } catch (error) {
+      setConfigMessage(error instanceof Error ? error.message : String(error));
+    } finally {
+      setConfigBusy(false);
+    }
+  }, [effectiveConfig]);
   const {
     debugRouting,
     diagramTransform,
@@ -1101,7 +1130,8 @@ function App() {
     setRoutingStyle
   } = useDiagramViewport({
     localStorage,
-    locationSearch: window.location.search
+    locationSearch: window.location.search,
+    zoomConfig: effectiveConfig?.zoom ?? null
   });
   const editorStates = useMemo(() => [
     { id: "release-planning", label: "Release Planning", dirty: releasePlanningDirty },
@@ -1441,6 +1471,7 @@ function App() {
   };
 
   return (
+    <DiagramConfigContext.Provider value={effectiveConfig}>
     <div className={`app ${navCollapsed ? "left-collapsed" : ""} ${rightCollapsed ? "right-collapsed" : ""} ${diagramTransform.focused ? "diagram-focused" : ""}`}>
       <header className="topbar">
         <div>
@@ -1465,6 +1496,15 @@ function App() {
               </button>
             ))}
           </div>
+          <button
+            type="button"
+            className="topbar-config-button"
+            onClick={() => setConfigPanelOpen(true)}
+            title="Configure diagram spacing, layout, and zoom"
+            aria-label="Open diagram configuration"
+          >
+            <span aria-hidden="true">⚙</span> Config
+          </button>
         </div>
       </header>
       {dataNotice && !dataIssue ? (
@@ -1721,7 +1761,23 @@ function App() {
           />
         )}
       </aside>
+      {configPanelOpen ? (
+        <DiagramConfigPanel
+          fields={configPayload?.fields ?? DIAGRAM_FIELD_SPEC}
+          sections={configPayload?.sections ?? DIAGRAM_SECTION_LABELS}
+          value={effectiveConfig ?? {}}
+          saved={savedConfig ?? {}}
+          busy={configBusy}
+          message={configMessage}
+          onChange={updateConfigField}
+          onSave={saveConfig}
+          onRevert={revertConfig}
+          onResetDefaults={resetConfigToDefaults}
+          onClose={() => setConfigPanelOpen(false)}
+        />
+      ) : null}
     </div>
+    </DiagramConfigContext.Provider>
   );
 }
 
@@ -2085,6 +2141,7 @@ function SystemMap({
   onSelectRelationship: (relationship: Relationship) => void;
   onSelectNode: (id: Id) => void;
 }) {
+  const diagramConfig = useDiagramConfig();
   const visibleNodeIds = useMemo(() => new Set(view.lanes.flatMap((lane) => lane.nodeIds)), [view]);
   const flowNodeIds = useMemo(
     () => new Set(activeFlow ? activeFlow.steps.flatMap((step) => [step.from, step.to]) : Array.from(visibleNodeIds)),
@@ -2141,7 +2198,7 @@ function SystemMap({
     });
   }, [activeFlow, view]);
 
-  const layout = diagramLayoutFor(view, showStructuralConnections ? structuralRelationships.length : flowRelationships.length);
+  const layout = diagramLayoutFor(view, showStructuralConnections ? structuralRelationships.length : flowRelationships.length, diagramConfig?.layout);
   const {
     nodeWidth,
     nodeHeight,
@@ -2329,10 +2386,11 @@ function SystemMap({
             if (!componentRect) return null;
             const connector = decisionConnectorRoute(decisionNode, componentRect);
             const isSelected = selectedStepDisplayIndex === decisionNode.displayIndex;
+            const connectorNodeType = nodesById.get(decisionNode.componentId)?.type ?? "";
             return (
               <line
                 key={`${decisionNode.id}:connector`}
-                className={isSelected ? "decision-node-connector selected" : "decision-node-connector"}
+                className={`decision-node-connector ${connectorNodeType}${isSelected ? " selected" : ""}`}
                 x1={connector.points[0].x}
                 y1={connector.points[0].y}
                 x2={connector.points[1].x}
@@ -2806,10 +2864,11 @@ function SequenceDiagram({
   onSelectRelationship: (relationship: Relationship) => void;
   onSelectStep: (stepId: Id) => void;
 }) {
+  const sequenceConfig = useDiagramConfig()?.sequence;
   const participantIds = Array.from(new Set(activeFlow.steps.flatMap((step) => [step.from, step.to])));
-  const participantWidth = 146;
-  const rowHeight = 56;
-  const marginX = 28;
+  const participantWidth = sequenceConfig?.participantWidth ?? 146;
+  const rowHeight = sequenceConfig?.rowHeight ?? 56;
+  const marginX = sequenceConfig?.marginX ?? 28;
   const headerY = 18;
   const messageStartY = 68;
   const width = marginX * 2 + participantIds.length * participantWidth;

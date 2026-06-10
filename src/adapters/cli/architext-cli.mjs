@@ -24,6 +24,7 @@ import { withTargetWriteLock } from "./write-lock.mjs";
 import { createDataWatchHub } from "../http/data-watch-hub.mjs";
 import { approveReleasePlanRequest as approveReleasePlanApiRequest } from "../http/release-planning-api.mjs";
 import { updateRulesRequest as updateRulesApiRequest } from "../http/rules-api.mjs";
+import { diagramConfigGetPayload, writeDiagramConfig } from "../http/diagram-config-api.mjs";
 import { c4DrilldownIssues, c4IssuesForView, repairC4Views } from "../../domain/architecture-model/c4-quality.mjs";
 import { generatedReleaseIndex, releaseIndexGenerationChanges } from "../../domain/architecture-model/release-history.mjs";
 import { doctorRepairCategories, doctorRepairsForStatus } from "../../domain/lifecycle/doctor-repairs.mjs";
@@ -1150,7 +1151,8 @@ function isMutatingApiRequest(pathname, method) {
     "/api/doctor",
     "/api/sync-repair",
     "/api/release-plans",
-    "/api/rules"
+    "/api/rules",
+    "/api/config"
   ].includes(pathname);
 }
 
@@ -1361,6 +1363,29 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
 
       if (url.pathname === "/api/session" && request.method === "GET") {
         sendJson(response, 200, { mutationToken });
+        return;
+      }
+
+      if (url.pathname === "/api/config" && request.method === "GET") {
+        const payload = await diagramConfigGetPayload(target);
+        if (payload.warnings.length) {
+          console.warn(`[architext] diagram config:\n  ${payload.warnings.join("\n  ")}`);
+        }
+        // Never cache: a stale payload (e.g. from before the field spec shipped)
+        // would leave the settings panel without controls.
+        response.setHeader("Cache-Control", "no-store");
+        sendJson(response, 200, payload);
+        return;
+      }
+
+      if (url.pathname === "/api/config" && request.method === "POST") {
+        try {
+          const body = await requestJson(request);
+          const result = await writeDiagramConfig({ scope: body.scope, target, diagram: body.diagram });
+          sendJson(response, 200, result);
+        } catch (error) {
+          sendJson(response, 200, { ok: false, mode: "config", error: error.message, reload: false });
+        }
         return;
       }
 

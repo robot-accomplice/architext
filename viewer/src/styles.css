@@ -2399,11 +2399,21 @@ select:disabled {
 }
 
 .decision-node-connector {
-  stroke: var(--orange);
+  stroke: var(--purple);
   stroke-width: 1.5;
   stroke-linecap: round;
   pointer-events: none;
 }
+
+/* Match the connection line to its affiliated node's colour (mirrors .node-card). */
+.decision-node-connector.actor { stroke: var(--pink); }
+.decision-node-connector.software-system { stroke: var(--cyan); }
+.decision-node-connector.client { stroke: var(--blue); }
+.decision-node-connector.service,
+.decision-node-connector.worker { stroke: var(--purple); }
+.decision-node-connector.queue { stroke: var(--orange); }
+.decision-node-connector.data-store { stroke: var(--green); }
+.decision-node-connector.external-service { stroke: var(--muted); }
 
 .decision-node-connector.selected {
   stroke: var(--flow-selected);
@@ -3825,4 +3835,153 @@ select:disabled {
 
 .layer-modal {
   z-index: var(--z-modal);
+}
+
+/* Top-level Config entry — a cross-concern action beside the mode tabs */
+.topbar-config-button {
+  flex: 0 0 auto;
+  padding: 7px 11px;
+  border: 1px solid color-mix(in srgb, var(--cyan) 70%, var(--line));
+  border-radius: 6px;
+  color: var(--cyan);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+
+.topbar-config-button:hover,
+.topbar-config-button:focus {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 14%, var(--panel-2));
+}
+
+/* Diagram settings panel (user-configurable diagram parameters) */
+.diagram-config-panel {
+  position: fixed;
+  top: 72px;
+  right: 16px;
+  width: 360px;
+  max-height: calc(100vh - 96px);
+  display: flex;
+  flex-direction: column;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  z-index: var(--z-modal);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+}
+
+.diagram-config-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--line);
+}
+
+.diagram-config-header h3 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.diagram-config-body {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.diagram-config-section h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--dim);
+}
+
+.diagram-config-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.diagram-config-field-label {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.diagram-config-field-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.diagram-config-field-controls input[type="range"] {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.diagram-config-field-controls input[type="number"] {
+  flex: 0 0 64px;
+  width: 64px;
+  background: var(--surface);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 4px 6px;
+}
+
+.diagram-config-unit {
+  flex: 0 0 auto;
+  font-size: 11px;
+  color: var(--dim);
+  min-width: 18px;
+}
+
+.diagram-config-field-reset {
+  flex: 0 0 auto;
+  padding: 2px 8px;
+}
+
+.diagram-config-footer {
+  border-top: 1px solid var(--line);
+  padding: 12px 14px;
+}
+
+.diagram-config-message {
+  margin: 0 0 8px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.diagram-config-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.diagram-config-actions .primary-action {
+  border-color: var(--cyan);
+  background: var(--cyan);
+  color: var(--bg);
+  font-weight: 700;
+}
+
+.diagram-config-actions .secondary-action {
+  border-color: color-mix(in srgb, var(--purple) 70%, var(--line));
+  background: color-mix(in srgb, var(--purple) 16%, var(--panel-2));
+  color: color-mix(in srgb, var(--purple) 42%, var(--ink));
+}
+
+.diagram-config-actions .quiet-action {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--muted);
 }

@@ -819,6 +819,44 @@
           ]
         }
       ]
+    },
+    {
+      "id": "view-30",
+      "name": "Feature Showcase",
+      "type": "flow-explorer",
+      "lanes": [
+        {
+          "id": "view-30-lane-0",
+          "name": "Entry",
+          "nodeIds": [
+            "n90",
+            "n91"
+          ]
+        },
+        {
+          "id": "view-30-lane-1",
+          "name": "Decision",
+          "nodeIds": [
+            "n92"
+          ]
+        },
+        {
+          "id": "view-30-lane-2",
+          "name": "Branches",
+          "nodeIds": [
+            "n93",
+            "n94"
+          ]
+        },
+        {
+          "id": "view-30-lane-3",
+          "name": "Async and Store",
+          "nodeIds": [
+            "n95",
+            "n96"
+          ]
+        }
+      ]
     }
   ]
 }

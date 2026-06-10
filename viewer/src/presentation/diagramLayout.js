@@ -12,15 +12,33 @@ const BASE_LAYOUT = {
 
 const DENSE_VIEW_TYPES = new Set(["dataflow", "deployment", "flow-explorer", "risk-overlay"]);
 
-export function diagramLayoutFor(view, relationshipCount = 0) {
+/**
+ * @param {*} view
+ * @param {number} [relationshipCount]
+ * @param {{nodeWidth?:number,nodeHeight?:number,laneWidth?:number,rowGap?:number,routeGutter?:number,marginY?:number}|null} [layoutConfig]
+ */
+export function diagramLayoutFor(view, relationshipCount = 0, layoutConfig = null) {
   const maxRows = Math.max(...view.lanes.map((lane) => lane.nodeIds.length), 1);
   const isDenseTopology = DENSE_VIEW_TYPES.has(view.type) && (maxRows >= 5 || relationshipCount >= 8);
-  const routeGutter = isDenseTopology ? 180 : BASE_LAYOUT.routeGutter;
+  // User overrides win over the auto-selected (default vs dense) value, and are
+  // applied before deriving marginX/canvasExtraWidth so an overridden routeGutter
+  // cascades. With layoutConfig null, every `??` falls through to the original
+  // value, so default rendering is byte-identical.
+  const o = layoutConfig ?? {};
+  const nodeWidth = o.nodeWidth ?? BASE_LAYOUT.nodeWidth;
+  const nodeHeight = o.nodeHeight ?? BASE_LAYOUT.nodeHeight;
+  const laneWidth = o.laneWidth ?? (isDenseTopology ? 240 : BASE_LAYOUT.laneWidth);
+  const rowGap = o.rowGap ?? (isDenseTopology ? 176 : BASE_LAYOUT.rowGap);
+  const routeGutter = o.routeGutter ?? (isDenseTopology ? 180 : BASE_LAYOUT.routeGutter);
+  const marginY = o.marginY ?? BASE_LAYOUT.marginY;
   return {
     ...BASE_LAYOUT,
-    laneWidth: isDenseTopology ? 240 : BASE_LAYOUT.laneWidth,
-    rowGap: isDenseTopology ? 176 : BASE_LAYOUT.rowGap,
+    nodeWidth,
+    nodeHeight,
+    laneWidth,
+    rowGap,
     routeGutter,
+    marginY,
     marginX: routeGutter + 48,
     minCanvasHeight: isDenseTopology ? 560 : BASE_LAYOUT.minCanvasHeight,
     canvasExtraWidth: routeGutter

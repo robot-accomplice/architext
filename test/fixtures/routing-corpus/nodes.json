@@ -263,6 +263,34 @@
     {
       "id": "n37",
       "type": "module"
+    },
+    {
+      "id": "n90",
+      "type": "client"
+    },
+    {
+      "id": "n91",
+      "type": "service"
+    },
+    {
+      "id": "n92",
+      "type": "service"
+    },
+    {
+      "id": "n93",
+      "type": "service"
+    },
+    {
+      "id": "n94",
+      "type": "service"
+    },
+    {
+      "id": "n95",
+      "type": "queue"
+    },
+    {
+      "id": "n96",
+      "type": "data-store"
     }
   ]
 }

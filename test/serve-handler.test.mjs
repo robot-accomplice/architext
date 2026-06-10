@@ -100,6 +100,73 @@ test("serve handler reads target data files through the package-owned server", a
   }
 });
 
+test("serve handler serves the resolved diagram config from the project config file", async () => {
+  const target = await mkdtemp(path.join(tmpdir(), "architext-config-"));
+  try {
+    const architextDir = path.join(target, "docs", "architext");
+    await mkdir(architextDir, { recursive: true });
+    // Project config wins over any user-global config, so these assertions are
+    // deterministic regardless of the developer's ~/.architext/config.json.
+    await writeFile(
+      path.join(architextDir, "config.json"),
+      JSON.stringify({ layout: { laneWidth: 321 }, legibility: { gapArrowheads: 0.75 }, bogus: 1 })
+    );
+
+    await withServer(createViewerRequestHandler({ target, targetDataDir: path.join(architextDir, "data"), watchHub: { attach() {} } }), async (origin) => {
+      const response = await fetch(`${origin}/api/config`);
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.diagram.layout.laneWidth, 321);
+      assert.equal(body.diagram.legibility.gapArrowheads, 0.75);
+      assert.ok(Array.isArray(body.warnings));
+      assert.ok(body.warnings.some((w) => /unknown section "bogus"/.test(w)));
+      assert.ok(body.fields?.layout?.laneWidth, "GET payload carries the field spec for the UI");
+    });
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test("serve handler writes diagram config via an authorized POST", async () => {
+  const target = await mkdtemp(path.join(tmpdir(), "architext-config-write-"));
+  try {
+    const architextDir = path.join(target, "docs", "architext");
+    await mkdir(architextDir, { recursive: true });
+
+    await withServer(createViewerRequestHandler({ target, targetDataDir: path.join(architextDir, "data"), watchHub: { attach() {} }, mutationToken: "secret" }), async (origin) => {
+      const response = await fetch(`${origin}/api/config`, {
+        method: "POST",
+        headers: { "content-type": "application/json", "x-architext-mutation-token": "secret" },
+        body: JSON.stringify({ scope: "project", diagram: { layout: { laneWidth: 333 } } })
+      });
+      assert.equal(response.status, 200);
+      const body = await response.json();
+      assert.equal(body.ok, true);
+      assert.equal(body.diagram.layout.laneWidth, 333); // project layer wins on re-resolve
+      const onDisk = JSON.parse(await readFile(path.join(architextDir, "config.json"), "utf8"));
+      assert.deepEqual(onDisk, { layout: { laneWidth: 333 } });
+    });
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
+test("serve handler rejects an unauthorized diagram config write", async () => {
+  const target = await mkdtemp(path.join(tmpdir(), "architext-config-auth-"));
+  try {
+    await withServer(createViewerRequestHandler({ target, watchHub: { attach() {} }, mutationToken: "secret" }), async (origin) => {
+      const response = await fetch(`${origin}/api/config`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ scope: "project", diagram: { layout: { laneWidth: 333 } } })
+      });
+      assert.equal(response.status, 403);
+    });
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
+
 test("serve handler treats malformed data paths as not found", async () => {
   const target = await mkdtemp(path.join(tmpdir(), "architext-serve-"));
   try {
