@@ -2,12 +2,12 @@
   "id": "v1-6-2",
   "version": "1.6.2",
   "name": "Architext 1.6.2 Honest Routing Progress",
-  "status": "implementing",
-  "posture": "release-candidate",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Patch release that replaces the static route-planning spinner with honest live progress (phase labels, edge counts, routes-considered counter, elapsed clock) and repairs the roadmap release reference that broke deep validation.",
   "targetDate": "2026-06-11",
-  "lastUpdated": "2026-06-11T05:40:00.000Z",
-  "updateSource": "1.6.2 RC: progress work merged (PR #101); maintainer directive 2026-06-11 — point release now, separation-pass optimization next (1.6.3), 1.7.0 gated behind the patch stream.",
+  "lastUpdated": "2026-06-11T06:25:00.000Z",
+  "updateSource": "1.6.2 shipped: GitHub release v1.6.2 published; publish.yml (OIDC) succeeded incl. packed-CLI smoke test; npm dist-tag latest=1.6.2.",
   "scope": {
     "required": [
       {
@@ -51,7 +51,7 @@
       "name": "Patch corrections",
       "owner": "maintainer",
       "status": "complete",
-      "posture": "release-candidate",
+      "posture": "shipped",
       "summary": "Patch release that replaces the static route-planning spinner with honest live progress (phase labels, edge counts, routes-considered counter, elapsed clock) and repairs the roadmap release reference that broke deep validation.",
       "progress": 100,
       "itemIds": [
@@ -68,7 +68,7 @@
     {
       "id": "patch-published",
       "label": "Patch published",
-      "status": "in-progress",
+      "status": "complete",
       "date": "2026-06-11",
       "order": 1,
       "itemIds": [
@@ -91,7 +91,8 @@
       "label": "npm package @robotaccomplice/architext@1.6.2",
       "href": "https://www.npmjs.com/package/@robotaccomplice/architext/v/1.6.2",
       "kind": "release-note",
-      "status": "in-progress"
+      "status": "complete"
     }
-  ]
+  ],
+  "releasedAt": "2026-06-11T06:25:00.000Z"
 }
