@@ -319,12 +319,32 @@ function ViewportOverlay({
   );
 }
 
-function RoutingLoadingOverlay({ active, phase }: { active: boolean; phase?: string }) {
+type PlanningProgress = { label: string; done: number; total: number; routesConsidered: number };
+
+function RoutingLoadingOverlay({ active, phase, progress }: { active: boolean; phase?: string; progress?: PlanningProgress | null }) {
+  // Elapsed timer: hooks must run unconditionally (before the early return) to
+  // keep React's hook order stable when `active` toggles.
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  useEffect(() => {
+    if (!active) {
+      setElapsedSeconds(0);
+      return undefined;
+    }
+    const startedAt = Date.now();
+    const timer = window.setInterval(() => setElapsedSeconds(Math.round((Date.now() - startedAt) / 1000)), 1000);
+    return () => window.clearInterval(timer);
+  }, [active]);
   if (!active) return null;
+  const label = progress?.label || phase || "Planning routes";
+  const detail: string[] = [];
+  if (progress && progress.total > 0) detail.push(`${progress.done}/${progress.total} edges`);
+  if (progress && progress.routesConsidered > 0) detail.push(`${progress.routesConsidered.toLocaleString()} routes considered`);
+  if (elapsedSeconds >= 2) detail.push(`${elapsedSeconds}s`);
   return (
     <ViewportOverlay className="routing-loading-overlay" role="status" aria-live="polite">
       <span className="routing-spinner" aria-hidden="true" />
-      <span>{phase || "Planning routes"}…</span>
+      <span>{label}…</span>
+      {detail.length > 0 ? <span className="routing-progress-detail">{detail.join(" · ")}</span> : null}
     </ViewportOverlay>
   );
 }
@@ -2498,7 +2518,7 @@ function SystemMap({
             className="diagram-canvas"
             style={canvasTransformStyle(fallbackCanvas.width, fallbackCanvas.height, transform)}
           >
-            <RoutingLoadingOverlay active={planningState.planning} phase={planningState.phase} />
+            <RoutingLoadingOverlay active={planningState.planning} phase={planningState.phase} progress={planningState.progress} />
           </div>
         </ScaledCanvasExtent>
       </section>
@@ -2704,7 +2724,7 @@ function SystemMap({
               </button>
             );
           })}
-          <RoutingLoadingOverlay active={planningState.planning} phase={planningState.phase} />
+          <RoutingLoadingOverlay active={planningState.planning} phase={planningState.phase} progress={planningState.progress} />
         </div>
       </ScaledCanvasExtent>
       {!activeFlow ? (
@@ -2941,7 +2961,7 @@ function C4Diagram({
             className={`c4-canvas ${view.type}`}
             style={canvasTransformStyle(fallbackCanvas.width, fallbackCanvas.height, transform)}
           >
-            <RoutingLoadingOverlay active={planningState.planning} phase={planningState.phase} />
+            <RoutingLoadingOverlay active={planningState.planning} phase={planningState.phase} progress={planningState.progress} />
           </div>
         </ScaledCanvasExtent>
       </section>
@@ -3032,7 +3052,7 @@ function C4Diagram({
               </button>
             );
           })}
-          <RoutingLoadingOverlay active={planningState.planning} phase={planningState.phase} />
+          <RoutingLoadingOverlay active={planningState.planning} phase={planningState.phase} progress={planningState.progress} />
         </div>
       </ScaledCanvasExtent>
       <div className="edge-strip">

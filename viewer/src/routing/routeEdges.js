@@ -1949,6 +1949,7 @@ function routePlannerContext(input) {
   const visibleRects = Array.from(visibleNodeIds).map(rectFor).filter(Boolean);
   const blockerCache = new Map();
   const stats = input.stats ?? null;
+  const progressTick = typeof input.progressTick === "function" ? input.progressTick : null;
   const blockerRects = (fromId, toId) => {
     const key = `${fromId}\u0000${toId}`;
     const cached = blockerCache.get(key);
@@ -2051,7 +2052,8 @@ function routePlannerContext(input) {
     gridRouteMaxPoints: input.gridRouteMaxPoints,
     rectFor,
     routeQualityFromSamples,
-    stats
+    stats,
+    progressTick
   });
 
   const edgePath = (relationship, index, pairIndex, usedRoutes, previousRoutes, routeIndex, endpointOffsets, endpointSideUsage, style = "orthogonal") => {
@@ -2083,6 +2085,7 @@ function routePlannerContext(input) {
       routeCandidates,
       routeIndex,
       stats,
+      progressTick,
       style,
       toId,
       toRect,
@@ -2111,12 +2114,43 @@ export function routeEdges(input) {
   const style = normalizeRouteStyle(input.style);
   // Optional progress narration: the worker forwards each label to the loading overlay so users
   // see the quality passes run. No-op by default, so direct callers and tests are unaffected.
-  const onPhase = typeof input.onPhase === "function" ? input.onPhase : () => {};
+  const onPhaseRaw = typeof input.onPhase === "function" ? input.onPhase : () => {};
+  const onProgress = typeof input.onProgress === "function" ? input.onProgress : null;
+  // Live counters behind the progress reports. Reuses the diagnostic stats counters
+  // (cheap candidates + grid calls) as the "routes considered" measure so the overlay
+  // shows real advancing work, not a synthetic percentage.
+  const progressStats = input.stats ?? (onProgress ? {} : null);
+  let progressLabel = "Routing edges";
+  let progressDone = 0;
+  let progressTotal = 0;
+  let lastProgressEmit = 0;
+  const emitProgress = (force = false) => {
+    if (!onProgress) return;
+    const now = Date.now();
+    if (!force && now - lastProgressEmit < 120) return;
+    lastProgressEmit = now;
+    onProgress({
+      label: progressLabel,
+      done: progressDone,
+      total: progressTotal,
+      routesConsidered: (progressStats?.cheapCandidateCount ?? 0) + (progressStats?.gridRouteCalls ?? 0)
+    });
+  };
+  const onPhase = (label) => {
+    progressLabel = label;
+    progressDone = 0;
+    progressTotal = 0;
+    emitProgress(true);
+    onPhaseRaw(label);
+  };
   onPhase("Routing edges");
   const cacheKey = routeCacheKey(input);
   const cachedRawRoutes = getCachedRawRoutes(cacheKey);
   const plannedRawRoutes = cachedRawRoutes ?? [];
-  const planner = cachedRawRoutes ? null : routePlannerContext(input);
+  // The planner context gets the shared counters + a throttled tick so candidate
+  // generation deep inside one slow edge still advances the overlay.
+  const plannerInput = onProgress ? { ...input, stats: progressStats, progressTick: emitProgress } : input;
+  const planner = cachedRawRoutes ? null : routePlannerContext(plannerInput);
 
   if (!cachedRawRoutes) {
     for (const relationship of input.relationships) {
@@ -2125,6 +2159,7 @@ export function routeEdges(input) {
       }
       endpointTotals.set(relationship.from, (endpointTotals.get(relationship.from) ?? 0) + 1);
       endpointTotals.set(relationship.to, (endpointTotals.get(relationship.to) ?? 0) + 1);
+      progressTotal += 1;
     }
 
     input.relationships.forEach((relationship, index) => {
@@ -2163,6 +2198,8 @@ export function routeEdges(input) {
       usedRoutes.push(route.samples);
       rawRoutes.push(route);
       routeIndex.add(route, rawRoutes.length - 1);
+      progressDone += 1;
+      emitProgress(true);
     });
     setCachedRawRoutes(cacheKey, plannedRawRoutes);
   }
@@ -2174,7 +2211,7 @@ export function routeEdges(input) {
   // shared gutter from this rebuild and is then nested by the crossing-reduction swap.
   // A dedicated planner is built only on the cache-hit path (planner is null there); the
   // common path reuses the planning-loop planner, so relief adds no extra precompute.
-  const reliefPlanner = planner ?? routePlannerContext(input);
+  const reliefPlanner = planner ?? routePlannerContext(plannerInput);
   const buildRouteForSides = (relationship, startSide, endSide, currentRoutes) => {
     const sideRouteIndex = createRouteIndex();
     if (currentRoutes) {
@@ -2200,10 +2237,14 @@ export function routeEdges(input) {
     // carry its own perpendicular endpoint stubs instead of grazing the node boundary.
     return rebuilt ? routeWithEndpointStubs(rebuilt, relationship, input) : rebuilt;
   };
+  // These two passes dominate dense-flow wall time after the edge loop; without
+  // their own phase labels the overlay sits frozen on "Routing edges 18/18".
+  onPhase("Tidying endpoint mounts");
   const endpointAdjustedRoutes = enforceEndpointStubs(
     spreadSharedSideEndpoints(recenterSingletonSideEndpoints(plannedRawRoutes, input), input),
     input
   );
+  onPhase("Separating parallel runs");
   const separatedRoutes = separateCloseParallelRoutes(endpointAdjustedRoutes, input);
   // Relief runs LAST, as the final mount-assignment authority: it deliberately routes a
   // crowded reciprocal pair onto a parallel escape gutter, which the close-parallel

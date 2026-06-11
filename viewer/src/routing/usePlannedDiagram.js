@@ -5,10 +5,20 @@ const ROUTING_LOADING_DELAY_MS = 1000;
 
 /**
  * @typedef {{
+ *   label: string;
+ *   done: number;
+ *   total: number;
+ *   routesConsidered: number;
+ * }} PlanningProgress
+ */
+
+/**
+ * @typedef {{
  *   key: string;
  *   plan: any | null;
  *   planning: boolean;
  *   phase: string;
+ *   progress: PlanningProgress | null;
  *   error: string | null;
  * }} PlannedDiagramState
  */
@@ -90,6 +100,7 @@ export function usePlannedDiagram(input) {
     plan: null,
     planning: false,
     phase: "",
+    progress: null,
     error: null
   });
 
@@ -102,6 +113,7 @@ export function usePlannedDiagram(input) {
       plan: previous.key === key ? previous.plan : null,
       planning: false,
       phase: "",
+      progress: null,
       error: null
     }));
 
@@ -118,6 +130,7 @@ export function usePlannedDiagram(input) {
         plan: attachPlanHelpers(plan),
         planning: false,
         phase: "",
+        progress: null,
         error: null
       });
     };
@@ -130,6 +143,7 @@ export function usePlannedDiagram(input) {
         plan: null,
         planning: false,
         phase: "",
+        progress: null,
         error: message
       });
     };
@@ -159,6 +173,13 @@ export function usePlannedDiagram(input) {
         // narration is visible even on fast diagrams; it just flashes by.
         window.clearTimeout(slowTimer);
         setState((previous) => previous.key === key ? { ...previous, planning: true, phase: event.data.phase } : previous);
+        return;
+      }
+      if (event.data.progress) {
+        // Live counters from inside the planner (edges done, routes considered) —
+        // the honest "it is actually working" signal for long dense-flow plans.
+        window.clearTimeout(slowTimer);
+        setState((previous) => previous.key === key ? { ...previous, planning: true, progress: event.data.progress } : previous);
         return;
       }
       if (event.data.error) {
