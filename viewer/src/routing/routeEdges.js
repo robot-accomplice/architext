@@ -638,77 +638,7 @@ function routeEndpointsArePerpendicular(route, relationship, input) {
   return true;
 }
 
-function closeParallelRunCountForRoutes(routeById) {
-  let count = 0;
-  const entries = [...routeById];
-  for (let leftRouteIndex = 0; leftRouteIndex < entries.length; leftRouteIndex += 1) {
-    for (let rightRouteIndex = leftRouteIndex + 1; rightRouteIndex < entries.length; rightRouteIndex += 1) {
-      for (const left of axisAlignedRouteSegments(entries[leftRouteIndex][1])) {
-        for (const right of axisAlignedRouteSegments(entries[rightRouteIndex][1])) {
-          if (left.orientation !== right.orientation) continue;
-          const overlap = Math.min(left.max, right.max) - Math.max(left.min, right.min);
-          if (overlap >= 72 && Math.abs(left.line - right.line) <= 10) count += 1;
-        }
-      }
-    }
-  }
-  return count;
-}
-
-function closeParallelRunCountBetween(leftRoute, rightRoute) {
-  let count = 0;
-  for (const left of axisAlignedRouteSegments(leftRoute)) {
-    for (const right of axisAlignedRouteSegments(rightRoute)) {
-      if (left.orientation !== right.orientation) continue;
-      const overlap = Math.min(left.max, right.max) - Math.max(left.min, right.min);
-      if (overlap >= 72 && Math.abs(left.line - right.line) <= 10) count += 1;
-    }
-  }
-  return count;
-}
-
 const ROUTE_SEPARATION_DISTANCES = [5, 7, 9, 11, 13, 15, 18, 24, 30, 36, 48, 60, -5, -7, -9, -11, -13, -15, -18, -24, -30, -36, -48, -60];
-
-function crossingPairKey(leftRouteIndex, rightRouteIndex) {
-  return leftRouteIndex < rightRouteIndex
-    ? `${leftRouteIndex}:${rightRouteIndex}`
-    : `${rightRouteIndex}:${leftRouteIndex}`;
-}
-
-function routeSetStats(routeById) {
-  const routeEntries = [...routeById];
-  const crossings = new Map();
-  let sharedSegments = 0;
-  for (let leftRouteIndex = 0; leftRouteIndex < routeEntries.length; leftRouteIndex += 1) {
-    for (let rightRouteIndex = leftRouteIndex + 1; rightRouteIndex < routeEntries.length; rightRouteIndex += 1) {
-      for (const left of axisAlignedRouteSegments(routeEntries[leftRouteIndex][1])) {
-        for (const right of axisAlignedRouteSegments(routeEntries[rightRouteIndex][1])) {
-          if (left.orientation === right.orientation) {
-            if (left.line !== right.line) continue;
-            const overlap = Math.min(left.max, right.max) - Math.max(left.min, right.min);
-            if (overlap > 1) sharedSegments += 1;
-            continue;
-          }
-          const horizontal = left.orientation === "horizontal" ? left : right;
-          const vertical = left.orientation === "vertical" ? left : right;
-          if (
-            vertical.line > horizontal.min + HOP_RADIUS &&
-            vertical.line < horizontal.max - HOP_RADIUS &&
-            horizontal.line > vertical.min + HOP_RADIUS &&
-            horizontal.line < vertical.max - HOP_RADIUS
-          ) {
-            const key = crossingPairKey(leftRouteIndex, rightRouteIndex);
-            crossings.set(key, (crossings.get(key) ?? 0) + 1);
-          }
-        }
-      }
-    }
-  }
-  return {
-    repeatedCrossings: [...crossings.values()].reduce((sum, count) => sum + Math.max(0, count - 1), 0),
-    sharedSegments
-  };
-}
 
 function routeSeparationScore({ nextCloseCount, nextStats, nextPairCloseCount, candidate, distance }) {
   return [
@@ -733,16 +663,6 @@ function totalBendsForRoutes(routeById) {
   return [...routeById.values()].reduce((sum, route) => sum + (route.bends ?? 0), 0);
 }
 
-function routeSetScore(routeById) {
-  const stats = routeSetStats(routeById);
-  return [
-    closeParallelRunCountForRoutes(routeById),
-    stats.sharedSegments,
-    stats.repeatedCrossings,
-    totalBendsForRoutes(routeById)
-  ];
-}
-
 function isBetterRouteSet(left, right) {
   if (!right) return true;
   for (let index = 0; index < left.score.length; index += 1) {
@@ -755,20 +675,109 @@ function cloneRouteById(routeById) {
   return new Map(routeById);
 }
 
-function separateCloseParallelRoutes(plannedRawRoutes, input) {
+function separateCloseParallelRoutes(plannedRawRoutes, input, onAttempt) {
   const relationshipById = new Map(input.relationships.map((relationship) => [relationship.id, relationship]));
   const routeById = new Map(plannedRawRoutes);
-  let bestRouteSet = { routes: cloneRouteById(routeById), score: routeSetScore(routeById) };
+
+  // Incremental metric state. Every set-level metric this pass consults (close
+  // parallel runs, shared segments, repeated crossings, total bends) is a sum of
+  // independent per-pair contributions, so swapping ONE route only changes the
+  // pairs involving it. Candidate evaluation computes O(n) pair deltas instead of
+  // rescanning all O(n^2) pairs per candidate — with identical integer results,
+  // so separation decisions (and the resulting routes) are byte-for-byte
+  // unchanged. Segments are memoized per route object (routes are immutable
+  // here; swaps replace the object).
+  const segmentsByRoute = new Map();
+  const segmentsOf = (route) => {
+    let segments = segmentsByRoute.get(route);
+    if (!segments) {
+      segments = axisAlignedRouteSegments(route);
+      segmentsByRoute.set(route, segments);
+    }
+    return segments;
+  };
+  // One combined sweep over a route pair. The three predicates (close parallel
+  // run: same orientation, overlap >= 72, |line delta| <= 10; shared segment:
+  // same line, overlap > 1; crossing: perpendicular within HOP_RADIUS bounds)
+  // are the set-level metrics this pass has always scored — kept bit-identical.
+  const pairMetrics = (leftRoute, rightRoute) => {
+    let close = 0;
+    let shared = 0;
+    let crossings = 0;
+    for (const left of segmentsOf(leftRoute)) {
+      for (const right of segmentsOf(rightRoute)) {
+        if (left.orientation === right.orientation) {
+          const overlap = Math.min(left.max, right.max) - Math.max(left.min, right.min);
+          if (overlap >= 72 && Math.abs(left.line - right.line) <= 10) close += 1;
+          if (left.line === right.line && overlap > 1) shared += 1;
+          continue;
+        }
+        const horizontal = left.orientation === "horizontal" ? left : right;
+        const vertical = left.orientation === "vertical" ? left : right;
+        if (
+          vertical.line > horizontal.min + HOP_RADIUS &&
+          vertical.line < horizontal.max - HOP_RADIUS &&
+          horizontal.line > vertical.min + HOP_RADIUS &&
+          horizontal.line < vertical.max - HOP_RADIUS
+        ) {
+          crossings += 1;
+        }
+      }
+    }
+    return { close, shared, crossings };
+  };
+
+  let closeTotal = 0;
+  let sharedTotal = 0;
+  let excessTotal = 0;
+  let bendsTotal = 0;
+  const ids = [...routeById.keys()];
+  for (let i = 0; i < ids.length; i += 1) {
+    bendsTotal += routeById.get(ids[i]).bends ?? 0;
+    for (let j = i + 1; j < ids.length; j += 1) {
+      const metrics = pairMetrics(routeById.get(ids[i]), routeById.get(ids[j]));
+      closeTotal += metrics.close;
+      sharedTotal += metrics.shared;
+      excessTotal += Math.max(0, metrics.crossings - 1);
+    }
+  }
+  const swapDeltas = (routeId, candidate) => {
+    const current = routeById.get(routeId);
+    let close = 0;
+    let shared = 0;
+    let excess = 0;
+    for (const otherId of ids) {
+      if (otherId === routeId) continue;
+      const other = routeById.get(otherId);
+      const before = pairMetrics(current, other);
+      const after = pairMetrics(candidate, other);
+      close += after.close - before.close;
+      shared += after.shared - before.shared;
+      excess += Math.max(0, after.crossings - 1) - Math.max(0, before.crossings - 1);
+    }
+    return { close, shared, excess };
+  };
+  const applySwap = (routeId, candidate) => {
+    const deltas = swapDeltas(routeId, candidate);
+    closeTotal += deltas.close;
+    sharedTotal += deltas.shared;
+    excessTotal += deltas.excess;
+    bendsTotal += (candidate.bends ?? 0) - (routeById.get(routeId).bends ?? 0);
+    routeById.set(routeId, candidate);
+  };
+
+  let bestRouteSet = { routes: cloneRouteById(routeById), score: [closeTotal, sharedTotal, excessTotal, bendsTotal] };
   const maxAttempts = Math.max(8, plannedRawRoutes.length * 12);
   for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+    onAttempt?.(attempt + 1, maxAttempts);
     const pair = closeParallelSegmentPair(routeById);
     if (!pair) break;
-    const currentCloseCount = closeParallelRunCountForRoutes(routeById);
-    const currentStats = routeSetStats(routeById);
-    const currentPairCloseCount = closeParallelRunCountBetween(
+    const currentCloseCount = closeTotal;
+    const currentStats = { sharedSegments: sharedTotal, repeatedCrossings: excessTotal };
+    const currentPairCloseCount = pairMetrics(
       routeById.get(pair.leftId),
       routeById.get(pair.rightId)
-    );
+    ).close;
     const options = [
       { routeId: pair.leftId, segment: pair.left, otherLine: pair.right.line },
       { routeId: pair.rightId, segment: pair.right, otherLine: pair.left.line }
@@ -778,6 +787,7 @@ function separateCloseParallelRoutes(plannedRawRoutes, input) {
       const route = routeById.get(option.routeId);
       const relationship = relationshipById.get(option.routeId);
       if (!route || !relationship) continue;
+      const otherPairRouteId = option.routeId === pair.leftId ? pair.rightId : pair.leftId;
       const direction = option.segment.line >= option.otherLine ? 1 : -1;
       for (const distance of ROUTE_SEPARATION_DISTANCES) {
         const candidates = [
@@ -793,14 +803,15 @@ function separateCloseParallelRoutes(plannedRawRoutes, input) {
           if (!routeEndpointsArePerpendicular(candidate, relationship, input)) continue;
           if (routeCollidesWithNonEndpoints(candidate, relationship, input)) continue;
           if (routeHasEndpointTraversal(candidate, relationship, input)) continue;
-          routeById.set(option.routeId, candidate);
-          const nextCloseCount = closeParallelRunCountForRoutes(routeById);
-          const nextStats = routeSetStats(routeById);
-          const nextPairCloseCount = closeParallelRunCountBetween(
-            routeById.get(pair.leftId),
-            routeById.get(pair.rightId)
-          );
-          routeById.set(option.routeId, route);
+          const deltas = swapDeltas(option.routeId, candidate);
+          const nextCloseCount = currentCloseCount + deltas.close;
+          const nextStats = {
+            sharedSegments: currentStats.sharedSegments + deltas.shared,
+            repeatedCrossings: currentStats.repeatedCrossings + deltas.excess
+          };
+          const nextPairCloseCount = option.routeId === pair.leftId || option.routeId === pair.rightId
+            ? pairMetrics(candidate, routeById.get(otherPairRouteId)).close
+            : currentPairCloseCount;
           if (nextStats.sharedSegments > currentStats.sharedSegments) continue;
           const improvesSharedSegments = nextStats.sharedSegments < currentStats.sharedSegments;
           const improvesCloseRuns = nextCloseCount < currentCloseCount;
@@ -821,8 +832,8 @@ function separateCloseParallelRoutes(plannedRawRoutes, input) {
     if (!best) {
       break;
     }
-    routeById.set(best.routeId, best.candidate);
-    const nextRouteSet = { routes: cloneRouteById(routeById), score: routeSetScore(routeById) };
+    applySwap(best.routeId, best.candidate);
+    const nextRouteSet = { routes: cloneRouteById(routeById), score: [closeTotal, sharedTotal, excessTotal, bendsTotal] };
     if (isBetterRouteSet(nextRouteSet, bestRouteSet)) {
       bestRouteSet = nextRouteSet;
     }
@@ -2245,7 +2256,11 @@ export function routeEdges(input) {
     input
   );
   onPhase("Separating parallel runs");
-  const separatedRoutes = separateCloseParallelRoutes(endpointAdjustedRoutes, input);
+  const separatedRoutes = separateCloseParallelRoutes(endpointAdjustedRoutes, input, (attemptsDone, attemptsTotal) => {
+    progressDone = attemptsDone;
+    progressTotal = attemptsTotal;
+    emitProgress();
+  });
   // Relief runs LAST, as the final mount-assignment authority: it deliberately routes a
   // crowded reciprocal pair onto a parallel escape gutter, which the close-parallel
   // separation pass would otherwise tear apart, and spills over-capacity surfaces onto
