@@ -48,7 +48,8 @@ export function createRouteCandidateFactory(context) {
     gridRouteMaxPoints = defaultGridRouteMaxPoints,
     rectFor,
     routeQualityFromSamples,
-    stats
+    stats,
+    progressTick
   } = context;
 
   // Perimeter routes should hug the node bounding box, not the far canvas wall.
@@ -72,6 +73,9 @@ export function createRouteCandidateFactory(context) {
 
   const gridRoute = (relationship, fromId, toId, startSide, endSide, routeOffset, usedRoutes, startPort, endPort) => {
     if (stats) stats.gridRouteCalls = (stats.gridRouteCalls ?? 0) + 1;
+    // Progress heartbeat from the expensive escalation path: grid searches dominate
+    // dense-flow planning, so ticking here keeps the overlay advancing inside one edge.
+    progressTick?.();
     const start = startPort.port;
     const end = endPort.port;
     const fromRect = rectFor(fromId);

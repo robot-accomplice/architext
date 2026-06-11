@@ -5,7 +5,10 @@ self.onmessage = (event) => {
   try {
     const plan = planDiagram({
       ...input,
-      onPhase: (phase) => self.postMessage({ key, phase })
+      onPhase: (phase) => self.postMessage({ key, phase }),
+      // Throttled at the source (routeEdges emits at most ~8/s), so the worker
+      // forwards every report without further rate-limiting.
+      onProgress: (progress) => self.postMessage({ key, progress })
     });
     const { positionFor, ...cloneablePlan } = plan;
     self.postMessage({ key, plan: cloneablePlan });

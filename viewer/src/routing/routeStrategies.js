@@ -158,6 +158,7 @@ export function selectRouteCandidate(input) {
     routeCandidates,
     routeIndex,
     stats,
+    progressTick,
     style,
     toId,
     toRect,
@@ -262,6 +263,7 @@ export function selectRouteCandidate(input) {
   });
 
   scoreRouteCandidates(cheapCandidates, scoringContext);
+  progressTick?.();
   const hasCleanCheapCandidate = cheapCandidates.some(isCleanRouteCandidate);
   const hasCleanSemanticCheapCandidate = cheapCandidates.some((candidate) =>
     isCleanRouteCandidate(candidate) && (candidate.semanticSurfaceMismatchCount ?? 0) === 0
