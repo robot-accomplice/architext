@@ -41,6 +41,15 @@ import { searchRepository, blastRadiusForNode } from "./presentation/blastRadius
 import { DiagramConfigPanel, type DiagramFieldsSpec, type DiagramSectionLabels } from "./presentation/DiagramConfigPanel.js";
 import { DIAGRAM_FIELD_SPEC, DIAGRAM_SECTION_LABELS } from "./presentation/diagramFieldSpec.js";
 import { nodeLanePosition, preferredDecisionBranchSide, preferredDecisionBranchEndSide } from "./presentation/decisionBranchModel.js";
+import {
+  assemblePlanInput,
+  buildDecisionNodes,
+  buildFlowRelationships,
+  decisionConnectorRoute,
+  decisionNodeId,
+  decisionRouteRect,
+  decisionTip
+} from "./presentation/planRequest.js";
 import { postDiagramConfig } from "./presentation/diagramConfigClient.js";
 import { pdfExportControlLabel, requestPdfExport } from "./presentation/pdfExportModel.js";
 import { StepRoute } from "./presentation/StepRoute.js";
@@ -157,48 +166,6 @@ function outcomeLabelPoint(route: DiagramRoute) {
     y: anchor.y
   };
 }
-
-function decisionNodeId(stepId: Id) {
-  return `decision:${stepId}`;
-}
-
-function decisionTip(rect: { x: number; y: number; width: number; height: number }, side: RouteSide) {
-  const center = { x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 };
-  const radius = rect.width / Math.SQRT2;
-  if (side === "left") return { x: center.x - radius, y: center.y };
-  if (side === "right") return { x: center.x + radius, y: center.y };
-  if (side === "top") return { x: center.x, y: center.y - radius };
-  return { x: center.x, y: center.y + radius };
-}
-
-function decisionRouteRect(rect: { x: number; y: number; width: number; height: number }) {
-  return {
-    ...rect,
-    fixedPorts: true,
-    sideAnchors: {
-      left: decisionTip(rect, "left"),
-      right: decisionTip(rect, "right"),
-      top: decisionTip(rect, "top"),
-      bottom: decisionTip(rect, "bottom")
-    }
-  };
-}
-
-// Connector from the affiliated node down to the diamond's node-facing (top) tip.
-// The diamond sits below its node, so the TOP point is the node side; branches
-// only ever use the other three tips (left/right/bottom), so they never collide
-// with this connection.
-function decisionConnectorRoute(decisionNode: { componentId: Id; rect: { x: number; y: number; width: number; height: number } }, componentRect: { x: number; y: number; width: number; height: number }) {
-  const x = componentRect.x + componentRect.width / 2;
-  const decisionTop = decisionTip(decisionNode.rect, "top");
-  return {
-    points: [
-      { x, y: componentRect.y + componentRect.height },
-      decisionTop
-    ]
-  };
-}
-
 
 function byId<T extends { id: Id }>(items: T[]): Map<Id, T> {
   return new Map(items.map((item) => [item.id, item]));
@@ -2382,39 +2349,12 @@ function SystemMap({
       });
   }), [nodesById, visibleNodeIds]);
 
-  const flowRelationships = useMemo(() => {
-    if (!activeFlow) return [];
-    const displayIndexes = flowStepDisplayIndexes(activeFlow.steps);
-    const decisionStepByTarget = new Map(activeFlow.steps.filter((step) => step.kind === "decision").map((step) => [step.to, step]));
-    return activeFlow.steps.map((step, index) => {
-      const displayIndex = displayIndexes.get(step.id) ?? index + 1;
-      const decisionStep = step.outcome ? decisionStepByTarget.get(step.from) : null;
-      const decisionPosition = decisionStep ? nodeLanePosition(view, step.from) : null;
-      const branchStartSide = decisionStep && decisionPosition ? preferredDecisionBranchSide(view, decisionPosition, step.to) : undefined;
-      return {
-        id: step.id,
-        from: decisionStep ? decisionNodeId(decisionStep.id) : step.from,
-        to: step.to,
-        label: `${displayIndex}. ${step.action}`,
-        summary: step.summary,
-        relationshipType: "flow" as const,
-        stepId: decisionStep ? decisionStep.id : step.id,
-        branchStepId: decisionStep ? step.id : undefined,
-        flowId: activeFlow.id,
-        displayIndex,
-        kind: step.kind,
-        returnOf: step.returnOf,
-        stepKind: step.kind,
-        outcome: step.outcome,
-        componentFrom: step.from,
-        componentTo: step.to,
-        preferredStartSide: branchStartSide,
-        preferredEndSide: branchStartSide && decisionPosition ? preferredDecisionBranchEndSide(view, decisionPosition, step.to, branchStartSide) : undefined
-      };
-    });
-  }, [activeFlow, view]);
+  const flowRelationships = useMemo(() => buildFlowRelationships(activeFlow, view), [activeFlow, view]);
 
-  const layout = diagramLayoutFor(view, showStructuralConnections ? structuralRelationships.length : flowRelationships.length, diagramConfig?.layout);
+  const layout = useMemo(
+    () => diagramLayoutFor(view, showStructuralConnections ? structuralRelationships.length : flowRelationships.length, diagramConfig?.layout),
+    [view, showStructuralConnections, structuralRelationships, flowRelationships, diagramConfig]
+  );
   const {
     nodeWidth,
     nodeHeight,
@@ -2427,70 +2367,25 @@ function SystemMap({
     canvasExtraWidth,
     canvasExtraHeight
   } = layout;
-  const decisionNodes = useMemo(() => {
-    if (!activeFlow) return [];
-    const branchedTargets = decisionBranchTargets(activeFlow.steps);
-    const displayIndexes = flowStepDisplayIndexes(activeFlow.steps);
-    return activeFlow.steps
-      .filter((step) => step.kind === "decision" && branchedTargets.has(step.to))
-      .flatMap((step) => {
-        const position = nodeLanePosition(view, step.to);
-        if (!position) return [];
-        const { laneIndex, rowIndex } = position;
-        return [{
-          id: decisionNodeId(step.id),
-          action: step.action,
-          componentId: step.to,
-          displayIndex: displayIndexes.get(step.id) ?? 0,
-          rect: {
-            x: marginX + laneIndex * laneWidth + nodeWidth / 2 - 19,
-            y: marginY + rowIndex * rowGap + nodeHeight + 22,
-            width: 38,
-            height: 38
-          },
-          laneIndex,
-          rowIndex
-        }];
-      });
-  }, [activeFlow, view, marginX, marginY, laneWidth, rowGap, nodeHeight]);
+  type DecisionNode = {
+    id: Id;
+    action: string;
+    componentId: Id;
+    displayIndex: number;
+    rect: { x: number; y: number; width: number; height: number };
+    laneIndex: number;
+    rowIndex: number;
+  };
+  const decisionNodes = useMemo<DecisionNode[]>(() => buildDecisionNodes(activeFlow, view, layout), [activeFlow, view, layout]);
 
-  const planInput = useMemo(() => ({
+  const planInput = useMemo(() => assemblePlanInput({
     view,
     relationships: showStructuralConnections ? structuralRelationships : flowRelationships,
     visibleNodeIds,
-    nodeWidth,
-    nodeHeight,
-    laneWidth,
-    rowGap,
-    marginX,
-    marginY,
-    minCanvasWidth,
-    minCanvasHeight,
-    canvasExtraWidth,
-    canvasExtraHeight,
-    extraNodeRects: new Map(decisionNodes.map((node) => [node.id, decisionRouteRect(node.rect)])),
-    extraLaneIndexByNode: new Map(decisionNodes.map((node) => [node.id, node.laneIndex])),
-    extraRowIndexByNode: new Map(decisionNodes.map((node) => [node.id, node.rowIndex])),
-    style: routingStyle
-  }), [
-    view,
-    showStructuralConnections,
-    structuralRelationships,
-    flowRelationships,
-    visibleNodeIds,
-    nodeWidth,
-    nodeHeight,
-    laneWidth,
-    rowGap,
-    marginX,
-    marginY,
-    minCanvasWidth,
-    minCanvasHeight,
-    canvasExtraWidth,
-    canvasExtraHeight,
+    layout,
     decisionNodes,
-    routingStyle
-  ]);
+    style: routingStyle
+  }), [view, showStructuralConnections, structuralRelationships, flowRelationships, visibleNodeIds, layout, decisionNodes, routingStyle]);
   const planningState = usePlannedDiagram(planInput);
   const fallbackCanvas = useMemo(() => plannedCanvasFallback(planInput), [planInput]);
   const plan = planningState.plan;

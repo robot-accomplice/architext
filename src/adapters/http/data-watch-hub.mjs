@@ -4,6 +4,7 @@ export function createDataWatchHub({
   target,
   dataDir,
   validateTarget,
+  onChange = () => {},
   settleMs = 300,
   maxClients = 32,
   heartbeatMs = 30000,
@@ -67,6 +68,10 @@ export function createDataWatchHub({
           version,
           output: validation.output
         });
+        // Server-side change hook (e.g. the plan precompute farm re-keys after
+        // every settled, validated data change). Errors must not break the
+        // watch/broadcast loop.
+        try { onChange(validation); } catch {}
       } while (validationPending);
     } finally {
       validating = false;

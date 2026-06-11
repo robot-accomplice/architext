@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { planDiagram } from "./planDiagram.js";
+import { deserializePlan } from "./planCodec.js";
 
 const ROUTING_LOADING_DELAY_MS = 1000;
 
@@ -23,6 +24,11 @@ const ROUTING_LOADING_DELAY_MS = 1000;
  *   error: string | null;
  * }} PlannedDiagramState
  */
+
+export async function planKeyHash(key) {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
 
 export const PLAN_TIMING_STORAGE_KEY = "architext.planTimings";
 const PLAN_TIMING_HISTORY_LIMIT = 20;
@@ -167,10 +173,10 @@ export function usePlannedDiagram(input) {
       setState((previous) => previous.key === key ? { ...previous, planning: true } : previous);
     }, ROUTING_LOADING_DELAY_MS);
 
-    const finishWithPlan = (plan) => {
+    const finishWithPlan = (plan, { precomputed = false } = {}) => {
       if (cancelled) return;
       window.clearTimeout(slowTimer);
-      const timing = buildPlanTiming({ startedAt, completedAt: performance.now(), marks: phaseMarks, lastProgress });
+      const timing = { ...buildPlanTiming({ startedAt, completedAt: performance.now(), marks: phaseMarks, lastProgress }), precomputed };
       // Persist only plans slow enough to have shown the loading overlay, so the
       // record matches what the user experienced and fast re-plans don't spam.
       if (timing.totalMs >= ROUTING_LOADING_DELAY_MS) persistPlanTiming(timing);
@@ -199,24 +205,47 @@ export function usePlannedDiagram(input) {
       });
     };
 
-    if (typeof Worker === "undefined") {
-      const timer = window.setTimeout(() => {
-        try {
-          const plan = planDiagram(input);
-          const { positionFor, ...cloneablePlan } = plan;
-          finishWithPlan(cloneablePlan);
-        } catch (error) {
-          finishWithError(error instanceof Error ? error.message : String(error));
-        }
-      }, 0);
-      return () => {
-        cancelled = true;
-        window.clearTimeout(timer);
-        window.clearTimeout(slowTimer);
-      };
-    }
+    let fallbackTimer = null;
+    const fetchController = typeof AbortController === "undefined" ? null : new AbortController();
 
-    worker = new Worker(new URL("./planningWorker.js", import.meta.url), { type: "module" });
+    const startLocalPlanning = () => {
+      if (cancelled) return;
+      if (typeof Worker === "undefined") {
+        fallbackTimer = window.setTimeout(() => {
+          try {
+            const plan = planDiagram(input);
+            const { positionFor, ...cloneablePlan } = plan;
+            finishWithPlan(cloneablePlan);
+          } catch (error) {
+            finishWithError(error instanceof Error ? error.message : String(error));
+          }
+        }, 0);
+        return;
+      }
+      startWorkerPlanning();
+    };
+
+    // Precomputed-plan fast path: ask the serve process for a plan under the
+    // sha256 of this exact input key. Strict parity — the server computed under
+    // a key built by the same shared planRequest module, and only an exact
+    // match returns 200. Any miss, error, or absent endpoint (static builds)
+    // falls through to local planning.
+    (async () => {
+      try {
+        if (!globalThis.crypto?.subtle || typeof fetch === "undefined") throw new Error("no fast path");
+        const hash = await planKeyHash(key);
+        const response = await fetch(`/api/plan/${hash}`, { signal: fetchController?.signal });
+        if (!response.ok) throw new Error("miss");
+        const body = await response.json();
+        if (cancelled) return;
+        finishWithPlan(deserializePlan(body.plan), { precomputed: true });
+      } catch {
+        startLocalPlanning();
+      }
+    })();
+
+    const startWorkerPlanning = () => {
+      worker = new Worker(new URL("./planningWorker.js", import.meta.url), { type: "module" });
     worker.onmessage = (event) => {
       if (event.data.key !== key) return;
       if (event.data.phase) {
@@ -241,14 +270,17 @@ export function usePlannedDiagram(input) {
       }
       finishWithPlan(event.data.plan);
     };
-    worker.onerror = (event) => {
-      finishWithError(event.message || "Route planning failed.");
+      worker.onerror = (event) => {
+        finishWithError(event.message || "Route planning failed.");
+      };
+      worker.postMessage({ key, input });
     };
-    worker.postMessage({ key, input });
 
     return () => {
       cancelled = true;
       window.clearTimeout(slowTimer);
+      if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
+      fetchController?.abort();
       worker?.terminate();
     };
   }, [key]);
