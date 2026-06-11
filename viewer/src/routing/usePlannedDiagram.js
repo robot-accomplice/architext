@@ -19,9 +19,48 @@ const ROUTING_LOADING_DELAY_MS = 1000;
  *   planning: boolean;
  *   phase: string;
  *   progress: PlanningProgress | null;
+ *   timing: { totalMs: number; phases: Array<{ label: string; ms: number }>; routesConsidered: number } | null;
  *   error: string | null;
  * }} PlannedDiagramState
  */
+
+export const PLAN_TIMING_STORAGE_KEY = "architext.planTimings";
+const PLAN_TIMING_HISTORY_LIMIT = 20;
+
+// Assemble the per-phase breakdown for a completed plan from the phase marks
+// collected while it ran. Pure so it is unit-testable: marks are
+// [{ label, at }] in ms relative to the same clock as startedAt/completedAt.
+export function buildPlanTiming({ startedAt, completedAt, marks, lastProgress }) {
+  const totalMs = Math.max(0, Math.round(completedAt - startedAt));
+  const phases = marks.map((mark, index) => {
+    const end = index + 1 < marks.length ? marks[index + 1].at : completedAt;
+    return { label: mark.label, ms: Math.max(0, Math.round(end - mark.at)) };
+  });
+  return {
+    totalMs,
+    phases,
+    routesConsidered: lastProgress?.routesConsidered ?? 0
+  };
+}
+
+// Persist slow-plan timings so the breakdown is reportable after the overlay is
+// gone: a structured console record plus a localStorage ring buffer readable via
+// JSON.parse(localStorage.getItem(PLAN_TIMING_STORAGE_KEY)). Only plans slow
+// enough to have shown the loading overlay are recorded.
+function persistPlanTiming(timing) {
+  try {
+    console.info(
+      `[architext] routed in ${(timing.totalMs / 1000).toFixed(1)}s`,
+      Object.fromEntries(timing.phases.map((phase) => [phase.label, `${(phase.ms / 1000).toFixed(1)}s`])),
+      `${timing.routesConsidered.toLocaleString()} routes considered`
+    );
+    const history = JSON.parse(window.localStorage.getItem(PLAN_TIMING_STORAGE_KEY) ?? "[]");
+    history.push({ v: 1, at: new Date().toISOString(), ...timing });
+    window.localStorage.setItem(PLAN_TIMING_STORAGE_KEY, JSON.stringify(history.slice(-PLAN_TIMING_HISTORY_LIMIT)));
+  } catch {
+    // Telemetry must never break planning (storage full/disabled, SSR, etc.).
+  }
+}
 
 function sortedMapEntries(map, projectValue) {
   if (!map) return [];
@@ -101,6 +140,7 @@ export function usePlannedDiagram(input) {
     planning: false,
     phase: "",
     progress: null,
+    timing: null,
     error: null
   });
 
@@ -108,12 +148,17 @@ export function usePlannedDiagram(input) {
     let cancelled = false;
     let worker = null;
 
+    const startedAt = performance.now();
+    const phaseMarks = [];
+    let lastProgress = null;
+
     setState((previous) => ({
       key,
       plan: previous.key === key ? previous.plan : null,
       planning: false,
       phase: "",
       progress: null,
+      timing: null,
       error: null
     }));
 
@@ -125,12 +170,17 @@ export function usePlannedDiagram(input) {
     const finishWithPlan = (plan) => {
       if (cancelled) return;
       window.clearTimeout(slowTimer);
+      const timing = buildPlanTiming({ startedAt, completedAt: performance.now(), marks: phaseMarks, lastProgress });
+      // Persist only plans slow enough to have shown the loading overlay, so the
+      // record matches what the user experienced and fast re-plans don't spam.
+      if (timing.totalMs >= ROUTING_LOADING_DELAY_MS) persistPlanTiming(timing);
       setState({
         key,
         plan: attachPlanHelpers(plan),
         planning: false,
         phase: "",
         progress: null,
+        timing,
         error: null
       });
     };
@@ -144,6 +194,7 @@ export function usePlannedDiagram(input) {
         planning: false,
         phase: "",
         progress: null,
+        timing: null,
         error: message
       });
     };
@@ -171,6 +222,7 @@ export function usePlannedDiagram(input) {
       if (event.data.phase) {
         // A pass started — show the overlay immediately (don't wait for the slow timer) so the
         // narration is visible even on fast diagrams; it just flashes by.
+        phaseMarks.push({ label: event.data.phase, at: performance.now() });
         window.clearTimeout(slowTimer);
         setState((previous) => previous.key === key ? { ...previous, planning: true, phase: event.data.phase } : previous);
         return;
@@ -178,6 +230,7 @@ export function usePlannedDiagram(input) {
       if (event.data.progress) {
         // Live counters from inside the planner (edges done, routes considered) —
         // the honest "it is actually working" signal for long dense-flow plans.
+        lastProgress = event.data.progress;
         window.clearTimeout(slowTimer);
         setState((previous) => previous.key === key ? { ...previous, planning: true, progress: event.data.progress } : previous);
         return;
