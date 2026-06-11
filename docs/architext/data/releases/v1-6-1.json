@@ -6,7 +6,7 @@
   "posture": "shipped",
   "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), folds in the App-component decomposition and crowded-face routing refinements deferred from 1.6.0, and includes minor UI cleanup.",
   "targetWindow": "After 1.6.0",
-  "lastUpdated": "2026-06-10T16:36:00.000Z",
+  "lastUpdated": "2026-06-11T05:00:00.000Z",
   "updateSource": "1.6.1 shipped: GitHub release v1.6.1 published; publish.yml (OIDC) succeeded incl. packed-CLI smoke test; npm dist-tag latest=1.6.1.",
   "scope": {
     "required": [],
@@ -153,7 +153,7 @@
         "workstreamId": "routing-polish",
         "priority": "medium",
         "dependsOn": [],
-        "rationale": "Deferred because the 2026-06-10 optimization audit established this is candidate-volume bound (~722K candidates) with no isolated hot spot and no safe quick win — a routing-exploration redesign, not a 1.6.1-sized change. A branch-and-bound attempt was implemented and reverted after it produced no speedup and regressed the fan-parallel-bundle baseline. Needs its own design cycle."
+        "rationale": "Deferred because the 2026-06-10 optimization audit established this is candidate-volume bound (~722K candidates) with no isolated hot spot and no safe quick win — a routing-exploration redesign, not a 1.6.1-sized change. A branch-and-bound attempt was implemented and reverted after it produced no speedup and regressed the fan-parallel-bundle baseline. Needs its own design cycle. UPDATE (2026-06-11, user-reported on the flagship 18-step flow): in-browser measurement of the published 1.6.1 worker shows the audit conclusion incomplete for the browser path — candidate exploration is only ~15s of a ~120s plan; separateCloseParallelRoutes alone consumes ~100s. The work is therefore a targeted optimization of one named pass, not a full exploration redesign. Interim mitigation shipped: live planning progress (phase labels incl. the separation pass, edge counts, routes-considered counter, elapsed clock) so long plans demonstrate progress instead of a static spinner."
       }
     ],
     "outOfScope": [
