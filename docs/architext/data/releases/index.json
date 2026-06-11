@@ -462,6 +462,27 @@
       },
       "file": "v1-6-1.json",
       "releasedAt": "2026-06-10T16:36:00.000Z"
+    },
+    {
+      "id": "v1-6-2",
+      "version": "1.6.2",
+      "name": "Architext 1.6.2 Honest Routing Progress",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-06-11",
+      "lastUpdated": "2026-06-11T05:40:00.000Z",
+      "summary": "Patch release that replaces the static route-planning spinner with honest live progress (phase labels, edge counts, routes-considered counter, elapsed clock) and repairs the roadmap release reference that broke deep validation.",
+      "counts": {
+        "features": 1,
+        "bugFixes": 1,
+        "workstreams": 1,
+        "blockers": 0,
+        "complete": 2,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-6-2.json"
     }
   ]
 }
