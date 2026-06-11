@@ -1,0 +1,87 @@
+{
+  "flows": {
+    "hub-fan-dense": {
+      "edgesPlanned": 479,
+      "cheapCandidateCount": 720896,
+      "gridRouteCalls": 743
+    },
+    "pair-fan-compact": {
+      "edgesPlanned": 226,
+      "cheapCandidateCount": 101769,
+      "gridRouteCalls": 374
+    },
+    "pair-chain-linear": {
+      "edgesPlanned": 171,
+      "cheapCandidateCount": 60673,
+      "gridRouteCalls": 115
+    },
+    "pair-minimal": {
+      "edgesPlanned": 165,
+      "cheapCandidateCount": 5896,
+      "gridRouteCalls": 20
+    },
+    "fan-coaligned-selfcross": {
+      "edgesPlanned": 223,
+      "cheapCandidateCount": 59033,
+      "gridRouteCalls": 27
+    },
+    "coaligned-multibundle-surfaceselect": {
+      "edgesPlanned": 260,
+      "cheapCandidateCount": 145592,
+      "gridRouteCalls": 96
+    },
+    "bundle-coaligned": {
+      "edgesPlanned": 651,
+      "cheapCandidateCount": 218343,
+      "gridRouteCalls": 704
+    },
+    "fan-quad-reciprocal": {
+      "edgesPlanned": 368,
+      "cheapCandidateCount": 110870,
+      "gridRouteCalls": 208
+    },
+    "bundle-return-gutter": {
+      "edgesPlanned": 365,
+      "cheapCandidateCount": 214663,
+      "gridRouteCalls": 174
+    },
+    "pair-chain-short": {
+      "edgesPlanned": 381,
+      "cheapCandidateCount": 80650,
+      "gridRouteCalls": 119
+    },
+    "fan-parallel-bundle": {
+      "edgesPlanned": 459,
+      "cheapCandidateCount": 241888,
+      "gridRouteCalls": 689
+    },
+    "pair-fan-basic": {
+      "edgesPlanned": 296,
+      "cheapCandidateCount": 74744,
+      "gridRouteCalls": 285
+    },
+    "pair-single-multiedge": {
+      "edgesPlanned": 99,
+      "cheapCandidateCount": 30529,
+      "gridRouteCalls": 9
+    },
+    "bracket-intermediates": {
+      "edgesPlanned": 573,
+      "cheapCandidateCount": 181641,
+      "gridRouteCalls": 342
+    },
+    "fan-max-systemmap": {
+      "edgesPlanned": 761,
+      "cheapCandidateCount": 200592,
+      "gridRouteCalls": 564
+    },
+    "feature-showcase": {
+      "edgesPlanned": 278,
+      "cheapCandidateCount": 70080,
+      "gridRouteCalls": 13
+    }
+  },
+  "corpusWallMs": 21199,
+  "calibrationMs": 1008.7,
+  "wallRatio": 21.1
+}
