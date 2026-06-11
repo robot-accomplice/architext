@@ -16,7 +16,11 @@ import path from "node:path";
 import { Worker } from "node:worker_threads";
 import { fileURLToPath } from "node:url";
 import { buildFlowPlanRequest } from "../../../viewer/src/presentation/planRequest.js";
-import { planInputKey } from "../../../viewer/src/routing/usePlannedDiagram.js";
+// React-free key module — NOT usePlannedDiagram.js: that hook imports react,
+// which does not exist in a packed global install, and this module loads with
+// every CLI invocation. Importing the hook here broke `architext --version`
+// in the packed-CLI smoke test.
+import { planInputKey } from "../../../viewer/src/routing/planKey.js";
 import { serializePlan } from "../../../viewer/src/routing/planCodec.js";
 import { viewTypesForMode, flowCompatibleWithView } from "../../../viewer/src/presentation/viewSelection.js";
 import { diagramConfigGetPayload } from "./diagram-config-api.mjs";
