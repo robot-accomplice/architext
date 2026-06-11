@@ -2,12 +2,12 @@
   "id": "v1-6-3",
   "version": "1.6.3",
   "name": "Architext 1.6.3 Server-Side Plan Precompute",
-  "status": "implementing",
-  "posture": "release-candidate",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Dense diagrams render instantly: architext serve precomputes every flow x view route plan in Node (where planning is ~20x faster than the browser) under strict input-key parity, and the viewer fetches finished plans with full in-browser fallback. Routing performance is now gated by a ratchet whose baseline only moves toward improvement, slow plans persist their per-phase timing breakdowns, winner selection is 1.27x faster with byte-identical routes, and the README/public face refresh is a release rule.",
-  "targetDate": "2026-06-12",
-  "lastUpdated": "2026-06-12T00:30:00.000Z",
-  "updateSource": "1.6.3 RC: all scope merged to main (PRs #105, #107, #108, #109, #110); awaiting GitHub release + trusted publish.",
+  "targetDate": "2026-06-11",
+  "lastUpdated": "2026-06-11T11:25:00.000Z",
+  "updateSource": "1.6.3 shipped 2026-06-11: GitHub release v1.6.3 published at fixed main; publish.yml (OIDC, release event) succeeded incl. release gate, post-publish verify, and packed-CLI smoke; npm dist-tag latest=1.6.3. First publish attempt failed at the release gate (plan-cache 404-on-miss read as a failed response) and surfaced a latent packed-CLI react import crash; both fixed in PR #112 before the shipped tag.",
   "scope": {
     "required": [
       {
@@ -98,6 +98,21 @@
         "priority": "low",
         "workstreamId": "release-hygiene",
         "dependsOn": []
+      },
+      {
+        "id": "plan-miss-publish-gate-fix",
+        "title": "Plan-cache miss protocol + packed-CLI react crash fix",
+        "kind": "bug-fix",
+        "summary": "The first 1.6.3 publish failed at the release gate: the browser UAT asserts zero failed network responses, and the fetch-first plan lookup returned 404 on every cold-farm miss. Misses now answer 200 {miss:true} (404 stays reserved for servers without the endpoint), with a regression test locking the contract. Fixing it surfaced a second latent defect from #107: the precompute farm imported planInputKey from the React hook module, so every packed-CLI invocation tried to resolve react (a devDependency) and architext --version crashed in a clean global install. planInputKey moved verbatim to a react-free planKey.js module; verified via the packed-tarball smoke test.",
+        "evidence": [
+          "pr-112",
+          "npm-package-1-6-3"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "release-hygiene",
+        "dependsOn": []
       }
     ],
     "planned": [],
@@ -111,7 +126,7 @@
       "name": "Plan performance",
       "owner": "maintainer",
       "status": "complete",
-      "posture": "release-candidate",
+      "posture": "shipped",
       "summary": "Server-side precompute under strict key parity, persisted timing telemetry, argmin winner selection, and the only-improves performance ratchet.",
       "progress": 100,
       "itemIds": [
@@ -130,15 +145,17 @@
       "name": "Release hygiene",
       "owner": "maintainer",
       "status": "complete",
-      "posture": "release-candidate",
-      "summary": "Public-face refresh with enforcement rule, and roadmap bookkeeping.",
+      "posture": "shipped",
+      "summary": "Public-face refresh with enforcement rule, roadmap bookkeeping, and the publish-gate fixes (plan-miss protocol, packed-CLI react crash) that unblocked the npm publish.",
       "progress": 100,
       "itemIds": [
         "public-face-refresh",
-        "roadmap-parallel-plans"
+        "roadmap-parallel-plans",
+        "plan-miss-publish-gate-fix"
       ],
       "evidence": [
-        "pr-108"
+        "pr-108",
+        "pr-112"
       ]
     }
   ],
@@ -156,21 +173,24 @@
         "route-winner-argmin",
         "performance-ratchet-gate",
         "public-face-refresh",
-        "roadmap-parallel-plans"
+        "roadmap-parallel-plans",
+        "plan-miss-publish-gate-fix"
       ]
     },
     {
       "id": "patch-published",
       "label": "Release published to npm",
-      "status": "planned",
+      "status": "complete",
       "order": 2,
       "itemIds": [
         "serve-plan-precompute",
         "plan-timing-telemetry",
         "route-winner-argmin",
         "performance-ratchet-gate",
-        "public-face-refresh"
-      ]
+        "public-face-refresh",
+        "plan-miss-publish-gate-fix"
+      ],
+      "date": "2026-06-11"
     }
   ],
   "dependencies": [],
@@ -215,7 +235,15 @@
       "label": "npm package @robotaccomplice/architext@1.6.3",
       "href": "https://www.npmjs.com/package/@robotaccomplice/architext/v/1.6.3",
       "kind": "release-note",
-      "status": "planned"
+      "status": "complete"
+    },
+    {
+      "id": "pr-112",
+      "label": "PR #112 fix(serve): plan-cache miss answers 200 + react-free planKey",
+      "href": "https://github.com/robot-accomplice/architext/pull/112",
+      "kind": "document",
+      "status": "complete"
     }
-  ]
+  ],
+  "releasedAt": "2026-06-11T11:13:07.864Z"
 }
