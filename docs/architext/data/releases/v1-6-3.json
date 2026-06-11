@@ -1,0 +1,221 @@
+{
+  "id": "v1-6-3",
+  "version": "1.6.3",
+  "name": "Architext 1.6.3 Server-Side Plan Precompute",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Dense diagrams render instantly: architext serve precomputes every flow x view route plan in Node (where planning is ~20x faster than the browser) under strict input-key parity, and the viewer fetches finished plans with full in-browser fallback. Routing performance is now gated by a ratchet whose baseline only moves toward improvement, slow plans persist their per-phase timing breakdowns, winner selection is 1.27x faster with byte-identical routes, and the README/public face refresh is a release rule.",
+  "targetDate": "2026-06-12",
+  "lastUpdated": "2026-06-12T00:30:00.000Z",
+  "updateSource": "1.6.3 RC: all scope merged to main (PRs #105, #107, #108, #109, #110); awaiting GitHub release + trusted publish.",
+  "scope": {
+    "required": [
+      {
+        "id": "serve-plan-precompute",
+        "title": "Server-side plan precompute, viewer fetch-first",
+        "kind": "feature",
+        "summary": "architext serve precomputes every flow x compatible-flows-view plan in a worker thread at startup, after every settled+validated data change, and after every config write. Plans are stored under sha256(planInputKey) — the canonical hash of the exact planner input, built by the shared planRequest module both sides import — and served via GET /api/plan/<sha>. The viewer renders a precomputed plan only on an exact key match and otherwise plans in-browser unchanged: the cache can miss, it cannot lie. The 18-step dense flow that took 2.5 minutes in Chrome renders from one fetch.",
+        "evidence": [
+          "pr-107",
+          "npm-package-1-6-3"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "plan-performance",
+        "dependsOn": []
+      },
+      {
+        "id": "plan-timing-telemetry",
+        "title": "Persisted plan-timing breakdowns",
+        "kind": "feature",
+        "summary": "Slow plans (those that showed the loading overlay) persist their full per-phase timing breakdown: a structured console record plus a localStorage ring buffer (architext.planTimings, last 20), and timing on the hook state — so a long plan is reportable after the overlay is gone instead of a stopwatch exercise.",
+        "evidence": [
+          "pr-105",
+          "npm-package-1-6-3"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "plan-performance",
+        "dependsOn": []
+      },
+      {
+        "id": "route-winner-argmin",
+        "title": "One-pass route winner selection",
+        "kind": "chore",
+        "summary": "CPU profiling put sortedRouteCandidates at 13.4% self-time with every caller consuming only the winner; replaced copy+sort with a single-pass argmin under the same total order. Corpus planning 45.8s -> 36.2s (1.27x), dense flow 6.7s -> ~5.2s, all 29 corpus plans byte-identical via the new route-parity fingerprint harness (shipped in viewer/tools).",
+        "evidence": [
+          "pr-110",
+          "npm-package-1-6-3"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "plan-performance",
+        "dependsOn": []
+      },
+      {
+        "id": "performance-ratchet-gate",
+        "title": "Performance ratchet test gate",
+        "kind": "test",
+        "summary": "Testing includes a performance threshold baselined on achieved results that only moves toward improvement: deterministic work counters gate exactly per corpus flow (zero CI flake), a machine-normalized wall ratio with interleaved calibration catches gross slowdowns under any load, and regen-perf-baseline.mjs refuses upward movement (median of three cold child-process runs).",
+        "evidence": [
+          "pr-110",
+          "npm-package-1-6-3"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "plan-performance",
+        "dependsOn": []
+      },
+      {
+        "id": "public-face-refresh",
+        "title": "README screenshots refresh + release rule",
+        "kind": "documentation",
+        "summary": "All README screenshots re-captured at the current UI (they dated from 1.4.x), Repo Tree and Blast Radius added, the capture script hardened (readiness selectors, overlay wait, runs the plan farm), and a high-criticality Release rule added: every release re-runs the capture and updates the roboticus-site card — a release is not complete while the public face shows a prior version.",
+        "evidence": [
+          "pr-108",
+          "npm-package-1-6-3"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "release-hygiene",
+        "dependsOn": []
+      },
+      {
+        "id": "roadmap-parallel-plans",
+        "title": "Roadmap: parallelize the plan farm",
+        "kind": "documentation",
+        "summary": "Planned roadmap item recorded: fan the precompute farm across a worker-thread pool (plans are independent), warming default view x flow pairs first; maps onto goroutine fan-out in the 1.7.0 Go backend.",
+        "evidence": [
+          "pr-109"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "low",
+        "workstreamId": "release-hygiene",
+        "dependsOn": []
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "plan-performance",
+      "name": "Plan performance",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Server-side precompute under strict key parity, persisted timing telemetry, argmin winner selection, and the only-improves performance ratchet.",
+      "progress": 100,
+      "itemIds": [
+        "serve-plan-precompute",
+        "plan-timing-telemetry",
+        "route-winner-argmin",
+        "performance-ratchet-gate"
+      ],
+      "evidence": [
+        "pr-107",
+        "pr-110"
+      ]
+    },
+    {
+      "id": "release-hygiene",
+      "name": "Release hygiene",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Public-face refresh with enforcement rule, and roadmap bookkeeping.",
+      "progress": 100,
+      "itemIds": [
+        "public-face-refresh",
+        "roadmap-parallel-plans"
+      ],
+      "evidence": [
+        "pr-108"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "scope-merged",
+      "label": "Scope merged to main",
+      "status": "complete",
+      "date": "2026-06-12",
+      "order": 1,
+      "itemIds": [
+        "serve-plan-precompute",
+        "plan-timing-telemetry",
+        "route-winner-argmin",
+        "performance-ratchet-gate",
+        "public-face-refresh",
+        "roadmap-parallel-plans"
+      ]
+    },
+    {
+      "id": "patch-published",
+      "label": "Release published to npm",
+      "status": "planned",
+      "order": 2,
+      "itemIds": [
+        "serve-plan-precompute",
+        "plan-timing-telemetry",
+        "route-winner-argmin",
+        "performance-ratchet-gate",
+        "public-face-refresh"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "pr-105",
+      "label": "PR #105 feat(routing): persist plan-timing breakdowns",
+      "href": "https://github.com/robot-accomplice/architext/pull/105",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-107",
+      "label": "PR #107 feat(serve): precompute diagram plans server-side",
+      "href": "https://github.com/robot-accomplice/architext/pull/107",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-108",
+      "label": "PR #108 docs(readme): refresh screenshots + release rule",
+      "href": "https://github.com/robot-accomplice/architext/pull/108",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-109",
+      "label": "PR #109 docs(roadmap): parallelize the plan farm",
+      "href": "https://github.com/robot-accomplice/architext/pull/109",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-110",
+      "label": "PR #110 perf(routing): argmin winner + perf ratchet",
+      "href": "https://github.com/robot-accomplice/architext/pull/110",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "npm-package-1-6-3",
+      "label": "npm package @robotaccomplice/architext@1.6.3",
+      "href": "https://www.npmjs.com/package/@robotaccomplice/architext/v/1.6.3",
+      "kind": "release-note",
+      "status": "planned"
+    }
+  ]
+}
