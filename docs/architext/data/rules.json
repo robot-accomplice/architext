@@ -154,6 +154,23 @@
         "edit": false,
         "delete": false
       }
+    },
+    {
+      "id": "release-refreshes-public-face",
+      "title": "Every release refreshes the public face",
+      "summary": "The release ceremony for every version must (1) re-run scripts/capture-readme-screenshots.mjs and commit the refreshed README screenshots (just release-doc-check does this), adding captures for any new top-level mode, and (2) update the architext card on the roboticus site to the released version. A release is not complete while the README shows a prior version's UI or the site advertises a stale version.",
+      "category": "Release",
+      "criticality": "high",
+      "order": 80,
+      "source": "maintainer",
+      "rationale": "1.6.0 and 1.6.1 shipped major UI additions (Repo Tree, Blast Radius, design language) while the README still showed 1.4.x screenshots and the site card lagged — discovered retroactively on 2026-06-11. The public face is part of the release, not an afterthought.",
+      "appliesTo": [
+        "release ceremony"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
     }
   ]
 }

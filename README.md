@@ -125,6 +125,10 @@ validation, release tracking, rules, and release packaging.
 
 ![Architext data and risks view showing migration and release risks](docs/assets/screenshots/architext-data-risks.png)
 
+![Architext Repo Tree view showing the repository's files colored by their owning architecture component, with file-type icons and size/modified metadata](docs/assets/screenshots/architext-repo-tree.png)
+
+![Architext Blast Radius view showing a focused component's reach: owned files, dependencies, dependents, flows, data, and risks](docs/assets/screenshots/architext-blast-radius.png)
+
 ![Architext Release Truth view showing release posture, path, and historical feature and bug-fix volume](docs/assets/screenshots/architext-release-truth.png)
 
 ![Architext Rules view showing ranked project rules grouped by category](docs/assets/screenshots/architext-rules.png)
