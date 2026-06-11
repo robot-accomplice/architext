@@ -1,0 +1,97 @@
+{
+  "id": "v1-6-2",
+  "version": "1.6.2",
+  "name": "Architext 1.6.2 Honest Routing Progress",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Patch release that replaces the static route-planning spinner with honest live progress (phase labels, edge counts, routes-considered counter, elapsed clock) and repairs the roadmap release reference that broke deep validation.",
+  "targetDate": "2026-06-11",
+  "lastUpdated": "2026-06-11T05:40:00.000Z",
+  "updateSource": "1.6.2 RC: progress work merged (PR #101); maintainer directive 2026-06-11 — point release now, separation-pass optimization next (1.6.3), 1.7.0 gated behind the patch stream.",
+  "scope": {
+    "required": [
+      {
+        "id": "routing-planning-progress",
+        "title": "Live route-planning progress",
+        "kind": "feature",
+        "summary": "Dense flows sat on a static 'Routing edges' spinner for 1-2 minutes, indistinguishable from a hang. The planner now reports real progress — per-edge completion counts, a routes-considered counter ticked from inside candidate generation (120ms throttle), force-emitting phase labels including the two previously silent passes (Tidying endpoint mounts, Separating parallel runs) — forwarded by the planning worker and rendered in the loading overlay with an elapsed-seconds clock.",
+        "evidence": [
+          "pr-101",
+          "npm-package-1-6-2"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "patch-corrections",
+        "dependsOn": []
+      },
+      {
+        "id": "roadmap-dangling-release-ref",
+        "title": "Repair roadmap release reference",
+        "kind": "bug-fix",
+        "summary": "The Go-rewrite roadmap item referenced targetReleaseId v1-7-0 before that release exists; the deep validator (npm run validate, doctor, sync migration test) was red on main. The version decision stays in the item summary; the id is set when the release is created at kickoff.",
+        "evidence": [
+          "pr-101"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "patch-corrections",
+        "dependsOn": []
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "patch-corrections",
+      "name": "Patch corrections",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Patch release that replaces the static route-planning spinner with honest live progress (phase labels, edge counts, routes-considered counter, elapsed clock) and repairs the roadmap release reference that broke deep validation.",
+      "progress": 100,
+      "itemIds": [
+        "routing-planning-progress",
+        "roadmap-dangling-release-ref"
+      ],
+      "evidence": [
+        "pr-101"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "patch-published",
+      "label": "Patch published",
+      "status": "in-progress",
+      "date": "2026-06-11",
+      "order": 1,
+      "itemIds": [
+        "routing-planning-progress",
+        "roadmap-dangling-release-ref"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "pr-101",
+      "label": "PR #101 feat(routing): live planning progress",
+      "href": "https://github.com/robot-accomplice/architext/pull/101",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "npm-package-1-6-2",
+      "label": "npm package @robotaccomplice/architext@1.6.2",
+      "href": "https://www.npmjs.com/package/@robotaccomplice/architext/v/1.6.2",
+      "kind": "release-note",
+      "status": "in-progress"
+    }
+  ]
+}
