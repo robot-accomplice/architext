@@ -235,8 +235,9 @@ export function usePlannedDiagram(input) {
         if (!globalThis.crypto?.subtle || typeof fetch === "undefined") throw new Error("no fast path");
         const hash = await planKeyHash(key);
         const response = await fetch(`/api/plan/${hash}`, { signal: fetchController?.signal });
-        if (!response.ok) throw new Error("miss");
+        if (!response.ok) throw new Error("no plan endpoint");
         const body = await response.json();
+        if (!body.plan) throw new Error("miss");
         if (cancelled) return;
         finishWithPlan(deserializePlan(body.plan), { precomputed: true });
       } catch {

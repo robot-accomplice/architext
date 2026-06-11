@@ -1414,7 +1414,11 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
         const hash = url.pathname.slice("/api/plan/".length);
         const stored = planFarm && /^[0-9a-f]{64}$/.test(hash) ? planFarm.lookup(hash) : undefined;
         if (stored === undefined) {
-          sendJson(response, 404, { miss: true });
+          // A miss is a normal, designed outcome (farm warming, config draft,
+          // data just changed) — not an HTTP error. The release-gate UAT
+          // rightly treats non-2xx responses as failures, which is exactly how
+          // the original 404-on-miss broke the 1.6.3 publish gate.
+          sendJson(response, 200, { miss: true });
           return;
         }
         response.statusCode = 200;
