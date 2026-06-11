@@ -346,3 +346,43 @@ test("serve handler can run constrained sync repair for missing data", async () 
     await rm(target, { recursive: true, force: true });
   }
 });
+
+test("plan endpoint answers misses with 200 so browser UAT sees no failed responses", async () => {
+  const target = await mkdtemp(path.join(tmpdir(), "architext-plan-miss-"));
+  try {
+    const targetDataDir = path.join(target, "docs", "architext", "data");
+    await mkdir(targetDataDir, { recursive: true });
+    const knownHash = "a".repeat(64);
+    const planFarm = { lookup: (hash) => (hash === knownHash ? "{\"laneIndexByNode\":[]}" : undefined) };
+
+    await withServer(createViewerRequestHandler({ target, targetDataDir, watchHub: { attach() {} }, planFarm }), async (origin) => {
+      // A cache miss is a designed outcome (farm warming, data just changed),
+      // not an HTTP error: the release-gate UAT fails on any non-2xx response,
+      // which is how 404-on-miss broke the 1.6.3 publish. 404 stays reserved
+      // for "this server has no plan endpoint at all" (older versions).
+      const miss = await fetch(`${origin}/api/plan/${"b".repeat(64)}`);
+      assert.equal(miss.status, 200);
+      const missBody = await miss.json();
+      assert.equal(missBody.miss, true);
+      assert.equal(missBody.plan, undefined, "miss body must not carry a plan");
+
+      const malformed = await fetch(`${origin}/api/plan/not-a-sha`);
+      assert.equal(malformed.status, 200);
+      assert.equal((await malformed.json()).miss, true);
+
+      const hit = await fetch(`${origin}/api/plan/${knownHash}`);
+      assert.equal(hit.status, 200);
+      assert.deepEqual((await hit.json()).plan, { laneIndexByNode: [] });
+    });
+
+    // Without a farm at all (static/embedded contexts) the endpoint still
+    // answers 200-miss rather than erroring.
+    await withServer(createViewerRequestHandler({ target, targetDataDir, watchHub: { attach() {} } }), async (origin) => {
+      const response = await fetch(`${origin}/api/plan/${knownHash}`);
+      assert.equal(response.status, 200);
+      assert.equal((await response.json()).miss, true);
+    });
+  } finally {
+    await rm(target, { recursive: true, force: true });
+  }
+});
