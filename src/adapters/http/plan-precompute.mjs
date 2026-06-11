@@ -19,7 +19,7 @@ import { buildFlowPlanRequest } from "../../../viewer/src/presentation/planReque
 import { planInputKey } from "../../../viewer/src/routing/usePlannedDiagram.js";
 import { serializePlan } from "../../../viewer/src/routing/planCodec.js";
 import { viewTypesForMode, flowCompatibleWithView } from "../../../viewer/src/presentation/viewSelection.js";
-import { loadDiagramConfig } from "./diagram-config-api.mjs";
+import { diagramConfigGetPayload } from "./diagram-config-api.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const defaultWorkerPath = path.join(here, "plan-precompute-worker.mjs");
@@ -52,7 +52,10 @@ export async function enumerateFlowPlanRequests({ dataDir, layoutConfig, readFil
 export function createPlanPrecomputeFarm({
   target,
   dataDirFn,
-  loadConfigFn = loadDiagramConfig,
+  // MUST be the same config source the viewer consumes (/api/config payload,
+  // defaults filled) — enumerating from the raw saved file diverges the layout
+  // numbers and therefore every key (found live: laneWidth undefined vs 210).
+  loadConfigFn = diagramConfigGetPayload,
   workerPath = defaultWorkerPath,
   log = (message) => console.log(message)
 }) {
