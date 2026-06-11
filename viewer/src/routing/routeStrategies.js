@@ -4,6 +4,7 @@ import { pathToSvg, simplifyOrthogonalPoints } from "./routeRendering.js";
 import {
   isCleanRouteCandidate,
   scoreRouteCandidates,
+  bestRouteCandidate,
   sortedRouteCandidates,
   withQualityCosts,
   warningRouteCandidate
@@ -226,7 +227,10 @@ export function selectRouteCandidate(input) {
       }
     });
     scoreRouteCandidates(splineCandidates, scoringContext);
-    return sortedRouteCandidates(splineCandidates).map(warnCandidate)[0] ?? relaxedPreferenceRoute();
+    {
+    const best = bestRouteCandidate(splineCandidates);
+    return best ? warnCandidate(best) : relaxedPreferenceRoute();
+  }
   }
 
   if (style === "straight") {
@@ -238,7 +242,10 @@ export function selectRouteCandidate(input) {
       }
     });
     scoreRouteCandidates(straightCandidates, scoringContext);
-    return sortedRouteCandidates(straightCandidates).map(warnCandidate)[0] ?? relaxedPreferenceRoute();
+    {
+    const best = bestRouteCandidate(straightCandidates);
+    return best ? warnCandidate(best) : relaxedPreferenceRoute();
+  }
   }
 
   const fixedPreferredRoute = fixedPreferredOrthogonalCandidate(relationship, fromRect, toRect, endpointOffsets, routeCandidates, usedRoutes, input);
@@ -273,7 +280,7 @@ export function selectRouteCandidate(input) {
     stats.cheapCandidateCount = (stats.cheapCandidateCount ?? 0) + cheapCandidates.length;
     if (!hasCleanCheapCandidate) {
       stats.gridEscalations = (stats.gridEscalations ?? 0) + 1;
-      const bestCheap = sortedRouteCandidates([...cheapCandidates])[0];
+      const bestCheap = bestRouteCandidate(cheapCandidates);
       const reasons = stats.cheapRejectionReasons ?? {};
       if (bestCheap) {
         if (bestCheap.collisions > 0) reasons.collisions = (reasons.collisions ?? 0) + 1;
@@ -323,7 +330,8 @@ export function selectRouteCandidate(input) {
     (candidate) => candidate.points.map((point) => `${point.x},${point.y}`).join("|")
   ), scoringContext);
 
-  return sortedRouteCandidates(candidates).map(warnCandidate)[0]
+  const best = bestRouteCandidate(candidates);
+  return (best ? warnCandidate(best) : null)
     ?? fixedPreferredOrthogonalCandidate(relationship, fromRect, toRect, endpointOffsets, routeCandidates, usedRoutes, input)
     ?? relaxedPreferenceRoute();
 }
