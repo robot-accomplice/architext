@@ -27,6 +27,7 @@ import { updateRulesRequest as updateRulesApiRequest } from "../http/rules-api.m
 import { updateNotesRequest as updateNotesApiRequest } from "../http/notes-api.mjs";
 import { diagramConfigGetPayload, writeDiagramConfig } from "../http/diagram-config-api.mjs";
 import { repoTreeApiRequest } from "../http/repo-tree-api.mjs";
+import { createPlanPrecomputeFarm } from "../http/plan-precompute.mjs";
 import { c4DrilldownIssues, c4IssuesForView, repairC4Views } from "../../domain/architecture-model/c4-quality.mjs";
 import { generatedReleaseIndex, releaseIndexGenerationChanges } from "../../domain/architecture-model/release-history.mjs";
 import { doctorRepairCategories, doctorRepairsForStatus } from "../../domain/lifecycle/doctor-repairs.mjs";
@@ -1343,23 +1344,26 @@ async function createViewerServer({ target, host, port }) {
   const lastPort = port === 0 ? 0 : Math.min(65535, port + servePortSearchLimit - 1);
 
   for (let candidatePort = port; candidatePort <= lastPort; candidatePort += 1) {
-    const watchHub = createDataWatchHub({ target, dataDir, validateTarget });
-    const server = createServer(createViewerRequestHandler({ target, targetDataDir, watchHub, mutationToken }));
+    const planFarm = createPlanPrecomputeFarm({ target, dataDirFn: dataDir });
+    const watchHub = createDataWatchHub({ target, dataDir, validateTarget, onChange: (validation) => { if (validation.ok) planFarm.refresh(); } });
+    const server = createServer(createViewerRequestHandler({ target, targetDataDir, watchHub, mutationToken, planFarm }));
     const boundPort = await listenOnPort(server, host, candidatePort);
     if (!boundPort) {
       server.close();
       watchHub.close();
+      planFarm.dispose();
       continue;
     }
     watchHub.start();
-    server.once("close", () => watchHub.close());
+    planFarm.refresh();
+    server.once("close", () => { watchHub.close(); planFarm.dispose(); });
     return { server, port: boundPort };
   }
 
   throw new Error(`No available loopback port found from ${port} through ${lastPort}.`);
 }
 
-export function createViewerRequestHandler({ target, targetDataDir = dataDir(target), watchHub, mutationToken = randomBytes(32).toString("base64url") }) {
+export function createViewerRequestHandler({ target, targetDataDir = dataDir(target), watchHub, mutationToken = randomBytes(32).toString("base64url"), planFarm = null }) {
   return async function viewerRequestHandler(request, response) {
     try {
       const url = new URL(request.url || "/", "http://127.0.0.1");
@@ -1403,10 +1407,27 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
         return;
       }
 
+      if (url.pathname.startsWith("/api/plan/") && request.method === "GET") {
+        // Precomputed plan lookup by sha256(planInputKey). Exact-match only —
+        // a miss means the browser plans locally, so a wrong plan can't be served.
+        response.setHeader("Cache-Control", "no-store");
+        const hash = url.pathname.slice("/api/plan/".length);
+        const stored = planFarm && /^[0-9a-f]{64}$/.test(hash) ? planFarm.lookup(hash) : undefined;
+        if (stored === undefined) {
+          sendJson(response, 404, { miss: true });
+          return;
+        }
+        response.statusCode = 200;
+        response.setHeader("Content-Type", "application/json");
+        response.end(`{"plan":${stored}}`);
+        return;
+      }
+
       if (url.pathname === "/api/config" && request.method === "POST") {
         try {
           const body = await requestJson(request);
           const result = await writeDiagramConfig({ scope: body.scope, target, diagram: body.diagram });
+          planFarm?.refresh();
           sendJson(response, 200, result);
         } catch (error) {
           sendJson(response, 200, { ok: false, mode: "config", error: error.message, reload: false });
