@@ -268,6 +268,19 @@ export function sortedRouteCandidates(candidateList) {
   return candidateList.sort(compareByRoutePriority);
 }
 
+// Single-pass winner under the same total order as sortedRouteCandidates()[0]:
+// strict-less against the running best keeps the FIRST minimal element, which
+// is exactly what a stable sort puts at index 0. O(n) with zero allocation —
+// the selection hot path was a copy + O(n log n) sort per edge evaluation
+// (13% of dense-plan self-time), of which only the winner was ever consumed.
+export function bestRouteCandidate(candidateList) {
+  let best = null;
+  for (const candidate of candidateList) {
+    if (best === null || compareByRoutePriority(candidate, best) < 0) best = candidate;
+  }
+  return best;
+}
+
 export function isCleanRouteCandidate(candidate) {
   return (
     candidate.collisions === 0 &&

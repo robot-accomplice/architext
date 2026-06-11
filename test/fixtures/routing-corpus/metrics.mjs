@@ -58,33 +58,83 @@ export function renderedViewFor(flow, views) {
   return compatible.find((view) => view.type !== "system-map") ?? compatible[0] ?? null;
 }
 
-export function computeCorpusMetrics() {
+// Performance ratchet counters: deterministic work-volume measures collected from the
+// planner's stats hooks. Exact for fixed inputs on every machine, so they gate strictly
+// with zero CI flake. They catch the historically dominant regression class (candidate
+// volume blowups); pure per-operation slowdowns are caught coarsely by the calibrated
+// wall-time ratio below.
+export const PERF_GATED_COUNTERS = ["edgesPlanned", "cheapCandidateCount", "gridRouteCalls"];
+
+function planCorpusFlow(flow, views, stats) {
+  const view = renderedViewFor(flow, views);
+  if (!view) throw new Error(`No rendered view for corpus flow "${flow.id}"`);
+  const relationships = flow.steps.map((step, index) => ({
+    id: step.id,
+    from: step.from,
+    to: step.to,
+    relationshipType: "flow",
+    displayIndex: index + 1,
+    kind: step.kind,
+    returnOf: step.returnOf,
+    outcome: step.outcome
+  }));
+  return planDiagram({
+    view,
+    relationships,
+    visibleNodeIds: new Set(view.lanes.flatMap((lane) => lane.nodeIds)),
+    style: "orthogonal",
+    diagnostics: true,
+    stats,
+    ...diagramLayoutFor(view, relationships.length)
+  });
+}
+
+// One corpus pass producing both the quality metrics and the performance measures, so
+// the fitness gate and the perf gate can never observe different plans.
+export function computeCorpusMetricsAndPerf() {
   const views = loadJson("views.json").views;
   const flows = loadJson("flows.json").flows;
-  const result = {};
+  const metricsByFlow = {};
+  const perfByFlow = {};
+
+  // Calibration yardstick: the smallest flow, planned cold once up front (untimed)
+  // so every timed calibration run below hits the raw-route cache — an identical
+  // workload on every machine and every run.
+  const smallest = [...flows].sort((a, b) => a.steps.length - b.steps.length)[0];
+  planCorpusFlow(smallest, views, {});
+
+  // The calibration runs are INTERLEAVED with the corpus flows so both timers
+  // sample the same load timeline: a parallel test suite (or CI runner) that
+  // time-slices the corpus pass slows the calibration identically, and the
+  // corpus/calibration ratio stays valid under load — measuring it after the
+  // corpus let suite parallelism inflate the ratio 2x and flake the gate.
+  let corpusWallMs = 0;
+  let calibrationMs = 0;
   for (const flow of flows) {
-    const view = renderedViewFor(flow, views);
-    if (!view) throw new Error(`No rendered view for corpus flow "${flow.id}"`);
-    const relationships = flow.steps.map((step, index) => ({
-      id: step.id,
-      from: step.from,
-      to: step.to,
-      relationshipType: "flow",
-      displayIndex: index + 1,
-      kind: step.kind,
-      returnOf: step.returnOf,
-      outcome: step.outcome
-    }));
-    const plan = planDiagram({
-      view,
-      relationships,
-      visibleNodeIds: new Set(view.lanes.flatMap((lane) => lane.nodeIds)),
-      style: "orthogonal",
-      diagnostics: true,
-      ...diagramLayoutFor(view, relationships.length)
-    });
+    const stats = {};
+    const corpusStart = performance.now();
+    const plan = planCorpusFlow(flow, views, stats);
+    corpusWallMs += performance.now() - corpusStart;
     const metrics = { ...plan.diagnostics.metrics, crossings: totalCrossings(plan.routes) };
-    result[flow.id] = Object.fromEntries(GATED_METRICS.map((key) => [key, metrics[key] ?? 0]));
+    metricsByFlow[flow.id] = Object.fromEntries(GATED_METRICS.map((key) => [key, metrics[key] ?? 0]));
+    perfByFlow[flow.id] = Object.fromEntries(PERF_GATED_COUNTERS.map((key) => [key, stats[key] ?? 0]));
+    const calibrationStart = performance.now();
+    planCorpusFlow(smallest, views, {});
+    calibrationMs += performance.now() - calibrationStart;
   }
-  return result;
+  calibrationMs = Math.max(0.1, calibrationMs);
+
+  return {
+    metrics: metricsByFlow,
+    perf: {
+      flows: perfByFlow,
+      corpusWallMs: Math.round(corpusWallMs),
+      calibrationMs: Math.round(calibrationMs * 10) / 10,
+      wallRatio: Math.round((corpusWallMs / calibrationMs) * 10) / 10
+    }
+  };
+}
+
+export function computeCorpusMetrics() {
+  return computeCorpusMetricsAndPerf().metrics;
 }
