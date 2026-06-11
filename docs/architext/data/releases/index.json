@@ -484,6 +484,27 @@
       },
       "file": "v1-6-2.json",
       "releasedAt": "2026-06-11T06:25:00.000Z"
+    },
+    {
+      "id": "v1-6-3",
+      "version": "1.6.3",
+      "name": "Architext 1.6.3 Server-Side Plan Precompute",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-06-12",
+      "lastUpdated": "2026-06-12T00:30:00.000Z",
+      "summary": "Dense diagrams render instantly: architext serve precomputes every flow x view route plan in Node (where planning is ~20x faster than the browser) under strict input-key parity, and the viewer fetches finished plans with full in-browser fallback. Routing performance is now gated by a ratchet whose baseline only moves toward improvement, slow plans persist their per-phase timing breakdowns, winner selection is 1.27x faster with byte-identical routes, and the README/public face refresh is a release rule.",
+      "counts": {
+        "features": 2,
+        "bugFixes": 0,
+        "workstreams": 2,
+        "blockers": 0,
+        "complete": 6,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-6-3.json"
     }
   ]
 }
