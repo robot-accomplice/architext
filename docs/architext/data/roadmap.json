@@ -356,6 +356,16 @@
       "priority": "medium",
       "section": "Design System",
       "dateAdded": "2026-06-10T00:00:00.000Z"
+    },
+    {
+      "id": "parallel-plan-precompute",
+      "title": "Parallelize server-side route calculation",
+      "summary": "The serve-side plan precompute farm (shipped 1.6.3-era, PR #107) computes flow x view plans sequentially in a single worker thread, so a full warmup is the sum of all plan times (~3 minutes for the routing corpus). Now that planning lives in the Node backend, fan the farm out across a worker-thread pool (cpu_count - 1, plans are independent and embarrassingly parallel) to cut warmup roughly by the pool width, prioritizing the default view x flow pairs first so the first screen a user opens is warm earliest. Generation-based invalidation already tolerates concurrent completion; the pool must preserve it. Also a direct fit for the 1.7.0 Go backend, where goroutine fan-out replaces the thread pool.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Routing Performance",
+      "dateAdded": "2026-06-11T00:00:00.000Z"
     }
   ]
 }
