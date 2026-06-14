@@ -13,10 +13,10 @@
     "validate": "node tools/validate-architext.mjs --data-dir ../docs/architext/data"
   },
   "dependencies": {
-    "@vitejs/plugin-react": "^4.3.4",
+    "@vitejs/plugin-react": "^6.0.2",
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1",
-    "vite": "^6.0.7",
+    "vite": "^8.0.16",
     "typescript": "^5.7.2",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
