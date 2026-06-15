@@ -10,8 +10,12 @@ pub fn js_round(x: f64) -> f64 {
     if x.is_nan() || x.is_infinite() {
         return x;
     }
-    // floor(x + 0.5) reproduces V8's half-toward-+∞ for finite values.
+    // floor(x + 0.5) reproduces V8's half-toward-+∞ for finite values, EXCEPT
+    // the double-rounding boundary: for x = 0.49999999999999994 (largest f64 < 0.5),
+    // x + 0.5 rounds up to exactly 1.0, so floor gives 1 while V8 gives 0. Correct
+    // by stepping back down when the rounded result overshot the true half-point.
     let r = (x + 0.5).floor();
+    let r = if r - 0.5 > x { r - 1.0 } else { r };
     // Preserve JS negative-zero: Math.round(x) for x in (-0.5, 0] is -0.
     if r == 0.0 && x.is_sign_negative() {
         return -0.0;
@@ -35,6 +39,8 @@ mod round_tests {
             (-0.5, 0.0),   // JS: -0; value compares equal to 0.0
             (-0.3, 0.0),   // JS: -0
             (120.0, 120.0),
+            (0.49999999999999994, 0.0),   // floor(x+0.5) double-rounding boundary: V8 gives 0, not 1
+            (-0.49999999999999994, 0.0),  // JS: -0
         ];
         for (input, expected) in cases {
             assert_eq!(js_round(input), expected, "js_round({input})");
