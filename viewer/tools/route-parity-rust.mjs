@@ -16,6 +16,57 @@ const { enumerateFlowPlanRequests } = await import(path.join(repoRoot, "src/adap
 const { planDiagram } = await import(path.join(repoRoot, "viewer/src/routing/planDiagram.js"));
 const wasm = await import(path.join(repoRoot, "crates/architext-routing/pkg/architext_routing.js"));
 
+// Serialize a planInput object to the wire shape the Rust PlanDiagramInput
+// expects. JS planInput uses Set (visibleNodeIds) and Map (extraNodeRects,
+// extraLaneIndexByNode, extraRowIndexByNode) which JSON.stringify loses.
+function serializePlanInput(input) {
+  return JSON.stringify({
+    view: { lanes: input.view.lanes.map((lane) => ({ id: lane.id, nodeIds: lane.nodeIds })) },
+    relationships: input.relationships.map((r) => ({
+      id: r.id,
+      from: r.from,
+      to: r.to,
+      label: r.label ?? null,
+      relationshipType: r.relationshipType ?? null,
+      stepId: r.stepId ?? null,
+      flowId: r.flowId ?? null,
+      kind: r.kind ?? null,
+      returnOf: r.returnOf ?? null,
+      outcome: r.outcome ?? null,
+      displayIndex: r.displayIndex ?? 0,
+      preferredStartSide: r.preferredStartSide ?? null,
+      preferredEndSide: r.preferredEndSide ?? null,
+    })),
+    // Set → plain array (insertion order preserved)
+    visibleNodeIds: input.visibleNodeIds instanceof Set
+      ? Array.from(input.visibleNodeIds)
+      : (input.visibleNodeIds ?? []),
+    nodeWidth: input.nodeWidth,
+    nodeHeight: input.nodeHeight,
+    laneWidth: input.laneWidth,
+    rowGap: input.rowGap,
+    marginX: input.marginX,
+    marginY: input.marginY,
+    minCanvasWidth: input.minCanvasWidth,
+    minCanvasHeight: input.minCanvasHeight,
+    canvasExtraWidth: input.canvasExtraWidth,
+    canvasExtraHeight: input.canvasExtraHeight,
+    // Map → [[key, value], ...] entries arrays
+    extraNodeRects: input.extraNodeRects instanceof Map
+      ? Array.from(input.extraNodeRects.entries())
+      : (input.extraNodeRects ?? []),
+    extraLaneIndexByNode: input.extraLaneIndexByNode instanceof Map
+      ? Array.from(input.extraLaneIndexByNode.entries())
+      : (input.extraLaneIndexByNode ?? []),
+    extraRowIndexByNode: input.extraRowIndexByNode instanceof Map
+      ? Array.from(input.extraRowIndexByNode.entries())
+      : (input.extraRowIndexByNode ?? []),
+    scoreEdgeProximity: Boolean(input.scoreEdgeProximity),
+    style: input.style ?? "orthogonal",
+    diagnostics: false,
+  });
+}
+
 // Works for both a JS Map (`[...map]` -> entries) and the Rust wire shape
 // (`plan.routes` is an array of [id, route] pairs) — identical destructuring.
 function fingerprint(plan) {
@@ -41,10 +92,7 @@ for (const req of requests) {
     jsFp = `JS-ERROR: ${error.message}`;
   }
   try {
-    // Phase 1B note: once plan() consumes its input, this must serialize
-    // planInput through the shared planRequest wire form. While the Rust side
-    // echoes a fixture, the input content is ignored.
-    rustFp = fingerprint(JSON.parse(wasm.plan(JSON.stringify(req.planInput))));
+    rustFp = fingerprint(JSON.parse(wasm.plan(serializePlanInput(req.planInput))));
   } catch (error) {
     rustFp = `RUST-ERROR: ${error.message}`;
   }
