@@ -2388,6 +2388,40 @@ pub fn alternate_middle_dogleg_routes(route: &RouteData) -> Vec<RouteData> {
 }
 
 // ---------------------------------------------------------------------------
+// spreadUnitSlots (Pass C3, L903)
+// ---------------------------------------------------------------------------
+
+/// Port of JS `spreadUnitSlots(halfWidths, sideLength)`.
+///
+/// Even-gap slot offsets (relative to face centre) for units of the given
+/// half-widths.  When all half-widths are zero this reduces exactly to
+/// `endpointSpreadOffset` (lone-mount faces stay byte-identical).  When units
+/// cannot fit (slack ≤ 0) falls back to even centres so the per-face guard
+/// can handle the squeeze.
+pub fn spread_unit_slots(half_widths: &[f64], side_length: f64) -> Vec<f64> {
+    let count = half_widths.len();
+    let content: f64 = half_widths.iter().map(|&hw| 2.0 * hw).sum();
+    let slack = side_length - content;
+    if slack <= 0.0 {
+        // Fall back: even centres (same as endpointSpreadOffset)
+        return half_widths
+            .iter()
+            .enumerate()
+            .map(|(index, _)| ((index + 1) as f64 / (count + 1) as f64 - 0.5) * side_length)
+            .collect();
+    }
+    let gap = slack / (count + 1) as f64;
+    let mut slots = Vec::with_capacity(count);
+    let mut cursor = -side_length / 2.0;
+    for &hw in half_widths {
+        cursor += gap + hw;
+        slots.push(cursor);
+        cursor += hw;
+    }
+    slots
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -3474,5 +3508,59 @@ mod tests {
         let alt1_pts = &alts[1].points;
         assert_eq!(alt1_pts[2], pt(75.0, 82.0)); // {gutterX, sourceStub.y}
         assert_eq!(alt1_pts[3], pt(75.0, 120.0)); // {gutterX, targetStub.y}
+    }
+
+    // -----------------------------------------------------------------------
+    // spreadUnitSlots — Node goldens
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn spread_unit_slots_zero_half_widths_reduces_to_even_spread() {
+        // Node: spreadUnitSlots([0,0,0], 100) = [-25, 0, 25]
+        let slots = spread_unit_slots(&[0.0, 0.0, 0.0], 100.0);
+        assert_eq!(slots.len(), 3);
+        assert!((slots[0] - -25.0).abs() < 1e-9);
+        assert!((slots[1] - 0.0).abs() < 1e-9);
+        assert!((slots[2] - 25.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn spread_unit_slots_single_unit_zero_width_centres() {
+        // Node: spreadUnitSlots([0], 100) = [0]  (single unit → centre = 0)
+        // With hw=0: content=0, slack=100, gap=100/2=50, cursor=-50+50+0=0
+        let slots = spread_unit_slots(&[0.0], 100.0);
+        assert_eq!(slots.len(), 1);
+        assert!((slots[0] - 0.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn spread_unit_slots_nonzero_half_widths() {
+        // Node: spreadUnitSlots([6,6,6], 54) = [-16.5, 0, 16.5]
+        let slots = spread_unit_slots(&[6.0, 6.0, 6.0], 54.0);
+        assert_eq!(slots.len(), 3);
+        assert!((slots[0] - -16.5).abs() < 1e-9);
+        assert!((slots[1] - 0.0).abs() < 1e-9);
+        assert!((slots[2] - 16.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn spread_unit_slots_no_slack_falls_back_to_even_centres() {
+        // Node: spreadUnitSlots([6,6], 20) → slack=20-24=-4 ≤ 0 → fallback
+        // fallback: [1/(2+1)-0.5, 2/(2+1)-0.5] * 20 = [-3.333..., 3.333...]
+        let slots = spread_unit_slots(&[6.0, 6.0], 20.0);
+        assert_eq!(slots.len(), 2);
+        let expected0 = (1.0_f64 / 3.0 - 0.5) * 20.0;
+        let expected1 = (2.0_f64 / 3.0 - 0.5) * 20.0;
+        assert!((slots[0] - expected0).abs() < 1e-9);
+        assert!((slots[1] - expected1).abs() < 1e-9);
+    }
+
+    #[test]
+    fn spread_unit_slots_two_units_with_widths() {
+        // Node: spreadUnitSlots([5,5], 100) = [-18.333..., 18.333...]
+        let slots = spread_unit_slots(&[5.0, 5.0], 100.0);
+        assert_eq!(slots.len(), 2);
+        assert!((slots[0] - -18.333_333_333_333_332).abs() < 1e-9);
+        assert!((slots[1] - 18.333_333_333_333_336).abs() < 1e-9);
     }
 }
