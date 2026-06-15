@@ -136,7 +136,7 @@
         "title": "UI design-language refactor (chrome-only, audited)",
         "kind": "feature",
         "status": "planned",
-        "summary": "Apply the new design language (produced externally via Stitch) to the viewer as a chrome-only refactor that does not change diagram-layout-input defaults. Gated by a usability/functional-parity/UX audit using the design-system skills; the canvas must stay fluid (computed dimensions, pan/zoom), never pinned to a fixed size.",
+        "summary": "Apply the new design language (locked in viewer/DESIGN.md, explored via Stitch) to the viewer as a chrome-only refactor that does not change diagram-layout-input defaults. UX-LED: the full user experience drives decisions — beauty is subordinate to usability, workflow integrity, and functional parity. COMPLETION GATE (rule design-language-fidelity-audit): not 'done' until a post-implementation audit — in the live-rendered UI, using the design-system skills — verifies (1) UX: every task still works, is discoverable, and is no slower than before, and (2) faithfulness to viewer/DESIGN.md + coherency across ALL modes (shared tokens, typography, the nav/canvas/inspector triad, fluid canvas, ARCHITEXT wordmark, state-not-role-hue). Partial/per-screen application, or a prettier UI that degrades a workflow, does not count.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-15T00:00:00.000Z",
         "workstreamId": "ui-refactor",
@@ -296,7 +296,7 @@
     },
     {
       "id": "facelift-audited",
-      "label": "Design-language refactor passes the audit",
+      "label": "Facelift passes the live fidelity + coherency audit (all modes)",
       "status": "planned",
       "targetWindow": "1.7.0 parallel",
       "order": 5,
