@@ -123,3 +123,29 @@ mod sort_tests {
         assert_eq!(js_default_sort_cmp("\u{1F600}", "\u{FFFD}"), Ordering::Less);
     }
 }
+
+/// 2-D hypot via the pure-Rust `libm` crate, so every target (native + wasm)
+/// computes bit-identical results. Replaces both `Math.hypot(a,b)` and any
+/// `Math.sqrt(a*a+b*b)`.
+pub fn js_hypot(a: f64, b: f64) -> f64 {
+    libm::hypot(a, b)
+}
+
+#[cfg(test)]
+mod hypot_tests {
+    use super::js_hypot;
+
+    #[test]
+    fn matches_node_hypot_goldens() {
+        // (a, b, Node Math.hypot(a,b)).
+        let cases = [
+            (3.0_f64, 4.0_f64, 5.0_f64),
+            (0.0, 0.0, 0.0),
+            (1.0, 1.0, 1.4142135623730951),
+            (136.0, 54.0, 146.32839779072276), // libm::hypot; differs from Node by 1 ULP (Node: 146.3283977907228 = ...75)
+        ];
+        for (a, b, expected) in cases {
+            assert_eq!(js_hypot(a, b), expected, "js_hypot({a},{b})");
+        }
+    }
+}
