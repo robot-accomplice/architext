@@ -13,7 +13,10 @@ pub mod route_ports;
 pub mod route_reciprocal;
 pub mod route_rendering;
 pub mod route_candidate_ports;
+pub mod route_cache;
+pub mod route_index;
 pub mod route_scoring;
+pub mod route_strategies;
 pub mod route_style;
 pub mod wasm;
 

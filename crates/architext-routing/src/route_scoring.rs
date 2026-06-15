@@ -137,6 +137,12 @@ pub struct RouteCandidate {
     pub points: Vec<Point>,
     pub samples: Vec<Point>,
     pub style: String,
+    /// SVG `d` path string (set by candidate builders / fixedPreferredOrthogonalCandidate).
+    pub d: String,
+    /// Label position X (midpoint of samples or points).
+    pub label_x: f64,
+    /// Label position Y (midpoint of samples or points).
+    pub label_y: f64,
     /// JS `candidate.startSide`
     pub start_side: Option<String>,
     /// JS `candidate.endSide`
