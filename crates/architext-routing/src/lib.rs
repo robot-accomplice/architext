@@ -12,6 +12,7 @@ pub mod route_labels;
 pub mod route_ports;
 pub mod route_reciprocal;
 pub mod route_rendering;
+pub mod route_candidate_ports;
 pub mod route_scoring;
 pub mod route_style;
 pub mod wasm;
