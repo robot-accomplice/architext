@@ -14,6 +14,7 @@ pub mod helpers;
 pub mod construction;
 pub mod separation;
 pub mod crossings;
+pub mod orchestration;
 
 // ---------------------------------------------------------------------------
 // Re-export the complete public surface so `crate::route_edges::X` resolves.
@@ -43,6 +44,12 @@ pub use construction::{
 
 // -- crossings --
 pub use crossings::{crossings_between, crossings_involving, gutter_lane_of};
+
+// -- orchestration --
+pub use orchestration::{
+    route_edges, route_planner_context, InputRelationship, NodeRect, PlannerContext,
+    RouteEdgesInput, RouteQualityImpl,
+};
 
 // -- separation --
 pub use separation::{

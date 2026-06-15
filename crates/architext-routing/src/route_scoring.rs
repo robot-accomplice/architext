@@ -45,7 +45,11 @@ use std::collections::HashSet;
 
 use crate::model::{Point, Rect};
 use crate::route_constants::rect_center;
-use crate::route_intent::{IntentRelationship, SidePair, SurfaceOptions};
+use crate::route_index::RouteIndex;
+use crate::route_intent::{
+    derive_route_intent, expected_facing_sides, semantic_surface_options, DeriveRouteIntentInput,
+    IntentRelationship, SemanticSurfaceOptionsInput, SidePair, SurfaceOptions,
+};
 use crate::route_ports::side_vector;
 
 // ---------------------------------------------------------------------------
@@ -583,6 +587,195 @@ fn route_metric_i64(value: i64) -> i64 {
 #[inline]
 fn route_metric_f64(value: f64) -> f64 {
     value
+}
+
+// ---------------------------------------------------------------------------
+// scoreRouteCandidates
+// ---------------------------------------------------------------------------
+
+/// Input context for `score_route_candidates`.
+///
+/// Mirrors the JS `context` object passed to `scoreRouteCandidates`.
+pub struct ScoreContext<'a> {
+    pub collision_count: &'a dyn Fn(&RouteCandidate, &str, &str, f64) -> i64,
+    pub route_index: &'a RouteIndex,
+    pub from_id: &'a str,
+    pub to_id: &'a str,
+    pub from_rect: &'a Rect,
+    pub to_rect: &'a Rect,
+    pub pair_index: usize,
+    pub top_limit: f64,
+    pub bottom_limit: f64,
+    pub relationship: Option<&'a IntentRelationship>,
+    pub from_lane_index: Option<i64>,
+    pub to_lane_index: Option<i64>,
+    pub from_row_index: Option<i64>,
+    pub to_row_index: Option<i64>,
+    pub canvas_width: Option<f64>,
+    pub canvas_height: Option<f64>,
+    pub blocker_rects: &'a [Rect],
+}
+
+/// Port of JS `scoreRouteCandidates(candidateList, context)`.
+///
+/// Fills `collisions`, `padded_collisions`, `endpoint_node_traversals`,
+/// crossing/overlap/surface-mismatch counts, fan-out direction cost, and
+/// `cost` on each candidate in the slice.
+pub fn score_route_candidates(candidates: &mut [RouteCandidate], ctx: &ScoreContext<'_>) {
+    let expected_sides: SidePair = if let Some(rel) = ctx.relationship {
+        let intent = derive_route_intent(&DeriveRouteIntentInput {
+            relationship: rel,
+            from_rect: ctx.from_rect,
+            to_rect: ctx.to_rect,
+            from_lane_index: ctx.from_lane_index.unwrap_or(0),
+            to_lane_index: ctx.to_lane_index.unwrap_or(0),
+            from_row_index: ctx.from_row_index.unwrap_or(0),
+            to_row_index: ctx.to_row_index.unwrap_or(0),
+        });
+        // JS: expectedSides.source ?? expectedSides.expectedSourceSide
+        // RouteIntent has expected_source_side / expected_target_side (no separate source/target)
+        SidePair {
+            source: intent.expected_source_side,
+            target: intent.expected_target_side,
+        }
+    } else {
+        expected_facing_sides(ctx.from_rect, ctx.to_rect)
+    };
+
+    let semantic_sides: SurfaceOptions = if let Some(rel) = ctx.relationship {
+        semantic_surface_options(&SemanticSurfaceOptionsInput {
+            expected_sides: SidePair {
+                source: expected_sides.source.clone(),
+                target: expected_sides.target.clone(),
+            },
+            relationship: rel,
+            from_rect: ctx.from_rect,
+            to_rect: ctx.to_rect,
+            blocker_rects: ctx.blocker_rects.to_vec(),
+            canvas_width: ctx.canvas_width.unwrap_or(0.0),
+            canvas_height: ctx.canvas_height.unwrap_or(0.0),
+        })
+    } else {
+        SurfaceOptions {
+            source: {
+                let mut s = indexmap::IndexSet::new();
+                s.insert(expected_sides.source.clone());
+                s
+            },
+            target: {
+                let mut s = indexmap::IndexSet::new();
+                s.insert(expected_sides.target.clone());
+                s
+            },
+        }
+    };
+
+    for candidate in candidates.iter_mut() {
+        let travels_top = candidate.samples.iter().any(|p| p.y < ctx.top_limit - 4.0);
+        let travels_bottom = candidate.samples.iter().any(|p| p.y > ctx.bottom_limit + 4.0);
+
+        candidate.collisions = (ctx.collision_count)(candidate, ctx.from_id, ctx.to_id, 0.0);
+        candidate.padded_collisions = (ctx.collision_count)(candidate, ctx.from_id, ctx.to_id, 8.0);
+        candidate.endpoint_node_traversals =
+            endpoint_node_traversal_count(&candidate.samples, Some(ctx.from_rect), Some(ctx.to_rect));
+
+        let (self_overlap_count, self_overlap_len) = if candidate.style == "spline" {
+            (0, 0.0)
+        } else {
+            self_overlap_segment_stats(&candidate.points)
+        };
+        let crossing_stats = if candidate.style == "spline" {
+            crate::route_index::CrossingStats { total: 0, repeated: 0 }
+        } else {
+            ctx.route_index.crossing_stats(&candidate.points)
+        };
+        let shared_stats = if candidate.style == "spline" {
+            crate::route_index::SharedSegmentStats { count: 0, length: 0.0 }
+        } else {
+            ctx.route_index.shared_segment_stats(&candidate.points)
+        };
+
+        candidate.self_overlapping_segments = self_overlap_count;
+        candidate.self_overlap_length = self_overlap_len;
+        candidate.crossings = crossing_stats.total;
+        candidate.repeated_crossings = crossing_stats.repeated;
+        candidate.shared_segments = shared_stats.count;
+        candidate.shared_segment_length = shared_stats.length;
+
+        candidate.surface_mismatch_count = surface_mismatch_count(
+            candidate.start_side.as_deref(),
+            candidate.end_side.as_deref(),
+            &candidate.style,
+            &SidePair {
+                source: expected_sides.source.clone(),
+                target: expected_sides.target.clone(),
+            },
+            ctx.relationship,
+        );
+        candidate.semantic_surface_mismatch_count = semantic_surface_mismatch_count(
+            candidate.start_side.as_deref(),
+            candidate.end_side.as_deref(),
+            &candidate.style,
+            &SidePair {
+                source: semantic_sides.source.iter().next().map(|s| s.as_str()).unwrap_or("").to_owned(),
+                target: semantic_sides.target.iter().next().map(|s| s.as_str()).unwrap_or("").to_owned(),
+            },
+            ctx.relationship,
+        );
+        candidate.surface_direction_mismatch_count = surface_direction_mismatch_count(
+            candidate.start_side.as_deref(),
+            candidate.end_side.as_deref(),
+            &candidate.style,
+            Some(ctx.from_rect),
+            Some(ctx.to_rect),
+            ctx.relationship,
+        );
+        candidate.blocked_primary_surface_use_count = blocked_primary_surface_use_count(
+            candidate.start_side.as_deref(),
+            candidate.end_side.as_deref(),
+            &SidePair {
+                source: expected_sides.source.clone(),
+                target: expected_sides.target.clone(),
+            },
+            &semantic_sides,
+        );
+        candidate.same_lane_exterior_mismatch_count = same_lane_exterior_mismatch_count(
+            &candidate.points,
+            &candidate.style,
+            ctx.relationship,
+            ctx.from_lane_index,
+            ctx.to_lane_index,
+            ctx.from_row_index,
+            ctx.to_row_index,
+            ctx.canvas_width,
+            Some(ctx.from_rect),
+            Some(ctx.to_rect),
+            ctx.blocker_rects,
+        );
+
+        candidate.quality_costs.crossing_cost = crossing_stats.total as f64 * 3000.0;
+        candidate.quality_costs.repeated_crossing_cost = crossing_stats.repeated as f64 * 40000.0;
+        candidate.quality_costs.self_overlap_cost =
+            self_overlap_count as f64 * 120000.0 + self_overlap_len * 1600.0;
+        candidate.quality_costs.route_overlap_cost =
+            shared_stats.count as f64 * 80000.0 + shared_stats.length * 1200.0;
+        candidate.quality_costs.endpoint_stack_cost =
+            if ctx.route_index.has_stacked_endpoint(&candidate.points) { 90000.0 } else { 0.0 };
+        candidate.quality_costs.same_lane_exterior_cost =
+            candidate.same_lane_exterior_mismatch_count as f64 * 20000.0;
+
+        if ctx.pair_index % 2 == 1 && travels_top {
+            candidate.quality_costs.fan_out_direction_cost += 25000.0;
+        }
+        if ctx.pair_index % 2 == 1 && !travels_bottom {
+            candidate.quality_costs.fan_out_direction_cost += 4000.0;
+        }
+        if ctx.pair_index.is_multiple_of(2) && travels_bottom {
+            candidate.quality_costs.fan_out_direction_cost += 600.0;
+        }
+
+        candidate.cost = total_quality_cost(&candidate.quality_costs);
+    }
 }
 
 // ---------------------------------------------------------------------------
