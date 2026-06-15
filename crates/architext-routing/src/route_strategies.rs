@@ -80,13 +80,14 @@
 use crate::js_compat::js_hypot;
 use crate::model::{Point, Rect};
 use crate::route_candidate_ports::{candidate_ports, port_pairs_for, side_pairs_for, CandidateScope, EndpointOffsets};
-use crate::route_constants::{dedupe_by, ROUTE_COST_WEIGHTS, ROUTE_SPACING, SPLINE_CURVE_VARIANTS};
+use crate::route_constants::{ROUTE_COST_WEIGHTS, ROUTE_SPACING, SPLINE_CURVE_VARIANTS};
 use crate::route_geometry::{bend_count, line_samples, rect_distance};
 use crate::route_ports::{PORT_STUB, SIDES};
 use crate::route_rendering::{path_to_svg, simplify_orthogonal_points};
+use crate::route_intent::IntentRelationship;
 use crate::route_scoring::{
-    best_route_candidate, is_clean_route_candidate, with_quality_costs, QualityCosts, RouteCandidate,
-    RouteWarning,
+    best_route_candidate, is_clean_route_candidate, score_route_candidates, with_quality_costs,
+    QualityCosts, RouteCandidate, RouteWarning, ScoreContext,
 };
 
 // ---------------------------------------------------------------------------
@@ -265,6 +266,22 @@ pub struct CandidateRelationship {
     pub preferred_end_side: Option<String>,
     /// JS `fixedPorts` boolean on the `fromRect`; stored here for convenience.
     pub from_rect_fixed_ports: bool,
+}
+
+impl CandidateRelationship {
+    fn to_intent_relationship(&self) -> IntentRelationship {
+        IntentRelationship {
+            id: self.id.clone().unwrap_or_default(),
+            kind: self.kind.clone(),
+            return_of: self.return_of.clone(),
+            outcome: self.outcome.clone(),
+            relationship_type: self.relationship_type.clone(),
+            step_id: self.step_id.clone(),
+            flow_id: self.flow_id.clone(),
+            preferred_start_side: self.preferred_start_side.clone(),
+            preferred_end_side: self.preferred_end_side.clone(),
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -753,7 +770,7 @@ where
     E: EndpointSideUsage,
 {
     let SelectRouteCandidateInput {
-        collision_count: _collision_count,
+        collision_count,
         corridors,
         endpoint_offsets,
         from_id,
@@ -762,7 +779,7 @@ where
         pair_index,
         relationship,
         route_candidates,
-        route_index: _route_index,
+        route_index,
         stats,
         progress_tick,
         style,
@@ -790,7 +807,7 @@ where
                 ..relationship.clone()
             };
             select_route_candidate(SelectRouteCandidateInput {
-                collision_count: _collision_count,
+                collision_count,
                 corridors,
                 endpoint_offsets,
                 from_id,
@@ -799,7 +816,7 @@ where
                 pair_index,
                 relationship: relaxed_rel,
                 route_candidates,
-                route_index: _route_index,
+                route_index,
                 stats: None, // stats not propagated into recursive relaxed call (JS doesn't either)
                 progress_tick,
                 style,
@@ -847,8 +864,26 @@ where
         + (index % ROUTE_SPACING.index_offset_modulo as usize) as f64 * ROUTE_SPACING.index_offset;
     let top_limit = f64::min(from_rect.y, to_rect.y);
     let bottom_limit = f64::max(from_rect.y + from_rect.height, to_rect.y + to_rect.height);
-    let _ = (top_limit, bottom_limit, canvas_width, canvas_height, blocker_rects,
-             from_lane_index, to_lane_index, from_row_index, to_row_index); // used in scoring context
+    let intent_relationship = relationship.to_intent_relationship();
+    let scoring_ctx = ScoreContext {
+        collision_count,
+        route_index,
+        from_id,
+        to_id,
+        from_rect,
+        to_rect,
+        pair_index,
+        top_limit,
+        bottom_limit,
+        relationship: Some(&intent_relationship),
+        from_lane_index,
+        to_lane_index,
+        from_row_index,
+        to_row_index,
+        canvas_width,
+        canvas_height,
+        blocker_rects,
+    };
 
     // -----------------------------------------------------------------------
     // Spline path
@@ -883,7 +918,7 @@ where
                 }
             }
         }
-        // score_route_candidates deferred
+        score_route_candidates(&mut spline_candidates, &scoring_ctx);
         let best = best_route_candidate(&spline_candidates).cloned();
         return best.map(warn_candidate).or_else(relaxed_preference_route);
     }
@@ -907,7 +942,7 @@ where
                 }
             }
         }
-        // score_route_candidates deferred
+        score_route_candidates(&mut straight_candidates, &scoring_ctx);
         let best = best_route_candidate(&straight_candidates).cloned();
         return best.map(warn_candidate).or_else(relaxed_preference_route);
     }
@@ -921,7 +956,7 @@ where
         endpoint_side_usage, from_id, to_id,
     );
     if let Some(mut fpr) = fixed_preferred_route {
-        // score_route_candidates([fixedPreferredRoute], scoringContext) — deferred
+        score_route_candidates(std::slice::from_mut(&mut fpr), &scoring_ctx);
         fpr = warn_candidate(fpr);
         return Some(fpr);
     }
@@ -977,7 +1012,7 @@ where
         }
     }
 
-    // score_route_candidates(cheapCandidates, scoringContext) — deferred
+    score_route_candidates(&mut cheap_candidates, &scoring_ctx);
     if let Some(tick) = progress_tick { tick(); }
 
     let has_clean_cheap = cheap_candidates.iter().any(is_clean_route_candidate);
@@ -1004,7 +1039,10 @@ where
         }
     }
 
-    // Push cheap candidates into main pool
+    // Push cheap candidates into main pool.
+    // Record the count so we can score only the newly-added (unscored)
+    // grid/perimeter candidates in the final scoring pass below.
+    let cheap_count = cheap_candidates.len();
     candidates.extend(cheap_candidates);
     candidate_keys.extend(
         candidates.iter().map(point_key)
@@ -1096,20 +1134,13 @@ where
         }
     }
 
-    // Final score pass: dedupe candidates without collisions field set (undefined in JS)
+    // Final score pass: score grid/perimeter candidates added after the cheap pass.
     // JS: scoreRouteCandidates(dedupeBy(candidates.filter(c => c.collisions === undefined), ...), context)
-    // In Rust, before scoring, candidates that have not been scored have collisions == 0 (default).
-    // The JS filter is `c.collisions === undefined` which catches unscored candidates; we track
-    // this via a sentinel. However since scoring is deferred, we run dedupe on all candidates.
-    let unscored: Vec<RouteCandidate> = candidates
-        .iter()
-        .filter(|c| c.collisions == i64::MIN) // sentinel: unscored (JS: undefined)
-        .cloned()
-        .collect();
-    let _deduped_unscored = dedupe_by(unscored, |c| {
-        c.points.iter().map(|pt| format!("{},{}", pt.x, pt.y)).collect::<Vec<_>>().join("|")
-    });
-    // score_route_candidates(_deduped_unscored, scoringContext) — deferred
+    // JS object mutation means scoring the deduped subset also scores the originals in `candidates`.
+    // In Rust, we score candidates[cheap_count..] in-place. Deduplication is used in JS to avoid
+    // redundant scoring; scoring the same geometry twice is idempotent so we skip the dedupe step.
+    let _ = cheap_count; // cheap candidates already scored above; rest are grid/perimeter
+    score_route_candidates(&mut candidates[cheap_count..], &scoring_ctx);
 
     let best = best_route_candidate(&candidates).cloned();
 
