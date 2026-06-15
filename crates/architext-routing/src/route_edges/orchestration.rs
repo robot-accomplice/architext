@@ -546,6 +546,69 @@ fn candidate_to_route_data(candidate: RouteCandidate) -> RouteData {
             .join(" ")
     };
 
+    // Build the `extra` map with all scored fields that the JS route carries.
+    // The fingerprint (d/points/labelX/labelY) doesn't use these, but
+    // `planDiagram` reads `warnings` and `qualityCosts` from the route.
+    let qc = &candidate.quality_costs;
+    let quality_costs_json = serde_json::json!({
+        "lengthCost": qc.length_cost,
+        "boundaryCost": qc.boundary_cost,
+        "nodeClearanceCost": qc.node_clearance_cost,
+        "edgeProximityCost": qc.edge_proximity_cost,
+        "labelNodeClearanceCost": qc.label_node_clearance_cost,
+        "pointCountCost": qc.point_count_cost,
+        "bendCost": qc.bend_cost,
+        "doglegCost": qc.dogleg_cost,
+        "perimeterFallbackCost": qc.perimeter_fallback_cost,
+        "perimeterLengthCost": qc.perimeter_length_cost,
+        "directnessReward": qc.directness_reward,
+        "crossingCost": qc.crossing_cost,
+        "repeatedCrossingCost": qc.repeated_crossing_cost,
+        "selfOverlapCost": qc.self_overlap_cost,
+        "routeOverlapCost": qc.route_overlap_cost,
+        "monotonicBacktrackCost": qc.monotonic_backtrack_cost,
+        "fanOutDirectionCost": qc.fan_out_direction_cost,
+        "endpointStackCost": qc.endpoint_stack_cost,
+        "splineSideDirectionCost": qc.spline_side_direction_cost,
+        "splineStraightnessCost": qc.spline_straightness_cost,
+        "sameLaneExteriorCost": qc.same_lane_exterior_cost,
+        // Label placement costs — initially 0; plan_diagram fills these in.
+        "labelMovementCost": 0.0,
+        "labelSearchOrderCost": 0.0,
+        "labelBoundaryCost": 0.0,
+        "labelNodeConflictCost": 0.0,
+        "labelConflictCost": 0.0,
+    });
+    let warnings_json: Vec<serde_json::Value> = candidate.warnings.iter().map(|w| {
+        serde_json::json!({ "code": w.code, "message": w.message })
+    }).collect();
+
+    let mut extra: IndexMap<String, serde_json::Value> = IndexMap::new();
+    if let Some(s) = &candidate.start_side {
+        extra.insert("startSide".to_string(), serde_json::json!(s));
+    }
+    if let Some(s) = &candidate.end_side {
+        extra.insert("endSide".to_string(), serde_json::json!(s));
+    }
+    extra.insert("qualityCosts".to_string(), quality_costs_json);
+    extra.insert("cost".to_string(), serde_json::json!(candidate.cost));
+    extra.insert("collisions".to_string(), serde_json::json!(candidate.collisions));
+    extra.insert("paddedCollisions".to_string(), serde_json::json!(candidate.padded_collisions));
+    extra.insert("endpointNodeTraversals".to_string(), serde_json::json!(candidate.endpoint_node_traversals));
+    extra.insert("selfOverlappingSegments".to_string(), serde_json::json!(candidate.self_overlapping_segments));
+    extra.insert("selfOverlapLength".to_string(), serde_json::json!(candidate.self_overlap_length));
+    extra.insert("crossings".to_string(), serde_json::json!(candidate.crossings));
+    extra.insert("repeatedCrossings".to_string(), serde_json::json!(candidate.repeated_crossings));
+    // sharedSegments/sharedSegmentLength are set by render_orthogonal_route
+    extra.insert("sharedSegments".to_string(), serde_json::json!(0i64));
+    extra.insert("sharedSegmentLength".to_string(), serde_json::json!(0.0));
+    extra.insert("surfaceMismatchCount".to_string(), serde_json::json!(candidate.surface_mismatch_count));
+    extra.insert("semanticSurfaceMismatchCount".to_string(), serde_json::json!(candidate.semantic_surface_mismatch_count));
+    extra.insert("surfaceDirectionMismatchCount".to_string(), serde_json::json!(candidate.surface_direction_mismatch_count));
+    extra.insert("blockedPrimarySurfaceUseCount".to_string(), serde_json::json!(candidate.blocked_primary_surface_use_count));
+    extra.insert("sameLaneExteriorMismatchCount".to_string(), serde_json::json!(candidate.same_lane_exterior_mismatch_count));
+    extra.insert("warnings".to_string(), serde_json::json!(warnings_json));
+
     RouteData {
         d,
         points,
@@ -556,7 +619,7 @@ fn candidate_to_route_data(candidate: RouteCandidate) -> RouteData {
         label_x: label.x,
         label_y: label.y,
         style: if candidate.style.is_empty() { "orthogonal".to_string() } else { candidate.style },
-        extra: IndexMap::new(),
+        extra,
     }
 }
 
