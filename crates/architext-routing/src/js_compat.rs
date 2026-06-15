@@ -46,3 +46,41 @@ mod round_tests {
         assert!(r == 0.0 && r.is_sign_negative(), "expected -0.0, got {r}");
     }
 }
+
+/// V8 `Number.prototype.toString` (radix 10), as used by template interpolation
+/// in the SVG `d`-path builder. Reproduced exactly via the `ryu-js` crate.
+pub fn js_number_to_string(x: f64) -> String {
+    if x.is_nan() {
+        return "NaN".to_string();
+    }
+    if x.is_infinite() {
+        return if x < 0.0 { "-Infinity" } else { "Infinity" }.to_string();
+    }
+    let mut buffer = ryu_js::Buffer::new();
+    buffer.format(x).to_string()
+}
+
+#[cfg(test)]
+mod num_str_tests {
+    use super::js_number_to_string;
+
+    #[test]
+    fn matches_v8_string_goldens() {
+        // (input, Node String(x)).
+        let cases: &[(f64, &str)] = &[
+            (120.0, "120"),
+            (1.5, "1.5"),
+            (0.1 + 0.2, "0.30000000000000004"),
+            (8.0 * 1.6, "12.8"),
+            (-3.5, "-3.5"),
+            (0.0, "0"),
+            (-0.0, "0"),        // V8: -0 stringifies to "0"
+            (1e21, "1e+21"),    // V8 switches to exponential at >=1e21
+            (1e-7, "1e-7"),     // V8 switches to exponential at <1e-6
+            (1e20, "100000000000000000000"),
+        ];
+        for (input, expected) in cases {
+            assert_eq!(&js_number_to_string(*input), expected, "js_number_to_string({input})");
+        }
+    }
+}
