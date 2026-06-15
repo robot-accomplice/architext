@@ -21,6 +21,7 @@ pub mod route_strategies;
 pub mod route_style;
 pub mod route_edges;
 pub mod route_mount_model;
+pub mod route_diagnostics;
 pub mod wasm;
 
 #[cfg(test)]
