@@ -13,6 +13,7 @@ pub mod types;
 pub mod helpers;
 pub mod construction;
 pub mod separation;
+pub mod crossings;
 
 // ---------------------------------------------------------------------------
 // Re-export the complete public surface so `crate::route_edges::X` resolves.
@@ -39,6 +40,9 @@ pub use construction::{
     route_with_endpoint_stubs, route_with_fewest_shared_segments, shared_segment_count,
     EndpointSideUsage, PlanRelationship, RelationshipC1, RouteInputC1,
 };
+
+// -- crossings --
+pub use crossings::{crossings_between, crossings_involving, gutter_lane_of};
 
 // -- separation --
 pub use separation::{
