@@ -1,15 +1,29 @@
 {
   "id": "v1-7-0",
   "version": "1.7.0",
-  "name": "Architext 1.7.0 Rust Backend Rewrite",
+  "name": "Architext 1.7.0 Rust Rewrite (Zero Node)",
   "status": "planned",
   "posture": "on-track",
   "targetWindow": "After 1.6.3 (1.6.x exhausted)",
-  "lastUpdated": "2026-06-15T00:00:00.000Z",
-  "updateSource": "Release Planning kickoff 2026-06-15: 1.6.x declared exhausted; opening 1.7.0 from the approved Rust rewrite design (docs/superpowers/specs/2026-06-15-rust-backend-rewrite-design.md). Language reopened and landed on Rust (not Go), routing engine IN scope.",
-  "summary": "Reimplement the shipped/running product as a single self-contained native binary in Rust, removing Node and the npm transitive dependency surface from what ships and runs. One Rust routing core compiles to native (fast serve-side precompute) and to WASM (the browser viewer, so the static/offline viewer keeps planning) — retiring the two-engine byte-parity burden permanently. Ports validation (ajv 2020-12 + reference checks) with a conformance corpus, the serve HTTP layer (11 endpoints, mutation/lock, SSE, plan farm), and the lifecycle commands; ships via signed native installers (brew/curl/releases) with an npm thin-launcher bridge so existing installs auto-upgrade. Includes the chrome-only UI design-language refactor (audited) and the folded-in diagram spacing controls. A minor release: the JSON data contract and CLI surface are preserved exactly; only the implementation language, performance, and distribution change.",
+  "lastUpdated": "2026-06-15T12:00:00.000Z",
+  "updateSource": "2026-06-15 zero-Node mandate: viewer rewrite (Rust→WASM UI) pulled into 1.7.0; build-time Node residual revoked; npm demoted to opt-in bridge.",
+  "summary": "Reimplement the entire product in Rust with NO Node dependency surviving — runtime AND build. One Rust routing core (native + WASM); validation, serve layer, and lifecycle ported; AND the React/Vite viewer rewritten as a Rust → WASM UI (Leptos/Dioxus/Yew, no JSX/Vite/npm) reusing the engine directly and implementing the Stitch design language. Native installers are the Node-free default; npm is an opt-in compatibility bridge only. Minor release: JSON data contract and CLI surface preserved exactly, proven by a byte-parity migration gate and a validation conformance corpus. Migration tooling (parity harness, ajv conformance, JS tests) is transitional and deleted with the JS code.",
   "scope": {
     "required": [
+      {
+        "id": "viewer-rust-wasm-rewrite",
+        "title": "Rewrite the viewer as a Rust → WASM UI (no Node build)",
+        "kind": "architecture",
+        "status": "planned",
+        "summary": "Replace React/Vite with a Rust web framework (Leptos/Dioxus/Yew) compiled to WASM: all nine modes (Flows, Sequence, C4, Deployment, Data/Risks, Repo Tree, Blast Radius, Release Truth, Rules), the diagram canvas (fluid, pan/zoom), editors, and inspectors. Reuses architext-routing directly (no JSON/WASM string boundary). No JSX, Vite, or npm anywhere in the build. The single largest piece of the zero-Node mandate; runs in parallel with the engine port.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-15T12:00:00.000Z",
+        "workstreamId": "viewer-rewrite",
+        "priority": "high",
+        "dependsOn": [
+          "routing-engine-rust-port"
+        ]
+      },
       {
         "id": "routing-engine-rust-port",
         "title": "Port the routing/planning engine to a Rust crate (native + WASM)",
@@ -139,7 +153,7 @@
         "summary": "Apply the new design language (locked in viewer/DESIGN.md, explored via Stitch) to the viewer as a chrome-only refactor that does not change diagram-layout-input defaults. UX-LED: the full user experience drives decisions — beauty is subordinate to usability, workflow integrity, and functional parity. COMPLETION GATE (rule design-language-fidelity-audit): not 'done' until a post-implementation audit — in the live-rendered UI, using the design-system skills — verifies (1) UX: every task still works, is discoverable, and is no slower than before, and (2) faithfulness to viewer/DESIGN.md + coherency across ALL modes (shared tokens, typography, the nav/canvas/inspector triad, fluid canvas, ARCHITEXT wordmark, state-not-role-hue). Partial/per-screen application, or a prettier UI that degrades a workflow, does not count.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-15T00:00:00.000Z",
-        "workstreamId": "ui-refactor",
+        "workstreamId": "viewer-rewrite",
         "priority": "medium",
         "dependsOn": []
       },
@@ -151,7 +165,7 @@
         "summary": "In-viewer controls for column width and sequence-diagram row spacing, surfacing laneWidth/rowGap (and node size) overrides the planner already accepts as input. Folded out of the 1.6.x stream into this UI refactor; does not move the parity baseline (defaults unchanged), so it is parity-safe.",
         "source": "roadmap",
         "dateAdded": "2026-05-27T16:30:00.000Z",
-        "workstreamId": "ui-refactor",
+        "workstreamId": "viewer-rewrite",
         "priority": "medium",
         "dependsOn": []
       }
@@ -159,20 +173,7 @@
     "planned": [],
     "stretch": [],
     "deferred": [],
-    "outOfScope": [
-      {
-        "id": "full-viewer-rewrite",
-        "title": "Rewrite the React viewer itself",
-        "kind": "architecture",
-        "status": "planned",
-        "summary": "Out of scope: this release keeps the React viewer (only its planning call moves to WASM and it receives the chrome-only facelift). A full-viewer rewrite is a separate, larger initiative. Node also remains in the dev/build toolchain (npm/Vite build the viewer); 1.7.0 removes Node from what ships and runs, not from the build box.",
-        "source": "ad-hoc",
-        "dateAdded": "2026-06-15T00:00:00.000Z",
-        "workstreamId": "engine-port",
-        "priority": "low",
-        "dependsOn": []
-      }
-    ]
+    "outOfScope": []
   },
   "workstreams": [
     {
@@ -233,14 +234,15 @@
       "evidence": []
     },
     {
-      "id": "ui-refactor",
-      "name": "UI design-language refactor",
+      "id": "viewer-rewrite",
+      "name": "Viewer rewrite (Rust → WASM UI)",
       "owner": "maintainer",
       "status": "planned",
       "posture": "on-track",
-      "summary": "Apply the new design language as a chrome-only refactor (audited), and surface the folded-in diagram spacing controls. Lands in parallel with the port; never moves a route by a pixel unless an intentional, separately-reviewed re-baseline.",
+      "summary": "Replace the React/Vite viewer with a Rust → WASM UI (Leptos/Dioxus/Yew) — no JSX, Vite, or npm — reusing architext-routing directly and implementing the locked Stitch design language. The largest workstream; required by the zero-Node mandate.",
       "progress": 0,
       "itemIds": [
+        "viewer-rust-wasm-rewrite",
         "design-language-facelift",
         "diagram-spacing-controls"
       ],
