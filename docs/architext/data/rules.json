@@ -174,13 +174,13 @@
     },
     {
       "id": "design-language-fidelity-audit",
-      "title": "Design work ships with a fidelity + coherency audit",
-      "summary": "Any design-language change is audited AFTER implementation for faithfulness to viewer/DESIGN.md and coherency across all modes, in the live-rendered UI — not just the code. Partial or per-screen application is not 'done': every mode must use the shared tokens (role color via --c4-*/C4_COLOR, .overline, .accent-surface, chips, typography, spacing) and read as one product. A design change without its post-implementation audit is incomplete work.",
+      "title": "Design work is UX-led and ships with a fidelity + coherency audit",
+      "summary": "Full UX drives design decisions — usability, workflow integrity, functional parity, and information hierarchy come first; visual beauty and design-language fidelity serve the UX, never the reverse. Any design-language change is audited AFTER implementation, in the live-rendered UI (not just code), against two bars: (1) UX — every user task still works, is discoverable, and is at least as efficient as before; (2) faithfulness to viewer/DESIGN.md and coherency across ALL modes (shared tokens: role color via --c4-*/C4_COLOR, .overline, .accent-surface, chips, typography, spacing, the nav/canvas/inspector triad). Partial/per-screen application, or a pretty result that degrades a workflow, does not count as done.",
       "category": "Design",
       "criticality": "high",
       "order": 90,
       "source": "maintainer",
-      "rationale": "Historically, Stitch design notes were applied in a half-finished way with no post-implementation audit of coherency or faithfulness, so modes drifted from the design language. The 1.7.0 facelift must not repeat that (maintainer, 2026-06-15).",
+      "rationale": "Historically, Stitch design notes were applied half-finished with no post-implementation audit, and decisions skewed toward how it looked over how it works — so modes drifted from the design language AND from good UX. The 1.7.0 facelift must be driven by the full user experience, beauty subordinate (maintainer, 2026-06-15).",
       "appliesTo": [
         "viewer",
         "design language",
