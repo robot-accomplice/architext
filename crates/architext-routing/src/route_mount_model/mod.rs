@@ -18,6 +18,7 @@ pub mod cost;
 pub mod distribution;
 pub mod helpers;
 pub mod optimize;
+pub mod reciprocal;
 pub mod relief;
 pub mod types;
 
@@ -45,6 +46,13 @@ pub use relief::{build_monotonic_staircase, build_reciprocal_gutter_bridge, reli
 pub use optimize::{
     center_solo_reciprocal_pair_surfaces, optimize_mount_assignments, realign_facing_endpoints,
     reciprocal_parallel_moves, route_unjustified_non_facing,
+};
+
+// reciprocal
+pub use reciprocal::{
+    order_gutter_lanes_by_target, recenter_singleton_side_endpoints,
+    reduce_crossings_by_surface_swaps, reorder_shared_surface_mounts,
+    route_reciprocal_pairs_parallel, spread_shared_side_endpoints,
 };
 
 // distribution

@@ -626,6 +626,7 @@ pub fn optimize_mount_assignments(
 // ---------------------------------------------------------------------------
 
 /// Endpoint descriptor used by orderedSurfaceEndpoints and its callers.
+#[derive(Clone)]
 pub(super) struct SurfaceEndpointDesc {
     pub relationship: MountRelationship,
     pub relationship_id: String,
