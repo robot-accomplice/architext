@@ -323,7 +323,8 @@
       "status": "planned",
       "priority": "medium",
       "section": "Diagram Ergonomics",
-      "dateAdded": "2026-05-27T16:30:00.000Z"
+      "dateAdded": "2026-05-27T16:30:00.000Z",
+      "targetReleaseId": "v1-7-0"
     },
     {
       "id": "persistent-architecture-element-notes",
@@ -338,13 +339,14 @@
     },
     {
       "id": "go-rewrite-cli-backend",
-      "title": "Rewrite the CLI and backend in Go (remove Node from the product)",
-      "summary": "Reimplement the architext CLI, schema/reference validator, local serve HTTP server, and lifecycle commands (sync, doctor, migrate, status) in Go, shipped as a single self-contained static binary that embeds the prebuilt viewer assets (go:embed). The driver is eliminating Node and its largely unvettable npm dependency/supply-chain surface from the end product: users would install one signed binary with no Node runtime and no transitive npm packages at runtime. Scope keeps the existing React viewer as-is (served from the embedded build); ships as 1.7.0 (maintainer decision 2026-06-10; targetReleaseId will be set when the v1-7-0 release is created at Release Planning kickoff, since Release Truth ids must reference existing releases) — a minor release is defensible because the JSON data contract and CLI surface are preserved exactly (only the implementation language and distribution change); it must preserve the JSON data contract and exact validation parity (port the ajv schemas + reference checks, with a conformance corpus proving identical accept/reject behavior across the Node and Go validators). Residual to note honestly: building the viewer still uses npm/Vite at build time, so this removes Node from what ships and runs, not from the dev/build toolchain; a later full-viewer rewrite would be a separate, larger initiative. Sequencing: schedule after the 1.6.x feature/design work lands and the data contract is stable, since a contract change mid-port doubles the work. MIGRATION PATH (npm upgrade bridge): existing installs came through npm, so @robotaccomplice/architext must continue to be published — from 1.7.0 onward as a thin launcher whose per-platform Go binaries ship as optionalDependencies (the esbuild/Biome distribution model), so that a plain npm update/install brings every prior-version user onto the Go codebase with no manual step. The npm artifact carries no runtime JS beyond binary resolution/spawn, preserving the supply-chain driver: npm remains only a delivery channel, with native installers (brew/curl/releases) as the recommended path for new users. GATE SATISFIED (2026-06-15): the 1.6.x patch stream is exhausted — 1.6.0–1.6.3 shipped (npm latest 1.6.3: routing overhaul, live progress overlay, serve-side plan precompute), and the last loose 1.6.x item (diagram-spacing-controls) was folded into 1.7.0 rather than a 1.6.4. So the suspension is lifted and 1.7.0 may open at Release Planning kickoff. SCOPE/LANGUAGE NOTE (pending maintainer greenlight to rewrite this item): brainstorming on 2026-06-15 reopened the language choice and landed on RUST, not Go, with the routing/planning engine IN scope (native speed is a driver) — one Rust core compiled to native (serve) and WASM (browser), three-crate workspace, byte-parity migration gate. This is materially bigger than the Go-only, engine-out scope recorded above; see docs/superpowers/specs/2026-06-15-rust-backend-rewrite-design.md. The 'Go'/'keep viewer as-is' language in this item is stale and should be rewritten to Rust + engine-in-scope when the maintainer approves the rescope.",
+      "title": "Rewrite the CLI, serve, validator, and routing engine in Rust (remove Node from the product)",
+      "summary": "Reimplement the shipped/running product as a single self-contained native binary in RUST (language reopened and decided 2026-06-15; not Go). One architext-routing core compiles to native (fast serve-side precompute) AND to WASM (the browser viewer, so the static/offline viewer keeps planning) — the routing/planning engine is IN scope (native speed is a driver), which retires the two-engine byte-parity burden permanently because browser and serve become the same compiled source. Three-crate workspace (architext-routing / architext-core / architext-cli); ports validation (ajv 2020-12 + reference checks, conformance corpus), the serve HTTP layer (11 endpoints, mutation/lock, SSE, plan farm), and the lifecycle commands; embeds the prebuilt viewer. The driver is eliminating Node and its largely unvettable npm dependency/supply-chain surface from the end product. Minor release: the JSON data contract and CLI surface are preserved exactly (only implementation language, performance, and distribution change), proven by a byte-parity migration gate (route-parity fingerprints) and a validation conformance corpus. MIGRATION PATH (npm upgrade bridge): @robotaccomplice/architext keeps publishing as a thin launcher whose per-platform Rust binaries ship as optionalDependencies (esbuild/Biome model), so a plain npm update brings every prior user onto the Rust build with no manual step; native installers (brew/curl/releases) are the recommended path for new users. RESIDUAL: building the viewer still uses npm/Vite (and now a Rust/wasm toolchain), so this removes Node from what ships and runs, not from the dev/build box; a full-viewer rewrite is a separate, larger initiative. GATE: 1.6.x is exhausted (1.6.0-1.6.3 shipped), so the suspension is lifted and this is now planned under v1-7-0. Full design: docs/superpowers/specs/2026-06-15-rust-backend-rewrite-design.md.",
       "kind": "architecture",
       "status": "planned",
       "priority": "high",
-      "section": "Go Rewrite",
-      "dateAdded": "2026-06-10T00:00:00.000Z"
+      "section": "Rust Rewrite",
+      "dateAdded": "2026-06-10T00:00:00.000Z",
+      "targetReleaseId": "v1-7-0"
     },
     {
       "id": "design-language-consolidation",
@@ -364,7 +366,8 @@
       "status": "planned",
       "priority": "medium",
       "section": "Routing Performance",
-      "dateAdded": "2026-06-11T00:00:00.000Z"
+      "dateAdded": "2026-06-11T00:00:00.000Z",
+      "targetReleaseId": "v1-7-0"
     }
   ]
 }
