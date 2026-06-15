@@ -506,6 +506,27 @@
       },
       "file": "v1-6-3.json",
       "releasedAt": "2026-06-11T11:13:07.864Z"
+    },
+    {
+      "id": "v1-7-0",
+      "version": "1.7.0",
+      "name": "Architext 1.7.0 Rust Backend Rewrite",
+      "status": "planned",
+      "posture": "on-track",
+      "targetWindow": "After 1.6.3 (1.6.x exhausted)",
+      "lastUpdated": "2026-06-15T00:00:00.000Z",
+      "summary": "Reimplement the shipped/running product as a single self-contained native binary in Rust, removing Node and the npm transitive dependency surface from what ships and runs. One Rust routing core compiles to native (fast serve-side precompute) and to WASM (the browser viewer, so the static/offline viewer keeps planning) — retiring the two-engine byte-parity burden permanently. Ports validation (ajv 2020-12 + reference checks) with a conformance corpus, the serve HTTP layer (11 endpoints, mutation/lock, SSE, plan farm), and the lifecycle commands; ships via signed native installers (brew/curl/releases) with an npm thin-launcher bridge so existing installs auto-upgrade. Includes the chrome-only UI design-language refactor (audited) and the folded-in diagram spacing controls. A minor release: the JSON data contract and CLI surface are preserved exactly; only the implementation language, performance, and distribution change.",
+      "counts": {
+        "features": 5,
+        "bugFixes": 0,
+        "workstreams": 5,
+        "blockers": 0,
+        "complete": 0,
+        "inProgress": 0,
+        "planned": 12,
+        "stretch": 0
+      },
+      "file": "v1-7-0.json"
     }
   ]
 }
