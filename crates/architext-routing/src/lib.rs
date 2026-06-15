@@ -3,6 +3,7 @@
 
 pub mod js_compat;
 pub mod model;
+pub mod wasm;
 
 #[cfg(test)]
 mod tests {
