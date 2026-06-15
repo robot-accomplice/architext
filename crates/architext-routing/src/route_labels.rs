@@ -77,6 +77,9 @@ pub fn estimated_label_box(label_point: &Point, relationship: Option<&LabelRelat
 
     // JS: Math.max(24, Math.min(180, text.length * 6 + 12))
     // text.length in JS = UTF-16 code unit count; for ASCII ids == byte count.
+    // Written as nested max/min to faithfully mirror JS; clippy's .clamp() is
+    // equivalent for finite values but we want an explicit JS-match marker here.
+    #[allow(clippy::manual_clamp)]
     let width = f64::max(24.0, f64::min(180.0, text.len() as f64 * 6.0 + 12.0));
 
     Some(LabelBox {
