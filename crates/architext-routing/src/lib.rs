@@ -2,6 +2,7 @@
 //! and to WASM (browser). See docs/superpowers/specs/2026-06-15-rust-backend-rewrite-design.md.
 
 pub mod js_compat;
+pub mod model;
 
 #[cfg(test)]
 mod tests {
