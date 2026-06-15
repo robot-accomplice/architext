@@ -82,6 +82,10 @@ pub struct IntentRelationship {
     pub step_id: Option<String>,
     /// JS `relationship.flowId`
     pub flow_id: Option<String>,
+    /// JS `relationship.preferredStartSide`
+    pub preferred_start_side: Option<String>,
+    /// JS `relationship.preferredEndSide`
+    pub preferred_end_side: Option<String>,
 }
 
 /// Input to `deriveRouteIntent`.
