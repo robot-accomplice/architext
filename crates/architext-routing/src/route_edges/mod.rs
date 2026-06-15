@@ -4,13 +4,10 @@
 //! external code using `crate::route_edges::X` paths keeps working unchanged.
 //!
 //! Submodule responsibilities:
-//! - `types`      — `RouteData`, `RouteInput`, `Relationship`, `AxisAlignedSegment`
-//! - `helpers`    — geometry helpers, collision checks, route-point construction,
-//!                  offset/polyline utilities, shared-segment rendering (Pass A + C1 L54–L129)
-//! - `construction` — C1 cleanup helpers: `EndpointSideUsage`, `recentered_*`,
-//!                  `RelationshipC1`, `RouteInputC1`, aligned/cleanup route fns,
-//!                  endpoint stub enforcement
-//! - `separation` — C2 parallel separation + C3 `spread_unit_slots`
+//! - `types` — `RouteData`, `RouteInput`, `Relationship`, `AxisAlignedSegment`.
+//! - `helpers` — geometry helpers, collision checks, route-point construction, offset/polyline utilities, shared-segment rendering (Pass A + C1 L54–L129).
+//! - `construction` — C1 cleanup helpers: `EndpointSideUsage`, `recentered_*`, `RelationshipC1`, `RouteInputC1`, aligned/cleanup route fns, endpoint stub enforcement.
+//! - `separation` — C2 parallel separation + C3 `spread_unit_slots`.
 
 pub mod types;
 pub mod helpers;
