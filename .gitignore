@@ -15,3 +15,4 @@ docs/superpowers/
 docs/architext/.architext-write.lock/
 
 /target
+crates/architext-routing/pkg/
