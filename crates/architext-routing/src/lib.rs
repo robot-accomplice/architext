@@ -5,6 +5,7 @@ pub mod js_compat;
 pub mod model;
 pub mod priority_queue;
 pub mod route_constants;
+pub mod route_geometry;
 pub mod route_reciprocal;
 pub mod route_style;
 pub mod wasm;
