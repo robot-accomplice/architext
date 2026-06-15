@@ -171,6 +171,26 @@
         "edit": false,
         "delete": false
       }
+    },
+    {
+      "id": "design-language-fidelity-audit",
+      "title": "Design work ships with a fidelity + coherency audit",
+      "summary": "Any design-language change is audited AFTER implementation for faithfulness to viewer/DESIGN.md and coherency across all modes, in the live-rendered UI — not just the code. Partial or per-screen application is not 'done': every mode must use the shared tokens (role color via --c4-*/C4_COLOR, .overline, .accent-surface, chips, typography, spacing) and read as one product. A design change without its post-implementation audit is incomplete work.",
+      "category": "Design",
+      "criticality": "high",
+      "order": 90,
+      "source": "maintainer",
+      "rationale": "Historically, Stitch design notes were applied in a half-finished way with no post-implementation audit of coherency or faithfulness, so modes drifted from the design language. The 1.7.0 facelift must not repeat that (maintainer, 2026-06-15).",
+      "appliesTo": [
+        "viewer",
+        "design language",
+        "1.7.0 facelift",
+        "all modes"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
     }
   ]
 }
