@@ -2,6 +2,8 @@
 //! on. Each primitive is verified against Node golden values; getting one wrong
 //! produces a different diagram, not a crash.
 
+use std::cmp::Ordering;
+
 /// JS `Math.round`: round half toward +∞. Differs from Rust `f64::round`
 /// (half away from zero) on negative halves, and yields -0.0 for x in (-0.5, 0].
 pub fn js_round(x: f64) -> f64 {
@@ -82,5 +84,42 @@ mod num_str_tests {
         for (input, expected) in cases {
             assert_eq!(&js_number_to_string(*input), expected, "js_number_to_string({input})");
         }
+    }
+}
+
+/// Order two strings as JS `Array.prototype.sort()` (no comparator) does:
+/// by UTF-16 code unit. ASCII collapses to byte order; non-ASCII follows UTF-16.
+pub fn js_default_sort_cmp(a: &str, b: &str) -> Ordering {
+    // Compare by UTF-16 code units, matching JS default string sort.
+    a.encode_utf16().cmp(b.encode_utf16())
+}
+
+/// JS `String.prototype.localeCompare` is locale-collated. The call sites in the
+/// router operate on ASCII node/relationship ids, where collation equals
+/// code-unit order; we encode that and assert the ASCII assumption in debug.
+pub fn js_locale_compare(a: &str, b: &str) -> Ordering {
+    debug_assert!(a.is_ascii() && b.is_ascii(), "js_locale_compare assumes ASCII ids: {a:?} {b:?}");
+    js_default_sort_cmp(a, b)
+}
+
+#[cfg(test)]
+mod sort_tests {
+    use super::js_default_sort_cmp;
+    use std::cmp::Ordering;
+
+    #[test]
+    fn ascii_matches_byte_order() {
+        // Goldens from Node: ["s10","s2","s1"].sort() => ["s1","s10","s2"].
+        let mut v = vec!["s10", "s2", "s1"];
+        v.sort_by(|a, b| js_default_sort_cmp(a, b));
+        assert_eq!(v, vec!["s1", "s10", "s2"]);
+    }
+
+    #[test]
+    fn orders_by_utf16_code_unit() {
+        // U+1F600 (astral) is a surrogate pair in UTF-16; its first code unit
+        // (0xD83D) sorts below U+FFFD (0xFFFD). Node: ["\u{FFFD}","\u{1F600}"].sort()
+        // => ["\u{1F600}","\u{FFFD}"].
+        assert_eq!(js_default_sort_cmp("\u{1F600}", "\u{FFFD}"), Ordering::Less);
     }
 }
