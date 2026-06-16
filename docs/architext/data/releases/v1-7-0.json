@@ -5,8 +5,8 @@
   "status": "implementing",
   "posture": "on-track",
   "targetWindow": "After 1.6.3 (1.6.x exhausted)",
-  "lastUpdated": "2026-06-16T00:00:00.000Z",
-  "updateSource": "2026-06-16: routing engine port COMPLETE — full JS engine ported to Rust (architext-routing), differential gate 16/16 byte-identical (native+wasm). js_compat determinism + harness done. Cutover (wire serve/viewer, delete JS) tracked under serve-layer-port + viewer-rust-wasm-rewrite, sign-off-gated.",
+  "lastUpdated": "2026-06-16T01:00:00.000Z",
+  "updateSource": "2026-06-16: validation parity COMPLETE — architext-core validator (schema via jsonschema + references + release + roadmap-target) verdict-identical to the JS validator; conformance gate 44/44 across per-rule fixtures.",
   "summary": "Reimplement the entire product in Rust with NO Node dependency surviving — runtime AND build. One Rust routing core (native + WASM); validation, serve layer, and lifecycle ported; AND the React/Vite viewer rewritten as a Rust → WASM UI (Leptos/Dioxus/Yew, no JSX/Vite/npm) reusing the engine directly and implementing the Stitch design language. Native installers are the Node-free default; npm is an opt-in compatibility bridge only. Minor release: JSON data contract and CLI surface preserved exactly, proven by a byte-parity migration gate and a validation conformance corpus. Migration tooling (parity harness, ajv conformance, JS tests) is transitional and deleted with the JS code.",
   "scope": {
     "required": [
@@ -78,13 +78,20 @@
         "id": "validation-conformance-port",
         "title": "Port validation with a conformance corpus",
         "kind": "architecture",
-        "status": "planned",
+        "status": "complete",
         "summary": "Port the ajv 2020-12 schema validation + custom reference checks to Rust (jsonschema crate + ported logic) in architext-core. A conformance corpus of accept/reject fixtures proves verdict parity between the outgoing ajv validator and the Rust validator, error-for-error.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-15T00:00:00.000Z",
         "workstreamId": "validation-parity",
         "priority": "high",
-        "dependsOn": []
+        "dependsOn": [],
+        "evidence": [
+          "pr-139",
+          "pr-140",
+          "pr-141",
+          "pr-142",
+          "pr-143"
+        ]
       },
       {
         "id": "serve-layer-port",
@@ -209,14 +216,17 @@
       "id": "validation-parity",
       "name": "Validation parity",
       "owner": "maintainer",
-      "status": "planned",
+      "status": "complete",
       "posture": "on-track",
       "summary": "Port schema + reference validation to Rust with a conformance corpus proving verdict parity with ajv.",
-      "progress": 0,
+      "progress": 100,
       "itemIds": [
         "validation-conformance-port"
       ],
-      "evidence": []
+      "evidence": [
+        "pr-142",
+        "pr-143"
+      ]
     },
     {
       "id": "serve-cli-native",
@@ -350,6 +360,41 @@
       "id": "pr-137",
       "label": "PR #137 16/16 byte-parity",
       "href": "https://github.com/robot-accomplice/architext/pull/137",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-139",
+      "label": "PR #139 validation: architext-core + conformance gate",
+      "href": "https://github.com/robot-accomplice/architext/pull/139",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-140",
+      "label": "PR #140 validation: schema layer",
+      "href": "https://github.com/robot-accomplice/architext/pull/140",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-141",
+      "label": "PR #141 validation: reference checks",
+      "href": "https://github.com/robot-accomplice/architext/pull/141",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-142",
+      "label": "PR #142 validation: release+roadmap 7/7",
+      "href": "https://github.com/robot-accomplice/architext/pull/142",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-143",
+      "label": "PR #143 validation: per-rule corpus 44/44",
+      "href": "https://github.com/robot-accomplice/architext/pull/143",
       "kind": "document",
       "status": "complete"
     }
