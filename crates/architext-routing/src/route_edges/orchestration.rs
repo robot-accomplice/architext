@@ -797,6 +797,86 @@ fn to_plan_relationships(input: &RouteEdgesInput) -> Vec<PlanRelationship> {
 }
 
 // ---------------------------------------------------------------------------
+// SeparationRerouteCallback — port of JS reroutedAgainstRouteSet
+// ---------------------------------------------------------------------------
+
+/// Port of JS `reroutedAgainstRouteSet(routeId, relationship, routeById, input)`.
+///
+/// Called by `separate_close_parallel_routes` for the first-distance reroute step.
+/// Builds a fresh `RouteIndex` from all other routes (excluding `route_id`), then
+/// calls `PlannerContext::edge_path` with empty `used_routes`, fresh
+/// `AlwaysAvailableSideUsage`, and zero endpoint offsets — matching the JS call exactly.
+struct SeparationRerouteCallback<'a> {
+    planner: &'a PlannerContext,
+    /// Full relationship list in order (for pair-index and rel-index lookup).
+    relationships: &'a [InputRelationship],
+    style: &'a str,
+    node_rects: &'a IndexMap<String, Rect>,
+}
+
+impl<'a> crate::route_edges::RerouteCallback for SeparationRerouteCallback<'a> {
+    fn reroute_against_route_set(
+        &self,
+        route_id: &str,
+        route_by_id: &[(String, RouteData)],
+    ) -> Option<RouteData> {
+        // Find the relationship for this route.
+        let rel = self.relationships.iter().find(|r| r.id == route_id)?;
+
+        // relationship_index: JS `Math.max(0, input.relationships.findIndex(...))`
+        let relationship_index = self
+            .relationships
+            .iter()
+            .position(|r| r.id == route_id)
+            .unwrap_or(0);
+
+        // pair_index: JS `routePairIndex(relationship, input.relationships)`
+        let sep_rels: Vec<crate::route_edges::SeparationRelationship> = self
+            .relationships
+            .iter()
+            .map(|r| crate::route_edges::SeparationRelationship {
+                id: r.id.clone(),
+                from: r.from.clone(),
+                to: r.to.clone(),
+            })
+            .collect();
+        let pair_index =
+            crate::route_edges::route_pair_index(route_id, &rel.from, &rel.to, &sep_rels);
+
+        // Build routeIndex and usedRoutes from all other routes.
+        let mut route_index = RouteIndex::new();
+        let mut used_routes: Vec<Vec<Point>> = Vec::new();
+        for (other_id, other_route) in route_by_id {
+            if other_id == route_id {
+                continue;
+            }
+            used_routes.push(other_route.samples.clone());
+            let position = used_routes.len() - 1;
+            route_index.add(&other_route.points, position);
+        }
+
+        // edgePath with endpointSideUsage = null (→ AlwaysAvailableSideUsage)
+        // and endpoint offsets (0, 0), no lane/row hints.
+        let built = self.planner.edge_path(
+            rel,
+            relationship_index,
+            pair_index,
+            &used_routes,
+            &route_index,
+            EndpointOffsets { from: 0.0, to: 0.0 },
+            &AlwaysAvailableSideUsage,
+            self.style,
+            None,
+            None,
+            None,
+            None,
+        )?;
+
+        Some(route_with_endpoint_stubs(&built, &rel.from, &rel.to, self.node_rects))
+    }
+}
+
+// ---------------------------------------------------------------------------
 // BuildRouteForSides wrapper
 // ---------------------------------------------------------------------------
 
@@ -904,7 +984,7 @@ pub fn route_edges(input: &RouteEdgesInput) -> IndexMap<String, RouteData> {
 
     // onPhase("Separating parallel runs")
     let separated_routes = {
-        use crate::route_edges::{separate_close_parallel_routes, NoopReroute, SeparationRelationship};
+        use crate::route_edges::{separate_close_parallel_routes, SeparationRelationship};
         let sep_rels: Vec<SeparationRelationship> = input
             .relationships
             .iter()
@@ -916,12 +996,18 @@ pub fn route_edges(input: &RouteEdgesInput) -> IndexMap<String, RouteData> {
             .collect();
         let fixed_ports: IndexMap<String, bool> =
             input.node_rects.iter().map(|(k, v)| (k.clone(), v.fixed_ports)).collect();
+        let sep_reroute = SeparationRerouteCallback {
+            planner: &ctx,
+            relationships: &input.relationships,
+            style,
+            node_rects: &node_rects_plain,
+        };
         separate_close_parallel_routes(
             &endpoint_adjusted,
             &sep_rels,
             &node_rects_plain,
             &fixed_ports,
-            &NoopReroute,
+            &sep_reroute,
         )
     };
 

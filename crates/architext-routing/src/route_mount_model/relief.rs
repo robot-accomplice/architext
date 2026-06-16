@@ -87,7 +87,11 @@ pub(super) fn try_side_moves(
                 }
                 let before = mount_assignment_cost(route_by_id, rel_by_id, input);
                 let saved = snapshot_routes(route_by_id);
-                let rebuilt = builder.build(rel, candidate_start, candidate_end, route_by_id);
+                // JS trySideMoves calls buildRouteForSides(rel, candStart, candEnd) with NO
+                // currentRoutes argument, so the sideRouteIndex inside buildRouteForSides is
+                // empty (obstacle-free). Pass an empty map here to match JS exactly.
+                let empty: IndexMap<String, RouteData> = IndexMap::new();
+                let rebuilt = builder.build(rel, candidate_start, candidate_end, &empty);
                 let rebuilt = match rebuilt {
                     Some(r) => r,
                     None => continue,
