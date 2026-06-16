@@ -28,6 +28,8 @@ const { upsertNote, deleteNote, notesForTarget } =
   await import(`${repoRoot}/src/domain/architecture-model/notes.mjs`);
 const { schemaMigrationPlan } =
   await import(`${repoRoot}/src/domain/lifecycle/schema-migrations.mjs`);
+const { c4IssuesForView, c4DrilldownIssues, repairC4Views } =
+  await import(`${repoRoot}/src/domain/architecture-model/c4-quality.mjs`);
 
 // ─── JS dispatcher ───────────────────────────────────────────────────────────
 function runJs(op, fixture) {
@@ -50,6 +52,18 @@ function runJs(op, fixture) {
       return notesForTarget(fixture.notes, fixture.kind, fixture.id);
     case "schema.migrationPlan":
       return schemaMigrationPlan({ currentVersion: fixture.currentVersion, targetVersion: fixture.targetVersion });
+    case "c4.issuesForView": {
+      const nodeMap = new Map((fixture.nodes ?? []).map((n) => [n.id, n]));
+      return c4IssuesForView(fixture.view, nodeMap);
+    }
+    case "c4.drilldownIssues": {
+      const nodeMap = new Map((fixture.nodes ?? []).map((n) => [n.id, n]));
+      return c4DrilldownIssues(fixture.views, nodeMap);
+    }
+    case "c4.repairViews": {
+      const nodeMap = new Map((fixture.nodes ?? []).map((n) => [n.id, n]));
+      return repairC4Views(fixture.views, nodeMap);
+    }
     default:
       throw new Error(`Unknown op: ${op}`);
   }

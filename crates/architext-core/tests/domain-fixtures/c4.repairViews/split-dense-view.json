@@ -1,0 +1,31 @@
+{
+  "views": [
+    {
+      "id": "v1",
+      "type": "c4-context",
+      "name": "Dense Ctx",
+      "summary": "A dense view.",
+      "lanes": [
+        { "id": "l1", "name": "Lane A", "nodeIds": ["n0","n1","n2","n3","n4","n5","n6","n7"] },
+        { "id": "l2", "name": "Lane B", "nodeIds": ["m0","m1","m2","m3","m4","m5","m6"] }
+      ]
+    }
+  ],
+  "nodes": [
+    { "id": "n0", "type": "service", "dependencies": [] },
+    { "id": "n1", "type": "service", "dependencies": [] },
+    { "id": "n2", "type": "service", "dependencies": [] },
+    { "id": "n3", "type": "service", "dependencies": [] },
+    { "id": "n4", "type": "service", "dependencies": [] },
+    { "id": "n5", "type": "service", "dependencies": [] },
+    { "id": "n6", "type": "service", "dependencies": [] },
+    { "id": "n7", "type": "service", "dependencies": [] },
+    { "id": "m0", "type": "service", "dependencies": [] },
+    { "id": "m1", "type": "service", "dependencies": [] },
+    { "id": "m2", "type": "service", "dependencies": [] },
+    { "id": "m3", "type": "service", "dependencies": [] },
+    { "id": "m4", "type": "service", "dependencies": [] },
+    { "id": "m5", "type": "service", "dependencies": [] },
+    { "id": "m6", "type": "service", "dependencies": [] }
+  ]
+}

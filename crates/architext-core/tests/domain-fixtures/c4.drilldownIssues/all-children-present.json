@@ -1,0 +1,29 @@
+{
+  "views": [
+    {
+      "id": "v1",
+      "type": "c4-context",
+      "name": "Context",
+      "lanes": [{ "id": "l1", "name": "L1", "nodeIds": ["n1"] }]
+    },
+    {
+      "id": "v2",
+      "type": "c4-container",
+      "name": "Container",
+      "scopeNodeId": "n1",
+      "lanes": [{ "id": "l1", "name": "L1", "nodeIds": ["n2"] }]
+    },
+    {
+      "id": "v3",
+      "type": "c4-component",
+      "name": "Component",
+      "scopeNodeId": "n2",
+      "lanes": [{ "id": "l1", "name": "L1", "nodeIds": ["n3"] }]
+    }
+  ],
+  "nodes": [
+    { "id": "n1", "type": "software-system" },
+    { "id": "n2", "type": "service" },
+    { "id": "n3", "type": "module" }
+  ]
+}

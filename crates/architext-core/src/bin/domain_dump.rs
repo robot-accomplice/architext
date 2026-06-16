@@ -41,7 +41,7 @@ fn err(msg: String) -> Value {
 }
 
 fn dispatch(op: &str, fixture: &Value) -> Value {
-    use architext_core::domain::{notes, rules, schema_migration};
+    use architext_core::domain::{c4_quality, notes, rules, schema_migration};
 
     match op {
         // ── rules ──────────────────────────────────────────────────────────
@@ -123,6 +123,30 @@ fn dispatch(op: &str, fixture: &Value) -> Value {
             let current = fixture["currentVersion"].as_str().unwrap_or("");
             let target = fixture["targetVersion"].as_str().unwrap_or("");
             ok(schema_migration::schema_migration_plan(current, target))
+        }
+
+        // ── c4 quality ─────────────────────────────────────────────────────────
+        "c4.issuesForView" => {
+            let view = &fixture["view"];
+            let nodes = fixture["nodes"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+            let node_map = c4_quality::build_node_map(nodes);
+            let issues = c4_quality::c4_issues_for_view(view, &node_map);
+            ok(Value::Array(issues.into_iter().map(Value::String).collect()))
+        }
+
+        "c4.drilldownIssues" => {
+            let views = fixture["views"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+            let nodes = fixture["nodes"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+            let node_map = c4_quality::build_node_map(nodes);
+            let issues = c4_quality::c4_drilldown_issues(views, &node_map);
+            ok(Value::Array(issues.into_iter().map(Value::String).collect()))
+        }
+
+        "c4.repairViews" => {
+            let views = fixture["views"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+            let nodes = fixture["nodes"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+            let node_map = c4_quality::build_node_map(nodes);
+            ok(c4_quality::repair_c4_views(views, &node_map))
         }
 
         _ => {
