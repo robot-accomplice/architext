@@ -1,0 +1,55 @@
+[     103ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[     130ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4463004ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4463037ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4470209ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4470227ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4477594ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4477611ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4485524ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4485543ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4492613ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4492630ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4502171ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4502190ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4508685ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4508704ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4532357ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4532365ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4532431ms] TypeError: Cannot read properties of undefined (reading 'values')
+    at contentExtent (http://127.0.0.1:4317/src/main.tsx?t=1780585976534:227:37)
+    at SystemMap (http://127.0.0.1:4317/src/main.tsx?t=1780585976534:3586:106)
+    at Object.react_stack_bottom_frame (http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:18507:20)
+    at renderWithHooks (http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:5652:24)
+    at updateFunctionComponent (http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:7473:21)
+    at beginWork (http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:8523:20)
+    at runWithFiberInDEV (http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:995:72)
+    at performUnitOfWork (http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:12559:98)
+    at workLoopSync (http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:12422:43)
+    at renderRootSync (http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:12406:13)
+[ 4532430ms] [WARNING] %s
+
+%s
+ An error occurred in the <SystemMap> component. Consider adding an error boundary to your tree to customize error handling behavior.
+Visit https://react.dev/link/error-boundaries to learn more about error boundaries. @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:6963
+[ 4556891ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4557022ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4557033ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4649627ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4649785ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4649804ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4660302ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4660507ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4660520ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4669531ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4669795ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4669814ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4677178ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4677551ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4677621ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4686643ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4686833ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4686855ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4694219ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0
+[ 4694450ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4317/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 4694470ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4317/api/data-events:0

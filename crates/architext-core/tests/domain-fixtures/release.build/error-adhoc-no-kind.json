@@ -1,0 +1,17 @@
+{
+  "releaseIndex": {
+    "releases": []
+  },
+  "roadmapItems": [],
+  "selectedRoadmapItemIds": [],
+  "itemScopes": {},
+  "adHocItems": [
+    {
+      "title": "No Kind",
+      "priority": "p1"
+    }
+  ],
+  "projectName": "TestApp",
+  "version": "1.0.0",
+  "now": "2024-01-01T00:00:00.000Z"
+}

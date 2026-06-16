@@ -1,0 +1,27 @@
+{
+  "releaseIndex": {
+    "releases": []
+  },
+  "roadmapItems": [],
+  "selectedRoadmapItemIds": [],
+  "itemScopes": {},
+  "adHocItems": [
+    {
+      "title": "Fix A",
+      "kind": "bug-fix",
+      "priority": "p1",
+      "summary": "fixes a bug",
+      "section": "DevOps"
+    },
+    {
+      "id": "custom-id",
+      "title": "Custom Item",
+      "kind": "feature",
+      "priority": "p2",
+      "summary": "explicit id"
+    }
+  ],
+  "projectName": "TestApp",
+  "version": "1.0.0",
+  "now": "2024-01-01T00:00:00.000Z"
+}

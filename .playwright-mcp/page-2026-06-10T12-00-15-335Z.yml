@@ -1,0 +1,80 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Architext / 1.6.0 · Schema / 1.5.0
+      - generic [ref=e7]:
+        - heading "Routing Corpus (review fixture)" [level=1] [ref=e8]
+        - paragraph [ref=e9]: Sanitized routing corpus for diagram review.
+    - generic [ref=e10]:
+      - tablist "Architext modes" [ref=e11]:
+        - tab "Flows" [ref=e12] [cursor=pointer]
+        - tab "Sequence" [ref=e13] [cursor=pointer]
+        - tab "C4" [ref=e14] [cursor=pointer]
+        - tab "Deployment" [ref=e15] [cursor=pointer]
+        - tab "Data/Risks" [ref=e16] [cursor=pointer]
+        - tab "Repo Tree" [ref=e17] [cursor=pointer]
+        - tab "Blast Radius" [selected] [ref=e18] [cursor=pointer]
+        - tab "Release Truth" [ref=e19] [cursor=pointer]
+        - tab "Rules" [ref=e20] [cursor=pointer]
+      - button "Open diagram configuration" [ref=e21] [cursor=pointer]: ⚙ Config
+  - button "Collapse left navigation" [ref=e22] [cursor=pointer]: ‹ Collapse
+  - button "Collapse right details" [ref=e23] [cursor=pointer]: › Collapse
+  - complementary [ref=e24]:
+    - generic [ref=e25]:
+      - heading "Blast Radius" [level=2] [ref=e26]
+      - paragraph [ref=e27]: Search to see what an element reaches.
+    - generic [ref=e29]:
+      - img "search"
+      - searchbox "Search components, files…" [active] [ref=e30]
+    - paragraph [ref=e32]: Start typing to search the repository.
+  - main [ref=e33]:
+    - generic [ref=e35]:
+      - heading "Blast radius" [level=2] [ref=e36]
+      - paragraph [ref=e37]: Search for a component, file, or concept on the left to see where it reaches across the repository and architecture — its files, dependencies, dependents, flows, decisions, and risks.
+  - complementary [ref=e38]:
+    - generic [ref=e39]:
+      - generic [ref=e40]:
+        - paragraph [ref=e41]: Flow
+        - heading "Hub Fan Dense" [level=2] [ref=e42]
+        - paragraph [ref=e43]: Corpus flow Hub Fan Dense.
+        - navigation "Detail sections" [ref=e44]:
+          - link "Summary" [ref=e45] [cursor=pointer]:
+            - /url: "#summary"
+          - link "Runtime" [ref=e46] [cursor=pointer]:
+            - /url: "#runtime"
+          - link "Interfaces" [ref=e47] [cursor=pointer]:
+            - /url: "#interfaces"
+          - link "Data" [ref=e48] [cursor=pointer]:
+            - /url: "#data"
+          - link "Security" [ref=e49] [cursor=pointer]:
+            - /url: "#security"
+          - link "Observability" [ref=e50] [cursor=pointer]:
+            - /url: "#observability"
+          - link "Risks" [ref=e51] [cursor=pointer]:
+            - /url: "#risks"
+          - link "Decisions" [ref=e52] [cursor=pointer]:
+            - /url: "#decisions"
+          - link "Verification" [ref=e53] [cursor=pointer]:
+            - /url: "#verification"
+      - generic [ref=e54]:
+        - generic [ref=e55]: Implemented
+        - generic [ref=e56]: 18 steps
+      - generic [ref=e57]:
+        - heading "Trigger" [level=3] [ref=e58]
+        - list [ref=e59]:
+          - listitem [ref=e60]: Corpus trigger.
+      - generic [ref=e61]:
+        - heading "Guarantees" [level=3] [ref=e62]
+        - paragraph [ref=e63]: None recorded.
+      - generic [ref=e64]:
+        - heading "Failure behavior" [level=3] [ref=e65]
+        - paragraph [ref=e66]: None recorded.
+      - generic [ref=e67]:
+        - heading "Observability" [level=3] [ref=e68]
+        - paragraph [ref=e69]: None recorded.
+      - generic [ref=e70]:
+        - heading "Known gaps" [level=3] [ref=e71]
+        - paragraph [ref=e72]: None recorded.
+      - generic [ref=e73]:
+        - heading "Verification" [level=3] [ref=e74]
+        - paragraph [ref=e75]: None recorded.

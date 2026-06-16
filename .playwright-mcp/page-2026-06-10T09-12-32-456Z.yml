@@ -1,0 +1,254 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Architext / 1.6.0 · Schema / 1.5.0
+      - generic [ref=e7]:
+        - heading "Routing Corpus (review fixture)" [level=1] [ref=e8]
+        - paragraph [ref=e9]: Sanitized routing corpus for diagram review.
+    - generic [ref=e10]:
+      - tablist "Architext modes" [ref=e11]:
+        - tab "Flows" [ref=e12] [cursor=pointer]
+        - tab "Sequence" [ref=e13] [cursor=pointer]
+        - tab "C4" [ref=e14] [cursor=pointer]
+        - tab "Deployment" [ref=e15] [cursor=pointer]
+        - tab "Data/Risks" [ref=e16] [cursor=pointer]
+        - tab "Repo Tree" [selected] [ref=e17] [cursor=pointer]
+        - tab "Release Truth" [ref=e18] [cursor=pointer]
+        - tab "Rules" [ref=e19] [cursor=pointer]
+      - button "Open diagram configuration" [ref=e20] [cursor=pointer]: ⚙ Config
+  - button "Collapse left navigation" [ref=e21] [cursor=pointer]: ‹ Collapse
+  - button "Collapse right details" [ref=e22] [cursor=pointer]: › Collapse
+  - complementary [ref=e23]:
+    - generic [ref=e24]:
+      - heading "Repo Tree" [level=2] [ref=e265]
+      - paragraph [ref=e266]: The repository's tracked files, colored by the architecture node that owns each path. Click a file to inspect its component.
+  - main [ref=e57]:
+    - generic [ref=e267]:
+      - generic [ref=e268]:
+        - generic [ref=e269]:
+          - heading "Repo Tree" [level=2] [ref=e270]
+          - paragraph [ref=e271]: 33 files · via filesystem — colored by the architecture node that owns each path.
+        - group "Color lens" [ref=e272]:
+          - button "C4 type" [ref=e273] [cursor=pointer]
+          - button "Flow" [ref=e274] [cursor=pointer]
+      - generic [ref=e276]:
+        - generic [ref=e277]:
+          - button "docs" [ref=e278] [cursor=pointer]:
+            - generic [ref=e279]: ▾
+            - generic [ref=e281]: docs
+          - generic [ref=e282]:
+            - button "architext" [ref=e283] [cursor=pointer]:
+              - generic [ref=e284]: ▾
+              - generic [ref=e286]: architext
+            - generic [ref=e287]:
+              - button "data" [ref=e288] [cursor=pointer]:
+                - generic [ref=e289]: ▾
+                - generic [ref=e291]: data
+              - generic "Not mapped to an architecture node" [ref=e292]:
+                - generic [ref=e294]: data-classification.json
+              - generic "Not mapped to an architecture node" [ref=e295]:
+                - generic [ref=e297]: decisions.json
+              - generic "Not mapped to an architecture node" [ref=e298]:
+                - generic [ref=e300]: flows.json
+              - generic "Not mapped to an architecture node" [ref=e301]:
+                - generic [ref=e303]: manifest.json
+              - generic "Not mapped to an architecture node" [ref=e304]:
+                - generic [ref=e306]: nodes.json
+              - generic "Not mapped to an architecture node" [ref=e307]:
+                - generic [ref=e309]: risks.json
+              - generic "Not mapped to an architecture node" [ref=e310]:
+                - generic [ref=e312]: views.json
+        - generic [ref=e313]:
+          - button "src mixed" [ref=e314] [cursor=pointer]:
+            - generic [ref=e315]: ▾
+            - generic [ref=e317]: src
+            - generic [ref=e318]: mixed
+          - generic [ref=e319]:
+            - button "client mixed" [ref=e320] [cursor=pointer]:
+              - generic [ref=e321]: ▾
+              - generic [ref=e323]: client
+              - generic [ref=e324]: mixed
+            - button "admin.ts Admin" [ref=e325] [cursor=pointer]:
+              - generic [ref=e327]: admin.ts
+              - generic [ref=e328]: Admin
+            - button "mobile.ts Web" [ref=e329] [cursor=pointer]:
+              - generic [ref=e331]: mobile.ts
+              - generic [ref=e332]: Web
+            - button "web.ts Web" [ref=e333] [cursor=pointer]:
+              - generic [ref=e335]: web.ts
+              - generic [ref=e336]: Web
+          - generic [ref=e337]:
+            - button "db mixed" [ref=e338] [cursor=pointer]:
+              - generic [ref=e339]: ▾
+              - generic [ref=e341]: db
+              - generic [ref=e342]: mixed
+            - generic [ref=e343]:
+              - button "cache Cache" [ref=e344] [cursor=pointer]:
+                - generic [ref=e345]: ▾
+                - generic [ref=e347]: cache
+                - generic [ref=e348]: Cache
+              - button "index.ts Cache" [ref=e349] [cursor=pointer]:
+                - generic [ref=e351]: index.ts
+                - generic [ref=e352]: Cache
+              - button "lru.ts Cache" [ref=e353] [cursor=pointer]:
+                - generic [ref=e355]: lru.ts
+                - generic [ref=e356]: Cache
+            - button "audit.ts Audit" [ref=e357] [cursor=pointer]:
+              - generic [ref=e359]: audit.ts
+              - generic [ref=e360]: Audit
+            - button "store.ts Store" [ref=e361] [cursor=pointer]:
+              - generic [ref=e363]: store.ts
+              - generic [ref=e364]: Store
+          - generic [ref=e365]:
+            - button "integrations mixed" [ref=e366] [cursor=pointer]:
+              - generic [ref=e367]: ▾
+              - generic [ref=e369]: integrations
+              - generic [ref=e370]: mixed
+            - button "sendgrid.ts Sendgrid" [ref=e371] [cursor=pointer]:
+              - generic [ref=e373]: sendgrid.ts
+              - generic [ref=e374]: Sendgrid
+            - button "stripe.ts Stripe" [ref=e375] [cursor=pointer]:
+              - generic [ref=e377]: stripe.ts
+              - generic [ref=e378]: Stripe
+          - generic [ref=e379]:
+            - button "modules Shared" [ref=e380] [cursor=pointer]:
+              - generic [ref=e381]: ▾
+              - generic [ref=e383]: modules
+              - generic [ref=e384]: Shared
+            - generic [ref=e385]:
+              - button "shared Shared" [ref=e386] [cursor=pointer]:
+                - generic [ref=e387]: ▾
+                - generic [ref=e389]: shared
+                - generic [ref=e390]: Shared
+              - button "index.ts Shared" [ref=e391] [cursor=pointer]:
+                - generic [ref=e393]: index.ts
+                - generic [ref=e394]: Shared
+          - generic [ref=e395]:
+            - button "queue Queue" [ref=e396] [cursor=pointer]:
+              - generic [ref=e397]: ▾
+              - generic [ref=e399]: queue
+              - generic [ref=e400]: Queue
+            - button "index.ts Queue" [ref=e401] [cursor=pointer]:
+              - generic [ref=e403]: index.ts
+              - generic [ref=e404]: Queue
+            - button "jobs.ts Queue" [ref=e405] [cursor=pointer]:
+              - generic [ref=e407]: jobs.ts
+              - generic [ref=e408]: Queue
+          - generic [ref=e409]:
+            - button "services mixed" [ref=e410] [cursor=pointer]:
+              - generic [ref=e411]: ▾
+              - generic [ref=e413]: services
+              - generic [ref=e414]: mixed
+            - generic [ref=e415]:
+              - button "auth Auth" [ref=e416] [cursor=pointer]:
+                - generic [ref=e417]: ▾
+                - generic [ref=e419]: auth
+                - generic [ref=e420]: Auth
+              - button "index.ts Auth" [ref=e421] [cursor=pointer]:
+                - generic [ref=e423]: index.ts
+                - generic [ref=e424]: Auth
+              - button "login.ts Auth" [ref=e425] [cursor=pointer]:
+                - generic [ref=e427]: login.ts
+                - generic [ref=e428]: Auth
+              - button "token.ts Auth" [ref=e429] [cursor=pointer]:
+                - generic [ref=e431]: token.ts
+                - generic [ref=e432]: Auth
+            - generic [ref=e433]:
+              - button "billing Billing" [ref=e434] [cursor=pointer]:
+                - generic [ref=e435]: ▾
+                - generic [ref=e437]: billing
+                - generic [ref=e438]: Billing
+              - button "index.ts Billing" [ref=e439] [cursor=pointer]:
+                - generic [ref=e441]: index.ts
+                - generic [ref=e442]: Billing
+            - generic [ref=e443]:
+              - button "gateway Gateway" [ref=e444] [cursor=pointer]:
+                - generic [ref=e445]: ▾
+                - generic [ref=e447]: gateway
+                - generic [ref=e448]: Gateway
+              - button "index.ts Gateway" [ref=e449] [cursor=pointer]:
+                - generic [ref=e451]: index.ts
+                - generic [ref=e452]: Gateway
+            - generic [ref=e453]:
+              - button "orders Orders" [ref=e454] [cursor=pointer]:
+                - generic [ref=e455]: ▾
+                - generic [ref=e457]: orders
+                - generic [ref=e458]: Orders
+              - button "index.ts Orders" [ref=e459] [cursor=pointer]:
+                - generic [ref=e461]: index.ts
+                - generic [ref=e462]: Orders
+          - generic [ref=e463]:
+            - button "util" [ref=e464] [cursor=pointer]:
+              - generic [ref=e465]: ▾
+              - generic [ref=e467]: util
+            - generic "Not mapped to an architecture node" [ref=e468]:
+              - generic [ref=e470]: log.ts
+          - generic [ref=e471]:
+            - button "workers Workers" [ref=e472] [cursor=pointer]:
+              - generic [ref=e473]: ▾
+              - generic [ref=e475]: workers
+              - generic [ref=e476]: Workers
+            - button "email.ts Workers" [ref=e477] [cursor=pointer]:
+              - generic [ref=e479]: email.ts
+              - generic [ref=e480]: Workers
+            - button "index.ts Workers" [ref=e481] [cursor=pointer]:
+              - generic [ref=e483]: index.ts
+              - generic [ref=e484]: Workers
+          - button "app.ts App" [ref=e485] [cursor=pointer]:
+            - generic [ref=e487]: app.ts
+            - generic [ref=e488]: App
+          - generic "Not mapped to an architecture node" [ref=e489]:
+            - generic [ref=e491]: index.ts
+        - generic "Not mapped to an architecture node" [ref=e492]:
+          - generic [ref=e494]: package.json
+        - generic "Not mapped to an architecture node" [ref=e495]:
+          - generic [ref=e497]: README.md
+        - generic "Not mapped to an architecture node" [ref=e498]:
+          - generic [ref=e500]: tsconfig.json
+  - complementary [ref=e228]:
+    - generic [ref=e229]:
+      - generic [ref=e230]:
+        - paragraph [ref=e231]: Flow
+        - heading "Hub Fan Dense" [level=2] [ref=e232]
+        - paragraph
+        - navigation "Detail sections" [ref=e233]:
+          - link "Summary" [ref=e234] [cursor=pointer]:
+            - /url: "#summary"
+          - link "Runtime" [ref=e235] [cursor=pointer]:
+            - /url: "#runtime"
+          - link "Interfaces" [ref=e236] [cursor=pointer]:
+            - /url: "#interfaces"
+          - link "Data" [ref=e237] [cursor=pointer]:
+            - /url: "#data"
+          - link "Security" [ref=e238] [cursor=pointer]:
+            - /url: "#security"
+          - link "Observability" [ref=e239] [cursor=pointer]:
+            - /url: "#observability"
+          - link "Risks" [ref=e240] [cursor=pointer]:
+            - /url: "#risks"
+          - link "Decisions" [ref=e241] [cursor=pointer]:
+            - /url: "#decisions"
+          - link "Verification" [ref=e242] [cursor=pointer]:
+            - /url: "#verification"
+      - generic [ref=e243]:
+        - generic [ref=e244]: Implemented
+        - generic [ref=e245]: 18 steps
+      - generic [ref=e246]:
+        - heading "Trigger" [level=3] [ref=e247]
+        - list [ref=e248]:
+          - listitem [ref=e249]
+      - generic [ref=e250]:
+        - heading "Guarantees" [level=3] [ref=e251]
+        - paragraph [ref=e252]: None recorded.
+      - generic [ref=e253]:
+        - heading "Failure behavior" [level=3] [ref=e254]
+        - paragraph [ref=e255]: None recorded.
+      - generic [ref=e256]:
+        - heading "Observability" [level=3] [ref=e257]
+        - paragraph [ref=e258]: None recorded.
+      - generic [ref=e259]:
+        - heading "Known gaps" [level=3] [ref=e260]
+        - paragraph [ref=e261]: None recorded.
+      - generic [ref=e262]:
+        - heading "Verification" [level=3] [ref=e263]
+        - paragraph [ref=e264]: None recorded.

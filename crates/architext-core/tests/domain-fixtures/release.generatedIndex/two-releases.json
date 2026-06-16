@@ -1,0 +1,83 @@
+{
+  "existingIndex": {
+    "currentReleaseId": "v1-0-0",
+    "releases": []
+  },
+  "detailEntries": [
+    {
+      "detail": {
+        "id": "v1-0-0",
+        "version": "1.0.0",
+        "name": "App 1.0.0",
+        "status": "completed",
+        "posture": "on-track",
+        "summary": "First release",
+        "releasedAt": "2023-12-01",
+        "lastUpdated": "2023-12-01",
+        "scope": {
+          "required": [
+            {
+              "id": "i1",
+              "kind": "feature",
+              "status": "complete"
+            }
+          ],
+          "planned": [],
+          "stretch": [],
+          "deferred": [],
+          "outOfScope": []
+        },
+        "workstreams": [
+          {
+            "id": "ws1"
+          }
+        ],
+        "blockers": [],
+        "dependencies": [],
+        "evidence": []
+      },
+      "file": "v1-0-0.json"
+    },
+    {
+      "detail": {
+        "id": "v1-1-0",
+        "version": "1.1.0",
+        "name": "App 1.1.0",
+        "status": "planned",
+        "posture": "on-track",
+        "summary": "Second release",
+        "targetDate": "2024-03-01",
+        "lastUpdated": "2024-01-01",
+        "scope": {
+          "required": [],
+          "planned": [
+            {
+              "id": "i2",
+              "kind": "bug-fix",
+              "status": "planned"
+            }
+          ],
+          "stretch": [],
+          "deferred": [],
+          "outOfScope": []
+        },
+        "workstreams": [
+          {
+            "id": "ws1"
+          },
+          {
+            "id": "ws2"
+          }
+        ],
+        "blockers": [
+          {
+            "id": "b1"
+          }
+        ],
+        "dependencies": [],
+        "evidence": []
+      },
+      "file": "v1-1-0.json"
+    }
+  ]
+}

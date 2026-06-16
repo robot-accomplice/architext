@@ -1,0 +1,50 @@
+{
+  "releaseIndex": {
+    "releases": [
+      {
+        "id": "v1-0-0",
+        "version": "1.0.0",
+        "status": "completed"
+      }
+    ]
+  },
+  "roadmapItems": [
+    {
+      "id": "feat-a",
+      "title": "Feature A",
+      "kind": "feature",
+      "summary": "Required",
+      "section": "Core",
+      "status": "planned"
+    },
+    {
+      "id": "feat-b",
+      "title": "Feature B",
+      "kind": "feature",
+      "summary": "Stretch",
+      "section": "Core",
+      "status": "planned"
+    },
+    {
+      "id": "feat-c",
+      "title": "Feature C",
+      "kind": "feature",
+      "summary": "Out",
+      "section": "Core",
+      "status": "planned"
+    }
+  ],
+  "selectedRoadmapItemIds": [
+    "feat-a",
+    "feat-b",
+    "feat-c"
+  ],
+  "itemScopes": {
+    "feat-a": "required",
+    "feat-b": "stretch",
+    "feat-c": "out-of-scope"
+  },
+  "adHocItems": [],
+  "projectName": "TestApp",
+  "now": "2024-01-01T00:00:00.000Z"
+}

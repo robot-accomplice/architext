@@ -1,0 +1,46 @@
+{
+  "existingDetail": {
+    "id": "v1-0-0",
+    "version": "1.0.0",
+    "name": "App 1.0.0",
+    "status": "planned",
+    "posture": "on-track",
+    "summary": "s",
+    "lastUpdated": "2024-01-01",
+    "updateSource": "Release Planning",
+    "scope": {
+      "required": [],
+      "planned": [],
+      "stretch": [],
+      "deferred": [],
+      "outOfScope": []
+    },
+    "workstreams": [],
+    "blockers": [],
+    "dependencies": [],
+    "milestones": [],
+    "evidence": []
+  },
+  "proposedDetail": {
+    "id": "v1-0-0",
+    "version": "1.0.0",
+    "name": "App 1.0.0",
+    "status": "planned",
+    "posture": "on-track",
+    "summary": "s",
+    "lastUpdated": "2024-01-01",
+    "updateSource": "Release Planning",
+    "scope": {
+      "required": [],
+      "planned": [],
+      "stretch": [],
+      "deferred": [],
+      "outOfScope": []
+    },
+    "workstreams": [],
+    "blockers": [],
+    "dependencies": [],
+    "milestones": [],
+    "evidence": []
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "releaseIndex": {
+    "releases": [
+      {
+        "id": "v1-0-0",
+        "version": "1.0.0",
+        "status": "completed"
+      }
+    ]
+  },
+  "roadmapItems": [
+    {
+      "id": "feat-a",
+      "title": "Feature A",
+      "kind": "feature",
+      "summary": "Does A",
+      "section": "Core",
+      "status": "planned"
+    },
+    {
+      "id": "feat-b",
+      "title": "Feature B",
+      "kind": "feature",
+      "summary": "Does B",
+      "section": "Core",
+      "status": "planned"
+    }
+  ],
+  "selectedRoadmapItemIds": [
+    "feat-a"
+  ],
+  "itemScopes": {},
+  "adHocItems": [],
+  "projectName": "TestApp",
+  "theme": "The Big One",
+  "now": "2024-01-01T00:00:00.000Z"
+}

@@ -1,0 +1,24 @@
+{
+  "releaseIndex": {
+    "releases": []
+  },
+  "roadmapItems": [
+    {
+      "id": "d1",
+      "title": "Deferred Item",
+      "kind": "feature",
+      "summary": "",
+      "section": "Core",
+      "status": "deferred",
+      "targetReleaseId": "v0-9-0"
+    }
+  ],
+  "selectedRoadmapItemIds": [
+    "d1"
+  ],
+  "itemScopes": {},
+  "adHocItems": [],
+  "projectName": "TestApp",
+  "version": "1.0.0",
+  "now": "2024-01-01T00:00:00.000Z"
+}

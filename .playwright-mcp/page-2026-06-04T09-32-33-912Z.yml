@@ -1,0 +1,181 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Architext / 1.5.0 · Schema / 1.5.0
+      - generic [ref=e7]:
+        - heading "Roboticus" [level=1] [ref=e8]
+        - paragraph [ref=e9]: Local-first autonomous agent runtime with CLI, TUI, browser dashboard, daemon, scheduler, channel adapters, memory, tool execution, model routing, and a centralized agent pipeline.
+    - tablist "Architext modes" [ref=e11]:
+      - tab "Flows" [selected] [ref=e12] [cursor=pointer]
+      - tab "Sequence" [ref=e13] [cursor=pointer]
+      - tab "C4" [ref=e14] [cursor=pointer]
+      - tab "Deployment" [ref=e15] [cursor=pointer]
+      - tab "Data/Risks" [ref=e16] [cursor=pointer]
+      - tab "Release Truth" [ref=e17] [cursor=pointer]
+      - tab "Rules" [ref=e18] [cursor=pointer]
+  - button "Collapse left navigation" [ref=e19] [cursor=pointer]: ‹ Collapse
+  - button "Expand right details" [ref=e20] [cursor=pointer]: ‹ Expand
+  - complementary [ref=e21]:
+    - generic [ref=e22]:
+      - heading "Flows" [level=2] [ref=e23]
+      - searchbox "Search flows" [ref=e24]
+      - paragraph [ref=e25]: 6 of 15 flows
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - heading "Flow Views" [level=3] [ref=e28]
+        - button "Roboticus System Map High-level map of operators, first-party surfaces, adapters, runtime services, persistence, external providers, and release validation. system-map" [ref=e29] [cursor=pointer]:
+          - strong [ref=e30]: Roboticus System Map
+          - generic [ref=e31]: High-level map of operators, first-party surfaces, adapters, runtime services, persistence, external providers, and release validation.
+          - generic [ref=e32]: system-map
+        - button "Agent Turn Flow Shows how conversational input moves from surfaces/adapters into the unified pipeline, through memory/tools/models, and back to the user. flow-explorer" [ref=e33] [cursor=pointer]:
+          - strong [ref=e34]: Agent Turn Flow
+          - generic [ref=e35]: Shows how conversational input moves from surfaces/adapters into the unified pipeline, through memory/tools/models, and back to the user.
+          - generic [ref=e36]: flow-explorer
+      - generic [ref=e37]:
+        - heading "Flows" [level=3] [ref=e38]
+        - button "Interactive agent turn A user message enters through a first-party or channel surface and is normalized into the unified pipeline for session, memory, tool, model, guard, persistence, and response handling. Implemented" [ref=e39] [cursor=pointer]:
+          - strong [ref=e40]: Interactive agent turn
+          - generic [ref=e41]: A user message enters through a first-party or channel surface and is normalized into the unified pipeline for session, memory, tool, model, guard, persistence, and response handling.
+          - generic [ref=e42]: Implemented
+        - button "Local CLI/TUI control Local first-party process surfaces call application internals and shared services directly instead of using REST or browser-only websocket seams. Partial" [ref=e43] [cursor=pointer]:
+          - strong [ref=e44]: Local CLI/TUI control
+          - generic [ref=e45]: Local first-party process surfaces call application internals and shared services directly instead of using REST or browser-only websocket seams.
+          - generic [ref=e46]: Partial
+        - button "Model inference and routing The pipeline asks the LLM service to route, sanitize, execute, observe, and fall back across configured cloud and local model providers. Implemented" [ref=e47] [cursor=pointer]:
+          - strong [ref=e48]: Model inference and routing
+          - generic [ref=e49]: The pipeline asks the LLM service to route, sanitize, execute, observe, and fall back across configured cloud and local model providers.
+          - generic [ref=e50]: Implemented
+        - button "Memory retrieval, ingest, and maintenance The pipeline and background services retrieve, persist, curate, index, and repair memory records in the local SQLite store. Implemented" [ref=e51] [cursor=pointer]:
+          - strong [ref=e52]: Memory retrieval, ingest, and maintenance
+          - generic [ref=e53]: The pipeline and background services retrieve, persist, curate, index, and repair memory records in the local SQLite store.
+          - generic [ref=e54]: Implemented
+        - button "Skill and plugin lifecycle Skills and plugins are loaded, cataloged, installed, activated, edited, deleted, and tracked through shared state rather than dashboard-only logic. Partial" [ref=e55] [cursor=pointer]:
+          - strong [ref=e56]: Skill and plugin lifecycle
+          - generic [ref=e57]: Skills and plugins are loaded, cataloged, installed, activated, edited, deleted, and tracked through shared state rather than dashboard-only logic.
+          - generic [ref=e58]: Partial
+        - button "Tool and MCP execution Tool calls, MCP resources, and plugin-backed tools are resolved through shared tool surfaces and recorded as typed evidence. Implemented" [ref=e59] [cursor=pointer]:
+          - strong [ref=e60]: Tool and MCP execution
+          - generic [ref=e61]: Tool calls, MCP resources, and plugin-backed tools are resolved through shared tool surfaces and recorded as typed evidence.
+          - generic [ref=e62]: Implemented
+  - main [ref=e63]:
+    - generic [ref=e64]:
+      - generic [ref=e65]:
+        - heading "Agent Turn Flow" [level=2] [ref=e66]
+        - paragraph [ref=e67]: Shows how conversational input moves from surfaces/adapters into the unified pipeline, through memory/tools/models, and back to the user.
+      - generic "Diagram controls" [ref=e68]:
+        - generic [ref=e69]:
+          - generic [ref=e70]: Line Style
+          - combobox "Line Style" [ref=e71] [cursor=pointer]:
+            - option "Orthogonal" [selected]
+            - option "Spline"
+            - option "Straight"
+        - button "Zoom out" [ref=e72] [cursor=pointer]: "-"
+        - generic [ref=e73]: 100%
+        - button "Zoom in" [ref=e74] [cursor=pointer]: +
+        - button "Fit" [ref=e75] [cursor=pointer]
+        - button "Reset" [ref=e76] [cursor=pointer]
+        - button "Focus" [ref=e77] [cursor=pointer]
+        - button "PDF" [ref=e78] [cursor=pointer]
+      - group [ref=e79]:
+        - generic "Legend" [ref=e80] [cursor=pointer]
+    - generic [ref=e85]:
+      - generic [ref=e86]:
+        - generic [ref=e87]:
+          - heading "Interactive agent turn" [level=2] [ref=e88]
+          - paragraph [ref=e89]: A user message enters through a first-party or channel surface and is normalized into the unified pipeline for session, memory, tool, model, guard, persistence, and response handling.
+        - generic [ref=e90]:
+          - generic [ref=e91]: Implemented
+          - button "Hide steps" [ref=e92] [cursor=pointer]
+      - generic [ref=e93]:
+        - button "Start 1 Operator → External channel adapters submit prompt" [ref=e94] [cursor=pointer]:
+          - img "Start" [ref=e96]
+          - generic [ref=e99]: "1"
+          - strong [ref=e100]: Operator → External channel adapters
+          - generic [ref=e101]: submit prompt
+        - button "Process 2 Browser dashboard → Dashboard websocket topic/control plane send session message" [ref=e102] [cursor=pointer]:
+          - img "Process" [ref=e104]
+          - generic [ref=e107]: "2"
+          - strong [ref=e108]: Browser dashboard → Dashboard websocket topic/control plane
+          - generic [ref=e109]: send session message
+        - button "Process 3 Dashboard websocket topic/control plane → Unified Pipeline delegate web message" [ref=e110] [cursor=pointer]:
+          - img "Process" [ref=e112]
+          - generic [ref=e115]: "3"
+          - strong [ref=e116]: Dashboard websocket topic/control plane → Unified Pipeline
+          - generic [ref=e117]: delegate web message
+        - button "Process 4 External channel adapters → Unified Pipeline call pipeline" [ref=e118] [cursor=pointer]:
+          - img "Process" [ref=e120]
+          - generic [ref=e123]: "4"
+          - strong [ref=e124]: External channel adapters → Unified Pipeline
+          - generic [ref=e125]: call pipeline
+        - button "Data store 5 Unified Pipeline → SQLite store resolve session and persist user turn" [ref=e126] [cursor=pointer]:
+          - img "Data store" [ref=e128]
+          - generic [ref=e131]: "5"
+          - strong [ref=e132]: Unified Pipeline → SQLite store
+          - generic [ref=e133]: resolve session and persist user turn
+        - button "Return 6 SQLite store → Unified Pipeline return session scope" [ref=e134] [cursor=pointer]:
+          - img "Return" [ref=e136]
+          - generic [ref=e139]: "6"
+          - strong [ref=e140]: SQLite store → Unified Pipeline
+          - generic [ref=e141]: return session scope
+        - button "Process 7 Unified Pipeline → Memory system retrieve context" [ref=e142] [cursor=pointer]:
+          - img "Process" [ref=e144]
+          - generic [ref=e147]: "7"
+          - strong [ref=e148]: Unified Pipeline → Memory system
+          - generic [ref=e149]: retrieve context
+        - button "Return 8 Memory system → Unified Pipeline return relevant context" [ref=e150] [cursor=pointer]:
+          - img "Return" [ref=e152]
+          - generic [ref=e155]: "8"
+          - strong [ref=e156]: Memory system → Unified Pipeline
+          - generic [ref=e157]: return relevant context
+        - button "Process 9 Unified Pipeline → MCP system execute eligible tools" [ref=e158] [cursor=pointer]:
+          - img "Process" [ref=e160]
+          - generic [ref=e163]: "9"
+          - strong [ref=e164]: Unified Pipeline → MCP system
+          - generic [ref=e165]: execute eligible tools
+        - button "Return 10 MCP system → Unified Pipeline return tool evidence" [ref=e166] [cursor=pointer]:
+          - img "Return" [ref=e168]
+          - generic [ref=e171]: "10"
+          - strong [ref=e172]: MCP system → Unified Pipeline
+          - generic [ref=e173]: return tool evidence
+        - button "Process 11 Unified Pipeline → LLM service and model router run inference" [ref=e174] [cursor=pointer]:
+          - img "Process" [ref=e176]
+          - generic [ref=e179]: "11"
+          - strong [ref=e180]: Unified Pipeline → LLM service and model router
+          - generic [ref=e181]: run inference
+        - button "Return 12 LLM service and model router → Unified Pipeline return model output" [ref=e182] [cursor=pointer]:
+          - img "Return" [ref=e184]
+          - generic [ref=e187]: "12"
+          - strong [ref=e188]: LLM service and model router → Unified Pipeline
+          - generic [ref=e189]: return model output
+        - button "Data store 13 Unified Pipeline → SQLite store persist assistant response and diagnostics" [ref=e190] [cursor=pointer]:
+          - img "Data store" [ref=e192]
+          - generic [ref=e195]: "13"
+          - strong [ref=e196]: Unified Pipeline → SQLite store
+          - generic [ref=e197]: persist assistant response and diagnostics
+        - button "Return 14 SQLite store → Unified Pipeline return persistence proof" [ref=e198] [cursor=pointer]:
+          - img "Return" [ref=e200]
+          - generic [ref=e203]: "14"
+          - strong [ref=e204]: SQLite store → Unified Pipeline
+          - generic [ref=e205]: return persistence proof
+        - button "Return 15 Unified Pipeline → Dashboard websocket topic/control plane return web pipeline outcome" [ref=e206] [cursor=pointer]:
+          - img "Return" [ref=e208]
+          - generic [ref=e211]: "15"
+          - strong [ref=e212]: Unified Pipeline → Dashboard websocket topic/control plane
+          - generic [ref=e213]: return web pipeline outcome
+        - button "Return 16 Dashboard websocket topic/control plane → Browser dashboard deliver web session response" [ref=e214] [cursor=pointer]:
+          - img "Return" [ref=e216]
+          - generic [ref=e219]: "16"
+          - strong [ref=e220]: Dashboard websocket topic/control plane → Browser dashboard
+          - generic [ref=e221]: deliver web session response
+        - button "Return 17 Unified Pipeline → External channel adapters return pipeline outcome" [ref=e222] [cursor=pointer]:
+          - img "Return" [ref=e224]
+          - generic [ref=e227]: "17"
+          - strong [ref=e228]: Unified Pipeline → External channel adapters
+          - generic [ref=e229]: return pipeline outcome
+        - button "Return 18 External channel adapters → Operator deliver final response" [ref=e230] [cursor=pointer]:
+          - img "Return" [ref=e232]
+          - generic [ref=e235]: "18"
+          - strong [ref=e236]: External channel adapters → Operator
+          - generic [ref=e237]: deliver final response
+  - complementary [ref=e238]:
+    - button "Details" [ref=e239] [cursor=pointer]
