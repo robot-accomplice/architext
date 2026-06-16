@@ -82,6 +82,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "architext-cli"
+version = "0.0.0"
+dependencies = [
+ "architext-core",
+ "serde_json",
+ "tempfile",
+]
+
+[[package]]
 name = "architext-core"
 version = "0.0.0"
 dependencies = [

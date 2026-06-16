@@ -1,0 +1,16 @@
+[package]
+name = "architext-cli"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "architext"
+path = "src/main.rs"
+
+[dependencies]
+architext-core = { path = "../architext-core" }
+serde_json = { version = "1" }
+
+[dev-dependencies]
+tempfile = "3"
