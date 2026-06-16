@@ -1,0 +1,9 @@
+{
+  "document": { "notes": [] },
+  "note": {
+    "id": "n1",
+    "target": { "kind": "node", "id": "node-1" },
+    "text": "A note",
+    "updatedAt": "2024-01-01T00:00:00Z"
+  }
+}

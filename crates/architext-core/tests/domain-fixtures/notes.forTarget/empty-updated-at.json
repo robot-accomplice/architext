@@ -1,0 +1,8 @@
+{
+  "notes": [
+    { "id": "n1", "target": { "kind": "node", "id": "x" }, "text": "No date" },
+    { "id": "n2", "target": { "kind": "node", "id": "x" }, "text": "Has date", "updatedAt": "2024-01-01T00:00:00Z" }
+  ],
+  "kind": "node",
+  "id": "x"
+}
