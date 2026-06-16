@@ -783,6 +783,9 @@ pub fn plan_diagram(input: &PlanDiagramInput) -> Plan {
 // ---------------------------------------------------------------------------
 
 fn route_data_to_json(route: &crate::route_edges::types::RouteData) -> Value {
+    // Field order must match JS `planDiagram.js` route object insertion order:
+    // d, labelX, labelY, bends, samples, points, then all extra fields (from the
+    // router), then sampleBounds, style (added last in JS, after the router output).
     let mut obj = serde_json::json!({
         "d": route.d,
         "labelX": route.label_x,
@@ -790,14 +793,16 @@ fn route_data_to_json(route: &crate::route_edges::types::RouteData) -> Value {
         "bends": route.bends,
         "samples": route.samples,
         "points": route.points,
-        "style": route.style,
-        "sampleBounds": route.sample_bounds,
     });
-    // Merge extra fields (qualityCosts, warnings, startSide, endSide, etc.)
+    // Merge extra fields (qualityCosts, warnings, startSide, endSide, etc.) BEFORE
+    // sampleBounds and style — matching JS insertion order.
     if let Some(obj_map) = obj.as_object_mut() {
         for (k, v) in &route.extra {
             obj_map.insert(k.clone(), v.clone());
         }
+        // Add sampleBounds and style AFTER extra fields (JS order: last).
+        obj_map.insert("sampleBounds".to_string(), serde_json::to_value(&route.sample_bounds).unwrap_or(serde_json::Value::Null));
+        obj_map.insert("style".to_string(), serde_json::Value::String(route.style.clone()));
     }
     obj
 }

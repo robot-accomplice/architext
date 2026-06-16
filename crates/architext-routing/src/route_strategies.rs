@@ -611,6 +611,8 @@ pub fn fixed_preferred_orthogonal_candidate<F: RouteCandidateFactory, E: Endpoin
             .unwrap_or(start_anchor)
             .clone();
         let length_cost = compute_length_cost(&samples);
+        let point_count_cost = points.len() as f64 * ROUTE_COST_WEIGHTS.point_count;
+        let bend_cost = bend_count(&points) as f64 * ROUTE_COST_WEIGHTS.bend;
         return Some(with_quality_costs(
             RouteCandidate {
                 d: path_to_svg(&points),
@@ -623,8 +625,8 @@ pub fn fixed_preferred_orthogonal_candidate<F: RouteCandidateFactory, E: Endpoin
             },
             QualityCosts {
                 length_cost,
-                point_count_cost: raw_points.len() as f64 * ROUTE_COST_WEIGHTS.point_count,
-                bend_cost: bend_count(&raw_points) as f64 * ROUTE_COST_WEIGHTS.bend,
+                point_count_cost,
+                bend_cost,
                 ..QualityCosts::default()
             },
         ));
@@ -673,6 +675,8 @@ pub fn fixed_preferred_orthogonal_candidate<F: RouteCandidateFactory, E: Endpoin
             .unwrap_or(start_anchor)
             .clone();
         let length_cost = compute_length_cost(&samples);
+        let point_count_cost = points.len() as f64 * ROUTE_COST_WEIGHTS.point_count;
+        let bend_cost = bend_count(&points) as f64 * ROUTE_COST_WEIGHTS.bend;
         return Some(with_quality_costs(
             RouteCandidate {
                 d: path_to_svg(&points),
@@ -685,8 +689,8 @@ pub fn fixed_preferred_orthogonal_candidate<F: RouteCandidateFactory, E: Endpoin
             },
             QualityCosts {
                 length_cost,
-                point_count_cost: raw_points.len() as f64 * ROUTE_COST_WEIGHTS.point_count,
-                bend_cost: bend_count(&raw_points) as f64 * ROUTE_COST_WEIGHTS.bend,
+                point_count_cost,
+                bend_cost,
                 ..QualityCosts::default()
             },
         ));
@@ -717,6 +721,8 @@ pub fn fixed_preferred_orthogonal_candidate<F: RouteCandidateFactory, E: Endpoin
         .unwrap_or(start_anchor)
         .clone();
     let length_cost = compute_length_cost(&samples);
+    let point_count_cost = points.len() as f64 * ROUTE_COST_WEIGHTS.point_count;
+    let bend_cost = bend_count(&points) as f64 * ROUTE_COST_WEIGHTS.bend;
     Some(with_quality_costs(
         RouteCandidate {
             d: path_to_svg(&points),
@@ -729,8 +735,8 @@ pub fn fixed_preferred_orthogonal_candidate<F: RouteCandidateFactory, E: Endpoin
         },
         QualityCosts {
             length_cost,
-            point_count_cost: raw_points.len() as f64 * ROUTE_COST_WEIGHTS.point_count,
-            bend_cost: bend_count(&raw_points) as f64 * ROUTE_COST_WEIGHTS.bend,
+            point_count_cost,
+            bend_cost,
             ..QualityCosts::default()
         },
     ))
