@@ -33,7 +33,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 const jsEntry = path.join(repoRoot, "tools", "architext-adopt.mjs");
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
