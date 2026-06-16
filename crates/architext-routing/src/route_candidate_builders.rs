@@ -145,20 +145,25 @@ impl RouteQualityFn for NoopQuality {
 /// centre-to-centre direction. Each backtracking unit contributes
 /// `|distance| * ROUTE_COST_WEIGHTS.monotonicBacktrack`.
 fn monotonic_backtrack_cost(points: &[Point], from_rect: &Rect, to_rect: &Rect) -> f64 {
+    // JS Math.sign returns 0 for 0; f64::signum returns 1 for +0. Use js_sign to match JS exactly.
+    #[inline]
+    fn js_sign(v: f64) -> f64 {
+        if v > 0.0 { 1.0 } else if v < 0.0 { -1.0 } else { 0.0 }
+    }
     let from_center = rect_center(from_rect);
     let to_center = rect_center(to_rect);
-    let x_direction = f64::signum(to_center.x - from_center.x);
-    let y_direction = f64::signum(to_center.y - from_center.y);
+    let x_direction = js_sign(to_center.x - from_center.x);
+    let y_direction = js_sign(to_center.y - from_center.y);
     let mut cost = 0.0_f64;
     for index in 0..points.len().saturating_sub(1) {
         let start = &points[index];
         let end = &points[index + 1];
         let dx = end.x - start.x;
         let dy = end.y - start.y;
-        if x_direction != 0.0 && f64::signum(dx) == -x_direction {
+        if x_direction != 0.0 && js_sign(dx) == -x_direction {
             cost += f64::abs(dx) * ROUTE_COST_WEIGHTS.monotonic_backtrack;
         }
-        if y_direction != 0.0 && f64::signum(dy) == -y_direction {
+        if y_direction != 0.0 && js_sign(dy) == -y_direction {
             cost += f64::abs(dy) * ROUTE_COST_WEIGHTS.monotonic_backtrack;
         }
     }

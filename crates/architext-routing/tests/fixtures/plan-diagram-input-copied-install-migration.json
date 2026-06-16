@@ -1,0 +1,155 @@
+{
+  "view": {
+    "lanes": [
+      {
+        "id": "users",
+        "nodeIds": [
+          "maintainer",
+          "llm-agent"
+        ]
+      },
+      {
+        "id": "cli",
+        "nodeIds": [
+          "architext-cli",
+          "cli-adapters",
+          "lifecycle-domain",
+          "architecture-model-domain",
+          "schema-validator"
+        ]
+      },
+      {
+        "id": "package",
+        "nodeIds": [
+          "viewer-runtime",
+          "viewer-adapters",
+          "viewer-presentation",
+          "diagram-planner",
+          "routing-engine",
+          "package-schemas",
+          "package-artifacts"
+        ]
+      },
+      {
+        "id": "target",
+        "nodeIds": [
+          "target-repository",
+          "target-data-files",
+          "static-dist"
+        ]
+      }
+    ]
+  },
+  "relationships": [
+    {
+      "id": "detect-copied-files",
+      "from": "architext-cli",
+      "to": "target-repository",
+      "label": "1. detectCopiedInstall",
+      "relationshipType": "flow",
+      "stepId": "detect-copied-files",
+      "flowId": "copied-install-migration",
+      "kind": null,
+      "returnOf": null,
+      "outcome": null,
+      "displayIndex": 1,
+      "preferredStartSide": null,
+      "preferredEndSide": null
+    },
+    {
+      "id": "preserve-data",
+      "from": "architext-cli",
+      "to": "target-data-files",
+      "label": "2. preserveArchitectureData",
+      "relationshipType": "flow",
+      "stepId": "preserve-data",
+      "flowId": "copied-install-migration",
+      "kind": null,
+      "returnOf": null,
+      "outcome": null,
+      "displayIndex": 2,
+      "preferredStartSide": null,
+      "preferredEndSide": null
+    },
+    {
+      "id": "rewrite-instructions",
+      "from": "architext-cli",
+      "to": "target-repository",
+      "label": "3. replaceArchitextInstructionSection",
+      "relationshipType": "flow",
+      "stepId": "rewrite-instructions",
+      "flowId": "copied-install-migration",
+      "kind": null,
+      "returnOf": null,
+      "outcome": null,
+      "displayIndex": 3,
+      "preferredStartSide": null,
+      "preferredEndSide": null
+    },
+    {
+      "id": "remove-copied-files",
+      "from": "architext-cli",
+      "to": "target-repository",
+      "label": "4. removePackageOwnedFiles",
+      "relationshipType": "flow",
+      "stepId": "remove-copied-files",
+      "flowId": "copied-install-migration",
+      "kind": null,
+      "returnOf": null,
+      "outcome": null,
+      "displayIndex": 4,
+      "preferredStartSide": null,
+      "preferredEndSide": null
+    },
+    {
+      "id": "validate-migration",
+      "from": "architext-cli",
+      "to": "schema-validator",
+      "label": "5. validateMigratedData",
+      "relationshipType": "flow",
+      "stepId": "validate-migration",
+      "flowId": "copied-install-migration",
+      "kind": null,
+      "returnOf": null,
+      "outcome": null,
+      "displayIndex": 5,
+      "preferredStartSide": null,
+      "preferredEndSide": null
+    }
+  ],
+  "visibleNodeIds": [
+    "maintainer",
+    "llm-agent",
+    "architext-cli",
+    "cli-adapters",
+    "lifecycle-domain",
+    "architecture-model-domain",
+    "schema-validator",
+    "viewer-runtime",
+    "viewer-adapters",
+    "viewer-presentation",
+    "diagram-planner",
+    "routing-engine",
+    "package-schemas",
+    "package-artifacts",
+    "target-repository",
+    "target-data-files",
+    "static-dist"
+  ],
+  "nodeWidth": 136,
+  "nodeHeight": 54,
+  "laneWidth": 210,
+  "rowGap": 102,
+  "marginX": 180,
+  "marginY": 104,
+  "minCanvasWidth": 0,
+  "minCanvasHeight": 340,
+  "canvasExtraWidth": 132,
+  "canvasExtraHeight": 88,
+  "extraNodeRects": [],
+  "extraLaneIndexByNode": [],
+  "extraRowIndexByNode": [],
+  "scoreEdgeProximity": false,
+  "style": "orthogonal",
+  "diagnostics": false
+}

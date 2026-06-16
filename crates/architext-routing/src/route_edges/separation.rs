@@ -766,10 +766,13 @@ pub fn separate_close_parallel_routes<R: RerouteCallback>(
                         continue;
                     }
                     // Filter: must not collide with non-endpoint nodes.
+                    // visible_node_ids must use node IDs (from node_rects), NOT route/edge IDs.
+                    // JS passes input.visibleNodeIds which is the list of diagram node IDs.
                     {
                         let simple_rel = Relationship { from: rel.from.as_str(), to: rel.to.as_str() };
+                        let visible_node_ids: Vec<String> = node_rects.keys().cloned().collect();
                         let simple_input = RouteInput {
-                            visible_node_ids: &route_by_id.iter().map(|(id, _)| id.clone()).collect::<Vec<_>>(),
+                            visible_node_ids: &visible_node_ids,
                             node_rects,
                         };
                         if route_collides_with_non_endpoints(candidate, &simple_rel, &simple_input) {

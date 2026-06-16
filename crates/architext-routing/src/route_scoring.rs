@@ -382,12 +382,18 @@ fn surface_mismatch_count(
 }
 
 /// Port of JS private `semanticSurfaceMismatchCount`.
+///
+/// JS passes `semanticSides` as `{source: Set, target: Set}` where the sets may
+/// contain multiple allowed sides (expanded when the primary corridor is blocked).
+/// `sideMatches` in JS uses `Set.has()` for membership when the expected value is a
+/// Set. We mirror this by accepting `&SurfaceOptions` (which carries `IndexSet`s) and
+/// using `SideExpected::Many` for the membership check.
 #[allow(dead_code)]
 fn semantic_surface_mismatch_count(
     start_side: Option<&str>,
     end_side: Option<&str>,
     style: &str,
-    semantic_sides: &SidePair,
+    semantic_sides: &SurfaceOptions,
     relationship: Option<&IntentRelationship>,
 ) -> i64 {
     // Guard: relationship must have at least one semantic field
@@ -402,7 +408,31 @@ fn semantic_surface_mismatch_count(
     if !has_semantic {
         return 0;
     }
-    surface_mismatch_count(start_side, end_side, style, semantic_sides, relationship)
+    if style == "spline" {
+        return 0;
+    }
+    if let Some(rel) = relationship {
+        if rel.preferred_start_side.is_some() || rel.preferred_end_side.is_some() {
+            return 0;
+        }
+        if let Some(kind) = &rel.kind {
+            if !facing_surface_roles().contains(kind.as_str()) {
+                return 0;
+            }
+        }
+    }
+    let mut count = 0i64;
+    if let Some(side) = start_side {
+        if !side_matches(side, SideExpected::Many(&semantic_sides.source)) {
+            count += 1;
+        }
+    }
+    if let Some(side) = end_side {
+        if !side_matches(side, SideExpected::Many(&semantic_sides.target)) {
+            count += 1;
+        }
+    }
+    count
 }
 
 /// Port of JS private `blockedPrimarySurfaceUseCount`.
@@ -716,10 +746,7 @@ pub fn score_route_candidates(candidates: &mut [RouteCandidate], ctx: &ScoreCont
             candidate.start_side.as_deref(),
             candidate.end_side.as_deref(),
             &candidate.style,
-            &SidePair {
-                source: semantic_sides.source.iter().next().map(|s| s.as_str()).unwrap_or("").to_owned(),
-                target: semantic_sides.target.iter().next().map(|s| s.as_str()).unwrap_or("").to_owned(),
-            },
+            &semantic_sides,
             ctx.relationship,
         );
         candidate.surface_direction_mismatch_count = surface_direction_mismatch_count(
