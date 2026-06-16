@@ -18,3 +18,4 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 architext-routing = { path = "../architext-routing" }
 indexmap = { version = "2", features = ["serde"] }
+regex = { version = "1", features = ["std"] }

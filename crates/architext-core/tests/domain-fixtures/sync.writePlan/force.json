@@ -1,0 +1,5 @@
+{
+  "installing": false, "migrating": false, "doctorRepairAvailable": false,
+  "syncChoices": { "instructionFiles": [], "manageGitignore": false, "manageRootScripts": false, "applyDoctorRepairs": false },
+  "options": { "force": true }
+}

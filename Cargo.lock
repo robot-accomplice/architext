@@ -38,6 +38,7 @@ dependencies = [
  "architext-routing",
  "indexmap",
  "jsonschema",
+ "regex",
  "serde",
  "serde_json",
 ]

@@ -1,0 +1,6 @@
+{
+  "files": [
+    { "path": "CLAUDE.md", "text": "- Short line\n- Keep functions small and focused on single responsibility\n" }
+  ],
+  "existingRules": []
+}

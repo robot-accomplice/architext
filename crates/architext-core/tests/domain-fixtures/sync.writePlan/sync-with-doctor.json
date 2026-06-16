@@ -1,0 +1,5 @@
+{
+  "installing": false, "migrating": false, "doctorRepairAvailable": true,
+  "syncChoices": { "instructionFiles": ["CLAUDE.md"], "manageGitignore": true, "manageRootScripts": false, "applyDoctorRepairs": true },
+  "options": {}
+}

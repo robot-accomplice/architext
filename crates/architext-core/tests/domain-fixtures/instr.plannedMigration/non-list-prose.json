@@ -1,0 +1,6 @@
+{
+  "files": [
+    { "path": "AGENTS.md", "text": "# Instructions\n\nThis is a long paragraph that explains the project. It has multiple sentences and is not a simple rule list.\n\n- Rule one that is long enough to be extracted properly\n- Another rule here that is also long enough to keep\n" }
+  ],
+  "existingRules": []
+}

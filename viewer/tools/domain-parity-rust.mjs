@@ -40,6 +40,13 @@ const {
 } = await import(`${repoRoot}/src/domain/architecture-model/release-history.mjs`);
 const { releaseItems } =
   await import(`${repoRoot}/src/domain/architecture-model/release-scopes.mjs`);
+const { plannedInstructionRuleMigration, upsertRulePointer } =
+  await import(`${repoRoot}/src/domain/lifecycle/instruction-rule-migration.mjs`);
+const {
+  normalizeSyncInstructionFiles, defaultSyncChoices, rememberedSyncChoices,
+  applyExplicitSyncOptions, syncOperation, syncWritePlan, shouldValidateSync,
+  persistedSyncChoices, syncMetadataPatch,
+} = await import(`${repoRoot}/src/adapters/cli/sync-plan.mjs`);
 
 // ─── JS dispatcher ───────────────────────────────────────────────────────────
 function runJs(op, fixture) {
@@ -97,6 +104,30 @@ function runJs(op, fixture) {
       return saveReleasePlanDraft(fixture);
     case "release.approve":
       return approveReleasePlan(fixture);
+    // ── instruction rules ───────────────────────────────────────────────
+    case "instr.plannedMigration":
+      return plannedInstructionRuleMigration({ files: fixture.files, existingRules: fixture.existingRules });
+    case "instr.upsertRulePointer":
+      return upsertRulePointer(fixture.text);
+    // ── sync plan ────────────────────────────────────────────────────────
+    case "sync.normalizeInstructionFiles":
+      return normalizeSyncInstructionFiles(fixture.files, fixture.validInstructionFiles);
+    case "sync.defaultChoices":
+      return defaultSyncChoices({ rootPackageExists: fixture.rootPackageExists, instructionFiles: fixture.instructionFiles });
+    case "sync.rememberedChoices":
+      return rememberedSyncChoices(fixture.metadata, { instructionFiles: fixture.instructionFiles });
+    case "sync.applyExplicitOptions":
+      return applyExplicitSyncOptions(fixture.choices, fixture.options, { instructionFiles: fixture.instructionFiles });
+    case "sync.operation":
+      return syncOperation({ installing: fixture.installing, migrating: fixture.migrating });
+    case "sync.writePlan":
+      return syncWritePlan({ installing: fixture.installing, migrating: fixture.migrating, doctorRepairAvailable: fixture.doctorRepairAvailable, syncChoices: fixture.syncChoices, options: fixture.options });
+    case "sync.shouldValidate":
+      return shouldValidateSync({ options: fixture.options, installing: fixture.installing });
+    case "sync.persistedChoices":
+      return persistedSyncChoices(fixture);
+    case "sync.metadataPatch":
+      return syncMetadataPatch(fixture);
     default:
       throw new Error(`Unknown op: ${op}`);
   }
