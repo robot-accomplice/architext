@@ -2,11 +2,11 @@
   "id": "v1-7-0",
   "version": "1.7.0",
   "name": "Architext 1.7.0 Rust Rewrite (Zero Node)",
-  "status": "planned",
+  "status": "implementing",
   "posture": "on-track",
   "targetWindow": "After 1.6.3 (1.6.x exhausted)",
-  "lastUpdated": "2026-06-15T12:00:00.000Z",
-  "updateSource": "2026-06-15 zero-Node mandate: viewer rewrite (Rust→WASM UI) pulled into 1.7.0; build-time Node residual revoked; npm demoted to opt-in bridge.",
+  "lastUpdated": "2026-06-16T00:00:00.000Z",
+  "updateSource": "2026-06-16: routing engine port COMPLETE — full JS engine ported to Rust (architext-routing), differential gate 16/16 byte-identical (native+wasm). js_compat determinism + harness done. Cutover (wire serve/viewer, delete JS) tracked under serve-layer-port + viewer-rust-wasm-rewrite, sign-off-gated.",
   "summary": "Reimplement the entire product in Rust with NO Node dependency surviving — runtime AND build. One Rust routing core (native + WASM); validation, serve layer, and lifecycle ported; AND the React/Vite viewer rewritten as a Rust → WASM UI (Leptos/Dioxus/Yew, no JSX/Vite/npm) reusing the engine directly and implementing the Stitch design language. Native installers are the Node-free default; npm is an opt-in compatibility bridge only. Minor release: JSON data contract and CLI surface preserved exactly, proven by a byte-parity migration gate and a validation conformance corpus. Migration tooling (parity harness, ajv conformance, JS tests) is transitional and deleted with the JS code.",
   "scope": {
     "required": [
@@ -28,31 +28,39 @@
         "id": "routing-engine-rust-port",
         "title": "Port the routing/planning engine to a Rust crate (native + WASM)",
         "kind": "architecture",
-        "status": "planned",
+        "status": "complete",
         "summary": "Translate viewer/src/routing/* into the architext-routing crate (cdylib + rlib), compiled native for serve-side precompute and to WASM for the browser worker. Internally cohesive port done as one unit; uses IndexMap/IndexSet where JS insertion order drives tiebreaks. Realizes the engine-in-scope decision that distinguishes this from the original Go-only plan.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-15T00:00:00.000Z",
         "workstreamId": "engine-port",
         "priority": "high",
-        "dependsOn": []
+        "dependsOn": [],
+        "evidence": [
+          "pr-119",
+          "pr-134",
+          "pr-137"
+        ]
       },
       {
         "id": "js-compat-determinism",
         "title": "js_compat determinism primitives (V8 parity)",
         "kind": "architecture",
-        "status": "planned",
+        "status": "complete",
         "summary": "Reproduce the exact JS semantics the router depends on: js_number_to_string (V8 Number::toString via ryu-js), js_round (half toward +inf), UTF-16 string sort + locale compare, and libm-backed hypot on every target so native and WASM floats are identical. The narrow surface where byte-parity lives.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-15T00:00:00.000Z",
         "workstreamId": "engine-port",
         "priority": "high",
-        "dependsOn": []
+        "dependsOn": [],
+        "evidence": [
+          "pr-119"
+        ]
       },
       {
         "id": "differential-parity-harness",
         "title": "Differential fingerprint harness (JS vs Rust-WASM)",
         "kind": "test",
-        "status": "planned",
+        "status": "complete",
         "summary": "Extend route-parity-fingerprint to run both engines over every corpus flow x view and diff sha256 fingerprints (points + d + label positions), driving the port flow-by-flow RED to GREEN. The one-time migration gate proving the Rust engine matches the outgoing JS engine byte-for-byte.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-15T00:00:00.000Z",
@@ -61,6 +69,9 @@
         "dependsOn": [
           "routing-engine-rust-port",
           "js-compat-determinism"
+        ],
+        "evidence": [
+          "pr-137"
         ]
       },
       {
@@ -180,16 +191,19 @@
       "id": "engine-port",
       "name": "Routing engine to Rust (native + WASM)",
       "owner": "maintainer",
-      "status": "planned",
+      "status": "complete",
       "posture": "on-track",
       "summary": "Port the routing/planning engine to one Rust crate compiled native + WASM, proven byte-identical to the outgoing JS engine via the differential fingerprint harness. The highest-risk, highest-value workstream; everything else is gated behind it.",
-      "progress": 0,
+      "progress": 100,
       "itemIds": [
         "routing-engine-rust-port",
         "js-compat-determinism",
         "differential-parity-harness"
       ],
-      "evidence": []
+      "evidence": [
+        "pr-119",
+        "pr-137"
+      ]
     },
     {
       "id": "validation-parity",
@@ -254,14 +268,15 @@
     {
       "id": "engine-parity-proven",
       "label": "Rust engine byte-identical to JS across the corpus",
-      "status": "planned",
+      "status": "complete",
       "targetWindow": "1.7.0 phase 1",
       "order": 1,
       "itemIds": [
         "routing-engine-rust-port",
         "js-compat-determinism",
         "differential-parity-harness"
-      ]
+      ],
+      "date": "2026-06-16"
     },
     {
       "id": "validator-parity-proven",
@@ -314,6 +329,27 @@
       "id": "spec-rust-rewrite",
       "label": "Design spec: Rust backend rewrite (2026-06-15)",
       "href": "docs/superpowers/specs/2026-06-15-rust-backend-rewrite-design.md",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-119",
+      "label": "PR #119 Phase 1A foundation",
+      "href": "https://github.com/robot-accomplice/architext/pull/119",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-134",
+      "label": "PR #134 planDiagram + wire plan()",
+      "href": "https://github.com/robot-accomplice/architext/pull/134",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-137",
+      "label": "PR #137 16/16 byte-parity",
+      "href": "https://github.com/robot-accomplice/architext/pull/137",
       "kind": "document",
       "status": "complete"
     }
