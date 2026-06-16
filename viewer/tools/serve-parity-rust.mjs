@@ -59,21 +59,19 @@ const { repoTreeApiRequest } = await import(
 // Build the Rust binary (or verify it exists)
 // ---------------------------------------------------------------------------
 const binPath = path.join(repoRoot, "target/release/architext-serve");
-const { existsSync } = await import("node:fs");
-if (!existsSync(binPath)) {
-  console.log("[setup] building architext-serve (release)...");
-  try {
-    execFileSync(
-      "cargo",
-      ["build", "-p", "architext-serve", "--release", "--quiet"],
-      { cwd: repoRoot, stdio: "inherit", timeout: 600_000 }
-    );
-  } catch (err) {
-    console.error("FATAL: cargo build failed:", err.message);
-    process.exit(1);
-  }
-} else {
-  console.log("[setup] using pre-built binary at", binPath);
+// ALWAYS rebuild — never trust a pre-existing binary. A stale binary silently
+// masks divergences (it once hid a truncate-vs-round mtime bug behind a passing
+// gate). cargo's incremental build is cheap when nothing changed.
+console.log("[setup] building architext-serve (release)...");
+try {
+  execFileSync(
+    "cargo",
+    ["build", "-p", "architext-serve", "--release", "--quiet"],
+    { cwd: repoRoot, stdio: "inherit", timeout: 600_000 }
+  );
+} catch (err) {
+  console.error("FATAL: cargo build failed:", err.message);
+  process.exit(1);
 }
 
 // ---------------------------------------------------------------------------
@@ -472,9 +470,9 @@ record(
             treeNote = `${jf.path} size mismatch: JS=${jf.size} RUST=${rf.size}`;
             break;
           }
-          // mtime: both should be integer ms; normalise both to integer
-          // JS: Math.round(mtimeMs). Rust: duration_since_epoch.as_millis().
-          // Both are integer ms; verify both are integers and close.
+          // mtime: JS = Math.round(mtimeMs); Rust = js_round(secs*1000 + nsec/1e6).
+          // These must match EXACTLY (same file, same rounding). No tolerance —
+          // a tolerance would mask the truncate-vs-round 1ms divergence.
           const jMtime = jf.mtime;
           const rMtime = rf.mtime;
           if (jMtime !== null && rMtime !== null) {
@@ -483,12 +481,9 @@ record(
               treeNote = `${jf.path} mtime is not integer: RUST=${rMtime}`;
               break;
             }
-            // Allow ±1000ms tolerance (filesystem clock resolution differences
-            // between stat() in JS vs Rust are sub-ms, but we tolerate 1s to be
-            // safe against any clock conversion edge cases).
-            if (Math.abs(jMtime - rMtime) > 1000) {
+            if (jMtime !== rMtime) {
               treePass = false;
-              treeNote = `${jf.path} mtime mismatch: JS=${jMtime} RUST=${rMtime} (diff=${Math.abs(jMtime-rMtime)}ms)`;
+              treeNote = `${jf.path} mtime mismatch: JS=${jMtime} RUST=${rMtime} (diff=${jMtime-rMtime}ms)`;
               break;
             }
           }

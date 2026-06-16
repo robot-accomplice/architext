@@ -1,4 +1,4 @@
-import { closeSync, openSync } from "node:fs";
+import { appendFileSync, closeSync, openSync } from "node:fs";
 import { mkdir, readdir, rm, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -8,6 +8,20 @@ import { isLoopbackHost } from "./command-line.mjs";
 import { readJson, writeJson } from "./runtime.mjs";
 
 const serveRuntimeDir = path.join(tmpdir(), "architext-serve");
+
+// Env-gated RCA instrumentation for the serve lifecycle (Rule 14). When
+// ARCHITEXT_SERVE_DIAG is set, every lifecycle step records {pid, step, ms,
+// detail} as JSONL so an intermittent --refresh/--background failure can be
+// root-caused from recorded state instead of guessed. Zero cost when unset.
+const serveDiagPath = process.env.ARCHITEXT_SERVE_DIAG || "";
+function serveDiag(step, detail = {}) {
+  if (!serveDiagPath) return;
+  try {
+    appendFileSync(serveDiagPath, `${JSON.stringify({ ts: Date.now(), pid: process.pid, step, ...detail })}\n`);
+  } catch {
+    // Diagnostics must never break the lifecycle.
+  }
+}
 const serveLockStaleMs = 30000;
 const serveStateLockTimeoutMs = 5000;
 const serveStateLockPollMs = 50;
@@ -15,6 +29,7 @@ const serveStartupTimeoutMs = 15000;
 const serveStartupPollMs = 100;
 const browserOpenSettleMs = 100;
 const serveStopTimeoutMs = 3000;
+const serveStopKillTimeoutMs = 5000;
 const serveStopPollMs = 100;
 
 function serveUrl(options) {
@@ -154,11 +169,22 @@ async function waitForUrl(url, timeoutMs = serveStartupTimeoutMs) {
 
 async function waitForChildServeState(target, pid, timeoutMs = serveStartupTimeoutMs) {
   const started = Date.now();
+  let lastState = null;
+  let lastReachable = null;
   while (Date.now() - started < timeoutMs) {
     const state = await readServeState(target);
-    if (state?.pid === pid && await urlReachable(state.url)) return state;
+    lastState = state;
+    if (state?.pid === pid) lastReachable = await urlReachable(state.url);
+    if (state?.pid === pid && lastReachable) return state;
     await new Promise((resolve) => setTimeout(resolve, serveStartupPollMs));
   }
+  serveDiag("waitForChildServeState.timeout", {
+    ms: Date.now() - started,
+    expectedPid: pid,
+    sawPid: lastState?.pid ?? null,
+    sawUrl: lastState?.url ?? null,
+    lastReachable
+  });
   return null;
 }
 
@@ -301,9 +327,12 @@ async function serveBackground({ target, options, cliEntryPath }) {
       closeSync(logFd);
     }
 
+    serveDiag("serveBackground.spawned", { childPid: child.pid, requestedPort: options.port, logPath });
     const childState = await waitForChildServeState(target, child.pid);
     if (!childState) {
-      if (pidExists(child.pid)) {
+      const childAlive = pidExists(child.pid);
+      serveDiag("serveBackground.unreachable", { childPid: child.pid, childAlive, requestedPort: options.port });
+      if (childAlive) {
         try {
           process.kill(child.pid, "SIGTERM");
         } catch {
@@ -313,6 +342,7 @@ async function serveBackground({ target, options, cliEntryPath }) {
       const url = serveUrl(options);
       throw new Error(`Architext background serve did not become reachable at ${url}. Check ${logPath}`);
     }
+    serveDiag("serveBackground.reachable", { childPid: child.pid, boundPort: childState.port });
 
     await writeServeState(target, {
       target: path.resolve(target),
@@ -347,20 +377,45 @@ async function serveStatus(target, options) {
   if (state.logPath) console.log(`Logs: ${state.logPath}`);
 }
 
-async function stopState(state) {
-  if (pidExists(state.pid)) {
-    process.kill(state.pid, "SIGTERM");
-    const stopped = await new Promise((resolve) => {
-      const started = Date.now();
-      const poll = () => {
-        if (!pidExists(state.pid)) resolve(true);
-        else if (Date.now() - started > serveStopTimeoutMs) resolve(false);
-        else setTimeout(poll, serveStopPollMs);
-      };
-      poll();
-    });
-    if (!stopped) console.error(`Architext server ${state.pid} did not stop after SIGTERM`);
+async function waitForPidGone(pid, timeoutMs, pollMs = serveStopPollMs) {
+  const started = Date.now();
+  while (pidExists(pid)) {
+    if (Date.now() - started > timeoutMs) return false;
+    await new Promise((resolve) => setTimeout(resolve, pollMs));
   }
+  return true;
+}
+
+// Stop a serve child and DO NOT return until it is genuinely gone. SIGTERM is
+// tried first for a clean exit, but under heavy load a child may not be
+// scheduled to act on SIGTERM within the stop window (and the caller's own poll
+// loop is itself starved, so a fixed wall-clock wait can expire while the child
+// is merely descheduled). The serve refresh re-spawns on this child's EXACT
+// port, so a surviving old process means the re-spawn collides on a held port —
+// observed in CI as "serve refresh ... did not become reachable". SIGKILL is
+// delivered by the kernel regardless of scheduling, so we escalate and confirm
+// death before returning, guaranteeing the port is free for the re-spawn.
+export async function stopServeProcess(pid, { termTimeoutMs = serveStopTimeoutMs, killTimeoutMs = serveStopKillTimeoutMs, pollMs = serveStopPollMs } = {}) {
+  if (!pidExists(pid)) return true;
+  try {
+    process.kill(pid, "SIGTERM");
+  } catch {
+    return true; // Exited between the liveness check and the signal.
+  }
+  if (await waitForPidGone(pid, termTimeoutMs, pollMs)) return true;
+  try {
+    process.kill(pid, "SIGKILL");
+  } catch {
+    return true; // Exited after the SIGTERM wait but before the escalation.
+  }
+  return waitForPidGone(pid, killTimeoutMs, pollMs);
+}
+
+async function stopState(state) {
+  const started = Date.now();
+  const stopped = await stopServeProcess(state.pid);
+  serveDiag("stopState.signalled", { targetPid: state.pid, stopped, ms: Date.now() - started, port: state.port });
+  if (!stopped) console.error(`Architext server ${state.pid} did not stop after SIGTERM and SIGKILL`);
   await removeServeStateById(state.id);
 }
 
@@ -407,8 +462,11 @@ async function restartServe(target, options, cliEntryPath, refreshTarget) {
   }
   if (!refreshTarget) throw new Error("Serve refresh is not configured.");
   console.log(`Syncing Architext target before restart: ${state.target}`);
+  serveDiag("restart.refresh.start", { id: state.id, oldPid: state.pid, port: state.port });
   await refreshTarget(state.target);
+  serveDiag("restart.refresh.done", { id: state.id });
   await stopState(state);
+  serveDiag("restart.respawn.start", { id: state.id, port: state.port });
   await serveBackground({
     target: state.target,
     options: {

@@ -163,16 +163,21 @@ fn stat_entries(target: &Path, paths: &[String]) -> Vec<Value> {
         .collect()
 }
 
-/// Return the file's mtime as integer milliseconds (matching JS `Math.round(info.mtimeMs)`).
+/// Return the file's mtime as integer milliseconds, byte-matching Node's
+/// `Math.round(info.mtimeMs)`. Node derives `mtimeMs = secs*1000 + nsec/1e6`
+/// (a float, well within f64 precision since secs*1000 ≈ 1.7e12 ≪ 2^53) and
+/// `Math.round`s it. We reconstruct the SAME float and round it with the proven
+/// `js_round` (Math.round semantics, half toward +∞) — NOT `as_millis()`, which
+/// truncates and diverges by 1ms whenever the sub-ms fraction is ≥ 0.5 (real on
+/// nanosecond-precision filesystems like APFS).
 fn metadata_mtime_ms(meta: &std::fs::Metadata) -> i64 {
     use std::time::UNIX_EPOCH;
     meta.modified()
         .ok()
         .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
         .map(|d| {
-            // duration_since gives exact sub-millisecond precision; round to ms.
-            let ms = d.as_millis();
-            ms as i64
+            let mtime_ms = (d.as_secs() as f64) * 1000.0 + (d.subsec_nanos() as f64) / 1_000_000.0;
+            architext_routing::js_compat::js_round(mtime_ms) as i64
         })
         .unwrap_or(0)
 }
