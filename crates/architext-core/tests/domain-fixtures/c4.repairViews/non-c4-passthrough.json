@@ -1,0 +1,11 @@
+{
+  "views": [
+    {
+      "id": "v1",
+      "type": "system-map",
+      "name": "Map",
+      "lanes": [{ "id": "l1", "name": "L1", "nodeIds": ["n1"] }]
+    }
+  ],
+  "nodes": []
+}

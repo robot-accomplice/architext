@@ -1,0 +1,27 @@
+{
+  "view": {
+    "id": "v6",
+    "type": "c4-context",
+    "name": "Big",
+    "lanes": [
+      { "id": "l1", "name": "L1", "nodeIds": ["n0","n1","n2","n3","n4","n5","n6","n7","n8","n9","n10","n11","n12","n13","n14"] }
+    ]
+  },
+  "nodes": [
+    { "id": "n0", "type": "service" },
+    { "id": "n1", "type": "service" },
+    { "id": "n2", "type": "service" },
+    { "id": "n3", "type": "service" },
+    { "id": "n4", "type": "service" },
+    { "id": "n5", "type": "service" },
+    { "id": "n6", "type": "service" },
+    { "id": "n7", "type": "service" },
+    { "id": "n8", "type": "service" },
+    { "id": "n9", "type": "service" },
+    { "id": "n10", "type": "service" },
+    { "id": "n11", "type": "service" },
+    { "id": "n12", "type": "service" },
+    { "id": "n13", "type": "service" },
+    { "id": "n14", "type": "service" }
+  ]
+}
