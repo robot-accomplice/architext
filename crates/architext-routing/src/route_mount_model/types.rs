@@ -26,6 +26,9 @@ pub struct MountRect {
     pub rect: Rect,
     /// JS `rect.fixedPorts` — when true the optimiser must not re-home endpoints.
     pub fixed_ports: bool,
+    /// Per-side anchor overrides (e.g. diamond tips for `decision:*` nodes).
+    /// `None` → geometric midpoint. Mirrors JS `rect.sideAnchors`.
+    pub side_anchors: Option<crate::route_ports::SideAnchors>,
 }
 
 /// A relationship descriptor as seen by the mount model.

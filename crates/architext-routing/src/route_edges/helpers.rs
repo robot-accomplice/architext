@@ -11,7 +11,7 @@ use crate::route_geometry::{
     segment_intersects_rect,
 };
 use crate::route_labels::{with_readable_label, RouteForLabel};
-use crate::route_ports::{anchor_for, port_for};
+use crate::route_ports::{anchor_for, anchor_for_with_overrides, port_for, SideAnchors};
 use crate::route_rendering::{path_to_svg_with_hops, simplify_orthogonal_points, RouteRef};
 
 use super::types::{AxisAlignedSegment, Relationship, RouteData, RouteInput};
@@ -371,6 +371,65 @@ pub(super) fn build_ml_path(points: &[Point]) -> String {
         })
         .collect::<Vec<_>>()
         .join(" ")
+}
+
+// ---------------------------------------------------------------------------
+// recenteredEndpointPointsWithAnchors
+// ---------------------------------------------------------------------------
+
+/// Centering variant of `endpoint_offset_points` (rawOffset == 0) that honours
+/// `sideAnchors` on the node rect (e.g. diamond tips for `decision:*` nodes).
+///
+/// JS `recenteredEndpointPoints` → `endpointOffsetPoints(…, 0)` → `anchorFor(rect, side)`
+/// where `anchorFor` checks `rect.sideAnchors` first.  The Rust `endpoint_offset_points`
+/// takes a plain `&Rect` (no sideAnchors), so this variant accepts the overrides
+/// separately and calls `anchor_for_with_overrides` instead.
+pub fn recentered_endpoint_points_with_anchors(
+    points: &[Point],
+    endpoint_index: usize,
+    rect: &Rect,
+    side: &str,
+    side_anchors: Option<&SideAnchors>,
+) -> Vec<Point> {
+    let mut next: Vec<Point> = points.to_vec();
+    let ep_idx = if endpoint_index == 0 { 0 } else { next.len() - 1 };
+    let old_anchor = next[ep_idx].clone();
+    let anchor = anchor_for_with_overrides(rect, side, side_anchors);
+    next[ep_idx] = anchor.clone();
+    let adjacent_idx = if ep_idx == 0 { 1 } else { next.len() - 2 };
+
+    // 2-point case: insert port + elbow to keep orthogonality.
+    if next.len() == 2 {
+        let adjacent = next[adjacent_idx].clone();
+        let port = port_for(rect, side, 18.0, 0.0, false).port;
+        let elbow = if side == "left" || side == "right" {
+            Point { x: port.x, y: adjacent.y }
+        } else {
+            Point { x: adjacent.x, y: port.y }
+        };
+        return if ep_idx == 0 {
+            vec![anchor, port, elbow, adjacent]
+        } else {
+            vec![adjacent, elbow, port, anchor]
+        };
+    }
+
+    // Multi-point centering pass.
+    if next.len() > 2 {
+        let elbow_idx = if ep_idx == 0 { 2 } else { next.len() - 3 };
+        if side == "top" || side == "bottom" {
+            next[adjacent_idx].x = anchor.x;
+            if next.get(elbow_idx).map(|p| p.x) == Some(old_anchor.x) {
+                next[elbow_idx].x = anchor.x;
+            }
+        } else {
+            next[adjacent_idx].y = anchor.y;
+            if next.get(elbow_idx).map(|p| p.y) == Some(old_anchor.y) {
+                next[elbow_idx].y = anchor.y;
+            }
+        }
+    }
+    next
 }
 
 // ---------------------------------------------------------------------------

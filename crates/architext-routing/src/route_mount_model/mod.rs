@@ -94,7 +94,7 @@ mod tests {
     }
 
     fn mk_rect(x: f64, y: f64, w: f64, h: f64) -> MountRect {
-        MountRect { rect: Rect { x, y, width: w, height: h }, fixed_ports: false }
+        MountRect { rect: Rect { x, y, width: w, height: h }, fixed_ports: false, side_anchors: None }
     }
 
     fn mk_rel(id: &str, from: &str, to: &str) -> MountRelationship {
