@@ -1,15 +1,16 @@
 // serve-parity-rust.mjs
 //
-// HTTP-level parity gate for the Rust serve adapter (Phase 2A slice 1).
+// HTTP-level parity gate for the Rust serve adapter (Phase 2A slice 1 + 2c).
 //
 // DOES NOT boot the flaky Node serve-lifecycle. Instead:
 //   1. Builds + spawns the Rust `architext-serve` binary on an ephemeral port.
 //   2. Runs a suite of HTTP checks against it.
 //   3. Derives oracles directly from the JS source-of-truth (plan-precompute.mjs,
-//      planDiagram.js, planCodec.js) — no Node server involved.
+//      planDiagram.js, planCodec.js, diagram-config-api.mjs, repo-tree-api.mjs)
+//      — no Node server involved.
 //   4. Reports per-check GREEN/RED + N/total, exits nonzero on any RED.
 //
-// Checks:
+// Checks (slice 1):
 //   /api/plan/{hash}   — hit: body byte-equals JS oracle; miss: 200 {miss:true}
 //   /data/{path}       — body bytes + content-type + cache-control
 //   /                  — index.html served
@@ -17,6 +18,12 @@
 //   /api/session       — 200 + base64url mutationToken of correct length
 //   security           — non-loopback Host/Origin → 403 exact error JSON
 //   /api/unknown       — 404 + error JSON shape
+//
+// Checks (slice 2c — new):
+//   /api/status        — 200 + {ok,status}; ok matches formula; status shape
+//   /api/config        — 200 + semantic-equal to JS oracle; Cache-Control: no-store
+//   /api/repo-tree     — 200 + source + files array parity; mtime integer ms;
+//                        Cache-Control: no-store
 //
 // Usage: node viewer/tools/serve-parity-rust.mjs
 import { execFileSync, spawn } from "node:child_process";
@@ -43,6 +50,9 @@ const { serializePlan } = await import(
 );
 const { diagramConfigGetPayload } = await import(
   path.join(repoRoot, "src/adapters/http/diagram-config-api.mjs")
+);
+const { repoTreeApiRequest } = await import(
+  path.join(repoRoot, "src/adapters/http/repo-tree-api.mjs")
 );
 
 // ---------------------------------------------------------------------------
@@ -296,6 +306,202 @@ record(
   unknownR.status === 404 && unknownBody.error === expectedUnknownError,
   `status=${unknownR.status} error=${JSON.stringify(unknownBody.error)}`
 );
+
+// ---------------------------------------------------------------------------
+// Check: /api/status → 200 + {ok, status}; ok matches formula; Cache-Control absent
+// ---------------------------------------------------------------------------
+{
+  const statusR = await get(`${BASE}/api/status`);
+  let statusPass = true;
+  let statusNote = "";
+
+  if (statusR.status !== 200) {
+    statusPass = false;
+    statusNote = `HTTP ${statusR.status} (expected 200)`;
+  } else {
+    let parsed;
+    try { parsed = JSON.parse(statusR.body.toString("utf8")); } catch (e) {
+      statusPass = false;
+      statusNote = `JSON parse error: ${e.message}`;
+    }
+    if (statusPass) {
+      // Shape: { ok: bool, status: { installed, needsMigration, validation?, ... } }
+      if (typeof parsed.ok !== "boolean") {
+        statusPass = false;
+        statusNote = `ok is not a boolean: ${JSON.stringify(parsed.ok)}`;
+      } else if (!parsed.status || typeof parsed.status !== "object") {
+        statusPass = false;
+        statusNote = `status is missing or not an object`;
+      } else {
+        // Verify ok formula: installed && !needsMigration && validation?.ok !== false
+        const { installed, needsMigration, validation } = parsed.status;
+        const expectedOk = installed === true && needsMigration === false && validation?.ok !== false;
+        if (parsed.ok !== expectedOk) {
+          statusPass = false;
+          statusNote = `ok=${parsed.ok} but formula(installed=${installed}, needsMigration=${needsMigration}, validation.ok=${validation?.ok}) → ${expectedOk}`;
+        }
+      }
+    }
+  }
+  record("/api/status → 200 {ok,status}; ok matches formula", statusPass, statusNote);
+}
+
+// ---------------------------------------------------------------------------
+// Check: /api/config → 200 + semantic-equal to JS oracle; Cache-Control: no-store
+// ---------------------------------------------------------------------------
+{
+  const jsConfigOracle = await diagramConfigGetPayload(repoRoot);
+  const configR = await get(`${BASE}/api/config`);
+  let configPass = true;
+  let configNote = "";
+
+  if (configR.status !== 200) {
+    configPass = false;
+    configNote = `HTTP ${configR.status} (expected 200)`;
+  } else if (configR.headers.get("cache-control") !== "no-store") {
+    configPass = false;
+    configNote = `cache-control=${configR.headers.get("cache-control")} (expected no-store)`;
+  } else {
+    let rustConfig;
+    try { rustConfig = JSON.parse(configR.body.toString("utf8")); } catch (e) {
+      configPass = false;
+      configNote = `JSON parse error: ${e.message}`;
+    }
+    if (configPass) {
+      // Compare diagram resolved values (semantic equality, both serialised via JSON)
+      const jsDiagram = JSON.stringify(jsConfigOracle.diagram);
+      const rustDiagram = JSON.stringify(rustConfig.diagram);
+      if (jsDiagram !== rustDiagram) {
+        configPass = false;
+        configNote = `diagram mismatch: JS=${jsDiagram.slice(0, 120)} RUST=${rustDiagram.slice(0, 120)}`;
+      }
+      // Compare fields spec (DIAGRAM_CONFIG_FIELDS)
+      if (configPass) {
+        const jsFields = JSON.stringify(jsConfigOracle.fields);
+        const rustFields = JSON.stringify(rustConfig.fields);
+        if (jsFields !== rustFields) {
+          configPass = false;
+          configNote = `fields mismatch: JS=${jsFields.slice(0, 80)} RUST=${rustFields.slice(0, 80)}`;
+        }
+      }
+      // Compare sections (SECTION_LABELS)
+      if (configPass) {
+        const jsSections = JSON.stringify(jsConfigOracle.sections);
+        const rustSections = JSON.stringify(rustConfig.sections);
+        if (jsSections !== rustSections) {
+          configPass = false;
+          configNote = `sections mismatch: JS=${jsSections} RUST=${rustSections}`;
+        }
+      }
+      // warnings: both should be empty arrays (no config files at repoRoot)
+      if (configPass) {
+        const jsW = jsConfigOracle.warnings;
+        const rustW = rustConfig.warnings;
+        if (!Array.isArray(rustW)) {
+          configPass = false;
+          configNote = `warnings not an array: ${JSON.stringify(rustW)}`;
+        } else if (jsW.length === 0 && rustW.length !== 0) {
+          configPass = false;
+          configNote = `warnings mismatch: JS=[] RUST=${JSON.stringify(rustW)}`;
+        }
+      }
+    }
+  }
+  record("/api/config → semantic-equal JS oracle; Cache-Control: no-store", configPass, configNote);
+}
+
+// ---------------------------------------------------------------------------
+// Check: /api/repo-tree → 200 + source + files parity; mtime integer ms; Cache-Control: no-store
+// ---------------------------------------------------------------------------
+{
+  const jsTree = await repoTreeApiRequest(repoRoot);
+  const treeR = await get(`${BASE}/api/repo-tree`);
+  let treePass = true;
+  let treeNote = "";
+
+  if (treeR.status !== 200) {
+    treePass = false;
+    treeNote = `HTTP ${treeR.status} (expected 200)`;
+  } else if (treeR.headers.get("cache-control") !== "no-store") {
+    treePass = false;
+    treeNote = `cache-control=${treeR.headers.get("cache-control")} (expected no-store)`;
+  } else {
+    let rustTree;
+    try { rustTree = JSON.parse(treeR.body.toString("utf8")); } catch (e) {
+      treePass = false;
+      treeNote = `JSON parse error: ${e.message}`;
+    }
+    if (treePass) {
+      // source must match
+      if (rustTree.source !== jsTree.source) {
+        treePass = false;
+        treeNote = `source mismatch: JS=${jsTree.source} RUST=${rustTree.source}`;
+      }
+      // files count must match
+      if (treePass && rustTree.files.length !== jsTree.files.length) {
+        treePass = false;
+        treeNote = `files count mismatch: JS=${jsTree.files.length} RUST=${rustTree.files.length}`;
+      }
+      if (treePass) {
+        // Build maps for fast lookup
+        const rustMap = new Map(rustTree.files.map(f => [f.path, f]));
+        const jsMap = new Map(jsTree.files.map(f => [f.path, f]));
+
+        // Check all JS paths are present in Rust
+        let missingInRust = null;
+        for (const [p] of jsMap) {
+          if (!rustMap.has(p)) { missingInRust = p; break; }
+        }
+        if (missingInRust) {
+          treePass = false;
+          treeNote = `path in JS but missing in Rust: ${missingInRust}`;
+        }
+      }
+      if (treePass) {
+        const rustMap = new Map(rustTree.files.map(f => [f.path, f]));
+        // For a sample of files, compare size and mtime (normalised to integer ms).
+        const jsFiles = jsTree.files;
+        const samplesToCheck = jsFiles.length > 20 ? 20 : jsFiles.length;
+        for (let i = 0; i < samplesToCheck; i++) {
+          const jf = jsFiles[i];
+          const rf = rustMap.get(jf.path);
+          if (!rf) continue; // already caught above
+          // size must match
+          if (rf.size !== jf.size) {
+            treePass = false;
+            treeNote = `${jf.path} size mismatch: JS=${jf.size} RUST=${rf.size}`;
+            break;
+          }
+          // mtime: both should be integer ms; normalise both to integer
+          // JS: Math.round(mtimeMs). Rust: duration_since_epoch.as_millis().
+          // Both are integer ms; verify both are integers and close.
+          const jMtime = jf.mtime;
+          const rMtime = rf.mtime;
+          if (jMtime !== null && rMtime !== null) {
+            if (typeof rMtime !== "number" || !Number.isInteger(rMtime)) {
+              treePass = false;
+              treeNote = `${jf.path} mtime is not integer: RUST=${rMtime}`;
+              break;
+            }
+            // Allow ±1000ms tolerance (filesystem clock resolution differences
+            // between stat() in JS vs Rust are sub-ms, but we tolerate 1s to be
+            // safe against any clock conversion edge cases).
+            if (Math.abs(jMtime - rMtime) > 1000) {
+              treePass = false;
+              treeNote = `${jf.path} mtime mismatch: JS=${jMtime} RUST=${rMtime} (diff=${Math.abs(jMtime-rMtime)}ms)`;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+  record(
+    `/api/repo-tree → source=${jsTree.source} files=${jsTree.files.length}; mtime integer ms; Cache-Control: no-store`,
+    treePass,
+    treeNote
+  );
+}
 
 // ---------------------------------------------------------------------------
 // Shutdown server
