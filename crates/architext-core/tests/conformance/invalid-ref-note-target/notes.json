@@ -1,0 +1,12 @@
+{
+  "notes": [
+    {
+      "id": "note-1",
+      "target": {
+        "kind": "node",
+        "id": "ghost-node"
+      },
+      "text": "Bad target."
+    }
+  ]
+}

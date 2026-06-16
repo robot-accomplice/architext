@@ -1,0 +1,21 @@
+{
+  "decisions": [
+    {
+      "id": "dec-1",
+      "title": "Use REST",
+      "status": "accepted",
+      "summary": "Use REST for API.",
+      "context": "Need a simple protocol.",
+      "decision": "REST.",
+      "consequences": [],
+      "relatedNodes": [
+        "ghost-node"
+      ],
+      "relatedFlows": [
+        "flow-one"
+      ],
+      "date": "2026-01-01",
+      "deciders": []
+    }
+  ]
+}

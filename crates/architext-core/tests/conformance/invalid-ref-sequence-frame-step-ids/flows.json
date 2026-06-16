@@ -1,0 +1,39 @@
+{
+  "flows": [
+    {
+      "id": "flow-one",
+      "name": "Flow One",
+      "status": "planned",
+      "summary": "A test flow.",
+      "trigger": "User request",
+      "actors": [
+        "node-a"
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "from": "node-a",
+          "to": "node-b",
+          "action": "call",
+          "summary": "Call.",
+          "data": []
+        }
+      ],
+      "sequenceFrames": [
+        {
+          "id": "frame-1",
+          "label": "Bad frame",
+          "stepIds": [
+            "s1",
+            "ghost-step"
+          ]
+        }
+      ],
+      "guarantees": [],
+      "failureBehavior": [],
+      "observability": [],
+      "verification": [],
+      "knownGaps": []
+    }
+  ]
+}
