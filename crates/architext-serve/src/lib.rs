@@ -8,12 +8,15 @@
 //!   - GET /api/status    (collect_status → {ok, status})
 //!   - GET /api/config    (diagram config payload + field spec)
 //!   - GET /api/repo-tree (git ls-files or filesystem walk)
-//!   - POST /api/rules    (mutation: update/delete/move/move-before)
-//!   - POST /api/notes    (mutation: update/delete + manifest bootstrap)
+//!   - POST /api/rules        (mutation: update/delete/move/move-before)
+//!   - POST /api/notes        (mutation: update/delete + manifest bootstrap)
+//!   - POST /api/config       (mutation: write diagram config layer)
+//!   - POST /api/release-plans (mutation: preview/approve/save-draft)
+//!   - POST /api/doctor       (mutation: dry-run or apply doctor repairs)
+//!   - POST /api/sync-repair  (mutation: non-interactive sync+validate)
 //!   - Unknown /api/* → 404
 //!
-//! Extension points for later slices: doctor, sync-repair,
-//! release-plans, data-events (SSE).
+//! Extension points for later slices: data-events (SSE).
 
 pub mod content_type;
 pub mod farm_state;
@@ -93,6 +96,10 @@ pub fn build_router(state: AppState, farm: Farm) -> Router {
         // API routes — POST (mutations; guarded by security middleware)
         .route("/api/rules", post(handlers::rules::post_rules))
         .route("/api/notes", post(handlers::notes::post_notes))
+        .route("/api/config", post(handlers::config_write::post_config))
+        .route("/api/release-plans", post(handlers::release_plans::post_release_plans))
+        .route("/api/doctor", post(handlers::doctor::post_doctor))
+        .route("/api/sync-repair", post(handlers::sync_repair::post_sync_repair))
         // Unknown /api/* fallback (must come after specific /api/* routes)
         .fallback(handlers::api_fallback::api_or_not_found_fallback)
         // Data files

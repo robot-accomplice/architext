@@ -152,6 +152,48 @@ pub fn section_labels_json() -> serde_json::Value {
     })
 }
 
+// ─── diffDiagramConfigFromDefaults ───────────────────────────────────────────
+
+/// Port of JS `diffDiagramConfigFromDefaults(config)`.
+///
+/// Reduces a full (or partial) config to only the fields that differ from
+/// the built-in defaults. Drops empty sections. Returns `{}` when nothing
+/// differs. Used when persisting config from the UI so the saved `config.json`
+/// contains only real user overrides.
+pub fn diff_diagram_config_from_defaults(config: &serde_json::Value) -> serde_json::Value {
+    let fields_spec = diagram_config_fields_json();
+    let mut overrides = serde_json::Map::new();
+
+    if config.is_null() || !config.is_object() {
+        return serde_json::Value::Object(overrides);
+    }
+
+    for (section, section_spec) in fields_spec.as_object().unwrap() {
+        let provided = match config.get(section) {
+            Some(v) if v.is_object() => v,
+            _ => continue,
+        };
+        let mut section_overrides = serde_json::Map::new();
+        for (field, spec) in section_spec.as_object().unwrap() {
+            let value = match provided.get(field) {
+                Some(v) if v.is_number() => v,
+                _ => continue,
+            };
+            let default = spec["default"].as_f64().unwrap_or(0.0);
+            let v = match value.as_f64() {
+                Some(n) if n.is_finite() && n != default => n,
+                _ => continue,
+            };
+            section_overrides.insert(field.clone(), serde_json::json!(v));
+        }
+        if !section_overrides.is_empty() {
+            overrides.insert(section.clone(), serde_json::Value::Object(section_overrides));
+        }
+    }
+
+    serde_json::Value::Object(overrides)
+}
+
 // ─── Full JSON-layer resolver ─────────────────────────────────────────────────
 
 /// Port of JS `normalizeDiagramConfigLayer(raw, { source })`.
