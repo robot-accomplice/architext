@@ -1,0 +1,26 @@
+{
+  "currentReleaseId": "ghost-release",
+  "releases": [
+    {
+      "id": "v0-1-0",
+      "version": "0.1.0",
+      "name": "Test Release",
+      "status": "implementing",
+      "posture": "on-track",
+      "targetDate": "2026-03-01",
+      "lastUpdated": "2026-01-01T12:00:00.000Z",
+      "summary": "A test release.",
+      "counts": {
+        "features": 1,
+        "bugFixes": 0,
+        "workstreams": 1,
+        "blockers": 0,
+        "complete": 0,
+        "inProgress": 1,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v0-1-0.json"
+    }
+  ]
+}

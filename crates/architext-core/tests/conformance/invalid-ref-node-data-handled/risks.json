@@ -1,0 +1,19 @@
+{
+  "risks": [
+    {
+      "id": "risk-1",
+      "title": "Data loss",
+      "summary": "Risk of data loss.",
+      "likelihood": "low",
+      "impact": "high",
+      "mitigation": "Backups.",
+      "status": "mitigated",
+      "relatedNodes": [
+        "node-a"
+      ],
+      "relatedFlows": [
+        "flow-one"
+      ]
+    }
+  ]
+}

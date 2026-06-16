@@ -1,0 +1,69 @@
+{
+  "id": "v0-1-0",
+  "version": "0.1.0",
+  "name": "Test Release",
+  "status": "implementing",
+  "posture": "on-track",
+  "summary": "A test release.",
+  "targetDate": "2026-03-01",
+  "lastUpdated": "2026-01-01T12:00:00.000Z",
+  "updateSource": "test",
+  "scope": {
+    "required": [
+      {
+        "id": "item-a",
+        "title": "Feature A",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "A feature."
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "ws-a",
+      "name": "Work A",
+      "owner": "team",
+      "status": "in-progress",
+      "posture": "on-track",
+      "summary": "Workstream A.",
+      "progress": 50,
+      "itemIds": [
+        "item-a"
+      ],
+      "evidence": []
+    }
+  ],
+  "blockers": [
+    {
+      "id": "blk-1",
+      "description": "Blocker on done item.",
+      "itemIds": [
+        "item-a"
+      ]
+    }
+  ],
+  "milestones": [
+    {
+      "id": "ms-a",
+      "title": "Milestone A",
+      "date": "2026-02-01",
+      "itemIds": [
+        "item-a"
+      ]
+    }
+  ],
+  "dependencies": [
+    {
+      "id": "dep-a",
+      "from": "item-a",
+      "to": "item-a",
+      "description": "Self-dep for testing."
+    }
+  ],
+  "evidence": []
+}

@@ -1,0 +1,26 @@
+{
+  "views": [
+    {
+      "id": "main-view",
+      "name": "Main View",
+      "type": "system-map",
+      "summary": "Main system map.",
+      "lanes": [
+        {
+          "id": "lane-1",
+          "name": "Lane 1",
+          "nodeIds": [
+            "node-a"
+          ]
+        },
+        {
+          "id": "lane-2",
+          "name": "Lane 2",
+          "nodeIds": [
+            "node-b"
+          ]
+        }
+      ]
+    }
+  ]
+}

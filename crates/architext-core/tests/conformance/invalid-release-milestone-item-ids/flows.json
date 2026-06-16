@@ -1,0 +1,50 @@
+{
+  "flows": [
+    {
+      "id": "flow-one",
+      "name": "Flow One",
+      "status": "planned",
+      "summary": "A test flow.",
+      "trigger": "User request",
+      "actors": [
+        "node-a"
+      ],
+      "steps": [
+        {
+          "id": "s1",
+          "from": "node-a",
+          "to": "node-b",
+          "action": "call",
+          "summary": "A calls B.",
+          "data": [
+            "data-public"
+          ]
+        },
+        {
+          "id": "s2",
+          "from": "node-b",
+          "to": "node-a",
+          "action": "respond",
+          "summary": "B responds.",
+          "returnOf": "s1",
+          "data": []
+        }
+      ],
+      "sequenceFrames": [
+        {
+          "id": "frame-1",
+          "label": "Main loop",
+          "stepIds": [
+            "s1",
+            "s2"
+          ]
+        }
+      ],
+      "guarantees": [],
+      "failureBehavior": [],
+      "observability": [],
+      "verification": [],
+      "knownGaps": []
+    }
+  ]
+}

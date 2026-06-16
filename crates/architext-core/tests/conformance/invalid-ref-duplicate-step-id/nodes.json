@@ -1,0 +1,62 @@
+{
+  "nodes": [
+    {
+      "id": "node-a",
+      "type": "service",
+      "name": "Service A",
+      "summary": "A test service.",
+      "responsibilities": [
+        "Handle requests"
+      ],
+      "owner": "team",
+      "sourcePaths": [
+        "src/"
+      ],
+      "runtime": "node",
+      "interfaces": [
+        "HTTP"
+      ],
+      "dependencies": [],
+      "dataHandled": [
+        "data-public"
+      ],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [
+        "flow-one"
+      ],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": []
+    },
+    {
+      "id": "node-b",
+      "type": "service",
+      "name": "Service B",
+      "summary": "Another service.",
+      "responsibilities": [
+        "Store data"
+      ],
+      "owner": "team",
+      "sourcePaths": [
+        "src/"
+      ],
+      "runtime": "node",
+      "interfaces": [
+        "HTTP"
+      ],
+      "dependencies": [
+        "node-a"
+      ],
+      "dataHandled": [
+        "data-public"
+      ],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": []
+    }
+  ]
+}
