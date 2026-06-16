@@ -27,8 +27,9 @@ use crate::route_constants::{rect_center, RECIPROCAL_PARALLEL_OFFSET};
 use crate::route_edges::{
     aligned_fixed_port_route, alternate_middle_dogleg_routes,
     collapse_aligned_opposing_surface_route, endpoint_side, endpoint_spread_offset,
-    offset_endpoint_route, offset_orthogonal_polyline, recentered_endpoint_route,
-    recentered_without_new_shared_segments, route_collides_with_non_endpoints,
+    offset_endpoint_route, offset_orthogonal_polyline,
+    recentered_endpoint_route_with_anchors, recentered_without_new_shared_segments,
+    route_collides_with_non_endpoints,
     route_with_best_cleanup_candidate, route_with_points,
     side_endpoint_key, side_needs_post_selection_centering, RelationshipC1, Relationship,
     RouteData, RouteInput, RouteInputC1,
@@ -545,7 +546,13 @@ pub fn recenter_singleton_side_endpoints(
                 if side_needs_post_selection_centering(start_side)
                     && endpoint_counts.get(&key).copied().unwrap_or(0) == 1
                 {
-                    let next_route = recentered_endpoint_route(&current, 0, &mr.rect, start_side);
+                    let next_route = recentered_endpoint_route_with_anchors(
+                        &current,
+                        0,
+                        &mr.rect,
+                        start_side,
+                        mr.side_anchors.as_ref(),
+                    );
                     let other_routes: Vec<RouteData> = route_by_id
                         .iter()
                         .filter(|(id, _)| *id != relationship_id)
@@ -571,7 +578,13 @@ pub fn recenter_singleton_side_endpoints(
                     && endpoint_counts.get(&key).copied().unwrap_or(0) == 1
                 {
                     let last_idx = points.len() - 1;
-                    let next_route = recentered_endpoint_route(&current, last_idx, &mr.rect, end_side);
+                    let next_route = recentered_endpoint_route_with_anchors(
+                        &current,
+                        last_idx,
+                        &mr.rect,
+                        end_side,
+                        mr.side_anchors.as_ref(),
+                    );
                     let other_routes: Vec<RouteData> = route_by_id
                         .iter()
                         .filter(|(id, _)| *id != relationship_id)
@@ -1062,7 +1075,7 @@ mod tests {
     use indexmap::IndexMap;
 
     fn mk_rect(x: f64, y: f64, w: f64, h: f64) -> MountRect {
-        MountRect { rect: Rect { x, y, width: w, height: h }, fixed_ports: false }
+        MountRect { rect: Rect { x, y, width: w, height: h }, fixed_ports: false, side_anchors: None }
     }
 
     fn mk_rel(id: &str, from: &str, to: &str) -> MountRelationship {

@@ -27,7 +27,8 @@ pub use types::{AxisAlignedSegment, Relationship, RouteData, RouteInput};
 pub use helpers::{
     axis_aligned_segments, endpoint_offset_points, endpoint_side, endpoint_spread_offset,
     final_shared_segment_stats, offset_endpoint_route, offset_orthogonal_polyline,
-    render_orthogonal_route, rendered_axis_aligned_segments, route_collides_with_non_endpoints,
+    recentered_endpoint_points_with_anchors, render_orthogonal_route,
+    rendered_axis_aligned_segments, route_collides_with_non_endpoints,
     route_has_endpoint_traversal, route_with_points, shared_segment_length, side_endpoint_key,
     side_needs_post_selection_centering, SharedSegmentStats,
 };
@@ -37,8 +38,9 @@ pub use construction::{
     aligned_facing_endpoint_route, aligned_fixed_port_route,
     collapse_aligned_opposing_surface_route, endpoint_stub_route, enforce_endpoint_stubs,
     non_endpoint_node_collision_count, recentered_endpoint_points, recentered_endpoint_route,
-    recentered_without_new_shared_segments, route_with_best_cleanup_candidate,
-    route_with_endpoint_stubs, route_with_fewest_shared_segments, shared_segment_count,
+    recentered_endpoint_route_with_anchors, recentered_without_new_shared_segments,
+    route_with_best_cleanup_candidate, route_with_endpoint_stubs,
+    route_with_fewest_shared_segments, shared_segment_count,
     EndpointSideUsage, PlanRelationship, RelationshipC1, RouteInputC1,
 };
 
@@ -1216,5 +1218,73 @@ mod tests {
         assert_eq!(slots.len(), 2);
         assert!((slots[0] - -18.333_333_333_333_332).abs() < 1e-9);
         assert!((slots[1] - 18.333_333_333_333_336).abs() < 1e-9);
+    }
+
+    // -----------------------------------------------------------------------
+    // recenteredEndpointRouteWithAnchors
+    // -----------------------------------------------------------------------
+
+    #[test]
+    fn recentered_endpoint_route_with_anchors_uses_side_anchor() {
+        // TDD: decision-diamond node has sideAnchors.right = {x:484.87, y:607}.
+        // The rect geometric right edge midpoint is at y = 588 + 38/2 = 607 (same y here,
+        // but different x: rect.x+rect.width = 477 ≠ 484.87).
+        // Route starts at the geometric right midpoint (x=477, y=607).
+        // After recenteredEndpointRouteWithAnchors the start must move to the sideAnchor (x=484.87).
+        use crate::route_ports::SideAnchors;
+
+        let r = Rect { x: 439.0, y: 588.0, width: 38.0, height: 38.0 };
+        // A multi-point route starting at geometric right midpoint
+        let route = orthogonal_route(vec![
+            pt(477.0, 607.0),   // geometric right midpoint (rect.x+rect.width, rect.y+rect.height/2)
+            pt(495.0, 607.0),   // port stub
+            pt(792.0, 607.0),   // horizontal run
+            pt(792.0, 300.0),   // vertical run
+        ]);
+        let anchors = SideAnchors {
+            right: Some(pt(484.87, 607.0)),
+            ..Default::default()
+        };
+
+        let without = recentered_endpoint_route(&route, 0, &r, "right");
+        let with_anchors = recentered_endpoint_route_with_anchors(&route, 0, &r, "right", Some(&anchors));
+
+        // Without anchors: endpoint stays at geometric midpoint x (no sideAnchors)
+        // The rect.x+rect.width = 477, so endpointSide sees x=477 as "right" → anchor y stays
+        // (the exact move depends on geometry, but endpoint must still be on right edge)
+        // With anchors: endpoint moves to sideAnchor x=484.87 (the diamond tip)
+        assert_eq!(
+            with_anchors.points[0].x,
+            484.87,
+            "sideAnchor x used instead of geometric right edge"
+        );
+        assert_eq!(
+            with_anchors.points[0].y,
+            607.0,
+            "sideAnchor y preserved"
+        );
+        // Without anchors the start differs (uses geometric right x=477)
+        assert_ne!(
+            without.points[0].x,
+            with_anchors.points[0].x,
+            "without anchors gives different x than with anchors"
+        );
+    }
+
+    #[test]
+    fn recentered_endpoint_route_with_anchors_none_matches_plain() {
+        // When side_anchors is None, result must be identical to recentered_endpoint_route.
+        // Node: confirms no regression on non-diamond nodes.
+        let r = Rect { x: 100.0, y: 200.0, width: 60.0, height: 80.0 };
+        let route = orthogonal_route(vec![
+            pt(100.0, 240.0),
+            pt(82.0, 240.0),
+            pt(82.0, 300.0),
+            pt(200.0, 300.0),
+        ]);
+        let plain = recentered_endpoint_route(&route, 0, &r, "left");
+        let with_none = recentered_endpoint_route_with_anchors(&route, 0, &r, "left", None);
+        assert_eq!(plain.points, with_none.points, "None anchors must match plain recentered route");
+        assert_eq!(plain.d, with_none.d);
     }
 }

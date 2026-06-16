@@ -79,7 +79,7 @@
 
 use crate::js_compat::js_hypot;
 use crate::model::{Point, Rect};
-use crate::route_candidate_ports::{candidate_ports, port_pairs_for, side_pairs_for, CandidateScope, EndpointOffsets};
+use crate::route_candidate_ports::{candidate_ports_with_anchors, port_pairs_for, side_pairs_for, CandidateScope, EndpointOffsets};
 use crate::route_constants::{ROUTE_COST_WEIGHTS, ROUTE_SPACING, SPLINE_CURVE_VARIANTS};
 use crate::route_geometry::{bend_count, line_samples, rect_distance};
 use crate::route_ports::{PORT_STUB, SIDES};
@@ -314,6 +314,11 @@ pub struct SelectRouteCandidateInput<'a, F: RouteCandidateFactory, E: EndpointSi
     pub to_lane_index: Option<i64>,
     pub from_row_index: Option<i64>,
     pub to_row_index: Option<i64>,
+    /// Optional per-side anchor overrides for the from-node (decision-diamond nodes).
+    /// JS stores sideAnchors on the rect object; Rust threads them separately.
+    pub from_side_anchors: Option<&'a crate::route_ports::SideAnchors>,
+    /// Optional per-side anchor overrides for the to-node.
+    pub to_side_anchors: Option<&'a crate::route_ports::SideAnchors>,
 }
 
 // ---------------------------------------------------------------------------
@@ -552,6 +557,8 @@ pub fn fixed_preferred_orthogonal_candidate<F: RouteCandidateFactory, E: Endpoin
     endpoint_side_usage: Option<&E>,
     from_id: &str,
     to_id: &str,
+    from_side_anchors: Option<&crate::route_ports::SideAnchors>,
+    to_side_anchors: Option<&crate::route_ports::SideAnchors>,
 ) -> Option<RouteCandidate> {
     // JS: if (!fromRect.fixedPorts || !relationship.preferredStartSide) return null;
     if !from_rect_fixed_ports || relationship.preferred_start_side.is_none() {
@@ -577,7 +584,7 @@ pub fn fixed_preferred_orthogonal_candidate<F: RouteCandidateFactory, E: Endpoin
         return None;
     }
 
-    let ports = candidate_ports(from_rect, to_rect, preferred_start_side, end_side, endpoint_offsets, CandidateScope::Cheap);
+    let ports = candidate_ports_with_anchors(from_rect, to_rect, preferred_start_side, end_side, endpoint_offsets, CandidateScope::Cheap, from_side_anchors, to_side_anchors);
     let port_pair = port_pairs_for(&ports).into_iter().next()?;
     let [start_port_result, end_port_result] = port_pair;
     let start_anchor = &start_port_result.anchor;
@@ -794,6 +801,8 @@ where
         to_lane_index,
         from_row_index,
         to_row_index,
+        from_side_anchors,
+        to_side_anchors,
     } = input;
 
     let warn_candidate = |c: RouteCandidate| warning_route_candidate(c, style, from_rect, to_rect);
@@ -831,6 +840,8 @@ where
                 to_lane_index,
                 from_row_index,
                 to_row_index,
+                from_side_anchors,
+                to_side_anchors,
             })
         } else {
             None // JS: `undefined`
@@ -891,7 +902,7 @@ where
     if style == "spline" {
         let mut spline_candidates: Vec<RouteCandidate> = Vec::new();
         for [start_side, end_side] in &fallback_side_pairs {
-            let ports = candidate_ports(from_rect, to_rect, start_side, end_side, &endpoint_offsets, CandidateScope::Cheap);
+            let ports = candidate_ports_with_anchors(from_rect, to_rect, start_side, end_side, &endpoint_offsets, CandidateScope::Cheap, from_side_anchors, to_side_anchors);
             for port_pair in port_pairs_for(&ports) {
                 let [start_port_result, end_port_result] = port_pair;
                 let start = &start_port_result.anchor;
@@ -929,7 +940,7 @@ where
     if style == "straight" {
         let mut straight_candidates: Vec<RouteCandidate> = Vec::new();
         for [start_side, end_side] in &fallback_side_pairs {
-            let ports = candidate_ports(from_rect, to_rect, start_side, end_side, &endpoint_offsets, CandidateScope::Cheap);
+            let ports = candidate_ports_with_anchors(from_rect, to_rect, start_side, end_side, &endpoint_offsets, CandidateScope::Cheap, from_side_anchors, to_side_anchors);
             for port_pair in port_pairs_for(&ports) {
                 let [start_port_result, end_port_result] = port_pair;
                 if let Some(c) = route_candidates.straight_candidate(
@@ -954,6 +965,7 @@ where
         &relationship, from_rect, relationship.from_rect_fixed_ports, to_rect,
         &endpoint_offsets, route_candidates, used_routes,
         endpoint_side_usage, from_id, to_id,
+        from_side_anchors, to_side_anchors,
     );
     if let Some(mut fpr) = fixed_preferred_route {
         score_route_candidates(std::slice::from_mut(&mut fpr), &scoring_ctx);
@@ -979,7 +991,7 @@ where
     };
 
     for [start_side, end_side] in &fallback_side_pairs {
-        let ports = candidate_ports(from_rect, to_rect, start_side, end_side, &endpoint_offsets, CandidateScope::Cheap);
+        let ports = candidate_ports_with_anchors(from_rect, to_rect, start_side, end_side, &endpoint_offsets, CandidateScope::Cheap, from_side_anchors, to_side_anchors);
         for port_pair in port_pairs_for(&ports) {
             let [start_port_result, end_port_result] = port_pair;
             if pair_index == 0 {
@@ -1051,7 +1063,7 @@ where
     if !has_clean_cheap || !has_clean_semantic_cheap {
         // Grid escalation
         for [start_side, end_side] in &fallback_side_pairs {
-            let ports = candidate_ports(from_rect, to_rect, start_side, end_side, &endpoint_offsets, CandidateScope::Grid);
+            let ports = candidate_ports_with_anchors(from_rect, to_rect, start_side, end_side, &endpoint_offsets, CandidateScope::Grid, from_side_anchors, to_side_anchors);
             for port_pair in port_pairs_for(&ports) {
                 let [start_port_result, end_port_result] = port_pair;
                 if let Some(c) = route_candidates.grid_route(
@@ -1105,7 +1117,7 @@ where
                     continue;
                 }
             }
-            let ports = candidate_ports(from_rect, to_rect, side, side, &endpoint_offsets, CandidateScope::Cheap);
+            let ports = candidate_ports_with_anchors(from_rect, to_rect, side, side, &endpoint_offsets, CandidateScope::Cheap, from_side_anchors, to_side_anchors);
             for port_pair in port_pairs_for(&ports) {
                 let [start_port_result, end_port_result] = port_pair;
                 if let Some(c) = route_candidates.perimeter_route(
@@ -1154,6 +1166,7 @@ where
                 &relationship, from_rect, relationship.from_rect_fixed_ports, to_rect,
                 &endpoint_offsets, route_candidates, used_routes,
                 endpoint_side_usage, from_id, to_id,
+                from_side_anchors, to_side_anchors,
             )
         })
         .or_else(relaxed_preference_route)
@@ -1413,6 +1426,7 @@ mod tests {
         let result = fixed_preferred_orthogonal_candidate(
             &rel, &from, false, &to, &EndpointOffsets::default(),
             &NeverFactory, &[], Some(&AlwaysAvailable), "A", "B",
+            None, None,
         );
         assert!(result.is_none());
     }
@@ -1430,6 +1444,7 @@ mod tests {
         let result = fixed_preferred_orthogonal_candidate(
             &rel, &from, true, &to, &EndpointOffsets::default(),
             &NeverFactory, &[], Some(&AlwaysAvailable), "A", "B",
+            None, None,
         );
         assert!(result.is_none());
     }
@@ -1449,6 +1464,7 @@ mod tests {
         let result = fixed_preferred_orthogonal_candidate(
             &rel, &from, true, &to, &EndpointOffsets::default(),
             &NeverFactory, &[], Some(&AlwaysAvailable), "A", "B",
+            None, None,
         );
         // Should produce a candidate (NeverFactory.directPortCandidate returns None,
         // so the L-shape geometry branch is taken)

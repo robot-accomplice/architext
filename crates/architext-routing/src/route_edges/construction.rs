@@ -12,11 +12,12 @@ use indexmap::IndexMap;
 
 use crate::model::{Point, Rect};
 use crate::route_constants::rect_center;
-use crate::route_ports::{surface_capacity, PORT_STUB};
+use crate::route_ports::{surface_capacity, SideAnchors, PORT_STUB};
 
 use super::helpers::{
     axis_aligned_segments, endpoint_offset_points, endpoint_side, offset_endpoint_route,
-    route_collides_with_non_endpoints, route_with_points, shared_segment_length, side_endpoint_key,
+    recentered_endpoint_points_with_anchors, route_collides_with_non_endpoints, route_with_points,
+    shared_segment_length, side_endpoint_key,
 };
 use super::types::{Relationship, RouteData, RouteInput};
 
@@ -99,6 +100,29 @@ pub fn recentered_endpoint_route(
     side: &str,
 ) -> RouteData {
     let points = recentered_endpoint_points(&route.points, endpoint_index, rect, side);
+    let controls = if route.style == "spline" { route.controls.clone() } else { None };
+    route_with_points(route, points, controls)
+}
+
+/// Centering variant that honours `sideAnchors` (e.g. diamond tips).
+///
+/// Use this instead of `recentered_endpoint_route` when the node rect has
+/// `sideAnchors` (JS `rect.sideAnchors`) — the JS `anchorFor(rect, side)`
+/// checks `rect.sideAnchors?.[side]` first; this variant mirrors that.
+pub fn recentered_endpoint_route_with_anchors(
+    route: &RouteData,
+    endpoint_index: usize,
+    rect: &Rect,
+    side: &str,
+    side_anchors: Option<&SideAnchors>,
+) -> RouteData {
+    let points = recentered_endpoint_points_with_anchors(
+        &route.points,
+        endpoint_index,
+        rect,
+        side,
+        side_anchors,
+    );
     let controls = if route.style == "spline" { route.controls.clone() } else { None };
     route_with_points(route, points, controls)
 }

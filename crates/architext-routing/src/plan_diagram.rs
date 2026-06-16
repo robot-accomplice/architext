@@ -30,6 +30,7 @@ use serde_json::Value;
 use crate::js_compat::js_hypot;
 use crate::model::{Plan, Point, Rect, Route};
 use crate::route_edges::orchestration::{route_edges, InputRelationship, NodeRect, RouteEdgesInput};
+use crate::route_ports::SideAnchors;
 use crate::route_geometry::rects_overlap;
 use crate::route_labels::{estimated_label_box, LabelBox, LabelRelationship};
 
@@ -556,19 +557,29 @@ pub fn plan_diagram(input: &PlanDiagramInput) -> Plan {
     }
 
     // Merge extraNodeRects into visible set and node_rects
-    // Build the augmented node_rects for RouteEdgesInput (NodeRect with fixed_ports)
+    // Build the augmented node_rects for RouteEdgesInput (NodeRect with fixed_ports + side_anchors)
     let mut route_node_rects: IndexMap<String, NodeRect> = node_rects
         .iter()
-        .map(|(k, v)| (k.clone(), NodeRect { rect: v.clone(), fixed_ports: false }))
+        .map(|(k, v)| (k.clone(), NodeRect { rect: v.clone(), fixed_ports: false, side_anchors: None }))
         .collect();
 
     for (node_id, extra_rect) in &input.extra_node_rects {
         visible_node_ids.insert(node_id.clone());
         let plain_rect = extra_rect.to_rect();
         node_rects.insert(node_id.clone(), plain_rect.clone());
+        // Convert SideAnchorsInput → SideAnchors so the router can use diamond tips.
+        // JS stores these on the rect object; we carry them separately and thread them
+        // to anchor_for_with_overrides / port_candidates_for_with_anchors.
+        let side_anchors: Option<SideAnchors> = extra_rect.side_anchors.as_ref().map(|sa| SideAnchors {
+            left: sa.left.clone(),
+            right: sa.right.clone(),
+            top: sa.top.clone(),
+            bottom: sa.bottom.clone(),
+        });
         route_node_rects.insert(node_id.clone(), NodeRect {
             rect: plain_rect,
             fixed_ports: extra_rect.fixed_ports,
+            side_anchors,
         });
         lane_index_by_node.insert(
             node_id.clone(),

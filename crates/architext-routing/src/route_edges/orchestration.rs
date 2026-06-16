@@ -58,7 +58,7 @@ use crate::route_mount_model::{
     MountRect, MountRelationship, ReliefResult,
 };
 use crate::route_edges::side_endpoint_key;
-use crate::route_ports::{offset_for_endpoint_order, surface_capacity};
+use crate::route_ports::{offset_for_endpoint_order, surface_capacity, SideAnchors};
 use crate::route_scoring::{QualityCosts, RouteCandidate};
 use crate::route_strategies::{
     select_route_candidate, CandidateRelationship, EndpointSideUsage as EndpointSideUsageTrait,
@@ -87,11 +87,17 @@ pub struct RouteEdgesInput {
     pub score_edge_proximity: bool,
 }
 
-/// A node rect with the optional `fixedPorts` flag.
+/// A node rect with optional `fixedPorts` flag and optional per-side anchor
+/// overrides (mirrors JS `rect.sideAnchors`). Decision-diamond nodes carry
+/// `sideAnchors` so routing anchors at the diamond tips rather than geometric
+/// rect-edge midpoints — matching JS `anchorFor(rect, side)`.
 #[derive(Debug, Clone)]
 pub struct NodeRect {
     pub rect: Rect,
     pub fixed_ports: bool,
+    /// Per-side anchor overrides. Present only for nodes with `sideAnchors` in
+    /// the input (e.g. `decision:*` diamond nodes). `None` → geometric midpoint.
+    pub side_anchors: Option<crate::route_ports::SideAnchors>,
 }
 
 /// Relationship descriptor as consumed by the orchestration layer.
@@ -374,6 +380,12 @@ pub struct PlannerContext {
     blocker_cache: Rc<RefCell<IndexMap<String, Vec<Rect>>>>,
     visible_node_ids: Vec<String>,
     node_rects: IndexMap<String, Rect>,
+    /// Per-node optional side-anchor overrides (decision-diamond nodes only).
+    /// JS stores sideAnchors on the rect object; Rust carries them separately.
+    side_anchors_by_node: IndexMap<String, crate::route_ports::SideAnchors>,
+    /// JS `rect.fixedPorts` per node.  Used to set `from_rect_fixed_ports` on
+    /// `CandidateRelationship` so `fixed_preferred_orthogonal_candidate` is called.
+    fixed_ports_by_node: IndexMap<String, bool>,
     canvas_width: f64,
     canvas_height: f64,
     diagram_corridors: Vec<crate::route_corridors::Corridor>,
@@ -402,6 +414,12 @@ impl PlannerContext {
         let to_id = &rel.to;
         let from_rect = self.node_rects.get(from_id)?;
         let to_rect = self.node_rects.get(to_id)?;
+
+        // Look up per-side anchor overrides for decision-diamond nodes.
+        // JS stores these on the rect object; we carry them in side_anchors_by_node
+        // and pass them to candidate_ports so anchorFor uses diamond tips, not rect edges.
+        let from_side_anchors = self.side_anchors_by_node.get(from_id.as_str());
+        let to_side_anchors = self.side_anchors_by_node.get(to_id.as_str());
 
         let include_exterior = rel.relationship_type.as_deref() == Some("flow")
             || rel.kind.is_some()
@@ -450,7 +468,10 @@ impl PlannerContext {
             to_id,
         );
 
-        let cand_rel = to_candidate_relationship(rel);
+        let mut cand_rel = to_candidate_relationship(rel);
+        // JS reads rect.fixedPorts directly; populate from our extracted map.
+        cand_rel.from_rect_fixed_ports =
+            self.fixed_ports_by_node.get(from_id.as_str()).copied().unwrap_or(false);
 
         let select_input = SelectRouteCandidateInput {
             collision_count: &collision_count_fn,
@@ -477,6 +498,8 @@ impl PlannerContext {
             to_lane_index,
             from_row_index,
             to_row_index,
+            from_side_anchors,
+            to_side_anchors,
         };
 
         let candidate = select_route_candidate(select_input)?;
@@ -633,6 +656,25 @@ pub fn route_planner_context(input: &RouteEdgesInput) -> PlannerContext {
     let node_rects: IndexMap<String, Rect> =
         input.node_rects.iter().map(|(k, v)| (k.clone(), v.rect.clone())).collect();
 
+    // Extract per-node side-anchor overrides (decision-diamond nodes only).
+    // JS stores these on the rect object in nodeRects so anchorFor(rect, side) picks
+    // them up automatically; in Rust we carry them separately and look them up by node id.
+    let side_anchors_by_node: IndexMap<String, SideAnchors> = input
+        .node_rects
+        .iter()
+        .filter_map(|(k, v)| v.side_anchors.clone().map(|sa| (k.clone(), sa)))
+        .collect();
+
+    // Extract per-node fixedPorts flags.  JS reads rect.fixedPorts directly; Rust carries
+    // them separately and populates CandidateRelationship.from_rect_fixed_ports so that
+    // fixed_preferred_orthogonal_candidate is correctly triggered.
+    let fixed_ports_by_node: IndexMap<String, bool> = input
+        .node_rects
+        .iter()
+        .filter(|(_, v)| v.fixed_ports)
+        .map(|(k, _)| (k.clone(), true))
+        .collect();
+
     let visible_rects: Vec<Rect> =
         visible_node_ids.iter().filter_map(|id| node_rects.get(id).cloned()).collect();
 
@@ -693,6 +735,8 @@ pub fn route_planner_context(input: &RouteEdgesInput) -> PlannerContext {
         blocker_cache,
         visible_node_ids,
         node_rects,
+        side_anchors_by_node,
+        fixed_ports_by_node,
         canvas_width: input.canvas_width,
         canvas_height: input.canvas_height,
         diagram_corridors,
@@ -708,7 +752,7 @@ fn to_mount_node_rects(input: &RouteEdgesInput) -> IndexMap<String, MountRect> {
     input
         .node_rects
         .iter()
-        .map(|(k, v)| (k.clone(), MountRect { rect: v.rect.clone(), fixed_ports: v.fixed_ports }))
+        .map(|(k, v)| (k.clone(), MountRect { rect: v.rect.clone(), fixed_ports: v.fixed_ports, side_anchors: v.side_anchors.clone() }))
         .collect()
 }
 
@@ -1172,15 +1216,15 @@ mod tests {
         let mut node_rects = IndexMap::new();
         node_rects.insert(
             "A".to_string(),
-            NodeRect { rect: Rect { x: 50.0, y: 100.0, width: 100.0, height: 60.0 }, fixed_ports: false },
+            NodeRect { rect: Rect { x: 50.0, y: 100.0, width: 100.0, height: 60.0 }, fixed_ports: false, side_anchors: None },
         );
         node_rects.insert(
             "B".to_string(),
-            NodeRect { rect: Rect { x: 300.0, y: 100.0, width: 100.0, height: 60.0 }, fixed_ports: false },
+            NodeRect { rect: Rect { x: 300.0, y: 100.0, width: 100.0, height: 60.0 }, fixed_ports: false, side_anchors: None },
         );
         node_rects.insert(
             "C".to_string(),
-            NodeRect { rect: Rect { x: 175.0, y: 250.0, width: 100.0, height: 60.0 }, fixed_ports: false },
+            NodeRect { rect: Rect { x: 175.0, y: 250.0, width: 100.0, height: 60.0 }, fixed_ports: false, side_anchors: None },
         );
         let mut lane_index = IndexMap::new();
         lane_index.insert("A".to_string(), 0i64);

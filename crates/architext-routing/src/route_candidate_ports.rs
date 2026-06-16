@@ -22,7 +22,7 @@
 use indexmap::IndexSet;
 
 use crate::model::{Point, Rect};
-use crate::route_ports::{port_candidates_for, tangent_vector, PortResult};
+use crate::route_ports::{port_candidates_for, port_candidates_for_with_anchors, tangent_vector, PortResult, SideAnchors};
 
 // ---------------------------------------------------------------------------
 // candidatePorts
@@ -105,6 +105,60 @@ pub fn candidate_ports(
     CandidatePortSet {
         starts: port_candidates_for(from_rect, start_side, &shared_offsets, false),
         ends: port_candidates_for(to_rect, end_side, &shared_offsets, false),
+    }
+}
+
+/// `candidatePorts` with optional per-node `SideAnchors` overrides.
+///
+/// Decision-diamond nodes carry `sideAnchors` (diamond tips) instead of the
+/// geometric rect-edge midpoint. JS stores these on the rect object itself;
+/// we thread them here so `portCandidatesFor` returns the tip-anchored ports
+/// rather than the geometric midpoint (matching JS `anchorFor(rect, side)`).
+#[allow(clippy::too_many_arguments)]
+pub fn candidate_ports_with_anchors(
+    from_rect: &Rect,
+    to_rect: &Rect,
+    start_side: &str,
+    end_side: &str,
+    endpoint_offsets: &EndpointOffsets,
+    scope: CandidateScope,
+    from_side_anchors: Option<&SideAnchors>,
+    to_side_anchors: Option<&SideAnchors>,
+) -> CandidatePortSet {
+    // Shared-offset computation is identical to candidate_ports.
+    let from_center = Point {
+        x: from_rect.x + from_rect.width / 2.0,
+        y: from_rect.y + from_rect.height / 2.0,
+    };
+    let to_center = Point {
+        x: to_rect.x + to_rect.width / 2.0,
+        y: to_rect.y + to_rect.height / 2.0,
+    };
+    let start_tangent = tangent_vector(start_side);
+    let end_tangent = tangent_vector(end_side);
+    let target_aligned_start_offset = if start_tangent.y != 0.0 {
+        to_center.y - from_center.y
+    } else {
+        to_center.x - from_center.x
+    };
+    let target_aligned_end_offset = if end_tangent.y != 0.0 {
+        from_center.y - to_center.y
+    } else {
+        from_center.x - to_center.x
+    };
+    let shared_offsets: Vec<f64> = match scope {
+        CandidateScope::Grid => vec![0.0, endpoint_offsets.from, endpoint_offsets.to],
+        CandidateScope::Cheap => vec![
+            0.0,
+            endpoint_offsets.from,
+            endpoint_offsets.to,
+            endpoint_offsets.from + target_aligned_start_offset,
+            endpoint_offsets.to + target_aligned_end_offset,
+        ],
+    };
+    CandidatePortSet {
+        starts: port_candidates_for_with_anchors(from_rect, start_side, &shared_offsets, false, from_side_anchors),
+        ends: port_candidates_for_with_anchors(to_rect, end_side, &shared_offsets, false, to_side_anchors),
     }
 }
 
@@ -396,5 +450,61 @@ mod tests {
         let pairs = port_pairs_for(&ports);
         // Node golden: portPairsFor dedup length = 1 (two starts with same anchor → 1 pair)
         assert_eq!(pairs.len(), 1);
+    }
+
+    // --- candidate_ports_with_anchors (TDD: side-anchors override for decision-diamond nodes) ---
+
+    #[test]
+    fn candidate_ports_with_anchors_uses_side_anchor_for_from() {
+        // Decision-diamond node: fromRect={x:0,y:0,w:100,h:80} has sideAnchors.right={x:100,y:20}
+        // (the diamond tip instead of the geometric midpoint {x:100,y:40}).
+        // Without sideAnchors: starts[0].anchor.y = 40.0 (geometric midpoint).
+        // With sideAnchors: starts[0].anchor = {x:100, y:20} (diamond tip).
+        // Node source: JS anchorFor(rect, side) returns rect.sideAnchors[side] when present.
+        let from = rect(0.0, 0.0, 100.0, 80.0);
+        let to = rect(200.0, 0.0, 100.0, 80.0);
+        let eo = EndpointOffsets { from: 0.0, to: 0.0 };
+
+        // Without sideAnchors: geometric midpoint
+        let cp_plain = candidate_ports(&from, &to, "right", "left", &eo, CandidateScope::Cheap);
+        assert_eq!(cp_plain.starts[0].anchor, pt(100.0, 40.0), "geometric midpoint");
+
+        // With sideAnchors on fromRect: anchor overridden to diamond tip
+        let from_anchors = SideAnchors {
+            right: Some(pt(100.0, 20.0)), // diamond right-tip is above midpoint
+            ..Default::default()
+        };
+        let cp_anchored = candidate_ports_with_anchors(
+            &from, &to, "right", "left", &eo, CandidateScope::Cheap,
+            Some(&from_anchors), None,
+        );
+        assert_eq!(
+            cp_anchored.starts[0].anchor,
+            pt(100.0, 20.0),
+            "side_anchors override: diamond tip, not geometric midpoint"
+        );
+        // Absent side (left) still uses geometric midpoint
+        assert_eq!(cp_anchored.starts[0].port, pt(118.0, 20.0), "port offset from tip anchor");
+        // toRect has no sideAnchors → geometric midpoint unchanged
+        assert_eq!(cp_anchored.ends[0].anchor, pt(200.0, 40.0), "to geometric midpoint unchanged");
+    }
+
+    #[test]
+    fn candidate_ports_with_anchors_no_override_matches_candidate_ports() {
+        // When both from_side_anchors and to_side_anchors are None, output must be
+        // identical to candidate_ports (no regression on non-diamond nodes).
+        let from = rect(0.0, 0.0, 100.0, 80.0);
+        let to = rect(200.0, 0.0, 100.0, 80.0);
+        let eo = EndpointOffsets { from: 6.0, to: -6.0 };
+        let cp = candidate_ports(&from, &to, "right", "left", &eo, CandidateScope::Cheap);
+        let cp_with = candidate_ports_with_anchors(
+            &from, &to, "right", "left", &eo, CandidateScope::Cheap, None, None,
+        );
+        assert_eq!(cp.starts.len(), cp_with.starts.len());
+        assert_eq!(cp.ends.len(), cp_with.ends.len());
+        for (a, b) in cp.starts.iter().zip(cp_with.starts.iter()) {
+            assert_eq!(a.anchor, b.anchor);
+            assert_eq!(a.port, b.port);
+        }
     }
 }
