@@ -24,6 +24,10 @@ pub mod route_mount_model;
 pub mod route_diagnostics;
 pub mod plan_diagram;
 pub mod wasm;
+pub mod plan_request;
+pub mod diagram_config;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod precompute;
 
 #[cfg(test)]
 mod tests {
