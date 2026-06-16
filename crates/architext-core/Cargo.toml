@@ -12,6 +12,10 @@ path = "src/bin/validate.rs"
 name = "domain_dump"
 path = "src/bin/domain_dump.rs"
 
+[[bin]]
+name = "jsonwrite_dump"
+path = "src/bin/jsonwrite_dump.rs"
+
 [dependencies]
 jsonschema = { version = "0.46.5", default-features = false, features = ["resolve-file"] }
 serde = { version = "1", features = ["derive"] }

@@ -1,5 +1,6 @@
 mod validation;
 pub mod domain;
+pub mod json_write;
 
 use std::path::Path;
 
