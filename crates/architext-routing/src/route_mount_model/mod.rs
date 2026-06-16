@@ -497,6 +497,94 @@ mod tests {
         assert!(rbid.is_empty());
     }
 
+    // -----------------------------------------------------------------------
+    // try_side_moves — builder receives empty route map (JS parity)
+    // -----------------------------------------------------------------------
+
+    /// JS `trySideMoves` calls `buildRouteForSides(rel, start, end)` with NO
+    /// `currentRoutes` argument, so the sideRouteIndex inside the builder is
+    /// empty. The Rust port must pass an empty map to `builder.build()` so the
+    /// planner explores candidates without obstacle bias.
+    ///
+    /// This test records the largest `route_by_id` the builder ever sees.
+    /// If the fix regresses, the builder would be called with the live map
+    /// (containing the other route) and `max_seen` would be non-zero.
+    #[test]
+    fn try_side_moves_calls_builder_with_empty_route_map() {
+        use std::cell::Cell;
+        use relief::try_side_moves;
+
+        struct RecordingBuilder<'a> {
+            max_seen: &'a Cell<usize>,
+            replacement: RouteData,
+        }
+        impl<'a> BuildRouteForSides for RecordingBuilder<'a> {
+            fn build(
+                &self,
+                _rel: &MountRelationship,
+                _start: &str,
+                _end: &str,
+                route_by_id: &IndexMap<String, RouteData>,
+            ) -> Option<RouteData> {
+                let n = route_by_id.len();
+                if n > self.max_seen.get() {
+                    self.max_seen.set(n);
+                }
+                Some(self.replacement.clone())
+            }
+        }
+
+        // Two routes: A(0,25)→(100,25) exits right of node-A (0,20,10,10),
+        //             B(90,25)→(0,25) exits left of node-B (90,20,10,10).
+        // A is the flow edge under test; B is a bystander in the same diagram.
+        // Before the fix, the bystander appeared in route_by_id when the builder
+        // was called for A's side moves. After the fix it must not.
+        let route_a = mk_route(vec![Point { x: 10.0, y: 25.0 }, Point { x: 90.0, y: 25.0 }]);
+        let route_b = mk_route(vec![Point { x: 90.0, y: 25.0 }, Point { x: 10.0, y: 25.0 }]);
+
+        // Replacement route the builder returns — must keep A on a valid side so
+        // the cost check inside try_side_moves doesn't simply restore.
+        // We return the same route as-is; cost guard will restore it, but the
+        // builder is still called (and its route_by_id is what we assert on).
+        let replacement = route_a.clone();
+
+        let mut route_by_id: IndexMap<String, RouteData> = IndexMap::new();
+        route_by_id.insert("a".to_string(), route_a.clone());
+        route_by_id.insert("b".to_string(), route_b.clone());
+
+        let mut rel_by_id: IndexMap<String, MountRelationship> = IndexMap::new();
+        rel_by_id.insert("a".to_string(), mk_rel("a", "node-a", "node-b"));
+        rel_by_id.insert("b".to_string(), mk_rel("b", "node-b", "node-a"));
+
+        let mut node_rects: IndexMap<String, MountRect> = IndexMap::new();
+        node_rects.insert("node-a".to_string(), mk_rect(0.0, 20.0, 10.0, 10.0));
+        node_rects.insert("node-b".to_string(), mk_rect(90.0, 20.0, 10.0, 10.0));
+
+        let visible = vec!["node-a".to_string(), "node-b".to_string()];
+        let lane_idx: IndexMap<String, i64> = IndexMap::new();
+        let row_idx: IndexMap<String, i64> = IndexMap::new();
+        let input = MountInput {
+            visible_node_ids: &visible,
+            node_rects: &node_rects,
+            lane_index_by_node: &lane_idx,
+            row_index_by_node: &row_idx,
+            canvas_width: 200.0,
+            canvas_height: 100.0,
+        };
+
+        let max_seen = Cell::new(0usize);
+        let builder = RecordingBuilder { max_seen: &max_seen, replacement };
+
+        try_side_moves(&mut route_by_id, &rel_by_id, &input, Some(&builder));
+
+        assert_eq!(
+            max_seen.get(),
+            0,
+            "try_side_moves must call builder with an empty route map (JS parity: \
+             trySideMoves calls buildRouteForSides without currentRoutes)"
+        );
+    }
+
     #[test]
     fn straighten_self_crossing_pairs_no_pairs_is_noop() {
         // With a single flow route, no pair exists → no-op.
