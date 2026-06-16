@@ -10,6 +10,7 @@ path = "src/bin/architext-serve.rs"
 
 [dependencies]
 architext-routing = { path = "../architext-routing", features = ["native"] }
+architext-core = { path = "../architext-core" }
 axum = { version = "0.7", features = ["http1", "http2", "tokio", "macros"] }
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.4" }
@@ -24,3 +25,4 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }
+tempfile = "3"

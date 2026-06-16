@@ -7,8 +7,30 @@ import { createHash } from "node:crypto";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { browserOpenCommand, isLoopbackServeUrl, readServeState } from "../src/adapters/cli/serve-lifecycle.mjs";
+import { browserOpenCommand, isLoopbackServeUrl, readServeState, stopServeProcess } from "../src/adapters/cli/serve-lifecycle.mjs";
 import { parseArgs } from "../src/adapters/cli/command-line.mjs";
+
+function isPidAlive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// Spawn a SIGTERM-ignoring process that is an ORPHAN (reparented to init), so a
+// liveness probe (kill -0) reflects real death rather than a zombie the test
+// process is holding unreaped. Returns the orphan's pid.
+function spawnStubbornOrphan() {
+  const launcher = [
+    "const { spawn } = require('node:child_process');",
+    "const c = spawn(process.execPath, ['-e', \"process.on('SIGTERM', () => {}); setInterval(() => {}, 1000);\"], { detached: true, stdio: 'ignore' });",
+    "c.unref();",
+    "process.stdout.write(String(c.pid));"
+  ].join("\n");
+  return Number(execFileSync(process.execPath, ["-e", launcher], { encoding: "utf8" }).trim());
+}
 
 const serveRuntimeDir = path.join(tmpdir(), "architext-serve");
 
@@ -514,5 +536,30 @@ test("reading serve state preserves the file on a transient (non-ENOENT, non-par
     if (existsSync(statePath)) chmodSync(statePath, 0o644);
     await rm(statePath, { force: true });
     await rm(target, { recursive: true, force: true });
+  }
+});
+
+test("stopServeProcess force-kills a serve child that does not exit on SIGTERM", async () => {
+  // The refresh re-spawn reuses the stopped instance's exact port, so the old
+  // child MUST be gone (port released) before stopServeProcess returns. Under
+  // heavy load a serve child may not be scheduled to act on SIGTERM within the
+  // stop window — observed in CI as "serve refresh ... did not become reachable"
+  // when the re-spawn collided with the still-alive old process on its port.
+  // A SIGTERM-ignoring orphan reproduces that condition deterministically: only
+  // an escalation to SIGKILL can reclaim the port.
+  const pid = spawnStubbornOrphan();
+  // Let the orphan install its SIGTERM handler before we try to stop it.
+  await new Promise((resolve) => setTimeout(resolve, 800));
+  assert.equal(isPidAlive(pid), true, "stubborn orphan should be running before the stop");
+  try {
+    const stopped = await stopServeProcess(pid, { termTimeoutMs: 400, killTimeoutMs: 3000, pollMs: 50 });
+    assert.equal(stopped, true, "stopServeProcess must confirm the process is gone");
+    assert.equal(isPidAlive(pid), false, "a SIGTERM-ignoring child must be force-killed so its port is freed");
+  } finally {
+    try {
+      process.kill(pid, "SIGKILL");
+    } catch {
+      // Already gone — the expected outcome.
+    }
   }
 });

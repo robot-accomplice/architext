@@ -113,12 +113,14 @@ dependencies = [
 name = "architext-serve"
 version = "0.0.0"
 dependencies = [
+ "architext-core",
  "architext-routing",
  "axum",
  "clap",
  "rand",
  "serde",
  "serde_json",
+ "tempfile",
  "tokio",
  "tower 0.4.13",
  "tower-http",

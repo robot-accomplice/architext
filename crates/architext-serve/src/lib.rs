@@ -1,13 +1,16 @@
 //! architext-serve — Rust HTTP serve adapter for `architext serve`.
 //!
-//! Slice 1 of the serve-layer port:
+//! Slice 1 + 2c of the serve-layer port:
 //!   - Security middleware (loopback-only, mutation token)
 //!   - Static serving (/data/*, /, /*path with SPA fallback)
 //!   - GET /api/session
 //!   - GET /api/plan/{hash} (native farm lookup)
+//!   - GET /api/status    (collect_status → {ok, status})
+//!   - GET /api/config    (diagram config payload + field spec)
+//!   - GET /api/repo-tree (git ls-files or filesystem walk)
 //!   - Unknown /api/* → 404
 //!
-//! Extension points for later slices: config, status, doctor, sync-repair,
+//! Extension points for later slices: doctor, sync-repair,
 //! release-plans, rules, notes, data-events (SSE).
 
 pub mod content_type;
@@ -39,6 +42,13 @@ pub struct AppState {
     pub data_dir: PathBuf,
     pub dist_dir: PathBuf,
     pub mutation_token: Arc<String>,
+    /// The project root directory (parent of `docs/architext/data`).
+    /// Derived from `data_dir` as `data_dir.parent().parent().parent()`.
+    /// Used by `/api/status`, `/api/config`, and `/api/repo-tree`.
+    pub target_dir: PathBuf,
+    /// The CLI version string, embedded at compile time from the package metadata.
+    /// Used by `/api/status` to populate `status.cliVersion`.
+    pub cli_version: Arc<String>,
 }
 
 /// Number of candidate ports to try when the preferred port is busy.
@@ -66,10 +76,10 @@ pub fn build_router(state: AppState, farm: Farm) -> Router {
     Router::new()
         // API routes
         .route("/api/session", get(handlers::session::get_session))
-        .route(
-            "/api/plan/:hash",
-            get(handlers::plan::get_plan),
-        )
+        .route("/api/plan/:hash", get(handlers::plan::get_plan))
+        .route("/api/status", get(handlers::status::get_status))
+        .route("/api/config", get(handlers::config_payload::get_config))
+        .route("/api/repo-tree", get(handlers::repo_tree::get_repo_tree))
         // Unknown /api/* fallback (must come after specific /api/* routes)
         .fallback(handlers::api_fallback::api_or_not_found_fallback)
         // Data files
@@ -171,10 +181,21 @@ pub async fn serve(
     tracing::info!("Building plan farm from {}", data_dir.display());
     let farm = farm_state::build_farm(&data_dir);
 
+    // Derive target_dir from data_dir: data_dir is <target>/docs/architext/data
+    // so target = data_dir.parent().parent().parent().
+    let target_dir = data_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.parent())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| data_dir.clone());
+
     let state = AppState {
         data_dir,
         dist_dir,
         mutation_token: Arc::new(mutation_token),
+        target_dir,
+        cli_version: Arc::new(env!("CARGO_PKG_VERSION").to_string()),
     };
 
     let router = build_router(state, farm);
