@@ -1,0 +1,27 @@
+{
+  "currentReleaseId": "v0-1-0",
+  "releases": [
+    {
+      "id": "v0-1-0",
+      "version": "0.1.0",
+      "name": "Test Release 0.1.0",
+      "status": "completed",
+      "posture": "shipped",
+      "targetDate": "2026-01-01",
+      "releasedAt": "2026-01-01T12:00:00.000Z",
+      "lastUpdated": "2026-01-01T12:00:00.000Z",
+      "summary": "STALE summary text that does not match the detail.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 0,
+        "workstreams": 1,
+        "blockers": 0,
+        "complete": 1,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v0-1-0.json"
+    }
+  ]
+}

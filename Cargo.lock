@@ -3,6 +3,14 @@
 version = 4
 
 [[package]]
+name = "architext-core"
+version = "0.0.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "architext-routing"
 version = "0.0.0"
 dependencies = [
