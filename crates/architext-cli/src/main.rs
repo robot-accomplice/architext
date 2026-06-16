@@ -122,14 +122,8 @@ fn main() {
         "sync" | "install" | "upgrade" | "migrate" => {
             commands::sync::run(&target, &opts, version);
         }
-        "serve" => {
-            eprintln!("serve is not yet implemented in the Rust CLI");
-            process::exit(1);
-        }
-        "doctor" => {
-            eprintln!("doctor is not yet implemented in the Rust CLI");
-            process::exit(1);
-        }
+        "serve" => commands::serve::run(&target, &opts, version),
+        "doctor" => commands::doctor::run(&target, &opts, version),
         unknown => {
             // JS: routeCommand throws `Unknown command: ${options.command}`
             eprintln!("Unknown command: {unknown}");
