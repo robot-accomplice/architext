@@ -124,23 +124,22 @@ function normalizeStatusHuman(output) {
 }
 
 /**
- * N3: normalize absolute temp paths in build/clean output.
- * Handles macOS /private/var vs /var symlink differences and
- * replaces the run-specific temp prefix with <TMPDIR>.
+ * Normalize the run-specific temp-dir prefix only. The CLI no longer
+ * canonicalizes the target (it lexically resolves like JS path.resolve), so the
+ * macOS /private/var hack is gone — paths print identically to Node. We only
+ * collapse the random mkdtemp prefix so separate JS/Rust out-dirs compare by
+ * their meaningful suffix.
  */
 function normalizePathOutput(output) {
-  // macOS: Rust canonicalize resolves /var -> /private/var; strip /private prefix
-  let normalized = output.replace(/\/private(\/var\/folders)/g, "$1");
-  // Replace the temp dir prefix with a placeholder
-  normalized = normalized.replace(/\/tmp\/ax-parity-[A-Za-z0-9]+/g, "<TMPDIR>");
-  // Also handle /var/folders/... style macOS temp paths
+  let normalized = output.replace(/\/tmp\/ax-parity-[A-Za-z0-9]+/g, "<TMPDIR>");
   normalized = normalized.replace(/\/var\/folders\/[^\s]+\/ax-parity-[A-Za-z0-9]+/g, "<TMPDIR>");
   return normalized;
 }
 
-/** N3 variant for build output: normalize "Copied target data to <path>" fully */
+/** Build uses distinct out-dirs for JS vs Rust; map each to <OUT> so the
+ *  "/data" suffix (and the leading copy text) are compared exactly. */
 function normalizeBuildOutput(output) {
-  return output.replace(/^(Copied target data to ).*$/m, "$1<PATH>");
+  return output.split(jsOutDir).join("<OUT>").split(rsOutDir).join("<OUT>");
 }
 
 // ─── Test cases ──────────────────────────────────────────────────────────────
@@ -367,10 +366,11 @@ check("clean <src> --dry-run (nothing exists → 'No generated Architext artifac
 
 // Create a dist dir in cleanSrc, then test --dry-run reports it
 mkdirSync(path.join(cleanSrc, "docs", "architext", "dist"), { recursive: true });
-check("clean <src> --dry-run (dist exists → Would remove) (N3: path)", {
+check("clean <src> --dry-run (dist exists → Would remove)", {
   js: runJs(["clean", cleanSrc, "--dry-run"]),
   rust: runRust(["clean", cleanSrc, "--dry-run"]),
-  compare: matchWith(normalizePathOutput)
+  // Same cleanSrc for both; no canonicalize → identical output, byte-for-byte.
+  compare: exactMatch
 });
 
 check("clean <src> (removes dist) (N3: path)", {

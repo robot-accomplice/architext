@@ -30,8 +30,30 @@ fn resolve_target(raw: &str) -> std::path::PathBuf {
                 .join(p)
         }
     };
-    // Normalize away trailing `/./` components (matches JS path.resolve behaviour).
-    base.canonicalize().unwrap_or(base)
+    // Match JS `path.resolve`: lexically collapse `.`/`..`, WITHOUT resolving
+    // symlinks or requiring the path to exist. (canonicalize() was wrong — it
+    // follows symlinks, so it printed /private/var for /var and would resolve
+    // any symlinked repo path, diverging from Node which prints the path as-given.)
+    lexical_normalize(&base)
+}
+
+/// Lexically normalize an absolute path the way Node's `path.resolve` does:
+/// drop `.` segments, pop on `..`, no filesystem access, no symlink resolution.
+fn lexical_normalize(p: &std::path::Path) -> std::path::PathBuf {
+    use std::path::Component;
+    let mut out = std::path::PathBuf::new();
+    for comp in p.components() {
+        match comp {
+            Component::CurDir => {}
+            Component::ParentDir => {
+                if !out.pop() {
+                    out.push("..");
+                }
+            }
+            other => out.push(other.as_os_str()),
+        }
+    }
+    out
 }
 
 fn main() {
