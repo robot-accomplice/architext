@@ -1,0 +1,12 @@
+{
+  "version": "1.7.0",
+  "installing": true,
+  "migrating": false,
+  "instructionFiles": ["AGENTS.md", "CLAUDE.md"],
+  "syncChoices": { "branch": "current", "instructionFiles": ["CLAUDE.md"], "manageGitignore": true, "manageRootScripts": false, "applyDoctorRepairs": true, "proceedWithChanges": true, "promptBeforeProceed": false },
+  "managedInstructions": [],
+  "gitignoreManaged": false,
+  "rootScriptsManaged": false,
+  "validation": null,
+  "now": "2024-01-01T00:00:00.000Z"
+}

@@ -41,7 +41,7 @@ fn err(msg: String) -> Value {
 }
 
 fn dispatch(op: &str, fixture: &Value) -> Value {
-    use architext_core::domain::{c4_quality, notes, release, rules, schema_migration};
+    use architext_core::domain::{c4_quality, instruction_rules, notes, release, rules, schema_migration, sync_plan};
 
     match op {
         // ── rules ──────────────────────────────────────────────────────────
@@ -206,6 +206,102 @@ fn dispatch(op: &str, fixture: &Value) -> Value {
 
         "release.approve" => {
             ok(release::approve_release_plan(fixture))
+        }
+
+        // ── instruction rules ──────────────────────────────────────────────
+        "instr.plannedMigration" => {
+            let files = fixture["files"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+            let existing_rules = fixture["existingRules"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
+            ok(instruction_rules::planned_instruction_rule_migration(files, existing_rules))
+        }
+
+        "instr.upsertRulePointer" => {
+            let text = fixture["text"].as_str().unwrap_or("");
+            ok(Value::String(instruction_rules::upsert_rule_pointer(text)))
+        }
+
+        // ── sync plan ──────────────────────────────────────────────────────
+        "sync.normalizeInstructionFiles" => {
+            let files = &fixture["files"];
+            let valid: Vec<String> = fixture["validInstructionFiles"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default();
+            ok(sync_plan::normalize_sync_instruction_files(files, &valid))
+        }
+
+        "sync.defaultChoices" => {
+            let root_pkg = fixture["rootPackageExists"].as_bool().unwrap_or(false);
+            let instr: Vec<String> = fixture["instructionFiles"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default();
+            ok(sync_plan::default_sync_choices(root_pkg, &instr))
+        }
+
+        "sync.rememberedChoices" => {
+            let metadata = &fixture["metadata"];
+            let instr: Vec<String> = fixture["instructionFiles"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default();
+            ok(sync_plan::remembered_sync_choices(metadata, &instr))
+        }
+
+        "sync.applyExplicitOptions" => {
+            let choices = &fixture["choices"];
+            let options = &fixture["options"];
+            let instr: Vec<String> = fixture["instructionFiles"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default();
+            ok(sync_plan::apply_explicit_sync_options(choices, options, &instr))
+        }
+
+        "sync.operation" => {
+            let installing = fixture["installing"].as_bool().unwrap_or(false);
+            let migrating = fixture["migrating"].as_bool().unwrap_or(false);
+            ok(Value::String(sync_plan::sync_operation(installing, migrating).to_string()))
+        }
+
+        "sync.writePlan" => {
+            let installing = fixture["installing"].as_bool().unwrap_or(false);
+            let migrating = fixture["migrating"].as_bool().unwrap_or(false);
+            let doctor_repair = fixture["doctorRepairAvailable"].as_bool().unwrap_or(false);
+            let sync_choices = &fixture["syncChoices"];
+            let options = &fixture["options"];
+            ok(sync_plan::sync_write_plan(installing, migrating, doctor_repair, sync_choices, options))
+        }
+
+        "sync.shouldValidate" => {
+            let installing = fixture["installing"].as_bool().unwrap_or(false);
+            let options = &fixture["options"];
+            ok(Value::Bool(sync_plan::should_validate_sync(options, installing)))
+        }
+
+        "sync.persistedChoices" => {
+            ok(sync_plan::persisted_sync_choices(fixture))
+        }
+
+        "sync.metadataPatch" => {
+            let version = fixture["version"].as_str().unwrap_or("");
+            let installing = fixture["installing"].as_bool().unwrap_or(false);
+            let migrating = fixture["migrating"].as_bool().unwrap_or(false);
+            let instr: Vec<String> = fixture["instructionFiles"]
+                .as_array()
+                .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+                .unwrap_or_default();
+            let sync_choices = &fixture["syncChoices"];
+            let managed_instructions = &fixture["managedInstructions"];
+            let gitignore_managed = fixture["gitignoreManaged"].as_bool().unwrap_or(false);
+            let root_scripts_managed = fixture["rootScriptsManaged"].as_bool().unwrap_or(false);
+            let validation = &fixture["validation"];
+            let now = fixture["now"].as_str().unwrap_or("");
+            ok(sync_plan::sync_metadata_patch(
+                version, installing, migrating, &instr, sync_choices,
+                managed_instructions, gitignore_managed, root_scripts_managed,
+                validation, now,
+            ))
         }
 
         _ => {

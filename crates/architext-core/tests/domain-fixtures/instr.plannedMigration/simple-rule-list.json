@@ -1,0 +1,6 @@
+{
+  "files": [
+    { "path": "CLAUDE.md", "text": "# Instructions\n\n- Always check tests before committing any code changes\n- Keep functions small and focused on single responsibility\n- Use meaningful variable names that explain the intent\n" }
+  ],
+  "existingRules": []
+}

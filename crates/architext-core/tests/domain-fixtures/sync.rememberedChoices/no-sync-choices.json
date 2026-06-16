@@ -1,0 +1,4 @@
+{
+  "metadata": { "someOtherField": "value" },
+  "instructionFiles": ["AGENTS.md", "CLAUDE.md", ".cursorrules"]
+}
