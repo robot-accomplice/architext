@@ -1,6 +1,6 @@
 //! architext-serve — Rust HTTP serve adapter for `architext serve`.
 //!
-//! Slice 1 + 2c of the serve-layer port:
+//! Slice 1 + 2c + 3a of the serve-layer port:
 //!   - Security middleware (loopback-only, mutation token)
 //!   - Static serving (/data/*, /, /*path with SPA fallback)
 //!   - GET /api/session
@@ -8,27 +8,32 @@
 //!   - GET /api/status    (collect_status → {ok, status})
 //!   - GET /api/config    (diagram config payload + field spec)
 //!   - GET /api/repo-tree (git ls-files or filesystem walk)
+//!   - POST /api/rules    (mutation: update/delete/move/move-before)
+//!   - POST /api/notes    (mutation: update/delete + manifest bootstrap)
 //!   - Unknown /api/* → 404
 //!
 //! Extension points for later slices: doctor, sync-repair,
-//! release-plans, rules, notes, data-events (SSE).
+//! release-plans, data-events (SSE).
 
 pub mod content_type;
 pub mod farm_state;
 pub mod handlers;
 pub mod safe_join;
 pub mod security;
+pub mod write_txn;
 
 use std::net::{IpAddr, SocketAddr, TcpListener};
 use std::path::PathBuf;
 use std::sync::Arc;
+
+use write_txn::WriteLock;
 
 use axum::{
     extract::Request,
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::get,
+    routing::{get, post},
     Extension, Router,
 };
 use serde_json::json;
@@ -49,6 +54,11 @@ pub struct AppState {
     /// The CLI version string, embedded at compile time from the package metadata.
     /// Used by `/api/status` to populate `status.cliVersion`.
     pub cli_version: Arc<String>,
+    /// Schema directory for the JSON schema validator (`viewer/schema/`).
+    /// Used by the mutation handlers (rules/notes) to run `validate_data_dir`.
+    pub schema_dir: PathBuf,
+    /// Per-process write-lock: serialises concurrent mutation requests.
+    pub write_lock: WriteLock,
 }
 
 /// Number of candidate ports to try when the preferred port is busy.
@@ -74,12 +84,15 @@ pub fn build_router(state: AppState, farm: Farm) -> Router {
     });
 
     Router::new()
-        // API routes
+        // API routes — GET
         .route("/api/session", get(handlers::session::get_session))
         .route("/api/plan/:hash", get(handlers::plan::get_plan))
         .route("/api/status", get(handlers::status::get_status))
         .route("/api/config", get(handlers::config_payload::get_config))
         .route("/api/repo-tree", get(handlers::repo_tree::get_repo_tree))
+        // API routes — POST (mutations; guarded by security middleware)
+        .route("/api/rules", post(handlers::rules::post_rules))
+        .route("/api/notes", post(handlers::notes::post_notes))
         // Unknown /api/* fallback (must come after specific /api/* routes)
         .fallback(handlers::api_fallback::api_or_not_found_fallback)
         // Data files
@@ -176,6 +189,21 @@ pub async fn serve(
     port: u16,
     mutation_token: String,
 ) -> std::io::Result<()> {
+    serve_with_schema_dir(data_dir, dist_dir, host, port, mutation_token, None).await
+}
+
+/// Top-level serve function with explicit schema_dir override (for tests).
+///
+/// If `schema_dir` is `None`, derives it as `<repo-root>/viewer/schema`
+/// (same convention used by the validator in `architext-core`).
+pub async fn serve_with_schema_dir(
+    data_dir: PathBuf,
+    dist_dir: PathBuf,
+    host: &str,
+    port: u16,
+    mutation_token: String,
+    schema_dir: Option<PathBuf>,
+) -> std::io::Result<()> {
     let (listener, bound_port) = bind_listener(host, port)?;
 
     tracing::info!("Building plan farm from {}", data_dir.display());
@@ -190,12 +218,40 @@ pub async fn serve(
         .map(|p| p.to_path_buf())
         .unwrap_or_else(|| data_dir.clone());
 
+    // Derive schema_dir: <repo-root>/viewer/schema  (same as core tests).
+    // The repo root is where the Cargo.toml workspace lives — i.e. the parent
+    // of the `crates/` directory.  When launched from the binary, the data_dir
+    // is docs/architext/data inside the repo so we can walk up; but the binary
+    // also accepts arbitrary paths, so we use the compile-time manifest path
+    // as the fallback anchor.  Tests pass an explicit override.
+    let resolved_schema_dir = schema_dir.unwrap_or_else(|| {
+        // Walk from data_dir up to the repo root heuristically.
+        // Repo root has viewer/schema.  Try data_dir/../../../viewer/schema.
+        let candidate = data_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .and_then(|p| p.parent())
+            .map(|root| root.join("viewer").join("schema"));
+        candidate
+            .filter(|p| p.is_dir())
+            .unwrap_or_else(|| {
+                // Fallback: compile-time anchor (works in tests / cargo run)
+                PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                    .parent().unwrap() // crates/
+                    .parent().unwrap() // repo root
+                    .join("viewer")
+                    .join("schema")
+            })
+    });
+
     let state = AppState {
         data_dir,
         dist_dir,
         mutation_token: Arc::new(mutation_token),
         target_dir,
         cli_version: Arc::new(env!("CARGO_PKG_VERSION").to_string()),
+        schema_dir: resolved_schema_dir,
+        write_lock: write_txn::new_write_lock(),
     };
 
     let router = build_router(state, farm);
