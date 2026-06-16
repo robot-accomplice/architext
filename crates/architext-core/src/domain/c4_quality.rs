@@ -373,7 +373,17 @@ pub fn c4_issues_for_view(view: &Value, node_map: &IndexMap<String, Value>) -> V
         if node.is_none() {
             issues.push(format!("{view_id}: missing node {node_id}"));
         } else if let (Some(allowed), Some(node)) = (allowed_types, node) {
-            let node_type = node["type"].as_str().unwrap_or("");
+            // JS: `${node.type}` in a template literal.
+            // - Key absent → JS `undefined` → template string `"undefined"`.
+            // - Key present with string value → that string.
+            // serde_json: absent key via [] returns Value::Null; use .get() to
+            // distinguish absent from explicit null.
+            let node_type: &str = match node.get("type") {
+                None => "undefined",            // absent key
+                Some(Value::Null) => "null",    // explicit null
+                Some(Value::String(s)) => s.as_str(),
+                Some(_) => "undefined",          // other non-string → treat as undefined
+            };
             if !allowed.contains(&node_type) {
                 issues.push(format!(
                     "{view_id}: {node_id} has {node_type}, which does not belong in {view_type}"
