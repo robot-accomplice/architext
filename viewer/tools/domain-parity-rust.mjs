@@ -165,6 +165,14 @@ for (const op of ops) {
     let jsError = null;
     try {
       jsResult = runJs(op, fixture);
+      // Round-trip through JSON so the comparison reflects what actually lands
+      // on disk: writeJson does JSON.stringify, which DROPS undefined-valued
+      // keys. The Rust port reads back via JSON.parse (no undefined possible),
+      // so comparing raw in-memory JS objects (which can carry `key: undefined`)
+      // would diverge from disk reality. This makes the gate the disk contract.
+      if (jsResult !== null && jsResult !== undefined) {
+        jsResult = JSON.parse(JSON.stringify(jsResult));
+      }
     } catch (e) {
       jsError = e.message;
     }

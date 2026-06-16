@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "corpus-review",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["/tmp/ax-review-serve.mjs"],
+      "port": 4173
+    }
+  ]
+}

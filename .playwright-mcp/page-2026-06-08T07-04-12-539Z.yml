@@ -1,0 +1,201 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Architext / 1.6.0 · Schema / 1.5.0
+      - generic [ref=e7]:
+        - heading "Routing Corpus (review fixture)" [level=1] [ref=e8]
+        - paragraph [ref=e9]: Sanitized routing corpus for diagram review.
+    - tablist "Architext modes" [ref=e11]:
+      - tab "Flows" [selected] [ref=e12] [cursor=pointer]
+      - tab "Sequence" [ref=e13] [cursor=pointer]
+      - tab "C4" [ref=e14] [cursor=pointer]
+      - tab "Deployment" [ref=e15] [cursor=pointer]
+      - tab "Data/Risks" [ref=e16] [cursor=pointer]
+      - tab "Release Truth" [ref=e17] [cursor=pointer]
+      - tab "Rules" [ref=e18] [cursor=pointer]
+  - button "Collapse left navigation" [ref=e19] [cursor=pointer]: ‹ Collapse
+  - button "Collapse right details" [ref=e20] [cursor=pointer]: › Collapse
+  - complementary [ref=e21]:
+    - generic [ref=e22]:
+      - heading "Flows" [level=2] [ref=e23]
+      - searchbox "Search flows" [ref=e24]
+      - paragraph [ref=e25]: 6 of 16 flows
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - heading "Flow Views" [level=3] [ref=e28]
+        - button "Roboticus System Map system-map" [ref=e29] [cursor=pointer]:
+          - strong [ref=e30]: Roboticus System Map
+          - generic [ref=e31]: system-map
+        - button "Agent Turn Flow flow-explorer" [ref=e32] [cursor=pointer]:
+          - strong [ref=e33]: Agent Turn Flow
+          - generic [ref=e34]: flow-explorer
+      - generic [ref=e35]:
+        - heading "Flows" [level=3] [ref=e36]
+        - button "Hub Fan Dense Implemented" [ref=e37] [cursor=pointer]:
+          - strong [ref=e38]: Hub Fan Dense
+          - generic [ref=e39]: Implemented
+        - button "Pair Chain Linear Implemented" [ref=e40] [cursor=pointer]:
+          - strong [ref=e41]: Pair Chain Linear
+          - generic [ref=e42]: Implemented
+        - button "Fan Coaligned Selfcross Implemented" [ref=e43] [cursor=pointer]:
+          - strong [ref=e44]: Fan Coaligned Selfcross
+          - generic [ref=e45]: Implemented
+        - button "Coaligned Multibundle Surfaceselect Implemented" [ref=e46] [cursor=pointer]:
+          - strong [ref=e47]: Coaligned Multibundle Surfaceselect
+          - generic [ref=e48]: Implemented
+        - button "Bundle Return Gutter Implemented" [ref=e49] [cursor=pointer]:
+          - strong [ref=e50]: Bundle Return Gutter
+          - generic [ref=e51]: Implemented
+        - button "Pair Chain Short Implemented" [ref=e52] [cursor=pointer]:
+          - strong [ref=e53]: Pair Chain Short
+          - generic [ref=e54]: Implemented
+  - main [ref=e55]:
+    - generic [ref=e56]:
+      - generic [ref=e57]:
+        - heading "Agent Turn Flow" [level=2] [ref=e58]
+        - paragraph
+      - generic "Diagram controls" [ref=e59]:
+        - generic [ref=e60]:
+          - generic [ref=e61]: Line Style
+          - combobox "Line Style" [ref=e62] [cursor=pointer]:
+            - option "Orthogonal" [selected]
+            - option "Spline"
+            - option "Straight"
+        - button "Zoom out" [ref=e63] [cursor=pointer]: "-"
+        - generic [ref=e64]: 100%
+        - button "Zoom in" [ref=e65] [cursor=pointer]: +
+        - button "Fit" [ref=e66] [cursor=pointer]
+        - button "Reset" [ref=e67] [cursor=pointer]
+        - button "Focus" [ref=e68] [cursor=pointer]
+        - button "Spacing…" [ref=e69] [cursor=pointer]
+        - button "PDF" [ref=e70] [cursor=pointer]
+      - group [ref=e71]:
+        - generic "Legend" [ref=e72] [cursor=pointer]
+    - generic [ref=e77]:
+      - generic [ref=e78]:
+        - generic [ref=e79]:
+          - heading "Hub Fan Dense" [level=2] [ref=e80]
+          - paragraph
+        - generic [ref=e81]:
+          - generic [ref=e82]: Implemented
+          - button "Hide steps" [ref=e83] [cursor=pointer]
+      - generic [ref=e84]:
+        - button "Start 1 n39 → n22" [ref=e85] [cursor=pointer]:
+          - img "Start" [ref=e87]
+          - generic [ref=e90]: "1"
+          - strong [ref=e91]: n39 → n22
+        - button "Process 2 n62 → n63" [ref=e93] [cursor=pointer]:
+          - img "Process" [ref=e95]
+          - generic [ref=e98]: "2"
+          - strong [ref=e99]: n62 → n63
+        - button "Process 3 n63 → n59" [ref=e101] [cursor=pointer]:
+          - img "Process" [ref=e103]
+          - generic [ref=e106]: "3"
+          - strong [ref=e107]: n63 → n59
+        - button "Process 4 n22 → n59" [ref=e109] [cursor=pointer]:
+          - img "Process" [ref=e111]
+          - generic [ref=e114]: "4"
+          - strong [ref=e115]: n22 → n59
+        - button "Data store 5 n59 → n49" [ref=e117] [cursor=pointer]:
+          - img "Data store" [ref=e119]
+          - generic [ref=e122]: "5"
+          - strong [ref=e123]: n59 → n49
+        - button "Return 6 n49 → n59" [ref=e125] [cursor=pointer]:
+          - img "Return" [ref=e127]
+          - generic [ref=e130]: "6"
+          - strong [ref=e131]: n49 → n59
+        - button "Process 7 n59 → n36" [ref=e133] [cursor=pointer]:
+          - img "Process" [ref=e135]
+          - generic [ref=e138]: "7"
+          - strong [ref=e139]: n59 → n36
+        - button "Return 8 n36 → n59" [ref=e141] [cursor=pointer]:
+          - img "Return" [ref=e143]
+          - generic [ref=e146]: "8"
+          - strong [ref=e147]: n36 → n59
+        - button "Process 9 n59 → n33" [ref=e149] [cursor=pointer]:
+          - img "Process" [ref=e151]
+          - generic [ref=e154]: "9"
+          - strong [ref=e155]: n59 → n33
+        - button "Return 10 n33 → n59" [ref=e157] [cursor=pointer]:
+          - img "Return" [ref=e159]
+          - generic [ref=e162]: "10"
+          - strong [ref=e163]: n33 → n59
+        - button "Process 11 n59 → n30" [ref=e165] [cursor=pointer]:
+          - img "Process" [ref=e167]
+          - generic [ref=e170]: "11"
+          - strong [ref=e171]: n59 → n30
+        - button "Return 12 n30 → n59" [ref=e173] [cursor=pointer]:
+          - img "Return" [ref=e175]
+          - generic [ref=e178]: "12"
+          - strong [ref=e179]: n30 → n59
+        - button "Data store 13 n59 → n49" [ref=e181] [cursor=pointer]:
+          - img "Data store" [ref=e183]
+          - generic [ref=e186]: "13"
+          - strong [ref=e187]: n59 → n49
+        - button "Return 14 n49 → n59" [ref=e189] [cursor=pointer]:
+          - img "Return" [ref=e191]
+          - generic [ref=e194]: "14"
+          - strong [ref=e195]: n49 → n59
+        - button "Return 15 n59 → n63" [ref=e197] [cursor=pointer]:
+          - img "Return" [ref=e199]
+          - generic [ref=e202]: "15"
+          - strong [ref=e203]: n59 → n63
+        - button "Return 16 n63 → n62" [ref=e205] [cursor=pointer]:
+          - img "Return" [ref=e207]
+          - generic [ref=e210]: "16"
+          - strong [ref=e211]: n63 → n62
+        - button "Return 17 n59 → n22" [ref=e213] [cursor=pointer]:
+          - img "Return" [ref=e215]
+          - generic [ref=e218]: "17"
+          - strong [ref=e219]: n59 → n22
+        - button "Return 18 n22 → n39" [ref=e221] [cursor=pointer]:
+          - img "Return" [ref=e223]
+          - generic [ref=e226]: "18"
+          - strong [ref=e227]: n22 → n39
+  - complementary [ref=e229]:
+    - generic [ref=e230]:
+      - generic [ref=e231]:
+        - paragraph [ref=e232]: Flow
+        - heading "Hub Fan Dense" [level=2] [ref=e233]
+        - paragraph
+        - navigation "Detail sections" [ref=e234]:
+          - link "Summary" [ref=e235] [cursor=pointer]:
+            - /url: "#summary"
+          - link "Runtime" [ref=e236] [cursor=pointer]:
+            - /url: "#runtime"
+          - link "Interfaces" [ref=e237] [cursor=pointer]:
+            - /url: "#interfaces"
+          - link "Data" [ref=e238] [cursor=pointer]:
+            - /url: "#data"
+          - link "Security" [ref=e239] [cursor=pointer]:
+            - /url: "#security"
+          - link "Observability" [ref=e240] [cursor=pointer]:
+            - /url: "#observability"
+          - link "Risks" [ref=e241] [cursor=pointer]:
+            - /url: "#risks"
+          - link "Decisions" [ref=e242] [cursor=pointer]:
+            - /url: "#decisions"
+          - link "Verification" [ref=e243] [cursor=pointer]:
+            - /url: "#verification"
+      - generic [ref=e244]:
+        - generic [ref=e245]: Implemented
+        - generic [ref=e246]: 18 steps
+      - generic [ref=e247]:
+        - heading "Trigger" [level=3] [ref=e248]
+        - list [ref=e249]:
+          - listitem [ref=e250]
+      - generic [ref=e251]:
+        - heading "Guarantees" [level=3] [ref=e252]
+        - paragraph [ref=e253]: None recorded.
+      - generic [ref=e254]:
+        - heading "Failure behavior" [level=3] [ref=e255]
+        - paragraph [ref=e256]: None recorded.
+      - generic [ref=e257]:
+        - heading "Observability" [level=3] [ref=e258]
+        - paragraph [ref=e259]: None recorded.
+      - generic [ref=e260]:
+        - heading "Known gaps" [level=3] [ref=e261]
+        - paragraph [ref=e262]: None recorded.
+      - generic [ref=e263]:
+        - heading "Verification" [level=3] [ref=e264]
+        - paragraph [ref=e265]: None recorded.

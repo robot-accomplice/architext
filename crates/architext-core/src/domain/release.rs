@@ -12,6 +12,35 @@ use indexmap::IndexMap;
 use serde_json::{json, Map, Value};
 
 // ─────────────────────────────────────────────────────────────────────────────
+// § JS `??` (nullish coalescing) + spread-drop semantics
+// ─────────────────────────────────────────────────────────────────────────────
+
+/// JS `existing ?? proposed` evaluated as the value to spread under a key, where
+/// `None` means the spread would set the key to `undefined` and writeJson would
+/// drop it. `??` is NULLISH: a `null` (or absent) left operand falls through to
+/// the right; only a non-null left operand wins. The result is `undefined`
+/// (→ `None` → key dropped) iff the left is nullish AND the right is absent.
+fn js_nullish_coalesce(existing: Option<&Value>, proposed: Option<&Value>) -> Option<Value> {
+    match existing {
+        Some(v) if !v.is_null() => Some(v.clone()), // left non-nullish → left
+        _ => proposed.cloned(),                      // left nullish → right (None = undefined = drop)
+    }
+}
+
+/// Insert `key` only when the JS spread would keep it; otherwise ensure it is
+/// absent (matching `JSON.stringify` dropping `undefined`-valued keys).
+fn insert_or_drop(obj: &mut Map<String, Value>, key: &str, value: Option<Value>) {
+    match value {
+        Some(v) => {
+            obj.insert(key.to_owned(), v);
+        }
+        None => {
+            obj.shift_remove(key);
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // § release-scopes.mjs
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -494,14 +523,14 @@ pub fn merge_existing_release_plan(existing_detail: &Value, proposed_detail: &Va
         if !es.is_empty() { Value::String(es.to_owned()) } else { proposed_detail["summary"].clone() }
     };
 
-    // targetDate/targetWindow/releasedAt: existing ?? proposed.
-    // Fixtures use explicit null when absent so both JS and Rust produce null.
-    let target_date = existing_detail.get("targetDate").cloned()
-        .unwrap_or_else(|| proposed_detail.get("targetDate").cloned().unwrap_or(Value::Null));
-    let target_window = existing_detail.get("targetWindow").cloned()
-        .unwrap_or_else(|| proposed_detail.get("targetWindow").cloned().unwrap_or(Value::Null));
-    let released_at = existing_detail.get("releasedAt").cloned()
-        .unwrap_or_else(|| proposed_detail.get("releasedAt").cloned().unwrap_or(Value::Null));
+    // targetDate/targetWindow/releasedAt: JS `existing[k] ?? proposed[k]` spread
+    // onto proposed. `??` is NULLISH (treats null AND undefined as nullish), and
+    // the spread `{k: result}` drops the key when the result is `undefined` — which
+    // happens iff existing is nullish AND proposed is absent. `None` here means
+    // "drop the key" (matches what writeJson lands on disk); `Some(v)` keeps it.
+    let target_date = js_nullish_coalesce(existing_detail.get("targetDate"), proposed_detail.get("targetDate"));
+    let target_window = js_nullish_coalesce(existing_detail.get("targetWindow"), proposed_detail.get("targetWindow"));
+    let released_at = js_nullish_coalesce(existing_detail.get("releasedAt"), proposed_detail.get("releasedAt"));
 
     // evidence: existing if non-empty, else proposed
     let evidence = {
@@ -519,9 +548,9 @@ pub fn merge_existing_release_plan(existing_detail: &Value, proposed_detail: &Va
     out_obj.insert("status".into(), Value::String(status));
     out_obj.insert("posture".into(), posture);
     out_obj.insert("summary".into(), summary);
-    out_obj.insert("targetDate".into(), target_date);
-    out_obj.insert("targetWindow".into(), target_window);
-    out_obj.insert("releasedAt".into(), released_at);
+    insert_or_drop(out_obj, "targetDate", target_date);
+    insert_or_drop(out_obj, "targetWindow", target_window);
+    insert_or_drop(out_obj, "releasedAt", released_at);
     out_obj.insert("updateSource".into(), proposed_detail.get("updateSource").cloned().unwrap_or(Value::Null));
     out_obj.insert("scope".into(), Value::Object(merged_scope));
     out_obj.insert("workstreams".into(), Value::Array(merged_workstreams));

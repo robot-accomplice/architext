@@ -1,0 +1,7 @@
+[     746ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4318/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[     839ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4318/api/data-events:0
+[   52945ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4318/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[   52953ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4318/api/data-events:0
+[  670331ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:4318/src/routing/routeEdges.js?t=1780638451038:0
+[ 1185671ms] [INFO] %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold @ http://127.0.0.1:4318/node_modules/.vite/deps/react-dom_client.js?v=8796d44c:20100
+[ 1185695ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4318/api/data-events:0

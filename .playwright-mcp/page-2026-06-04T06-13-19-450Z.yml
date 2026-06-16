@@ -1,0 +1,248 @@
+- generic [ref=e5]:
+  - banner [ref=e6]:
+    - generic [ref=e7]:
+      - paragraph [ref=e8]: Architext / 1.5.0 · Schema / 1.5.0
+      - generic [ref=e9]:
+        - heading "Roboticus" [level=1] [ref=e10]
+        - paragraph [ref=e11]: Local-first autonomous agent runtime with CLI, TUI, browser dashboard, daemon, scheduler, channel adapters, memory, tool execution, model routing, and a centralized agent pipeline.
+    - tablist "Architext modes" [ref=e13]:
+      - tab "Flows" [selected] [ref=e14] [cursor=pointer]
+      - tab "Sequence" [ref=e15] [cursor=pointer]
+      - tab "C4" [ref=e16] [cursor=pointer]
+      - tab "Deployment" [ref=e17] [cursor=pointer]
+      - tab "Data/Risks" [ref=e18] [cursor=pointer]
+      - tab "Release Truth" [ref=e19] [cursor=pointer]
+      - tab "Rules" [ref=e20] [cursor=pointer]
+  - button "Collapse left navigation" [ref=e21] [cursor=pointer]: ‹ Collapse
+  - button "Expand right details" [ref=e22] [cursor=pointer]: ‹ Expand
+  - complementary [ref=e23]:
+    - generic [ref=e24]:
+      - heading "Flows" [level=2] [ref=e25]
+      - searchbox "Search flows" [ref=e26]
+      - paragraph [ref=e27]: 6 of 15 flows
+    - generic [ref=e28]:
+      - generic [ref=e29]:
+        - heading "Flow Views" [level=3] [ref=e30]
+        - button "Roboticus System Map High-level map of operators, first-party surfaces, adapters, runtime services, persistence, external providers, and release validation. system-map" [ref=e31] [cursor=pointer]:
+          - strong [ref=e32]: Roboticus System Map
+          - generic [ref=e33]: High-level map of operators, first-party surfaces, adapters, runtime services, persistence, external providers, and release validation.
+          - generic [ref=e34]: system-map
+        - button "Agent Turn Flow Shows how conversational input moves from surfaces/adapters into the unified pipeline, through memory/tools/models, and back to the user. flow-explorer" [ref=e35] [cursor=pointer]:
+          - strong [ref=e36]: Agent Turn Flow
+          - generic [ref=e37]: Shows how conversational input moves from surfaces/adapters into the unified pipeline, through memory/tools/models, and back to the user.
+          - generic [ref=e38]: flow-explorer
+        - button "Sensitive Data Flow Highlights where sensitive content, secrets, memory, media, mail, wallet data, and telemetry move through the runtime. dataflow" [ref=e388] [cursor=pointer]:
+          - strong [ref=e389]: Sensitive Data Flow
+          - generic [ref=e390]: Highlights where sensitive content, secrets, memory, media, mail, wallet data, and telemetry move through the runtime.
+          - generic [ref=e391]: dataflow
+      - generic [ref=e39]:
+        - heading "Flows" [level=3] [ref=e40]
+        - button "Interactive agent turn A user message enters through a first-party or channel surface and is normalized into the unified pipeline for session, memory, tool, model, guard, persistence, and response handling. Implemented" [ref=e41] [cursor=pointer]:
+          - strong [ref=e42]: Interactive agent turn
+          - generic [ref=e43]: A user message enters through a first-party or channel surface and is normalized into the unified pipeline for session, memory, tool, model, guard, persistence, and response handling.
+          - generic [ref=e44]: Implemented
+        - button "Local CLI/TUI control Local first-party process surfaces call application internals and shared services directly instead of using REST or browser-only websocket seams. Partial" [ref=e45] [cursor=pointer]:
+          - strong [ref=e46]: Local CLI/TUI control
+          - generic [ref=e47]: Local first-party process surfaces call application internals and shared services directly instead of using REST or browser-only websocket seams.
+          - generic [ref=e48]: Partial
+        - button "Model inference and routing The pipeline asks the LLM service to route, sanitize, execute, observe, and fall back across configured cloud and local model providers. Implemented" [ref=e49] [cursor=pointer]:
+          - strong [ref=e50]: Model inference and routing
+          - generic [ref=e51]: The pipeline asks the LLM service to route, sanitize, execute, observe, and fall back across configured cloud and local model providers.
+          - generic [ref=e52]: Implemented
+        - button "Memory retrieval, ingest, and maintenance The pipeline and background services retrieve, persist, curate, index, and repair memory records in the local SQLite store. Implemented" [ref=e53] [cursor=pointer]:
+          - strong [ref=e54]: Memory retrieval, ingest, and maintenance
+          - generic [ref=e55]: The pipeline and background services retrieve, persist, curate, index, and repair memory records in the local SQLite store.
+          - generic [ref=e56]: Implemented
+        - button "Skill and plugin lifecycle Skills and plugins are loaded, cataloged, installed, activated, edited, deleted, and tracked through shared state rather than dashboard-only logic. Partial" [ref=e57] [cursor=pointer]:
+          - strong [ref=e58]: Skill and plugin lifecycle
+          - generic [ref=e59]: Skills and plugins are loaded, cataloged, installed, activated, edited, deleted, and tracked through shared state rather than dashboard-only logic.
+          - generic [ref=e60]: Partial
+        - button "Tool and MCP execution Tool calls, MCP resources, and plugin-backed tools are resolved through shared tool surfaces and recorded as typed evidence. Implemented" [ref=e61] [cursor=pointer]:
+          - strong [ref=e62]: Tool and MCP execution
+          - generic [ref=e63]: Tool calls, MCP resources, and plugin-backed tools are resolved through shared tool surfaces and recorded as typed evidence.
+          - generic [ref=e64]: Implemented
+  - main [ref=e65]:
+    - generic [ref=e66]:
+      - generic [ref=e67]:
+        - heading "Agent Turn Flow" [level=2] [ref=e68]
+        - paragraph [ref=e69]: Shows how conversational input moves from surfaces/adapters into the unified pipeline, through memory/tools/models, and back to the user.
+      - generic "Diagram controls" [ref=e70]:
+        - generic [ref=e71]:
+          - generic [ref=e72]: Line Style
+          - combobox "Line Style" [ref=e73] [cursor=pointer]:
+            - option "Orthogonal" [selected]
+            - option "Spline"
+            - option "Straight"
+        - button "Zoom out" [ref=e74] [cursor=pointer]: "-"
+        - generic [ref=e75]: 92%
+        - button "Zoom in" [active] [ref=e76] [cursor=pointer]: +
+        - button "Fit" [ref=e77] [cursor=pointer]
+        - button "Reset" [ref=e78] [cursor=pointer]
+        - button "Exit focus" [ref=e566] [cursor=pointer]
+        - button "PDF" [ref=e80] [cursor=pointer]
+      - group [ref=e81]:
+        - generic "Legend" [ref=e82] [cursor=pointer]
+    - generic [ref=e86]:
+      - group "Agent Turn Flow relationships":
+        - button "Messages, tool-call history, context, and model policy are normalized at the LLM boundary." [ref=e392] [cursor=pointer]:
+          - generic [ref=e393]:
+            - generic:
+              - generic: "1"
+        - button "Cloud route uses configured keys, provider formats, fallback, and circuit state." [ref=e395] [cursor=pointer]:
+          - generic [ref=e396]:
+            - generic:
+              - generic: "2"
+        - button "Cloud providers return model output, tool calls, usage, or typed provider errors." [ref=e398] [cursor=pointer]:
+          - generic [ref=e399]:
+            - generic:
+              - generic: "3"
+        - button "Local route uses operator-managed local inference servers and records host/resource-sensitive latency." [ref=e401] [cursor=pointer]:
+          - generic [ref=e402]:
+            - generic:
+              - generic: "4"
+        - button "Local providers return model output or typed reachability/resource failures." [ref=e404] [cursor=pointer]:
+          - generic [ref=e405]:
+            - generic:
+              - generic: "5"
+        - button "Final provider/model, failed attempts, framework latency, model latency, retries, and fallback are observable." [ref=e407] [cursor=pointer]:
+          - generic [ref=e408]:
+            - generic:
+              - generic: "6"
+        - button "The LLM service returns the selected final route, content/tool calls, and provider diagnostics to the pipeline." [ref=e410] [cursor=pointer]:
+          - generic [ref=e411]:
+            - generic:
+              - generic: "7"
+      - generic:
+        - heading "Entry" [level=3]
+      - generic:
+        - heading "Factory" [level=3]
+      - generic:
+        - heading "Context and Tools" [level=3]
+      - generic:
+        - heading "Inference and Output" [level=3]
+      - button "Actor Operator actor" [ref=e413] [cursor=pointer]:
+        - generic [ref=e414]:
+          - img "Actor" [ref=e415]
+          - strong [ref=e417]: Operator
+        - generic [ref=e418]: actor
+      - button "Client CLI client" [ref=e419] [cursor=pointer]:
+        - generic [ref=e420]:
+          - img "Client" [ref=e421]
+          - strong [ref=e423]: CLI
+        - generic [ref=e424]: client
+      - button "Client TUI client" [ref=e425] [cursor=pointer]:
+        - generic [ref=e426]:
+          - img "Client" [ref=e427]
+          - strong [ref=e429]: TUI
+        - generic [ref=e430]: client
+      - button "Client Browser dashboard client" [ref=e431] [cursor=pointer]:
+        - generic [ref=e432]:
+          - img "Client" [ref=e433]
+          - strong [ref=e435]: Browser dashboard
+        - generic [ref=e436]: client
+      - button "Service Dashboard websocket topic/control plane service" [ref=e437] [cursor=pointer]:
+        - generic [ref=e438]:
+          - img "Service" [ref=e439]
+          - strong [ref=e441]: Dashboard websocket topic/control plane
+        - generic [ref=e442]: service
+      - button "Service External channel adapters service" [ref=e443] [cursor=pointer]:
+        - generic [ref=e444]:
+          - img "Service" [ref=e445]
+          - strong [ref=e447]: External channel adapters
+        - generic [ref=e448]: service
+      - button "Service Unified Pipeline service" [ref=e449] [cursor=pointer]:
+        - generic [ref=e450]:
+          - img "Service" [ref=e451]
+          - strong [ref=e453]: Unified Pipeline
+        - generic [ref=e454]: service
+      - button "Service Memory system service" [ref=e455] [cursor=pointer]:
+        - generic [ref=e456]:
+          - img "Service" [ref=e457]
+          - strong [ref=e459]: Memory system
+        - generic [ref=e460]: service
+      - button "Service Roboticus product knowledge service service" [ref=e461] [cursor=pointer]:
+        - generic [ref=e462]:
+          - img "Service" [ref=e463]
+          - strong [ref=e465]: Roboticus product knowledge service
+        - generic [ref=e466]: service
+      - button "Service Skills and plugins service" [ref=e467] [cursor=pointer]:
+        - generic [ref=e468]:
+          - img "Service" [ref=e469]
+          - strong [ref=e471]: Skills and plugins
+        - generic [ref=e472]: service
+      - button "Service MCP system service" [ref=e473] [cursor=pointer]:
+        - generic [ref=e474]:
+          - img "Service" [ref=e475]
+          - strong [ref=e477]: MCP system
+        - generic [ref=e478]: service
+      - button "Data store SQLite store data-store" [ref=e479] [cursor=pointer]:
+        - generic [ref=e480]:
+          - img "Data store" [ref=e481]
+          - strong [ref=e483]: SQLite store
+        - generic [ref=e484]: data-store
+      - button "Service LLM service and model router service" [ref=e485] [cursor=pointer]:
+        - generic [ref=e486]:
+          - img "Service" [ref=e487]
+          - strong [ref=e489]: LLM service and model router
+        - generic [ref=e490]: service
+      - button "External service Cloud model providers external-service" [ref=e491] [cursor=pointer]:
+        - generic [ref=e492]:
+          - img "External service" [ref=e493]
+          - strong [ref=e495]: Cloud model providers
+        - generic [ref=e496]: external-service
+      - button "External service Local model frameworks external-service" [ref=e497] [cursor=pointer]:
+        - generic [ref=e498]:
+          - img "External service" [ref=e499]
+          - strong [ref=e501]: Local model frameworks
+        - generic [ref=e502]: external-service
+      - button "Service Observability and diagnostics service" [ref=e503] [cursor=pointer]:
+        - generic [ref=e504]:
+          - img "Service" [ref=e505]
+          - strong [ref=e507]: Observability and diagnostics
+        - generic [ref=e508]: service
+    - generic [ref=e233]:
+      - generic [ref=e234]:
+        - generic [ref=e235]:
+          - heading "Model inference and routing" [level=2] [ref=e509]
+          - paragraph [ref=e237]: The pipeline asks the LLM service to route, sanitize, execute, observe, and fall back across configured cloud and local model providers.
+        - generic [ref=e238]:
+          - generic [ref=e239]: Implemented
+          - button "Hide steps" [ref=e240] [cursor=pointer]
+      - generic [ref=e241]:
+        - button "Start 1 Unified Pipeline → LLM service and model router prepare inference request" [ref=e510] [cursor=pointer]:
+          - img "Start" [ref=e512]
+          - generic [ref=e515]: "1"
+          - strong [ref=e516]: Unified Pipeline → LLM service and model router
+          - generic [ref=e517]: prepare inference request
+        - button "Process 2 LLM service and model router → Cloud model providers call cloud provider" [ref=e518] [cursor=pointer]:
+          - img "Process" [ref=e520]
+          - generic [ref=e523]: "2"
+          - strong [ref=e524]: LLM service and model router → Cloud model providers
+          - generic [ref=e525]: call cloud provider
+        - button "Process 3 Cloud model providers → LLM service and model router return cloud provider result" [ref=e526] [cursor=pointer]:
+          - img "Process" [ref=e528]
+          - generic [ref=e531]: "3"
+          - strong [ref=e532]: Cloud model providers → LLM service and model router
+          - generic [ref=e533]: return cloud provider result
+        - button "Process 4 LLM service and model router → Local model frameworks call local provider" [ref=e534] [cursor=pointer]:
+          - img "Process" [ref=e536]
+          - generic [ref=e539]: "4"
+          - strong [ref=e540]: LLM service and model router → Local model frameworks
+          - generic [ref=e541]: call local provider
+        - button "Process 5 Local model frameworks → LLM service and model router return local provider result" [ref=e542] [cursor=pointer]:
+          - img "Process" [ref=e544]
+          - generic [ref=e547]: "5"
+          - strong [ref=e548]: Local model frameworks → LLM service and model router
+          - generic [ref=e549]: return local provider result
+        - button "Process 6 LLM service and model router → Observability and diagnostics record model route and latency" [ref=e550] [cursor=pointer]:
+          - img "Process" [ref=e552]
+          - generic [ref=e555]: "6"
+          - strong [ref=e556]: LLM service and model router → Observability and diagnostics
+          - generic [ref=e557]: record model route and latency
+        - button "Stop 7 LLM service and model router → Unified Pipeline return inference result" [ref=e558] [cursor=pointer]:
+          - img "Stop" [ref=e560]
+          - generic [ref=e563]: "7"
+          - strong [ref=e564]: LLM service and model router → Unified Pipeline
+          - generic [ref=e565]: return inference result
+  - complementary [ref=e386]:
+    - button "Details" [ref=e387] [cursor=pointer]

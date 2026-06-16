@@ -1,0 +1,35 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Architext / 1.6.0 · Schema / 1.5.0
+      - generic [ref=e7]:
+        - heading "Routing Corpus (review fixture)" [level=1] [ref=e8]
+        - paragraph [ref=e9]: Sanitized routing corpus for diagram review.
+    - generic [ref=e10]:
+      - tablist "Architext modes" [ref=e11]:
+        - tab "Flows" [ref=e12] [cursor=pointer]
+        - tab "Sequence" [ref=e13] [cursor=pointer]
+        - tab "C4" [ref=e14] [cursor=pointer]
+        - tab "Deployment" [ref=e15] [cursor=pointer]
+        - tab "Data/Risks" [ref=e16] [cursor=pointer]
+        - tab "Repo Tree" [ref=e17] [cursor=pointer]
+        - tab "Blast Radius" [selected] [ref=e18] [cursor=pointer]
+        - tab "Release Truth" [ref=e19] [cursor=pointer]
+        - tab "Rules" [ref=e20] [cursor=pointer]
+      - button "Open diagram configuration" [ref=e21] [cursor=pointer]: ⚙ Config
+  - button "Collapse left navigation" [ref=e22] [cursor=pointer]: ‹ Collapse
+  - button "Expand right details" [ref=e23] [cursor=pointer]: ‹ Expand
+  - complementary [ref=e24]:
+    - generic [ref=e25]:
+      - heading "Blast Radius" [level=2] [ref=e26]
+      - paragraph [ref=e27]: Search to see what an element reaches.
+    - generic [ref=e29]:
+      - img "search"
+      - searchbox "Search components, files…" [active] [ref=e30]
+    - paragraph [ref=e32]: Start typing to search the repository.
+  - main [ref=e33]:
+    - generic [ref=e35]:
+      - heading "Blast radius" [level=2] [ref=e36]
+      - paragraph [ref=e37]: Search for a component, file, or concept on the left to see where it reaches across the repository and architecture — its files, dependencies, dependents, flows, decisions, and risks.
+  - complementary [ref=e38]:
+    - button "Details" [ref=e39] [cursor=pointer]

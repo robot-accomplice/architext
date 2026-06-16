@@ -1,0 +1,87 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Architext / 1.5.0 · Schema / 1.5.0
+      - generic [ref=e7]:
+        - heading "Roboticus" [level=1] [ref=e8]
+        - paragraph [ref=e9]: Local-first autonomous agent runtime with CLI, TUI, browser dashboard, daemon, scheduler, channel adapters, memory, tool execution, model routing, and a centralized agent pipeline.
+    - tablist "Architext modes" [ref=e11]:
+      - tab "Flows" [selected] [ref=e12] [cursor=pointer]
+      - tab "Sequence" [ref=e13] [cursor=pointer]
+      - tab "C4" [ref=e14] [cursor=pointer]
+      - tab "Deployment" [ref=e15] [cursor=pointer]
+      - tab "Data/Risks" [ref=e16] [cursor=pointer]
+      - tab "Release Truth" [ref=e17] [cursor=pointer]
+      - tab "Rules" [ref=e18] [cursor=pointer]
+  - button "Collapse left navigation" [ref=e19] [cursor=pointer]: ‹ Collapse
+  - button "Expand right details" [ref=e20] [cursor=pointer]: ‹ Expand
+  - complementary [ref=e21]:
+    - generic [ref=e22]:
+      - heading "Flows" [level=2] [ref=e23]
+      - searchbox "Search flows" [ref=e24]
+      - paragraph [ref=e25]: 6 of 15 flows
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - heading "Flow Views" [level=3] [ref=e28]
+        - button "Roboticus System Map High-level map of operators, first-party surfaces, adapters, runtime services, persistence, external providers, and release validation. system-map" [ref=e29] [cursor=pointer]:
+          - strong [ref=e30]: Roboticus System Map
+          - generic [ref=e31]: High-level map of operators, first-party surfaces, adapters, runtime services, persistence, external providers, and release validation.
+          - generic [ref=e32]: system-map
+        - button "Agent Turn Flow Shows how conversational input moves from surfaces/adapters into the unified pipeline, through memory/tools/models, and back to the user. flow-explorer" [ref=e33] [cursor=pointer]:
+          - strong [ref=e34]: Agent Turn Flow
+          - generic [ref=e35]: Shows how conversational input moves from surfaces/adapters into the unified pipeline, through memory/tools/models, and back to the user.
+          - generic [ref=e36]: flow-explorer
+      - generic [ref=e37]:
+        - heading "Flows" [level=3] [ref=e38]
+        - button "Interactive agent turn A user message enters through a first-party or channel surface and is normalized into the unified pipeline for session, memory, tool, model, guard, persistence, and response handling. Implemented" [ref=e39] [cursor=pointer]:
+          - strong [ref=e40]: Interactive agent turn
+          - generic [ref=e41]: A user message enters through a first-party or channel surface and is normalized into the unified pipeline for session, memory, tool, model, guard, persistence, and response handling.
+          - generic [ref=e42]: Implemented
+        - button "Local CLI/TUI control Local first-party process surfaces call application internals and shared services directly instead of using REST or browser-only websocket seams. Partial" [ref=e43] [cursor=pointer]:
+          - strong [ref=e44]: Local CLI/TUI control
+          - generic [ref=e45]: Local first-party process surfaces call application internals and shared services directly instead of using REST or browser-only websocket seams.
+          - generic [ref=e46]: Partial
+        - button "Model inference and routing The pipeline asks the LLM service to route, sanitize, execute, observe, and fall back across configured cloud and local model providers. Implemented" [ref=e47] [cursor=pointer]:
+          - strong [ref=e48]: Model inference and routing
+          - generic [ref=e49]: The pipeline asks the LLM service to route, sanitize, execute, observe, and fall back across configured cloud and local model providers.
+          - generic [ref=e50]: Implemented
+        - button "Memory retrieval, ingest, and maintenance The pipeline and background services retrieve, persist, curate, index, and repair memory records in the local SQLite store. Implemented" [ref=e51] [cursor=pointer]:
+          - strong [ref=e52]: Memory retrieval, ingest, and maintenance
+          - generic [ref=e53]: The pipeline and background services retrieve, persist, curate, index, and repair memory records in the local SQLite store.
+          - generic [ref=e54]: Implemented
+        - button "Skill and plugin lifecycle Skills and plugins are loaded, cataloged, installed, activated, edited, deleted, and tracked through shared state rather than dashboard-only logic. Partial" [ref=e55] [cursor=pointer]:
+          - strong [ref=e56]: Skill and plugin lifecycle
+          - generic [ref=e57]: Skills and plugins are loaded, cataloged, installed, activated, edited, deleted, and tracked through shared state rather than dashboard-only logic.
+          - generic [ref=e58]: Partial
+        - button "Tool and MCP execution Tool calls, MCP resources, and plugin-backed tools are resolved through shared tool surfaces and recorded as typed evidence. Implemented" [ref=e59] [cursor=pointer]:
+          - strong [ref=e60]: Tool and MCP execution
+          - generic [ref=e61]: Tool calls, MCP resources, and plugin-backed tools are resolved through shared tool surfaces and recorded as typed evidence.
+          - generic [ref=e62]: Implemented
+  - main [ref=e63]:
+    - generic [ref=e64]:
+      - generic [ref=e65]:
+        - heading "Agent Turn Flow" [level=2] [ref=e66]
+        - paragraph [ref=e67]: Shows how conversational input moves from surfaces/adapters into the unified pipeline, through memory/tools/models, and back to the user.
+      - generic "Diagram controls" [ref=e68]:
+        - generic [ref=e69]:
+          - generic [ref=e70]: Line Style
+          - combobox "Line Style" [ref=e71] [cursor=pointer]:
+            - option "Orthogonal" [selected]
+            - option "Spline"
+            - option "Straight"
+        - button "Zoom out" [ref=e72] [cursor=pointer]: "-"
+        - generic [ref=e73]: 100%
+        - button "Zoom in" [ref=e74] [cursor=pointer]: +
+        - button "Fit" [ref=e75] [cursor=pointer]
+        - button "Reset" [ref=e76] [cursor=pointer]
+        - button "Focus" [ref=e77] [cursor=pointer]
+        - button "PDF" [ref=e78] [cursor=pointer]
+      - group [ref=e79]:
+        - generic "Legend" [ref=e80] [cursor=pointer]
+    - generic [ref=e86]:
+      - heading "Interactive agent turn" [level=2] [ref=e88]
+      - generic [ref=e89]:
+        - generic [ref=e90]: Implemented
+        - button "Show steps" [ref=e91] [cursor=pointer]
+  - complementary [ref=e92]:
+    - button "Details" [ref=e93] [cursor=pointer]

@@ -1,0 +1,104 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Architext / 1.6.0 · Schema / 1.5.0
+      - generic [ref=e7]:
+        - heading "Routing Corpus (review fixture)" [level=1] [ref=e8]
+        - paragraph [ref=e9]: Sanitized routing corpus for diagram review.
+    - generic [ref=e10]:
+      - tablist "Architext modes" [ref=e11]:
+        - tab "Flows" [ref=e12] [cursor=pointer]
+        - tab "Sequence" [ref=e13] [cursor=pointer]
+        - tab "C4" [ref=e14] [cursor=pointer]
+        - tab "Deployment" [ref=e15] [cursor=pointer]
+        - tab "Data/Risks" [ref=e16] [cursor=pointer]
+        - tab "Repo Tree" [selected] [ref=e17] [cursor=pointer]
+        - tab "Release Truth" [ref=e18] [cursor=pointer]
+        - tab "Rules" [ref=e19] [cursor=pointer]
+      - button "Open diagram configuration" [ref=e20] [cursor=pointer]: ⚙ Config
+  - button "Collapse left navigation" [ref=e21] [cursor=pointer]: ‹ Collapse
+  - button "Collapse right details" [ref=e22] [cursor=pointer]: › Collapse
+  - complementary [ref=e23]:
+    - generic [ref=e24]:
+      - heading "Repo Tree" [level=2] [ref=e25]
+      - paragraph [ref=e26]: The repository's tracked files, colored by the architecture node that owns each path. Click a file to inspect its component.
+    - generic [ref=e27]:
+      - heading "Color by" [level=3] [ref=e28]
+      - group "Color lens" [ref=e29]:
+        - button "C4 type" [ref=e30] [cursor=pointer]
+        - button "Flow" [ref=e31] [cursor=pointer]
+    - generic [ref=e32]:
+      - heading "Component types" [level=3] [ref=e33]
+      - list [ref=e34]:
+        - listitem [ref=e35]:
+          - generic [ref=e37]: Client
+        - listitem [ref=e38]:
+          - generic [ref=e40]: Software system
+        - listitem [ref=e41]:
+          - generic [ref=e43]: Service
+        - listitem [ref=e44]:
+          - generic [ref=e46]: External service
+        - listitem [ref=e47]:
+          - generic [ref=e49]: Data store
+        - listitem [ref=e50]:
+          - generic [ref=e52]: Worker
+        - listitem [ref=e53]:
+          - generic [ref=e55]: Module
+        - listitem [ref=e56]:
+          - generic [ref=e58]: Queue
+  - main [ref=e59]:
+    - generic [ref=e60]:
+      - generic [ref=e62]:
+        - heading "Repo Tree" [level=2] [ref=e63]
+        - paragraph [ref=e64]: 0 files — colored by the architecture node that owns each path.
+      - paragraph [ref=e67]:
+        - text: No files found. Run
+        - code [ref=e68]: architext serve
+        - text: inside a git repository.
+  - complementary [ref=e69]:
+    - generic [ref=e70]:
+      - generic [ref=e71]:
+        - paragraph [ref=e72]: Flow
+        - heading "Hub Fan Dense" [level=2] [ref=e73]
+        - paragraph
+        - navigation "Detail sections" [ref=e74]:
+          - link "Summary" [ref=e75] [cursor=pointer]:
+            - /url: "#summary"
+          - link "Runtime" [ref=e76] [cursor=pointer]:
+            - /url: "#runtime"
+          - link "Interfaces" [ref=e77] [cursor=pointer]:
+            - /url: "#interfaces"
+          - link "Data" [ref=e78] [cursor=pointer]:
+            - /url: "#data"
+          - link "Security" [ref=e79] [cursor=pointer]:
+            - /url: "#security"
+          - link "Observability" [ref=e80] [cursor=pointer]:
+            - /url: "#observability"
+          - link "Risks" [ref=e81] [cursor=pointer]:
+            - /url: "#risks"
+          - link "Decisions" [ref=e82] [cursor=pointer]:
+            - /url: "#decisions"
+          - link "Verification" [ref=e83] [cursor=pointer]:
+            - /url: "#verification"
+      - generic [ref=e84]:
+        - generic [ref=e85]: Implemented
+        - generic [ref=e86]: 18 steps
+      - generic [ref=e87]:
+        - heading "Trigger" [level=3] [ref=e88]
+        - list [ref=e89]:
+          - listitem [ref=e90]
+      - generic [ref=e91]:
+        - heading "Guarantees" [level=3] [ref=e92]
+        - paragraph [ref=e93]: None recorded.
+      - generic [ref=e94]:
+        - heading "Failure behavior" [level=3] [ref=e95]
+        - paragraph [ref=e96]: None recorded.
+      - generic [ref=e97]:
+        - heading "Observability" [level=3] [ref=e98]
+        - paragraph [ref=e99]: None recorded.
+      - generic [ref=e100]:
+        - heading "Known gaps" [level=3] [ref=e101]
+        - paragraph [ref=e102]: None recorded.
+      - generic [ref=e103]:
+        - heading "Verification" [level=3] [ref=e104]
+        - paragraph [ref=e105]: None recorded.

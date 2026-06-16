@@ -1,0 +1,130 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e3]:
+    - banner [ref=e4]:
+      - generic [ref=e5]:
+        - paragraph [ref=e6]: Architext / 1.6.0 · Schema / 1.5.0
+        - generic [ref=e7]:
+          - heading "Routing Corpus (review fixture)" [level=1] [ref=e8]
+          - paragraph [ref=e9]: Sanitized routing corpus for diagram review.
+      - generic [ref=e10]:
+        - tablist "Architext modes" [ref=e11]:
+          - tab "Flows" [selected] [ref=e12] [cursor=pointer]
+          - tab "Sequence" [ref=e13] [cursor=pointer]
+          - tab "C4" [ref=e14] [cursor=pointer]
+          - tab "Deployment" [ref=e15] [cursor=pointer]
+          - tab "Data/Risks" [ref=e16] [cursor=pointer]
+          - tab "Repo Tree" [ref=e17] [cursor=pointer]
+          - tab "Release Truth" [ref=e18] [cursor=pointer]
+          - tab "Rules" [ref=e19] [cursor=pointer]
+        - button "Open diagram configuration" [ref=e20] [cursor=pointer]: ⚙ Config
+    - button "Collapse left navigation" [ref=e21] [cursor=pointer]: ‹ Collapse
+    - button "Collapse right details" [ref=e22] [cursor=pointer]: › Collapse
+    - complementary [ref=e23]:
+      - generic [ref=e24]:
+        - heading "Flows" [level=2] [ref=e529]
+        - searchbox "Search flows" [ref=e530]
+        - paragraph [ref=e531]: 6 of 16 flows
+      - generic [ref=e532]:
+        - generic [ref=e533]:
+          - heading "Flow Views" [level=3] [ref=e534]
+          - button "Roboticus System Map system-map" [ref=e535] [cursor=pointer]:
+            - strong [ref=e536]: Roboticus System Map
+            - generic [ref=e537]: system-map
+          - button "Agent Turn Flow flow-explorer" [ref=e538] [cursor=pointer]:
+            - strong [ref=e539]: Agent Turn Flow
+            - generic [ref=e540]: flow-explorer
+        - generic [ref=e541]:
+          - heading "Flows" [level=3] [ref=e542]
+          - button "Hub Fan Dense Implemented" [ref=e543] [cursor=pointer]:
+            - strong [ref=e544]: Hub Fan Dense
+            - generic [ref=e545]: Implemented
+          - button "Pair Chain Linear Implemented" [ref=e546] [cursor=pointer]:
+            - strong [ref=e547]: Pair Chain Linear
+            - generic [ref=e548]: Implemented
+          - button "Fan Coaligned Selfcross Implemented" [ref=e549] [cursor=pointer]:
+            - strong [ref=e550]: Fan Coaligned Selfcross
+            - generic [ref=e551]: Implemented
+          - button "Coaligned Multibundle Surfaceselect Implemented" [ref=e552] [cursor=pointer]:
+            - strong [ref=e553]: Coaligned Multibundle Surfaceselect
+            - generic [ref=e554]: Implemented
+          - button "Bundle Return Gutter Implemented" [ref=e555] [cursor=pointer]:
+            - strong [ref=e556]: Bundle Return Gutter
+            - generic [ref=e557]: Implemented
+          - button "Pair Chain Short Implemented" [ref=e558] [cursor=pointer]:
+            - strong [ref=e559]: Pair Chain Short
+            - generic [ref=e560]: Implemented
+    - main [ref=e57]:
+      - generic [ref=e561]:
+        - generic:
+          - heading "Agent Turn Flow" [level=2]
+          - paragraph
+        - generic "Diagram controls" [ref=e562]:
+          - generic [ref=e563]:
+            - generic [ref=e564]: Line Style
+            - combobox "Line Style" [ref=e565] [cursor=pointer]:
+              - option "Orthogonal" [selected]
+              - option "Spline"
+              - option "Straight"
+          - button "Zoom out" [ref=e566] [cursor=pointer]: "-"
+          - generic [ref=e567]: 100%
+          - button "Zoom in" [ref=e568] [cursor=pointer]: +
+          - button "Fit" [ref=e569] [cursor=pointer]
+          - button "Reset" [ref=e570] [cursor=pointer]
+          - button "Focus" [ref=e571] [cursor=pointer]
+          - button "PDF" [ref=e572] [cursor=pointer]
+        - group [ref=e573]:
+          - generic "Legend" [ref=e574] [cursor=pointer]
+      - generic [ref=e580]:
+        - heading "Hub Fan Dense" [level=2] [ref=e582]
+        - generic [ref=e583]:
+          - generic [ref=e584]: Implemented
+          - button "Show steps" [ref=e742] [cursor=pointer]
+    - complementary [ref=e228]:
+      - generic [ref=e229]:
+        - generic [ref=e230]:
+          - paragraph [ref=e231]: Flow
+          - heading "Hub Fan Dense" [level=2] [ref=e731]
+          - paragraph
+          - navigation "Detail sections" [ref=e233]:
+            - link "Summary" [ref=e234] [cursor=pointer]:
+              - /url: "#summary"
+            - link "Runtime" [ref=e235] [cursor=pointer]:
+              - /url: "#runtime"
+            - link "Interfaces" [ref=e236] [cursor=pointer]:
+              - /url: "#interfaces"
+            - link "Data" [ref=e237] [cursor=pointer]:
+              - /url: "#data"
+            - link "Security" [ref=e238] [cursor=pointer]:
+              - /url: "#security"
+            - link "Observability" [ref=e239] [cursor=pointer]:
+              - /url: "#observability"
+            - link "Risks" [ref=e240] [cursor=pointer]:
+              - /url: "#risks"
+            - link "Decisions" [ref=e241] [cursor=pointer]:
+              - /url: "#decisions"
+            - link "Verification" [ref=e242] [cursor=pointer]:
+              - /url: "#verification"
+        - generic [ref=e243]:
+          - generic [ref=e244]: Implemented
+          - generic [ref=e732]: 18 steps
+        - generic [ref=e246]:
+          - heading "Trigger" [level=3] [ref=e733]
+          - list [ref=e248]:
+            - listitem [ref=e734]
+        - generic [ref=e250]:
+          - heading "Guarantees" [level=3] [ref=e735]
+          - paragraph [ref=e736]: None recorded.
+        - generic [ref=e253]:
+          - heading "Failure behavior" [level=3] [ref=e737]
+          - paragraph [ref=e738]: None recorded.
+        - generic [ref=e256]:
+          - heading "Observability" [level=3] [ref=e739]
+          - paragraph [ref=e258]: None recorded.
+        - generic [ref=e259]:
+          - heading "Known gaps" [level=3] [ref=e740]
+          - paragraph [ref=e261]: None recorded.
+        - generic [ref=e262]:
+          - heading "Verification" [level=3] [ref=e741]
+          - paragraph [ref=e264]: None recorded.
+  - status:
+    - generic: Routing edges…

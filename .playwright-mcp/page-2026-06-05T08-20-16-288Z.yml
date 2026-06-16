@@ -1,0 +1,20 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Architext / 1.5.0
+      - generic [ref=e7]:
+        - heading "Recovery" [level=1] [ref=e8]
+        - paragraph [ref=e9]: Target data could not produce a valid architecture model.
+    - button "RELOAD" [ref=e11] [cursor=pointer]
+  - main [ref=e12]:
+    - generic [ref=e13]:
+      - paragraph [ref=e14]: Data Health
+      - heading "Architext is running in recovery mode" [level=2] [ref=e15]
+      - paragraph [ref=e16]: The served viewer is available, but the current data failed loading or validation. Use the constrained repair actions below; they reuse Architext doctor and sync behavior.
+      - generic [ref=e17]:
+        - button "CHECK STATUS" [ref=e18] [cursor=pointer]
+        - button "DOCTOR DRY RUN" [ref=e19] [cursor=pointer]
+        - button "APPLY DOCTOR" [ref=e20] [cursor=pointer]
+        - button "SYNC REPAIR" [ref=e21] [cursor=pointer]
+      - group [ref=e22]:
+        - generic "DETAILS" [ref=e23] [cursor=pointer]
