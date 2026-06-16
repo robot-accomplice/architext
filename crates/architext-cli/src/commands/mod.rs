@@ -1,7 +1,9 @@
 pub mod build;
 pub mod clean;
+pub mod doctor;
 pub mod explain;
 pub mod prompt;
+pub mod serve;
 pub mod skill;
 pub mod status;
 pub mod sync;
