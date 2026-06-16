@@ -10,7 +10,13 @@
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
-use serde_json::{json, Map, Value};
+use serde_json::{json, Value};
+
+// Re-use pure domain functions — single source of truth.
+use crate::domain::release::{
+    release_items as release_items_domain,
+    release_summary_from_detail as release_summary_from_detail_domain,
+};
 
 // ---------------------------------------------------------------------------
 // Public entry points
@@ -211,7 +217,7 @@ fn validate_release_references(releases: &Releases, errors: &mut Vec<String>) {
         }
 
         // Collect all scope items
-        let items = release_items(detail);
+        let items = release_items_domain(detail);
         let item_ids: HashSet<&str> = items
             .iter()
             .filter_map(|i| i.get("id").and_then(Value::as_str))
@@ -343,42 +349,10 @@ fn validate_release_references(releases: &Releases, errors: &mut Vec<String>) {
 /// Regenerates the index summary from the detail, normalizes both, and
 /// compares their JSON serializations.
 fn same_generated_release_summary(summary: &Value, detail: &Value, file: &str) -> bool {
-    let generated = release_summary_from_detail(detail, file);
+    let generated = release_summary_from_detail_domain(detail, file);
     let norm_summary = normalize_release_summary(summary);
     let norm_generated = normalize_release_summary(&generated);
-    // Use serde_json::to_string for the JSON.stringify equivalent
     serde_json::to_string(&norm_summary).ok() == serde_json::to_string(&norm_generated).ok()
-}
-
-/// Mirrors `releaseSummaryFromDetail(detail, file)` in release-history.mjs.
-fn release_summary_from_detail(detail: &Value, file: &str) -> Value {
-    let mut obj = Map::new();
-    obj.insert("id".into(), str_val(detail, "id"));
-    obj.insert("version".into(), str_val(detail, "version"));
-    obj.insert("name".into(), str_val(detail, "name"));
-    obj.insert("status".into(), str_val(detail, "status"));
-    obj.insert("posture".into(), str_val(detail, "posture"));
-    // Only include targetDate/targetWindow/releasedAt if present (spread syntax)
-    if let Some(td) = detail.get("targetDate") {
-        if !td.is_null() {
-            obj.insert("targetDate".into(), td.clone());
-        }
-    }
-    if let Some(tw) = detail.get("targetWindow") {
-        if !tw.is_null() {
-            obj.insert("targetWindow".into(), tw.clone());
-        }
-    }
-    if let Some(ra) = detail.get("releasedAt") {
-        if !ra.is_null() {
-            obj.insert("releasedAt".into(), ra.clone());
-        }
-    }
-    obj.insert("lastUpdated".into(), str_val(detail, "lastUpdated"));
-    obj.insert("summary".into(), str_val(detail, "summary"));
-    obj.insert("counts".into(), derive_release_counts(detail));
-    obj.insert("file".into(), Value::String(file.to_owned()));
-    Value::Object(obj)
 }
 
 /// Mirrors `normalizeReleaseSummary(summary)` in references.mjs.
@@ -403,46 +377,6 @@ fn normalize_release_summary(summary: &Value) -> Value {
     })
 }
 
-/// Mirrors `deriveReleaseCounts(detail)` in release-history.mjs.
-fn derive_release_counts(detail: &Value) -> Value {
-    let items = release_items(detail);
-    let features = items.iter().filter(|i| i.get("kind").and_then(Value::as_str) == Some("feature")).count();
-    let bug_fixes = items.iter().filter(|i| i.get("kind").and_then(Value::as_str) == Some("bug-fix")).count();
-    let workstreams = detail.get("workstreams").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
-    let blockers = detail.get("blockers").and_then(Value::as_array).map(|a| a.len()).unwrap_or(0);
-    let complete = items.iter().filter(|i| i.get("status").and_then(Value::as_str) == Some("complete")).count();
-    let in_progress = items.iter().filter(|i| i.get("status").and_then(Value::as_str) == Some("in-progress")).count();
-    let planned = items.iter().filter(|i| i.get("status").and_then(Value::as_str) == Some("planned")).count();
-    let stretch = items.iter().filter(|i| i.get("status").and_then(Value::as_str) == Some("stretch")).count();
-
-    json!({
-        "features": features,
-        "bugFixes": bug_fixes,
-        "workstreams": workstreams,
-        "blockers": blockers,
-        "complete": complete,
-        "inProgress": in_progress,
-        "planned": planned,
-        "stretch": stretch,
-    })
-}
-
-/// Mirrors `releaseItems(detail)` in release-scopes.mjs.
-/// Collects all scope items: required + planned + stretch + deferred + outOfScope.
-fn release_items(detail: &Value) -> Vec<&Value> {
-    let scope = match detail.get("scope") {
-        Some(s) => s,
-        None => return vec![],
-    };
-    let mut items = Vec::new();
-    for section in &["required", "planned", "stretch", "deferred", "outOfScope"] {
-        if let Some(arr) = scope.get(section).and_then(Value::as_array) {
-            items.extend(arr.iter());
-        }
-    }
-    items
-}
-
 /// Mirrors `releaseItemCanBeBlocked(status)` in references.mjs.
 fn release_item_can_be_blocked(status: &str) -> bool {
     !matches!(status, "complete" | "deferred" | "cut")
@@ -451,13 +385,6 @@ fn release_item_can_be_blocked(status: &str) -> bool {
 // ---------------------------------------------------------------------------
 // Utilities
 // ---------------------------------------------------------------------------
-
-fn str_val(obj: &Value, key: &str) -> Value {
-    obj.get(key)
-        .and_then(Value::as_str)
-        .map(|s| Value::String(s.to_owned()))
-        .unwrap_or(Value::Null)
-}
 
 /// Iterate over string values in a JSON array field of an object.
 fn arr_strs<'a>(obj: &'a Value, field: &str) -> impl Iterator<Item = &'a str> {

@@ -41,7 +41,7 @@ fn err(msg: String) -> Value {
 }
 
 fn dispatch(op: &str, fixture: &Value) -> Value {
-    use architext_core::domain::{c4_quality, notes, rules, schema_migration};
+    use architext_core::domain::{c4_quality, notes, release, rules, schema_migration};
 
     match op {
         // ── rules ──────────────────────────────────────────────────────────
@@ -147,6 +147,65 @@ fn dispatch(op: &str, fixture: &Value) -> Value {
             let nodes = fixture["nodes"].as_array().map(|a| a.as_slice()).unwrap_or(&[]);
             let node_map = c4_quality::build_node_map(nodes);
             ok(c4_quality::repair_c4_views(views, &node_map))
+        }
+
+        // ── release ─────────────────────────────────────────────────────────
+        "release.nextMinorVersion" => {
+            let release_index = &fixture["releaseIndex"];
+            ok(release::next_minor_version(release_index))
+        }
+
+        "release.items" => {
+            let detail = &fixture["detail"];
+            ok(Value::Array(release::release_items(detail).into_iter().cloned().collect()))
+        }
+
+        "release.deriveCounts" => {
+            let detail = &fixture["detail"];
+            ok(release::derive_release_counts(detail))
+        }
+
+        "release.summaryFromDetail" => {
+            let detail = &fixture["detail"];
+            let file = fixture["file"].as_str().unwrap_or("");
+            ok(release::release_summary_from_detail(detail, file))
+        }
+
+        "release.generatedIndex" => {
+            let existing_index = &fixture["existingIndex"];
+            let detail_entries = &fixture["detailEntries"];
+            ok(release::generated_release_index(existing_index, detail_entries))
+        }
+
+        "release.indexGenerationChanges" => {
+            let existing_index = &fixture["existingIndex"];
+            let generated_index = &fixture["generatedIndex"];
+            ok(release::release_index_generation_changes(existing_index, generated_index))
+        }
+
+        "release.build" => {
+            match release::build_release_plan(fixture) {
+                Ok(v) => ok(v),
+                Err(e) => err(e),
+            }
+        }
+
+        "release.merge" => {
+            let existing = &fixture["existingDetail"];
+            let proposed = &fixture["proposedDetail"];
+            ok(release::merge_existing_release_plan(existing, proposed))
+        }
+
+        "release.changes" => {
+            ok(release::release_plan_changes(fixture))
+        }
+
+        "release.saveDraft" => {
+            ok(release::save_release_plan_draft(fixture))
+        }
+
+        "release.approve" => {
+            ok(release::approve_release_plan(fixture))
         }
 
         _ => {

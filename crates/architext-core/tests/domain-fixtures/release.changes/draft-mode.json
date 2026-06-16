@@ -1,0 +1,103 @@
+{
+  "releaseIndex": {
+    "currentReleaseId": "v1-0-0",
+    "releases": [
+      {
+        "id": "v1-0-0",
+        "version": "1.0.0",
+        "status": "completed",
+        "file": "v1-0-0.json"
+      }
+    ]
+  },
+  "roadmap": {
+    "items": [
+      {
+        "id": "feat-a",
+        "title": "Feature A",
+        "kind": "feature",
+        "status": "planned",
+        "section": "Core",
+        "targetReleaseId": "v1-0-0"
+      }
+    ]
+  },
+  "releaseDetail": {
+    "id": "v1-1-0",
+    "version": "1.1.0",
+    "name": "TestApp 1.1.0",
+    "status": "planned",
+    "posture": "on-track",
+    "summary": "TestApp 1.1.0 release plan.",
+    "targetWindow": "Next release",
+    "lastUpdated": "2024-01-01T00:00:00.000Z",
+    "updateSource": "Release Planning",
+    "scope": {
+      "required": [],
+      "planned": [
+        {
+          "id": "feat-a",
+          "title": "Feature A",
+          "kind": "feature",
+          "status": "planned",
+          "summary": "Does A",
+          "source": "roadmap",
+          "dateAdded": "2024-01-01",
+          "workstreamId": "core",
+          "dependsOn": [],
+          "evidence": []
+        },
+        {
+          "id": "feat-new",
+          "title": "Feature New",
+          "kind": "feature",
+          "status": "planned",
+          "summary": "New",
+          "source": "ad-hoc",
+          "dateAdded": "2024-01-01",
+          "workstreamId": "core",
+          "dependsOn": [],
+          "evidence": []
+        }
+      ],
+      "stretch": [],
+      "deferred": [],
+      "outOfScope": [
+        {
+          "id": "feat-cut",
+          "title": "Cut",
+          "kind": "feature",
+          "status": "cut",
+          "summary": "cut",
+          "source": "roadmap",
+          "dateAdded": "2024-01-01",
+          "workstreamId": "core",
+          "dependsOn": [],
+          "evidence": []
+        }
+      ]
+    },
+    "workstreams": [
+      {
+        "id": "core",
+        "name": "Core",
+        "owner": "maintainer",
+        "status": "planned",
+        "posture": "on-track",
+        "summary": "Core release scope.",
+        "progress": 0,
+        "itemIds": [
+          "feat-a",
+          "feat-new",
+          "feat-cut"
+        ],
+        "evidence": []
+      }
+    ],
+    "blockers": [],
+    "milestones": [],
+    "dependencies": [],
+    "evidence": []
+  },
+  "mode": "draft"
+}

@@ -30,6 +30,16 @@ const { schemaMigrationPlan } =
   await import(`${repoRoot}/src/domain/lifecycle/schema-migrations.mjs`);
 const { c4IssuesForView, c4DrilldownIssues, repairC4Views } =
   await import(`${repoRoot}/src/domain/architecture-model/c4-quality.mjs`);
+const {
+  nextMinorVersion, buildReleasePlan, mergeExistingReleasePlan, releasePlanChanges,
+  saveReleasePlanDraft, approveReleasePlan,
+} = await import(`${repoRoot}/src/domain/architecture-model/release-planning.mjs`);
+const {
+  generatedReleaseIndex, releaseIndexGenerationChanges,
+  releaseSummaryFromDetail, deriveReleaseCounts,
+} = await import(`${repoRoot}/src/domain/architecture-model/release-history.mjs`);
+const { releaseItems } =
+  await import(`${repoRoot}/src/domain/architecture-model/release-scopes.mjs`);
 
 // ─── JS dispatcher ───────────────────────────────────────────────────────────
 function runJs(op, fixture) {
@@ -64,6 +74,29 @@ function runJs(op, fixture) {
       const nodeMap = new Map((fixture.nodes ?? []).map((n) => [n.id, n]));
       return repairC4Views(fixture.views, nodeMap);
     }
+    // ── release ────────────────────────────────────────────────────────────
+    case "release.nextMinorVersion":
+      return nextMinorVersion(fixture.releaseIndex);
+    case "release.items":
+      return releaseItems(fixture.detail);
+    case "release.deriveCounts":
+      return deriveReleaseCounts(fixture.detail);
+    case "release.summaryFromDetail":
+      return releaseSummaryFromDetail(fixture.detail, fixture.file);
+    case "release.generatedIndex":
+      return generatedReleaseIndex(fixture.existingIndex, fixture.detailEntries);
+    case "release.indexGenerationChanges":
+      return releaseIndexGenerationChanges(fixture.existingIndex, fixture.generatedIndex);
+    case "release.build":
+      return buildReleasePlan(fixture);
+    case "release.merge":
+      return mergeExistingReleasePlan(fixture.existingDetail, fixture.proposedDetail);
+    case "release.changes":
+      return releasePlanChanges(fixture);
+    case "release.saveDraft":
+      return saveReleasePlanDraft(fixture);
+    case "release.approve":
+      return approveReleasePlan(fixture);
     default:
       throw new Error(`Unknown op: ${op}`);
   }

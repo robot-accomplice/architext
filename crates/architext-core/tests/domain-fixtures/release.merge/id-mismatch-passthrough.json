@@ -1,0 +1,100 @@
+{
+  "existingDetail": {
+    "id": "v0-9-0",
+    "version": "0.9.0",
+    "name": "App 1.0.0",
+    "status": "planned",
+    "posture": "on-track",
+    "summary": "proposed summary",
+    "targetWindow": "Next release",
+    "lastUpdated": "2024-01-01",
+    "updateSource": "Release Planning",
+    "scope": {
+      "required": [],
+      "planned": [
+        {
+          "id": "i1",
+          "title": "T",
+          "kind": "feature",
+          "status": "planned",
+          "summary": "S",
+          "source": "roadmap",
+          "dateAdded": "2024-01-01",
+          "workstreamId": "ws",
+          "dependsOn": [],
+          "evidence": []
+        }
+      ],
+      "stretch": [],
+      "deferred": [],
+      "outOfScope": []
+    },
+    "workstreams": [
+      {
+        "id": "ws",
+        "name": "Core",
+        "status": "planned",
+        "posture": "on-track",
+        "summary": "",
+        "progress": 0,
+        "itemIds": [
+          "i1"
+        ],
+        "evidence": []
+      }
+    ],
+    "blockers": [],
+    "dependencies": [],
+    "milestones": [],
+    "evidence": []
+  },
+  "proposedDetail": {
+    "id": "v1-0-0",
+    "version": "1.0.0",
+    "name": "App 1.0.0",
+    "status": "planned",
+    "posture": "on-track",
+    "summary": "proposed summary",
+    "targetWindow": "Next release",
+    "lastUpdated": "2024-01-01",
+    "updateSource": "Release Planning",
+    "scope": {
+      "required": [],
+      "planned": [
+        {
+          "id": "i1",
+          "title": "T",
+          "kind": "feature",
+          "status": "planned",
+          "summary": "S",
+          "source": "roadmap",
+          "dateAdded": "2024-01-01",
+          "workstreamId": "ws",
+          "dependsOn": [],
+          "evidence": []
+        }
+      ],
+      "stretch": [],
+      "deferred": [],
+      "outOfScope": []
+    },
+    "workstreams": [
+      {
+        "id": "ws",
+        "name": "Core",
+        "status": "planned",
+        "posture": "on-track",
+        "summary": "",
+        "progress": 0,
+        "itemIds": [
+          "i1"
+        ],
+        "evidence": []
+      }
+    ],
+    "blockers": [],
+    "dependencies": [],
+    "milestones": [],
+    "evidence": []
+  }
+}

@@ -1,0 +1,117 @@
+{
+  "existingDetail": {
+    "id": "v1-0-0",
+    "version": "1.0.0",
+    "name": "App 1.0.0",
+    "status": "implementing",
+    "posture": "at-risk",
+    "summary": "existing summary",
+    "targetWindow": "Next release",
+    "lastUpdated": "2024-01-01",
+    "updateSource": "Release Planning",
+    "scope": {
+      "required": [],
+      "planned": [
+        {
+          "id": "i1",
+          "title": "T",
+          "kind": "feature",
+          "status": "in-progress",
+          "summary": "S",
+          "source": "roadmap",
+          "dateAdded": "2024-01-01",
+          "workstreamId": "ws",
+          "dependsOn": [],
+          "evidence": [],
+          "owner": "alice"
+        }
+      ],
+      "stretch": [],
+      "deferred": [],
+      "outOfScope": []
+    },
+    "workstreams": [
+      {
+        "id": "ws",
+        "name": "Core",
+        "status": "in-progress",
+        "posture": "at-risk",
+        "summary": "ws summary",
+        "progress": 50,
+        "itemIds": [
+          "i1"
+        ],
+        "evidence": [
+          "e1"
+        ]
+      }
+    ],
+    "blockers": [
+      {
+        "id": "b1"
+      }
+    ],
+    "dependencies": [
+      {
+        "id": "d1"
+      }
+    ],
+    "milestones": [],
+    "evidence": [
+      "ev1"
+    ],
+    "targetDate": null,
+    "releasedAt": null
+  },
+  "proposedDetail": {
+    "id": "v1-0-0",
+    "version": "1.0.0",
+    "name": "App 1.0.0",
+    "status": "planned",
+    "posture": "on-track",
+    "summary": "proposed summary",
+    "targetWindow": "Next release",
+    "lastUpdated": "2024-01-01",
+    "updateSource": "Release Planning",
+    "scope": {
+      "required": [],
+      "planned": [
+        {
+          "id": "i1",
+          "title": "T",
+          "kind": "feature",
+          "status": "planned",
+          "summary": "S",
+          "source": "roadmap",
+          "dateAdded": "2024-01-01",
+          "workstreamId": "ws",
+          "dependsOn": [],
+          "evidence": []
+        }
+      ],
+      "stretch": [],
+      "deferred": [],
+      "outOfScope": []
+    },
+    "workstreams": [
+      {
+        "id": "ws",
+        "name": "Core",
+        "status": "planned",
+        "posture": "on-track",
+        "summary": "",
+        "progress": 0,
+        "itemIds": [
+          "i1"
+        ],
+        "evidence": []
+      }
+    ],
+    "blockers": [],
+    "dependencies": [],
+    "milestones": [],
+    "evidence": [],
+    "targetDate": null,
+    "releasedAt": null
+  }
+}
