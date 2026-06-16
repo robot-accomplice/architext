@@ -51,7 +51,7 @@
  */
 
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdtempSync, mkdirSync, cpSync, rmSync, existsSync } from "node:fs";
+import { mkdtempSync, mkdirSync, cpSync, rmSync, existsSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -221,6 +221,22 @@ const rsOutDir = path.join(tmpBase, "rs-out");
 const cleanJsOutDir = path.join(cleanSrc, "docs", "architext", "dist");
 const cleanRsOutDir = path.join(cleanSrc, "docs", "architext", "dist");
 
+// Invalid-DATA fixture for the `validate <invalid>` case. The test previously
+// pointed at a hardcoded /tmp/ax-test-bad that nothing created — so it actually
+// validated a NON-EXISTENT path ("Target is not a directory", no "failed:"
+// prefix) and only passed when that path happened to linger on disk. Create a
+// real installed-but-schema-invalid target so the test exercises a true
+// validation FAILURE on both CLIs.
+const badData = path.join(tmpBase, "bad-data");
+mkdirSync(path.join(badData, "docs", "architext", "data"), { recursive: true });
+cpSync(path.join(repoRoot, "docs", "architext", "data"), path.join(badData, "docs", "architext", "data"), { recursive: true });
+{
+  const nodesPath = path.join(badData, "docs", "architext", "data", "nodes.json");
+  const nodesDoc = JSON.parse(readFileSync(nodesPath, "utf8"));
+  if (nodesDoc.nodes && nodesDoc.nodes[0]) delete nodesDoc.nodes[0].type; // drop a required field
+  writeFileSync(nodesPath, JSON.stringify(nodesDoc, null, 2) + "\n");
+}
+
 // ─── Matrix of invocations ───────────────────────────────────────────────────
 
 console.log("\n── Argv parsing + meta ─────────────────────────────────────────");
@@ -289,8 +305,8 @@ check("validate <repoRoot> (PASS)", {
 });
 
 check("validate <invalid> (FAIL, exit 1)", {
-  js: runJs(["validate", "/tmp/ax-test-bad"]),
-  rust: runRust(["validate", "/tmp/ax-test-bad"]),
+  js: runJs(["validate", badData]),
+  rust: runRust(["validate", badData]),
   compare: validateFailCompare
 });
 
