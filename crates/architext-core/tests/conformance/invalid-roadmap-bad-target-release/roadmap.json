@@ -1,0 +1,13 @@
+{
+  "items": [
+    {
+      "id": "feature-x",
+      "title": "Feature X",
+      "summary": "A planned feature.",
+      "kind": "feature",
+      "status": "planned",
+      "section": "Core",
+      "targetReleaseId": "v9-9-9-nonexistent"
+    }
+  ]
+}

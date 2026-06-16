@@ -1,0 +1,42 @@
+{
+  "nodes": [
+    {
+      "id": "node-a",
+      "type": "service",
+      "name": "Service A",
+      "summary": "A test service.",
+      "responsibilities": ["Handle requests"],
+      "owner": "team",
+      "sourcePaths": ["src/"],
+      "runtime": "node",
+      "interfaces": ["HTTP"],
+      "dependencies": [],
+      "dataHandled": ["data-public"],
+      "security": [],
+      "observability": [],
+      "relatedFlows": ["flow-one"],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": []
+    },
+    {
+      "id": "node-a",
+      "type": "service",
+      "name": "Service A Duplicate",
+      "summary": "Duplicate id — must be rejected.",
+      "responsibilities": [],
+      "owner": "team",
+      "sourcePaths": [],
+      "runtime": "node",
+      "interfaces": [],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": []
+    }
+  ]
+}

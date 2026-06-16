@@ -1,0 +1,27 @@
+{
+  "flows": [
+    {
+      "id": "flow-one",
+      "name": "Flow One",
+      "status": "planned",
+      "summary": "A test flow.",
+      "trigger": "User request",
+      "actors": ["node-a"],
+      "steps": [
+        {
+          "id": "s1",
+          "from": "node-a",
+          "to": "node-does-not-exist",
+          "action": "self call",
+          "summary": "Calls itself.",
+          "data": ["data-public"]
+        }
+      ],
+      "guarantees": [],
+      "failureBehavior": [],
+      "observability": [],
+      "verification": [],
+      "knownGaps": []
+    }
+  ]
+}

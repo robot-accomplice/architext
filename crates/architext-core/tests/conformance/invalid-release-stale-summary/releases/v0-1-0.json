@@ -1,0 +1,44 @@
+{
+  "id": "v0-1-0",
+  "version": "0.1.0",
+  "name": "Test Release 0.1.0",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "A test release.",
+  "targetDate": "2026-01-01",
+  "releasedAt": "2026-01-01T12:00:00.000Z",
+  "lastUpdated": "2026-01-01T12:00:00.000Z",
+  "updateSource": "test",
+  "scope": {
+    "required": [
+      {
+        "id": "item-a",
+        "title": "Item A",
+        "kind": "chore",
+        "status": "complete",
+        "summary": "A test item."
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "ws-a",
+      "name": "Work A",
+      "owner": "team",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Work stream A.",
+      "progress": 100,
+      "itemIds": ["item-a"],
+      "evidence": []
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": []
+}
