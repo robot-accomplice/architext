@@ -1,0 +1,9 @@
+{
+  "document": {
+    "notes": [
+      { "id": "n1", "target": { "kind": "node", "id": "node-1" }, "text": "A note", "updatedAt": "2024-01-01T00:00:00Z" },
+      { "id": "n2", "target": { "kind": "node", "id": "node-2" }, "text": "Another", "updatedAt": "2024-01-02T00:00:00Z" }
+    ]
+  },
+  "id": "n1"
+}

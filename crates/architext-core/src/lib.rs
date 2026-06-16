@@ -1,4 +1,5 @@
 mod validation;
+pub mod domain;
 
 use std::path::Path;
 

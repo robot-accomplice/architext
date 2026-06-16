@@ -1,0 +1,7 @@
+{
+  "rules": [
+    { "id": "low1", "title": "Low Rule", "criticality": "low", "order": 1, "protection": { "edit": false, "delete": false } },
+    { "id": "unk1", "title": "Unknown Rule", "criticality": "totally-unknown", "order": 1, "protection": { "edit": false, "delete": false } },
+    { "id": "crit1", "title": "Critical Rule", "criticality": "critical", "order": 1, "protection": { "edit": false, "delete": false } }
+  ]
+}

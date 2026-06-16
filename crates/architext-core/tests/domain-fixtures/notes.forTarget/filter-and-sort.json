@@ -1,0 +1,10 @@
+{
+  "notes": [
+    { "id": "n1", "target": { "kind": "node", "id": "node-1" }, "text": "Older", "updatedAt": "2024-01-01T00:00:00Z" },
+    { "id": "n2", "target": { "kind": "node", "id": "node-1" }, "text": "Newer", "updatedAt": "2024-06-01T00:00:00Z" },
+    { "id": "n3", "target": { "kind": "node", "id": "node-2" }, "text": "Different target", "updatedAt": "2024-03-01T00:00:00Z" },
+    { "id": "n4", "target": { "kind": "flow", "id": "node-1" }, "text": "Different kind", "updatedAt": "2024-05-01T00:00:00Z" }
+  ],
+  "kind": "node",
+  "id": "node-1"
+}

@@ -1,0 +1,9 @@
+{
+  "document": {
+    "rules": [
+      { "id": "r1", "title": "Rule One", "criticality": "high", "order": 1, "protection": { "edit": false, "delete": false } },
+      { "id": "r2", "title": "Rule Two", "criticality": "high", "order": 2, "protection": { "edit": false, "delete": false } }
+    ]
+  },
+  "id": "r1"
+}
