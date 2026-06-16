@@ -38,7 +38,10 @@ use crate::route_edges::crossings::{crossings_between, crossings_involving, gutt
 use crate::route_mount_model::distribution::shared_segment_count_involving;
 
 use super::helpers::{extract_rects, make_route_input};
-use super::optimize::{opposite_route_endpoint_projection, SurfaceEndpointDesc};
+use super::optimize::{
+    center_solo_reciprocal_pair_surfaces, opposite_route_endpoint_projection,
+    realign_facing_endpoints, SurfaceEndpointDesc,
+};
 use super::types::{MountInput, MountRect, MountRelationship};
 
 // ---------------------------------------------------------------------------
@@ -832,6 +835,16 @@ pub fn spread_shared_side_endpoints(
             }
         }
     }
+
+    // JS spreadSharedSideEndpoints (L1060–1064): after the endpoint-spread loop, the JS
+    // function runs five cleanup sub-passes on the same routeById before returning.
+    // These must run here (not just in the main pipeline) because they produce the
+    // straight right→left routes that match JS output BEFORE separateCloseParallelRoutes.
+    realign_facing_endpoints(&mut route_by_id, rel_by_id, input);
+    reorder_shared_surface_mounts(&mut route_by_id, rel_by_id, input);
+    route_reciprocal_pairs_parallel(&mut route_by_id, rel_by_id, input, None);
+    reduce_crossings_by_surface_swaps(&mut route_by_id, rel_by_id, input);
+    center_solo_reciprocal_pair_surfaces(&mut route_by_id, rel_by_id, input);
 
     planned_raw_routes
         .iter()

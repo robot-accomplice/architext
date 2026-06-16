@@ -390,6 +390,12 @@ pub struct PlannerContext {
     canvas_height: f64,
     diagram_corridors: Vec<crate::route_corridors::Corridor>,
     route_candidates: RouteCandidateBuilders<RouteQualityImpl>,
+    /// Lane index per node, mirroring JS `input.laneIndexByNode`.
+    /// JS `edgePath` always reads these from the closure-captured input; Rust
+    /// threads them through `PlannerContext` so reroute callbacks have them too.
+    lane_index_by_node: IndexMap<String, i64>,
+    /// Row index per node, mirroring JS `input.rowIndexByNode`.
+    row_index_by_node: IndexMap<String, i64>,
 }
 
 impl PlannerContext {
@@ -472,6 +478,15 @@ impl PlannerContext {
         // JS reads rect.fixedPorts directly; populate from our extracted map.
         cand_rel.from_rect_fixed_ports =
             self.fixed_ports_by_node.get(from_id.as_str()).copied().unwrap_or(false);
+
+        // JS `edgePath` always reads lane/row indices from `input.laneIndexByNode` /
+        // `input.rowIndexByNode` stored on the closure-captured planner context — even
+        // during reroute callbacks that don't pass them explicitly. Mirror that here by
+        // preferring the planner's own maps over the caller-supplied `Option<i64>` params.
+        let from_lane_index = from_lane_index.or_else(|| self.lane_index_by_node.get(from_id.as_str()).copied());
+        let to_lane_index   = to_lane_index.or_else(||   self.lane_index_by_node.get(to_id.as_str()).copied());
+        let from_row_index  = from_row_index.or_else(||  self.row_index_by_node.get(from_id.as_str()).copied());
+        let to_row_index    = to_row_index.or_else(||    self.row_index_by_node.get(to_id.as_str()).copied());
 
         let select_input = SelectRouteCandidateInput {
             collision_count: &collision_count_fn,
@@ -741,6 +756,8 @@ pub fn route_planner_context(input: &RouteEdgesInput) -> PlannerContext {
         canvas_height: input.canvas_height,
         diagram_corridors,
         route_candidates,
+        lane_index_by_node: input.lane_index_by_node.clone(),
+        row_index_by_node: input.row_index_by_node.clone(),
     }
 }
 
@@ -1416,6 +1433,7 @@ mod tests {
             r2.d
         );
     }
+
 
     #[test]
     fn route_edges_skips_relationship_without_lane_index() {

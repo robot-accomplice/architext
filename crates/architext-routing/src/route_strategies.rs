@@ -86,8 +86,9 @@ use crate::route_ports::{PORT_STUB, SIDES};
 use crate::route_rendering::{path_to_svg, simplify_orthogonal_points};
 use crate::route_intent::IntentRelationship;
 use crate::route_scoring::{
-    best_route_candidate, is_clean_route_candidate, score_route_candidates, with_quality_costs,
-    QualityCosts, RouteCandidate, RouteWarning, ScoreContext,
+    best_route_candidate, is_clean_route_candidate,
+    score_route_candidates, with_quality_costs, QualityCosts, RouteCandidate, RouteWarning,
+    ScoreContext,
 };
 
 // ---------------------------------------------------------------------------
