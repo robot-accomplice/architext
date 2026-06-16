@@ -119,11 +119,8 @@ fn main() {
         "build" => commands::build::run(&target, &opts.out),
         "clean" => commands::clean::run(&target, opts.node_modules, opts.dry_run),
 
-        // Side-effecting commands deferred to later slices — stub with a
-        // clear error so the parity gate can skip them intentionally.
         "sync" | "install" | "upgrade" | "migrate" => {
-            eprintln!("sync/install/upgrade/migrate are not yet implemented in the Rust CLI");
-            process::exit(1);
+            commands::sync::run(&target, &opts, version);
         }
         "serve" => {
             eprintln!("serve is not yet implemented in the Rust CLI");
