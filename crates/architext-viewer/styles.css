@@ -1,0 +1,359 @@
+/* =============================================================================
+   Architext viewer — design tokens & primitives
+   Source of truth: viewer/DESIGN.md ("Cyber-Tactical Monolith", 1.7.0 facelift).
+
+   This is a CHROME-ONLY token system. Role color is single-sourced via --c4-*;
+   STATE (active/selected/primary) is a dedicated --accent treatment, never a
+   role hue (DESIGN.md rule 1). Hex values for role hues / surfaces are carried
+   faithfully from the live viewer (viewer/src/styles.css) so one hue holds per
+   role across every mode; the 1.7.0 refinements add the tiered-black ramp and
+   the explicit state treatment.
+
+   Fonts are VENDORED woff2 (assets/fonts/) with @font-face below — zero CDN,
+   offline-capable, no Node in the build.
+   ============================================================================= */
+
+/* ── Vendored fonts (OFL-1.1; see assets/fonts/*-OFL.txt) ───────────────────
+   Hanken Grotesk: UI / headers / body (humanist grotesque).
+   JetBrains Mono: all technical data + .overline caps. */
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("assets/fonts/hanken-grotesk-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("assets/fonts/hanken-grotesk-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("assets/fonts/hanken-grotesk-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("assets/fonts/hanken-grotesk-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("assets/fonts/jetbrains-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("assets/fonts/jetbrains-mono-700.woff2") format("woff2");
+}
+
+:root {
+  color-scheme: dark;
+
+  /* ── Tiered-black surface ramp (DESIGN.md "Surfaces") ─────────────────────
+     One canvas-black (the single darkest diagram background), then background →
+     panel → popover ascending tonal layers. Hierarchy via tonal layering +
+     1px outlines, not heavy shadows. */
+  --canvas-black: #08090b;   /* THE single darkest surface — diagram canvas only */
+  --bg: #0c0e11;             /* app background */
+  --surface: #111316;        /* base surface under panels */
+  --panel: #1a1c1f;          /* panels (nav / inspector) */
+  --panel-2: #1e2023;        /* raised controls within panels */
+  --popover: #282a2d;        /* popovers / menus / topmost layer */
+
+  /* ── Text ramp (tuned for secondary-text contrast on near-black) ───────── */
+  --ink: #e2e2e6;            /* primary text */
+  --muted: #b9cacb;          /* secondary text / overlines */
+  --dim: #849495;            /* tertiary / disabled */
+
+  /* ── Hairlines ──────────────────────────────────────────────────────────
+     1px panel gaps (not wide margins) for the single-machine console feel. */
+  --line: #3b494b;
+  --line-strong: #849495;
+  --hairline: 1px;
+
+  /* ── Component-type color — SINGLE SOURCE OF TRUTH (DESIGN.md) ────────────
+     Node/component type color ALWAYS comes from these tokens. Never hardcode a
+     raw palette hue for a type. One hue per role, held across every mode. */
+  --c4-actor: #ff4db8;
+  --c4-client: #00e5ff;
+  --c4-service: #a855ff;
+  --c4-worker: #ffd21f;
+  --c4-data: #35ff4d;
+  --c4-external: #b9cacb;
+  --c4-deployment: #ff9f1a;
+  --c4-module: #35ff96;
+
+  /* ── State / accent treatment (DESIGN.md rule 1) ──────────────────────────
+     STATE (active / selected / primary action) is a dedicated signal — a
+     border / ring / inner-glow on --accent — NOT a --c4-* role hue. --accent is
+     deliberately distinct from every role color above (green-leaning teal vs the
+     client cyan #00e5ff) so "active" never collides with "client/system". */
+  --accent: #19f2c4;
+  --accent-ring: rgba(25, 242, 196, 0.45);
+  --accent-glow: rgba(25, 242, 196, 0.16);
+
+  /* ── Typography ───────────────────────────────────────────────────────────
+     Hanken Grotesk (UI/headers/body) + JetBrains Mono (technical data). */
+  --font-ui: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --display-size: 32px;      /* display 32/700 */
+  --headline-size: 20px;     /* headline 20/600 */
+  --body-size: 14px;         /* body pinned 14 for density */
+  --overline-size: 11px;     /* .overline caps 11/700 */
+  --overline-tracking: 0.08em;
+
+  /* ── Shape & elevation ────────────────────────────────────────────────────
+     4px UI chrome / up to 8px node cards; pills reserved for status. */
+  --card-radius: 4px;        /* UI chrome */
+  --node-card-radius: 8px;   /* diagram node cards */
+  --chip-radius: 14px;       /* pill-shaped chips */
+  --pill-radius: 999px;      /* count pills */
+  --accent-rail: 3px;        /* colored left rail on cards/rows/sections */
+  --node-topbar: 2px;        /* node-card category top-bar */
+
+  /* ── 4px baseline grid / tight padding ──────────────────────────────────── */
+  --grid: 4px;
+  --pad-tight: 8px;
+  --pad: 12px;
+
+  /* ── Fixed-fluid console grid widths (DESIGN.md "Layout") ───────────────── */
+  --nav-w: 280px;
+  --inspector-w: 320px;
+
+  font-family: var(--font-ui);
+  font-size: var(--body-size);
+}
+
+/* ── Primitives (real classes shared by every mode) ───────────────────────── */
+
+/* Overline: the ONE section-label / eyebrow treatment. */
+.overline {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--muted);
+}
+
+/* Accent rail card/row/section: 1px bordered surface + 3px --accent left rail.
+   Set --accent per instance (a --c4-* role color where it encodes type). */
+.accent-surface {
+  border: var(--hairline) solid var(--line);
+  border-left: var(--accent-rail) solid var(--accent, var(--line));
+  border-radius: var(--card-radius);
+  background: var(--panel-2);
+  padding: var(--pad);
+}
+
+/* Chip: pill-shaped, bordered, optional leading icon / type tint. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--grid);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 2px var(--pad-tight);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--chip-radius);
+  color: var(--muted);
+  background: var(--panel-2);
+}
+
+/* Count pill: fully-round status/count indicator. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  font-weight: 700;
+  border-radius: var(--pill-radius);
+  color: var(--ink);
+  background: var(--popover);
+}
+
+/* State treatment (rule 1): --accent ring + inner glow, never a role hue. */
+.is-active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring), inset 0 0 12px var(--accent-glow);
+  color: var(--ink);
+}
+
+/* ── Reset / base ─────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  cursor: pointer;
+}
+button:hover,
+button:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+
+/* ── App shell: fixed-fluid console grid (DESIGN.md "Layout") ───────────────
+   fixed ~280 left nav | FLUID center canvas | fixed ~320 right inspector,
+   joined by 1px hairline gaps (the gaps show --line through a grid gap). */
+.shell {
+  display: grid;
+  grid-template-columns: var(--nav-w) 1fr var(--inspector-w);
+  gap: var(--hairline);
+  background: var(--line);   /* hairline gaps = the grid background bleeding through */
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ── Left nav ───────────────────────────────────────────────────────────── */
+.left-nav {
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  padding: var(--pad);
+  gap: var(--pad);
+  overflow-y: auto;
+}
+
+.wordmark {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: var(--headline-size);
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+}
+.wordmark__rail {
+  width: var(--accent-rail);
+  height: 1em;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.mode-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.mode-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+  padding: var(--pad-tight) var(--pad);
+  border: var(--hairline) solid transparent;
+  border-radius: var(--card-radius);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: var(--body-size);
+  text-align: left;
+  width: 100%;
+}
+.mode-list__item:hover {
+  color: var(--ink);
+  border-color: var(--line);
+}
+/* Active mode = state treatment (rule 1: --accent ring/glow, NOT a role hue). */
+.mode-list__item.is-active {
+  color: var(--ink);
+}
+
+/* ── Center: fluid canvas (rule 3 — never pinned w/h) ─────────────────────── */
+.canvas-panel {
+  position: relative;
+  background: var(--canvas-black);   /* the one canvas-black */
+  overflow: hidden;
+  min-width: 0;                      /* allow the fluid track to shrink */
+}
+.canvas-panel__surface {
+  position: absolute;
+  inset: 0;
+  /* faint baseline-grid texture; purely cosmetic console feel */
+  background-image:
+    linear-gradient(var(--line) 0.5px, transparent 0.5px),
+    linear-gradient(90deg, var(--line) 0.5px, transparent 0.5px);
+  background-size: 32px 32px;
+  opacity: 0.06;
+}
+.canvas-panel__controls {
+  position: absolute;
+  top: var(--pad);
+  right: var(--pad);
+  display: flex;
+  gap: var(--grid);
+}
+.canvas-panel__controls button {
+  font-family: var(--font-mono);
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.canvas-panel__hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--dim);
+}
+
+/* ── Right inspector ──────────────────────────────────────────────────────── */
+.inspector {
+  background: var(--panel);
+  padding: var(--pad);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+  overflow-y: auto;
+}
+.inspector__section-label {
+  margin-bottom: var(--pad-tight);
+}
+.inspector__title {
+  font-weight: 600;
+  font-size: var(--body-size);
+  color: var(--ink);
+  margin: 0 0 var(--grid);
+}
+.inspector__meta {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+  margin: 0;
+}

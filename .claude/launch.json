@@ -6,6 +6,12 @@
       "runtimeExecutable": "node",
       "runtimeArgs": ["/tmp/ax-review-serve.mjs"],
       "port": 4173
+    },
+    {
+      "name": "viewer",
+      "runtimeExecutable": "sh",
+      "runtimeArgs": ["-c", "cd crates/architext-viewer && trunk serve --address 127.0.0.1 --port 8099 --no-autoreload"],
+      "port": 8099
     }
   ]
 }

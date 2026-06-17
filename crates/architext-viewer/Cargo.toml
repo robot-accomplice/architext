@@ -1,0 +1,22 @@
+[package]
+name = "architext-viewer"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+# CSR wasm app. cdylib is the wasm-bindgen entry; rlib lets `cargo test`/docs
+# work on native. The crate only builds meaningfully for wasm32 (Leptos CSR),
+# so it is excluded from the workspace default-members (see workspace Cargo.toml)
+# to keep `cargo build --workspace` on native targets green.
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# Routing engine, wired now so later slices call plan() in-process. The `wasm`
+# feature exposes the #[wasm_bindgen] plan() boundary; we depend on it with that
+# feature so the viewer wasm bundle carries the planner.
+architext-routing = { path = "../architext-routing", features = ["wasm"] }
+
+leptos = { version = "0.6", features = ["csr"] }
+console_error_panic_hook = "0.1"
+wasm-bindgen = "0.2"

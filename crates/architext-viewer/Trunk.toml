@@ -1,0 +1,11 @@
+# Trunk build config for the Leptos CSR viewer. Build is pure Rust/wasm — no
+# Node, npm, or Vite anywhere in the pipeline.
+[build]
+target = "index.html"
+dist = "dist"
+
+[serve]
+# `trunk serve` is for local dev only; release serving is done by
+# architext-serve pointed at this dist/. Not used in CI builds.
+addresses = ["127.0.0.1"]
+port = 8080

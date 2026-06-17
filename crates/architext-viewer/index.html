@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Architext</title>
+    <!-- Build the CSR binary (the crate also emits a cdylib + rlib for native
+         workspace builds, so name the artifact explicitly to disambiguate). -->
+    <link data-trunk rel="rust" data-bin="architext-viewer" data-type="main" />
+    <!-- Design tokens + chrome. Trunk hashes & emits this into dist/. -->
+    <link data-trunk rel="css" href="styles.css" />
+    <!-- Vendored woff2 referenced by @font-face in styles.css (zero CDN). Trunk
+         copies the dir into dist/assets/fonts/ so the url()s resolve offline. -->
+    <link data-trunk rel="copy-dir" href="assets/fonts" data-target-path="assets/fonts" />
+  </head>
+  <body></body>
+</html>
