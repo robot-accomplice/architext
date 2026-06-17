@@ -31,22 +31,31 @@ pub struct RenderModel {
 }
 
 /// Build the render model from a computed `Plan`, the selected flow (for edge
-/// kinds) and view, and the node registry (for names + C4 types).
+/// kinds, flows mode only) and view, and the node registry (for names + C4
+/// types).
+///
+/// `flow` is `None` in structural (C4 / deployment) mode — there are no flow
+/// steps, so every edge is a plain `Process` edge and labels come from
+/// `edge_labels` (the relationship label rule's output, keyed by route id).
+/// In flows mode `flow` is `Some` and `edge_labels` is empty; labels then fall
+/// back to the `"{index}. {action}"` reconstruction from the flow.
 ///
 /// Decision rects are the `node_rects` entries whose ids are not real nodes
 /// (the `decision:<step>` augmented rects); they render as diamonds and are
 /// excluded from the node-card pass.
 pub fn build_render_model(
     plan: &Plan,
-    flow: &Flow,
+    flow: Option<&Flow>,
+    edge_labels: &HashMap<String, String>,
     nodes_by_id: &HashMap<&str, &Node>,
 ) -> RenderModel {
-    // Edge kind per step id (the route key == the flow step id).
+    // Edge kind per step id (the route key == the flow step id). Empty in
+    // structural mode → every edge defaults to Process.
     let kind_by_step: HashMap<&str, EdgeKind> = flow
-        .steps
-        .iter()
-        .map(|s| (s.id.as_str(), EdgeKind::from_step_kind(s.kind.as_deref())))
-        .collect();
+        .map(|f| f.steps.iter()
+            .map(|s| (s.id.as_str(), EdgeKind::from_step_kind(s.kind.as_deref())))
+            .collect())
+        .unwrap_or_default();
 
     // Node cards: rects that resolve to a real dataset node.
     let mut node_views = Vec::new();
@@ -62,7 +71,11 @@ pub fn build_render_model(
             None => {
                 // An augmented (decision) rect — tint with the component's role
                 // color when the affiliated node is resolvable, else external.
-                let component_type = decision_component_type(id, flow, nodes_by_id);
+                // Structural mode has no decision rects (no flow), but guard
+                // anyway: default to the external role when there is no flow.
+                let component_type = flow
+                    .map(|f| decision_component_type(id, f, nodes_by_id))
+                    .unwrap_or("external");
                 decisions.push((rect.clone(), role_color_var(component_type)));
             }
         }
@@ -89,7 +102,8 @@ pub fn build_render_model(
                 .get("label")
                 .and_then(|v| v.as_str())
                 .map(str::to_string)
-                .or_else(|| edge_label_from_flow(id, flow))?;
+                .or_else(|| edge_labels.get(id).cloned())
+                .or_else(|| flow.and_then(|f| edge_label_from_flow(id, f)))?;
             let box_rect = plan.label_boxes.get(id).cloned().unwrap_or(Rect {
                 x: route.label_x,
                 y: route.label_y,
@@ -145,7 +159,11 @@ fn edge_label_from_flow(edge_id: &str, flow: &Flow) -> Option<String> {
 #[component]
 pub fn DiagramSvg(
     plan: Plan,
-    flow: Flow,
+    /// The selected flow (flows mode). `None` in structural (C4 / deployment)
+    /// mode, where edges come from structural relationships, not flow steps.
+    flow: Option<Flow>,
+    /// Edge id → label, for structural mode (empty in flows mode).
+    edge_labels: HashMap<String, String>,
     #[allow(unused)] view: DataView,
     nodes: Vec<Node>,
     #[prop(into)] pan_x: Signal<f64>,
@@ -155,7 +173,7 @@ pub fn DiagramSvg(
     #[prop(into)] on_select: Callback<String>,
 ) -> impl IntoView {
     let nodes_by_id: HashMap<&str, &Node> = nodes.iter().map(|n| (n.id.as_str(), n)).collect();
-    let model = build_render_model(&plan, &flow, &nodes_by_id);
+    let model = build_render_model(&plan, flow.as_ref(), &edge_labels, &nodes_by_id);
 
     let view_box = format!("0 0 {} {}", model.canvas_width, model.canvas_height);
     let transform = move || format!("translate({} {}) scale({})", pan_x.get(), pan_y.get(), zoom.get());

@@ -13,6 +13,8 @@ pub mod decision_branch;
 pub mod flow_step_display;
 pub mod view_selection;
 pub mod diagram_layout;
+pub mod c4_layout;
+pub mod relationship_label;
 pub mod plan_key;
 
 use std::f64::consts::SQRT_2;
@@ -22,6 +24,7 @@ use crate::plan_diagram::{ExtraNodeRect, SideAnchorsInput, PlanDiagramInput, Lan
 use crate::model::Point;
 
 use diagram_layout::{DiagramLayout, LayoutConfig, diagram_layout_for};
+use relationship_label::{LabelNode, relationship_label};
 use decision_branch::{node_lane_position, preferred_decision_branch_side, preferred_decision_branch_end_side};
 use flow_step_display::{flow_step_display_indexes, decision_branch_targets};
 use plan_key::{
@@ -279,6 +282,196 @@ pub fn build_flow_plan_request(
     );
 
     FlowPlanRequest { key, plan_diagram_input }
+}
+
+/// A node, as the structural-relationship builder needs it: id, C4 role `type`,
+/// and the list of node ids it depends on.
+///
+/// This is the routing-side mirror of the viewer `Node` (and the JS `ArchNode`):
+/// only the fields the structural edge + label rules read are carried.
+pub struct StructuralNode {
+    pub id: String,
+    pub node_type: String,
+    pub dependencies: Vec<String>,
+}
+
+/// The result of building a structural (C4 / deployment) plan request.
+#[derive(Debug)]
+pub struct StructuralPlanRequest {
+    /// The canonical key string (sha256'd to produce the cache hash).
+    pub key: String,
+    /// The plan diagram input ready to pass to `plan_diagram`.
+    pub plan_diagram_input: PlanDiagramInput,
+    /// Edge id → display label, so the renderer can label structural edges
+    /// (which carry no numbered flow step). Keyed by relationship id (`from-to`).
+    pub edge_labels: IndexMap<String, String>,
+}
+
+/// The number of structural relationships a view would produce — the count the
+/// deployment layout's dense-topology heuristic needs BEFORE the layout (and
+/// thus the full request) is built. Uses the same visible-node + visible-dep
+/// filtering as `build_structural_plan_request`, so the two cannot drift.
+pub fn structural_relationship_count(view: &View, nodes: &[StructuralNode]) -> usize {
+    let nodes_by_id: IndexMap<&str, &StructuralNode> =
+        nodes.iter().map(|n| (n.id.as_str(), n)).collect();
+    let mut seen = std::collections::HashSet::new();
+    let mut visible: Vec<&str> = Vec::new();
+    for lane in &view.lanes {
+        for nid in &lane.node_ids {
+            if seen.insert(nid.as_str()) {
+                visible.push(nid.as_str());
+            }
+        }
+    }
+    let visible_set: std::collections::HashSet<&str> = visible.iter().copied().collect();
+    visible.iter().map(|nid| {
+        nodes_by_id.get(nid)
+            .map(|n| n.dependencies.iter().filter(|d| visible_set.contains(d.as_str())).count())
+            .unwrap_or(0)
+    }).sum()
+}
+
+/// Port of JS structural-relationship building (`SystemMap`/`C4Diagram` in
+/// `main.tsx`): for each visible node, emit one relationship per dependency
+/// whose target is ALSO visible in the view. Edges are labelled by
+/// `relationship_label(from, to)` — never numbered.
+///
+/// `view` supplies lane membership + type; `nodes` supplies dependencies + type;
+/// `layout` is the C4 layout (for C4 views) or the default layout (deployment).
+/// The engine pipeline and `plan_diagram` are reused unchanged — only the
+/// relationships and layout differ from the flow path.
+pub fn build_structural_plan_request(
+    view: &View,
+    nodes: &[StructuralNode],
+    layout: &DiagramLayout,
+    style: &str,
+) -> StructuralPlanRequest {
+    let nodes_by_id: IndexMap<&str, &StructuralNode> =
+        nodes.iter().map(|n| (n.id.as_str(), n)).collect();
+
+    // Visible node ids in lane order, deduplicated (JS: `Array.from(new Set(...))`
+    // for C4; `new Set(view.lanes.flatMap(...))` for deployment — both dedupe and
+    // preserve first-seen order).
+    let mut visible_node_ids: Vec<String> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    for lane in &view.lanes {
+        for nid in &lane.node_ids {
+            if seen.insert(nid.clone()) {
+                visible_node_ids.push(nid.clone());
+            }
+        }
+    }
+    let visible_set: std::collections::HashSet<&str> =
+        visible_node_ids.iter().map(String::as_str).collect();
+
+    // Build structural relationships: iterate visible nodes in order, emit one
+    // per visible dependency. Mirrors the JS `flatMap` over visibleNodeIds.
+    let mut relationships: Vec<RelationshipInput> = Vec::new();
+    for nid in &visible_node_ids {
+        let Some(node) = nodes_by_id.get(nid.as_str()) else { continue };
+        for dep in &node.dependencies {
+            if !visible_set.contains(dep.as_str()) {
+                continue;
+            }
+            let to_node = nodes_by_id.get(dep.as_str()).copied();
+            let from_label = LabelNode { id: &node.id, node_type: &node.node_type };
+            let to_label = to_node.map(|t| LabelNode { id: &t.id, node_type: &t.node_type });
+            let label = relationship_label(Some(&from_label), to_label.as_ref());
+            relationships.push(RelationshipInput {
+                id: format!("{nid}-{dep}"),
+                from: nid.clone(),
+                to: dep.clone(),
+                label: Some(label),
+                relationship_type: Some("structural".to_string()),
+                step_id: None,
+                flow_id: None,
+                kind: None,
+                return_of: None,
+                outcome: None,
+                display_index: 0,
+                preferred_start_side: None,
+                preferred_end_side: None,
+            });
+        }
+    }
+
+    let edge_labels: IndexMap<String, String> = relationships
+        .iter()
+        .filter_map(|r| r.label.clone().map(|l| (r.id.clone(), l)))
+        .collect();
+
+    // Plan key (structural relationships carry no decision rects).
+    let key_lanes: Vec<PlanKeyLane<'_>> = view.lanes.iter()
+        .map(|l| PlanKeyLane { id: &l.id, node_ids: &l.node_ids })
+        .collect();
+    let key_rels: Vec<PlanKeyRelationship> = relationships.iter().map(|r| PlanKeyRelationship {
+        id: r.id.clone(),
+        from: r.from.clone(),
+        to: r.to.clone(),
+        label: r.label.clone(),
+        relationship_type: r.relationship_type.clone(),
+        step_id: r.step_id.clone(),
+        flow_id: r.flow_id.clone(),
+        kind: r.kind.clone(),
+        return_of: r.return_of.clone(),
+        outcome: r.outcome.clone(),
+        display_index: r.display_index,
+        preferred_start_side: r.preferred_start_side.clone(),
+        preferred_end_side: r.preferred_end_side.clone(),
+    }).collect();
+    // Structural visibleNodeIds are deduped already; the key sorts them.
+    let visible_sorted = sorted_visible_node_ids(visible_node_ids.iter().cloned());
+    let key = plan_input_key(&PlanKeyInput {
+        view_id: &view.id,
+        view_type: &view.view_type,
+        lanes: &key_lanes,
+        relationships: &key_rels,
+        visible_node_ids: &visible_sorted,
+        node_width: layout.node_width,
+        node_height: layout.node_height,
+        lane_width: layout.lane_width,
+        row_gap: layout.row_gap,
+        margin_x: layout.margin_x,
+        margin_y: layout.margin_y,
+        min_canvas_width: layout.min_canvas_width,
+        min_canvas_height: layout.min_canvas_height,
+        canvas_extra_width: layout.canvas_extra_width,
+        canvas_extra_height: layout.canvas_extra_height,
+        extra_node_rects: &[],
+        extra_lane_index_by_node: &[],
+        extra_row_index_by_node: &[],
+        score_edge_proximity: false,
+        style,
+    });
+
+    let plan_diagram_input = PlanDiagramInput {
+        view: ViewInput {
+            lanes: view.lanes.iter().map(|l| LaneInput {
+                id: l.id.clone(),
+                node_ids: l.node_ids.clone(),
+            }).collect(),
+        },
+        relationships,
+        visible_node_ids,
+        node_width: layout.node_width,
+        node_height: layout.node_height,
+        lane_width: layout.lane_width,
+        row_gap: layout.row_gap,
+        margin_x: layout.margin_x,
+        margin_y: layout.margin_y,
+        min_canvas_width: layout.min_canvas_width,
+        min_canvas_height: layout.min_canvas_height,
+        canvas_extra_width: layout.canvas_extra_width,
+        canvas_extra_height: layout.canvas_extra_height,
+        extra_node_rects: IndexMap::new(),
+        extra_lane_index_by_node: IndexMap::new(),
+        extra_row_index_by_node: IndexMap::new(),
+        score_edge_proximity: false,
+        style: style.to_string(),
+        diagnostics: false,
+    };
+
+    StructuralPlanRequest { key, plan_diagram_input, edge_labels }
 }
 
 /// Assemble the `PlanDiagramInput` that the Rust plan engine accepts.
