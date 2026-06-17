@@ -21,6 +21,12 @@ leptos = { version = "0.6", features = ["csr"] }
 console_error_panic_hook = "0.1"
 wasm-bindgen = "0.2"
 
+# Pan/zoom-fit needs to measure the canvas viewport (DomRect from the container
+# element). The wheel/mouse event TYPES come from Leptos's typed event handlers;
+# we only need web-sys for the element measurement, declared explicitly rather
+# than relying on transitive feature enablement.
+web-sys = { version = "0.3", features = ["DomRect", "Element"] }
+
 # Same-origin async fetch of the Architext data docs (/data/**, /api/config).
 gloo-net = { version = "0.6", default-features = false, features = ["http", "json"] }
 serde = { version = "1", features = ["derive"] }

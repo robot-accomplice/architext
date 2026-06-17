@@ -1,18 +1,20 @@
 //! architext-viewer — Leptos CSR app (wasm32), built with Trunk (no Node).
 //!
-//! V2 adds the data layer: same-origin fetch of the Architext documents
-//! (`/data/**` + `/api/config`), serde models, reactive app state, and the
-//! ported routing view-selection driving mode/view/flow selection. The shell
-//! renders loading / error / loaded states; diagram rendering arrives in V3.
+//! V2 added the data layer; V3 adds the FLOWS-mode diagram canvas: the selected
+//! (view, flow) is turned into a routing `Plan` IN-PROCESS (no worker) and
+//! rendered as a fluid, pan/zoom SVG. The shell renders loading / error /
+//! loaded states. Non-flows modes keep their data surfaces (diagram is V4).
 //!
 //! Module layout (clean separation):
 //! - `data`      — serde models + same-origin async fetch
 //! - `state`     — `AppState` (signals) provided via Leptos context
 //! - `selection` — thin adapter over `architext_routing` view-selection
+//! - `diagram`   — in-process plan compute + SVG render (flows mode)
 //! - `components`— one component per file
 //! - `theme`     — enumerated design facts (the nine modes)
 pub mod components;
 pub mod data;
+pub mod diagram;
 pub mod selection;
 pub mod state;
 pub mod theme;
@@ -73,14 +75,4 @@ fn ErrorScreen(err: FetchError) -> impl IntoView {
             </div>
         </div>
     }
-}
-
-/// Touches the wasm-exported planner entry so the dependency is linked into the
-/// bundle. `architext_routing::plan` is `#[cfg(feature = "wasm")]` and only
-/// exists for wasm32, so this linkage is gated to that target; V3 replaces it
-/// with the real diagram-rendering call.
-#[cfg(target_arch = "wasm32")]
-#[doc(hidden)]
-pub fn _routing_linked() -> fn(&str) -> Result<String, wasm_bindgen::JsValue> {
-    |input| architext_routing::wasm::plan(input).map_err(Into::into)
 }
