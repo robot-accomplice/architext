@@ -24,6 +24,10 @@ pub struct AppState {
     pub view_idx: RwSignal<Option<usize>>,
     /// Selected flow, as an index into `data.flows` (only meaningful in flows mode).
     pub flow_idx: RwSignal<Option<usize>>,
+    /// Node selected by clicking a diagram card (drives the inspector). Cleared
+    /// when the view/flow changes so a stale node never inspects a node absent
+    /// from the new projection.
+    pub selected_node: RwSignal<Option<String>>,
 }
 
 impl AppState {
@@ -45,12 +49,19 @@ impl AppState {
             mode: create_rw_signal(mode),
             view_idx: create_rw_signal(view_idx),
             flow_idx: create_rw_signal(flow_idx),
+            selected_node: create_rw_signal(None),
         }
+    }
+
+    /// Select a node by id (diagram click → inspector).
+    pub fn set_selected_node(&self, node_id: String) {
+        self.selected_node.set(Some(node_id));
     }
 
     /// Switch modes and re-seed the view/flow selection per the routing rules.
     pub fn set_mode(&self, mode: Mode) {
         let data = self.data.get_untracked();
+        self.selected_node.set(None);
         self.mode.set(mode);
         if mode.is_flows() {
             let flow = if data.flows.is_empty() { None } else { Some(0) };
@@ -69,6 +80,7 @@ impl AppState {
     /// Select a flow (flows mode); re-resolve the view to a compatible one.
     pub fn set_flow(&self, flow_idx: usize) {
         let data = self.data.get_untracked();
+        self.selected_node.set(None);
         self.flow_idx.set(Some(flow_idx));
         let current = self.view_idx.get_untracked();
         let view = selection::default_view_for_flow(
@@ -84,6 +96,7 @@ impl AppState {
     /// Select a view; in flows mode re-resolve the flow to a compatible one.
     pub fn set_view(&self, view_idx: usize) {
         let data = self.data.get_untracked();
+        self.selected_node.set(None);
         self.view_idx.set(Some(view_idx));
         if self.mode.get_untracked().is_flows() {
             let current = self.flow_idx.get_untracked();

@@ -6,6 +6,7 @@
 //! is never empty. Node-level inspection on diagram click is a V3 concern.
 use leptos::*;
 
+use crate::diagram::role_color_var;
 use crate::state::use_app_state;
 use crate::theme::Mode;
 
@@ -19,6 +20,29 @@ pub fn InspectorPanel() -> impl IntoView {
             {move || {
                 let data = state.data.get();
                 let mode = state.mode.get();
+
+                // A clicked diagram node takes precedence: show its details with
+                // the type chip in its single-source --c4-{type} role color.
+                if let Some(node_id) = state.selected_node.get() {
+                    if let Some(node) = data.nodes.iter().find(|n| n.id == node_id).cloned() {
+                        let role = role_color_var(&node.node_type);
+                        return view! {
+                            <div class="accent-surface inspector__card">
+                                <div class="overline">"NODE"</div>
+                                <h2 class="inspector__title">{node.name.clone()}</h2>
+                                <span class="chip" style=format!("color:{role}")>
+                                    {node.node_type.clone()}
+                                </span>
+                                {node.summary.clone().map(|s| view! {
+                                    <p class="inspector__meta">{s}</p>
+                                })}
+                                {node.owner.clone().map(|o| view! {
+                                    <p class="inspector__meta">{format!("Owner: {o}")}</p>
+                                })}
+                            </div>
+                        }.into_view();
+                    }
+                }
 
                 // Diagram-less modes summarize their data set.
                 if !mode.is_flows() {

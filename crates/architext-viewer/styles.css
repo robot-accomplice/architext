@@ -399,24 +399,102 @@ button:focus-visible {
   margin: 0;
 }
 
-/* ── Canvas placard (data-bound identity; diagram is V3) ──────────────────── */
+/* ── Diagram viewport (fluid; pan/zoom host) ──────────────────────────────── */
+.canvas-panel__viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+}
+.canvas-panel__viewport:active { cursor: grabbing; }
+/* DESIGN.md rule 3: fluid SVG — fills the viewport, never a fixed w/h. */
+.flow-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── Diagram edges (orthogonal; the d-string is engine-verbatim) ──────────── */
+.flow-edge {
+  stroke: var(--line-strong);
+  stroke-width: 1.5;
+  fill: none;
+}
+.flow-edge--async { stroke-dasharray: 6 4; }
+.flow-edge--return {
+  stroke: var(--dim);
+  stroke-dasharray: 2 3;
+}
+.flow-edge--decision { stroke: var(--muted); }
+.flow-arrowhead { fill: var(--line-strong); }
+
+/* ── Step labels (JetBrains Mono over a chrome-radius box) ────────────────── */
+.flow-label__box {
+  fill: var(--surface);
+  stroke: var(--line);
+  stroke-width: 1;
+  opacity: 0.92;
+}
+.flow-label__text {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--muted);
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+
+/* ── Decision diamonds (tinted with the affiliated node's role color) ─────── */
+.flow-decision {
+  fill: var(--canvas-black);
+  stroke-width: 1.5;
+}
+
+/* ── Node cards (8px radius; 2px role top-bar; name + type chip) ──────────── */
+.flow-node { cursor: pointer; }
+.flow-node__card {
+  fill: var(--panel);
+  stroke: var(--line);
+  stroke-width: 1;
+  rx: var(--node-card-radius);
+}
+.flow-node__topbar {
+  /* height + fill set inline (the 2px --node-topbar bar in the role color). */
+  opacity: 0.95;
+}
+.flow-node__name {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 12px;
+  fill: var(--ink);
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+.flow-node__type {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+/* Selected = STATE treatment (rule 1): --accent ring/glow, never a role hue. */
+.flow-node--selected .flow-node__card {
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 6px var(--accent-glow));
+}
+
+/* ── Canvas placard (data-bound identity, bottom-left) ────────────────────── */
 .canvas-panel__placard {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  text-align: center;
+  left: var(--pad);
+  bottom: var(--pad);
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: var(--pad);
-  max-width: 80%;
-}
-.canvas-panel__identity {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--pad);
+  gap: var(--grid);
+  pointer-events: none;
+  max-width: 60%;
 }
 .canvas-panel__title {
   font-family: var(--font-ui);
@@ -425,22 +503,10 @@ button:focus-visible {
   color: var(--ink);
   margin: 0;
 }
-.canvas-panel__flow {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--grid);
-}
-.canvas-panel__flow-name {
-  font-family: var(--font-ui);
-  color: var(--ink);
-  margin: 0;
-}
 .chip-row {
   display: flex;
   flex-wrap: wrap;
   gap: var(--grid);
-  justify-content: center;
 }
 
 /* ── Boot screens (loading / error) ───────────────────────────────────────── */
