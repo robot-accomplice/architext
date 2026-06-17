@@ -3,5 +3,6 @@ pub mod canvas_panel;
 pub mod inspector_panel;
 pub mod left_nav;
 pub mod mode_list;
+pub mod selector_bar;
 pub mod shell;
 pub mod wordmark;

@@ -1,19 +1,19 @@
 //! The nav mode list: nine entries, one active at a time.
 //!
 //! Active state uses the dedicated state treatment (`.is-active` = --accent
-//! ring/glow, DESIGN.md rule 1), never a --c4-* role hue. Selection is local
-//! Leptos signal state for now — no data routing yet (V1 scaffold).
+//! ring/glow, DESIGN.md rule 1), never a --c4-* role hue. Selecting a mode
+//! drives `AppState::set_mode`, which re-seeds the view/flow selection via the
+//! ported routing rules.
 use leptos::*;
 
+use crate::state::use_app_state;
 use crate::theme::Mode;
 
 #[component]
-pub fn ModeList(
-    /// Current selection.
-    active: ReadSignal<Mode>,
-    /// Setter the nav buttons drive.
-    set_active: WriteSignal<Mode>,
-) -> impl IntoView {
+pub fn ModeList() -> impl IntoView {
+    let state = use_app_state();
+    let active = state.mode;
+
     view! {
         <ul class="mode-list">
             {Mode::ALL
@@ -24,7 +24,7 @@ pub fn ModeList(
                             <button
                                 class="mode-list__item"
                                 class:is-active=move || active.get() == mode
-                                on:click=move |_| set_active.set(mode)
+                                on:click=move |_| state.set_mode(mode)
                             >
                                 {mode.label()}
                             </button>

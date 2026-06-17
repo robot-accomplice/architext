@@ -357,3 +357,122 @@ button:focus-visible {
   color: var(--dim);
   margin: 0;
 }
+.inspector__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+
+/* ── Selector region (left nav): flow + view selects ──────────────────────── */
+.selector-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+  margin-top: var(--pad-tight);
+  border-top: var(--hairline) solid var(--line);
+  padding-top: var(--pad);
+}
+.selector-bar__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.selector-bar__select {
+  width: 100%;
+  padding: var(--pad-tight) var(--pad);
+  background: var(--panel-2);
+  color: var(--ink);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  font-family: var(--font-ui);
+  font-size: var(--body-size);
+}
+.selector-bar__select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.selector-bar__note {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+  margin: 0;
+}
+
+/* ── Canvas placard (data-bound identity; diagram is V3) ──────────────────── */
+.canvas-panel__placard {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--pad);
+  max-width: 80%;
+}
+.canvas-panel__identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--pad);
+}
+.canvas-panel__title {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: var(--headline-size);
+  color: var(--ink);
+  margin: 0;
+}
+.canvas-panel__flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--grid);
+}
+.canvas-panel__flow-name {
+  font-family: var(--font-ui);
+  color: var(--ink);
+  margin: 0;
+}
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--grid);
+  justify-content: center;
+}
+
+/* ── Boot screens (loading / error) ───────────────────────────────────────── */
+.boot-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pad);
+  background: var(--canvas-black);
+  color: var(--muted);
+}
+.boot-screen__msg {
+  font-family: var(--font-ui);
+  color: var(--ink);
+  margin: 0;
+}
+.boot-screen__detail {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+  margin: 0;
+  word-break: break-all;
+}
+.boot-screen__error-card {
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.boot-screen--error .accent-surface {
+  --accent: var(--c4-actor);
+}

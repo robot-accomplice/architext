@@ -12,6 +12,12 @@
       "runtimeExecutable": "sh",
       "runtimeArgs": ["-c", "cd crates/architext-viewer && trunk serve --address 127.0.0.1 --port 8099 --no-autoreload"],
       "port": 8099
+    },
+    {
+      "name": "viewer-serve",
+      "runtimeExecutable": "target/release/architext-serve",
+      "runtimeArgs": ["--data-dir", "docs/architext/data", "--dist", "crates/architext-viewer/dist", "--port", "8110"],
+      "port": 8110
     }
   ]
 }
