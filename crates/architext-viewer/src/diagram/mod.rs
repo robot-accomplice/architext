@@ -17,8 +17,11 @@ pub mod edge;
 pub mod label;
 pub mod node;
 pub mod plan;
+pub mod sequence;
+pub mod sequence_svg;
 pub mod svg;
 
+pub use sequence_svg::SequenceSvg;
 pub use svg::DiagramSvg;
 
 /// The C4 role tokens defined in `styles.css` (`--c4-*`). A node `type` is the

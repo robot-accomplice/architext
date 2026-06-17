@@ -44,7 +44,7 @@ impl AppState {
         let data = Rc::new(data);
 
         // Seed selection using the routing-backed rules.
-        let flow_idx = if mode.is_flows() && !data.flows.is_empty() { Some(0) } else { None };
+        let flow_idx = if mode.projects_flows() && !data.flows.is_empty() { Some(0) } else { None };
         let view_idx = match flow_idx {
             Some(f) => selection::default_view_for_flow(&data.views, &data.flows, mode, None, f),
             None => selection::default_view_for_mode(&data.views, mode),
@@ -72,6 +72,7 @@ impl AppState {
         self.selected_node.set(None);
         self.mode.set(mode);
         if mode.is_flows() {
+            // Flows: the flow drives; resolve the view to a compatible projection.
             let flow = if data.flows.is_empty() { None } else { Some(0) };
             self.flow_idx.set(flow);
             let view = match flow {
@@ -79,6 +80,15 @@ impl AppState {
                 None => selection::default_view_for_mode(&data.views, mode),
             };
             self.view_idx.set(view);
+        } else if mode.projects_flows() {
+            // Sequence: the view is fixed by the mode (the `sequence` view);
+            // resolve the flow to the first one compatible with it.
+            let view = selection::default_view_for_mode(&data.views, mode);
+            self.view_idx.set(view);
+            let flow = view.and_then(|v| {
+                selection::default_flow_for_view(&data.views, &data.flows, v, None)
+            });
+            self.flow_idx.set(flow);
         } else {
             self.flow_idx.set(None);
             self.view_idx.set(selection::default_view_for_mode(&data.views, mode));
@@ -106,7 +116,7 @@ impl AppState {
         let data = self.data.get_untracked();
         self.selected_node.set(None);
         self.view_idx.set(Some(view_idx));
-        if self.mode.get_untracked().is_flows() {
+        if self.mode.get_untracked().projects_flows() {
             let current = self.flow_idx.get_untracked();
             let flow = selection::default_flow_for_view(&data.views, &data.flows, view_idx, current);
             self.flow_idx.set(flow);

@@ -20,7 +20,7 @@ pub fn SelectorBar() -> impl IntoView {
     // Flow selector (flows mode only).
     let flow_options = move || {
         let data = state.data.get();
-        if !state.mode.get().is_flows() {
+        if !state.mode.get().projects_flows() {
             return Vec::new();
         }
         data.flows
@@ -51,7 +51,7 @@ pub fn SelectorBar() -> impl IntoView {
 
     view! {
         <div class="selector-bar">
-            <Show when=move || state.mode.get().is_flows()>
+            <Show when=move || state.mode.get().projects_flows()>
                 <div class="selector-bar__group">
                     <div class="overline">"FLOW"</div>
                     <select

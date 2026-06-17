@@ -71,4 +71,12 @@ impl Mode {
     pub fn is_flows(self) -> bool {
         matches!(self, Mode::Flows)
     }
+
+    /// Whether this mode is driven by a selected FLOW (so the UI shows a flow
+    /// selector and the state seeds/​resolves a flow). Both the Flows projection
+    /// and the Sequence projection render one selected flow; the difference is
+    /// how each lays it out (routed plan vs. lifelines), handled downstream.
+    pub fn projects_flows(self) -> bool {
+        matches!(self, Mode::Flows | Mode::Sequence)
+    }
 }

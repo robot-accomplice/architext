@@ -142,6 +142,22 @@ pub struct FlowStep {
     pub return_of: Option<String>,
 }
 
+/// A sequence frame (`alt`/`loop`/`par`/`opt`/`transaction`) — a bordered box
+/// spanning a contiguous range of the flow's steps in the SEQUENCE diagram. The
+/// frame `type` labels the box (e.g. `loop: retry`); `step_ids` names the steps
+/// it brackets. Only the SEQUENCE projection reads these.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SequenceFrame {
+    pub id: String,
+    #[serde(rename = "type")]
+    pub frame_type: String,
+    #[serde(default)]
+    pub label: Option<String>,
+    #[serde(default)]
+    pub step_ids: Vec<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Flow {
@@ -155,6 +171,9 @@ pub struct Flow {
     pub trigger: Option<String>,
     #[serde(default)]
     pub steps: Vec<FlowStep>,
+    /// SEQUENCE-mode frames bracketing step ranges. Absent for most flows.
+    #[serde(default)]
+    pub sequence_frames: Vec<SequenceFrame>,
 }
 
 impl Flow {
