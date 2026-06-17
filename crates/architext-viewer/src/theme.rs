@@ -49,4 +49,26 @@ impl Mode {
             Mode::Rules => "Rules",
         }
     }
+
+    /// The JS/data mode id (matches `MODE_DEFINITIONS` ids), used to drive the
+    /// ported `architext_routing::plan_request::view_selection` logic.
+    pub fn id(self) -> &'static str {
+        match self {
+            Mode::Flows => "flows",
+            Mode::Sequence => "sequence",
+            Mode::C4 => "c4",
+            Mode::Deployment => "deployment",
+            Mode::DataRisks => "data-risks",
+            Mode::RepoTree => "repo-tree",
+            Mode::BlastRadius => "blast-radius",
+            Mode::ReleaseTruth => "release-truth",
+            Mode::Rules => "rules",
+        }
+    }
+
+    /// Whether this mode projects a diagram (has view types). Diagram-less modes
+    /// render data surfaces (rules, releases, repo tree, blast radius) instead.
+    pub fn is_flows(self) -> bool {
+        matches!(self, Mode::Flows)
+    }
 }
