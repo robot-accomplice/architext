@@ -10,13 +10,16 @@
 //! It is deliberately free of Leptos/`web_sys` so it compiles and runs on
 //! native targets and can be gated by a `#[test]`.
 
+use std::collections::HashMap;
+
 use architext_routing::diagram_config::DiagramConfigLayout;
 use architext_routing::model::Plan;
 use architext_routing::plan_diagram::plan_diagram;
-use architext_routing::plan_request::build_flow_plan_request;
-use architext_routing::plan_request::diagram_layout::LayoutConfig;
+use architext_routing::plan_request::c4_layout::c4_layout_for;
+use architext_routing::plan_request::diagram_layout::{diagram_layout_for, LayoutConfig};
+use architext_routing::plan_request::{build_flow_plan_request, build_structural_plan_request, StructuralNode};
 
-use crate::data::models::{Flow, View};
+use crate::data::models::{Flow, Node, View};
 
 /// Resolve the `LayoutConfig` from the resolved `/api/config` diagram payload.
 ///
@@ -58,11 +61,129 @@ pub fn compute_plan(view: &View, flow: &Flow, layout: &LayoutConfig) -> Plan {
     plan_diagram(&request.plan_diagram_input)
 }
 
+/// A computed structural diagram: the `Plan` plus the per-edge labels (keyed by
+/// route/relationship id, `from-to`) the renderer needs — structural edges carry
+/// no numbered flow step, so the label rule's output is threaded through here.
+pub struct StructuralDiagram {
+    pub plan: Plan,
+    pub edge_labels: HashMap<String, String>,
+}
+
+/// Build the structural diagram `Plan` for a C4 / deployment view, using the
+/// same plan engine the flows path uses. The layout differs per mode:
+/// - C4 views (`c4-*`) use the type-specific `c4_layout_for` dimensions;
+/// - deployment uses the default `diagram_layout_for` (dense-aware) layout.
+///
+/// `nodes` supplies dependencies + types (the structural edge + label source).
+/// `style` is fixed to `"orthogonal"` — the only edge style the viewer renders.
+pub fn compute_structural_plan(view: &View, nodes: &[Node], layout_config: &LayoutConfig) -> StructuralDiagram {
+    let routing_view = view.to_routing();
+    let structural_nodes: Vec<StructuralNode> = nodes
+        .iter()
+        .map(|n| StructuralNode {
+            id: n.id.clone(),
+            node_type: n.node_type.clone(),
+            dependencies: n.dependencies.clone(),
+        })
+        .collect();
+
+    let layout = if view.view_type.starts_with("c4-") {
+        c4_layout_for(&view.view_type)
+    } else {
+        // Deployment: the default layout, with the structural relationship count
+        // feeding the dense-topology heuristic.
+        let count = architext_routing::plan_request::structural_relationship_count(
+            &routing_view,
+            &structural_nodes,
+        );
+        diagram_layout_for(&routing_view, count, Some(layout_config))
+    };
+
+    let request = build_structural_plan_request(&routing_view, &structural_nodes, &layout, "orthogonal");
+    let plan = plan_diagram(&request.plan_diagram_input);
+    StructuralDiagram {
+        plan,
+        edge_labels: request.edge_labels.into_iter().collect(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::data::models::{FlowsFile, ViewsFile};
+    use crate::data::models::{FlowsFile, NodesFile, ViewsFile};
     use crate::selection::compatible_flow_views;
+
+    fn data_root() -> String {
+        concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/architext/data").to_string()
+    }
+
+    /// Build a STRUCTURAL plan for a real corpus C4 view via the same in-process
+    /// path the C4/Deployment UI uses, and assert it produces real geometry:
+    /// node rects, routed edges (the view has dependencies), a positive canvas,
+    /// and a label per edge (structural edges are labelled by the relationship
+    /// rule, not a numbered step). This gates the structural-plan path even
+    /// though the SVG render itself is visual.
+    #[test]
+    fn computes_nonempty_structural_plan_for_c4_container() {
+        let root = data_root();
+        let views: ViewsFile = serde_json::from_str(
+            &std::fs::read_to_string(format!("{root}/views.json")).expect("read views.json"),
+        )
+        .expect("parse views.json");
+        let nodes: NodesFile = serde_json::from_str(
+            &std::fs::read_to_string(format!("{root}/nodes.json")).expect("read nodes.json"),
+        )
+        .expect("parse nodes.json");
+
+        let view = views
+            .views
+            .iter()
+            .find(|v| v.view_type == "c4-container")
+            .expect("corpus has a c4-container view");
+
+        let layout = DiagramConfigLayout::default().to_layout_config();
+        let diagram = compute_structural_plan(view, &nodes.nodes, &layout);
+        let plan = &diagram.plan;
+
+        assert!(plan.canvas_width > 0.0, "canvas_width must be positive");
+        assert!(plan.canvas_height > 0.0, "canvas_height must be positive");
+        assert!(!plan.node_rects.is_empty(), "node_rects must be non-empty");
+        // The c4-container view has visible inter-node dependencies → routes.
+        assert!(!plan.routes.is_empty(), "structural routes must be non-empty");
+        assert!(!diagram.edge_labels.is_empty(), "structural edges must carry labels");
+        for (id, route) in &plan.routes {
+            assert!(!route.d.is_empty(), "route {id} must have a non-empty d-string");
+            assert!(
+                diagram.edge_labels.contains_key(id),
+                "route {id} must have a structural label"
+            );
+        }
+    }
+
+    /// C4 layout dims must flow through to the plan: the c4-container node rect
+    /// width is the C4 layout's 176 (not the default 136), proving the structural
+    /// path uses `c4_layout_for`, not the flow/default layout.
+    #[test]
+    fn structural_c4_plan_uses_c4_layout_dims() {
+        let root = data_root();
+        let views: ViewsFile = serde_json::from_str(
+            &std::fs::read_to_string(format!("{root}/views.json")).expect("read views.json"),
+        )
+        .expect("parse views.json");
+        let nodes: NodesFile = serde_json::from_str(
+            &std::fs::read_to_string(format!("{root}/nodes.json")).expect("read nodes.json"),
+        )
+        .expect("parse nodes.json");
+        let view = views
+            .views
+            .iter()
+            .find(|v| v.view_type == "c4-container")
+            .expect("corpus has a c4-container view");
+        let layout = DiagramConfigLayout::default().to_layout_config();
+        let diagram = compute_structural_plan(view, &nodes.nodes, &layout);
+        let rect = diagram.plan.node_rects.values().next().expect("a node rect");
+        assert_eq!(rect.width, 176.0, "c4-container node width must be the C4 layout's 176");
+    }
 
     /// Build a plan for a real (view, flow) via the same code path the UI uses,
     /// and assert the plan is non-empty. This gates the in-process compute path

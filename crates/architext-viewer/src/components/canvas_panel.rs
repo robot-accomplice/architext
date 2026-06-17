@@ -7,7 +7,12 @@
 //!  - wire the `- ⤢ +` controls, mouse-wheel zoom, and drag-to-pan;
 //!  - host `DiagramSvg` and forward node clicks to `AppState`.
 //!
-//! Non-flows modes have no diagram projection (V4); they keep the placard.
+//! Flows, C4, and Deployment modes all project through the SAME `DiagramSvg`:
+//! flows feed it a flow + flow-routed plan; C4/Deployment feed it a structural
+//! plan (built from node `dependencies`) + per-edge labels and no flow. The
+//! remaining (diagram-less) modes keep the placard.
+
+use std::collections::HashMap;
 
 use leptos::*;
 use leptos::ev::{MouseEvent, WheelEvent};
@@ -15,12 +20,17 @@ use leptos::ev::{MouseEvent, WheelEvent};
 use architext_routing::model::Plan;
 
 use crate::data::models::{Flow, Node, View};
-use crate::diagram::plan::{compute_plan, layout_config_from_diagram};
+use crate::diagram::plan::{compute_plan, compute_structural_plan, layout_config_from_diagram};
 use crate::diagram::DiagramSvg;
+use crate::selection::child_c4_view_for_node;
 use crate::state::use_app_state;
+use crate::theme::Mode;
 
-/// The bundle the SVG needs to render one flows-mode diagram.
-type DiagramInputs = (Plan, Flow, View, Vec<Node>);
+/// The bundle the SVG needs to render one diagram. `flow` is `Some` in flows
+/// mode (drives edge kinds); `edge_labels` is populated in structural (C4 /
+/// deployment) mode (the relationship labels). Exactly one of the two carries
+/// the edge labels.
+type DiagramInputs = (Plan, Option<Flow>, HashMap<String, String>, View, Vec<Node>);
 
 // Zoom bounds + step (centralized, not magic literals at call sites).
 const ZOOM_MIN: f64 = 0.1;
@@ -100,20 +110,30 @@ pub fn CanvasPanel() -> impl IntoView {
     // signal. This recomputes exactly when the selection changes, not on every
     // unrelated signal.
     let selection_key = create_memo(move |_| {
-        (state.mode.get().is_flows(), state.view_idx.get(), state.flow_idx.get())
+        (state.mode.get(), state.view_idx.get(), state.flow_idx.get())
     });
     let diagram_inputs = create_rw_signal::<Option<DiagramInputs>>(None);
     create_effect(move |_| {
-        let (is_flows, view_idx, flow_idx) = selection_key.get();
+        let (mode, view_idx, flow_idx) = selection_key.get();
         let data = state.data.get_untracked();
         let bundle = (|| {
-            if !is_flows {
-                return None;
-            }
             let view = view_idx.and_then(|i| data.views.get(i).cloned())?;
-            let flow = flow_idx.and_then(|i| data.flows.get(i).cloned())?;
-            let plan = compute_plan(&view, &flow, &layout_config());
-            Some((plan, flow, view, data.nodes.clone()))
+            match mode {
+                Mode::Flows => {
+                    let flow = flow_idx.and_then(|i| data.flows.get(i).cloned())?;
+                    let plan = compute_plan(&view, &flow, &layout_config());
+                    Some((plan, Some(flow), HashMap::new(), view, data.nodes.clone()))
+                }
+                // C4 + Deployment: structural plan (node dependencies → edges),
+                // labelled by the relationship rule, no flow.
+                Mode::C4 | Mode::Deployment => {
+                    let structural =
+                        compute_structural_plan(&view, &data.nodes, &layout_config());
+                    Some((structural.plan, None, structural.edge_labels, view, data.nodes.clone()))
+                }
+                // Diagram-less modes keep the placard.
+                _ => None,
+            }
         })();
         diagram_inputs.set(bundle);
     });
@@ -121,7 +141,7 @@ pub fn CanvasPanel() -> impl IntoView {
     // Fit-to-viewport: scale so the whole canvas fits, then center it. This is
     // an imperative action (rAF / button click), so it reads untracked.
     let fit = move || {
-        let Some((plan, _, _, _)) = diagram_inputs.get_untracked() else { return };
+        let Some((plan, _, _, _, _)) = diagram_inputs.get_untracked() else { return };
         let Some(el) = viewport_ref.get_untracked() else { return };
         let Some(bounds) = content_bounds(&plan) else { return };
         let rect = el.get_bounding_client_rect();
@@ -183,7 +203,23 @@ pub fn CanvasPanel() -> impl IntoView {
     };
     let end_drag = move |_: MouseEvent| dragging.set(false);
 
-    let on_select = Callback::new(move |node_id: String| state.set_selected_node(node_id));
+    // Node click: in C4 mode, a decomposable node (one with a scoped child C4
+    // view) drills DOWN to that child view; otherwise (and in every other mode)
+    // it selects the node for the inspector — exactly the JS viewer's behavior.
+    let on_select = Callback::new(move |node_id: String| {
+        if state.mode.get_untracked() == Mode::C4 {
+            let data = state.data.get_untracked();
+            if let Some(view) = state.view_idx.get_untracked().and_then(|i| data.views.get(i)) {
+                if let Some(child_idx) =
+                    child_c4_view_for_node(&data.views, &view.view_type, &node_id)
+                {
+                    state.set_view(child_idx);
+                    return;
+                }
+            }
+        }
+        state.set_selected_node(node_id);
+    });
 
     // Selected view/flow identity for the corner placard (kept for context).
     let placard = move || {
@@ -206,10 +242,11 @@ pub fn CanvasPanel() -> impl IntoView {
                 on:mouseleave=end_drag
             >
                 {move || match diagram_inputs.get() {
-                    Some((plan, flow, view, nodes)) => view! {
+                    Some((plan, flow, edge_labels, view, nodes)) => view! {
                         <DiagramSvg
                             plan=plan
                             flow=flow
+                            edge_labels=edge_labels
                             view=view
                             nodes=nodes
                             pan_x=pan_x

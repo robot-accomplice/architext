@@ -88,6 +88,38 @@ pub fn default_view_for_flow(
     view_index_by_id(views, &chosen.id)
 }
 
+/// The child C4 view type for a parent C4 type, or `None` at the leaf.
+/// Port of JS `childC4Type` in `c4Drilldown.js`.
+fn child_c4_type(view_type: &str) -> Option<&'static str> {
+    match view_type {
+        "c4-context" => Some("c4-container"),
+        "c4-container" => Some("c4-component"),
+        "c4-component" => Some("c4-code"),
+        _ => None,
+    }
+}
+
+/// The index of the child C4 view a node drills down into, if one exists.
+/// Port of JS `childC4ViewForNode(views, activeView, nodeId)`: find the view
+/// whose type is the parent's child type AND whose `scopeNodeId == nodeId`.
+///
+/// Returns `None` when the active view is not a C4 view, is at the leaf level,
+/// or no scoped child view is authored for the node — in which case the caller
+/// falls back to selecting the node (inspector), as the JS viewer does.
+pub fn child_c4_view_for_node(
+    views: &[View],
+    active_view_type: &str,
+    node_id: &str,
+) -> Option<usize> {
+    if !active_view_type.starts_with("c4-") {
+        return None;
+    }
+    let next_type = child_c4_type(active_view_type)?;
+    views.iter().position(|v| {
+        v.view_type == next_type && v.scope_node_id.as_deref() == Some(node_id)
+    })
+}
+
 /// The default flow index when a view is selected (keeps the current flow if it
 /// stays compatible; else the first compatible flow).
 pub fn default_flow_for_view(

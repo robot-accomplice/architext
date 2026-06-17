@@ -58,6 +58,10 @@ pub struct Node {
     pub summary: Option<String>,
     #[serde(default)]
     pub owner: Option<String>,
+    /// Node ids this node structurally depends on. Drives the C4/deployment
+    /// structural-relationship edges.
+    #[serde(default)]
+    pub dependencies: Vec<String>,
 }
 
 // ─── views.json ────────────────────────────────────────────────────────────
@@ -84,6 +88,11 @@ pub struct View {
     pub view_type: String,
     #[serde(default)]
     pub summary: Option<String>,
+    /// The node a decomposable C4 view scopes into — the drilldown anchor. A
+    /// `c4-container` view with `scopeNodeId: "x"` is the child of node `x` in
+    /// the parent `c4-context` view.
+    #[serde(rename = "scopeNodeId", default)]
+    pub scope_node_id: Option<String>,
     #[serde(default)]
     pub lanes: Vec<Lane>,
 }
