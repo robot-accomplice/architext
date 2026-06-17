@@ -265,6 +265,10 @@ pub async fn serve_with_schema_dir(
 
     tracing::info!("Architext serve listening on http://{host}:{bound_port}");
 
+    // tokio requires the std listener to be non-blocking before `from_std`;
+    // tokio 1.52+ panics on registering a blocking fd with the runtime. Mirrors
+    // the same guard in the CLI's foreground serve path (serve/mod.rs).
+    listener.set_nonblocking(true)?;
     let listener = tokio::net::TcpListener::from_std(listener)?;
     axum::serve(listener, router).await
 }
