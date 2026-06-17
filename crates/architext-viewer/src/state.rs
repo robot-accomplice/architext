@@ -28,6 +28,12 @@ pub struct AppState {
     /// when the view/flow changes so a stale node never inspects a node absent
     /// from the new projection.
     pub selected_node: RwSignal<Option<String>>,
+    /// Whether the left nav is collapsed to its thin rail (DESIGN.md: auxiliary
+    /// panels collapse to icons/drawers). Drives the shell grid + the canvas
+    /// re-fit when the center track resizes.
+    pub nav_collapsed: RwSignal<bool>,
+    /// Whether the right inspector is collapsed to its thin rail.
+    pub inspector_collapsed: RwSignal<bool>,
 }
 
 impl AppState {
@@ -50,6 +56,8 @@ impl AppState {
             view_idx: create_rw_signal(view_idx),
             flow_idx: create_rw_signal(flow_idx),
             selected_node: create_rw_signal(None),
+            nav_collapsed: create_rw_signal(false),
+            inspector_collapsed: create_rw_signal(false),
         }
     }
 

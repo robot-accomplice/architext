@@ -83,6 +83,10 @@
   --line: #3b494b;
   --line-strong: #849495;
   --hairline: 1px;
+  /* Diagram route stroke — a clearly-visible mid-light on canvas-black, brighter
+     than --line-strong so edges read at any zoom. Not a --c4-* role hue, not the
+     accent (state). */
+  --edge: #b3c2c3;
 
   /* ── Component-type color — SINGLE SOURCE OF TRUTH (DESIGN.md) ────────────
      Node/component type color ALWAYS comes from these tokens. Never hardcode a
@@ -132,6 +136,10 @@
   /* ── Fixed-fluid console grid widths (DESIGN.md "Layout") ───────────────── */
   --nav-w: 280px;
   --inspector-w: 320px;
+  /* Collapsed rails: thin enough to give the canvas room, wide enough for the
+     expand affordance. */
+  --nav-collapsed: 44px;
+  --inspector-collapsed: 44px;
 
   font-family: var(--font-ui);
   font-size: var(--body-size);
@@ -235,6 +243,44 @@ button:focus-visible {
   width: 100vw;
 }
 
+/* ── Panel collapse affordance (shared by nav + inspector) ────────────────── */
+/* Header row holding the panel label/wordmark and the collapse chevron. */
+.panel-collapse-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad-tight);
+}
+/* Chevron toggle: on-language hairline + mono, --accent only as a STATE signal
+   on hover/active (rule 1 — never a role hue). */
+.panel-collapse-toggle {
+  font-family: var(--font-mono);
+  font-size: var(--body-size);
+  line-height: 1;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.panel-collapse-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.panel-collapse-toggle:active {
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+/* In the collapsed rail the toggle is the only affordance — center it. */
+.panel-collapse-toggle--rail {
+  margin: 0 auto;
+}
+
 /* ── Left nav ───────────────────────────────────────────────────────────── */
 .left-nav {
   background: var(--panel);
@@ -243,6 +289,13 @@ button:focus-visible {
   padding: var(--pad);
   gap: var(--pad);
   overflow-y: auto;
+}
+/* Collapsed: thin rail, just the expand chevron, no horizontal scrollbar. */
+.left-nav--collapsed,
+.inspector--collapsed {
+  padding: var(--pad) 0;
+  align-items: center;
+  overflow: hidden;
 }
 
 .wordmark {
@@ -416,17 +469,30 @@ button:focus-visible {
 
 /* ── Diagram edges (orthogonal; the d-string is engine-verbatim) ──────────── */
 .flow-edge {
-  stroke: var(--line-strong);
+  stroke: var(--edge);
   stroke-width: 1.5;
   fill: none;
+  /* Keep the stroke a constant ~1.5px in SCREEN space at any zoom so routes
+     never thin to sub-pixel and vanish when fit zooms out. */
+  vector-effect: non-scaling-stroke;
 }
-.flow-edge--async { stroke-dasharray: 6 4; }
+.flow-edge--async {
+  stroke-dasharray: 6 4;
+  opacity: 0.85;
+}
 .flow-edge--return {
-  stroke: var(--dim);
   stroke-dasharray: 2 3;
+  opacity: 0.7;
 }
-.flow-edge--decision { stroke: var(--muted); }
-.flow-arrowhead { fill: var(--line-strong); }
+.flow-edge--decision {
+  stroke-dasharray: 4 3;
+  opacity: 0.8;
+}
+.flow-arrowhead {
+  fill: var(--edge);
+  stroke: var(--edge);
+  vector-effect: non-scaling-stroke;
+}
 
 /* ── Step labels (JetBrains Mono over a chrome-radius box) ────────────────── */
 .flow-label__box {

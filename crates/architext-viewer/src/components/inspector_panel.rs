@@ -13,11 +13,18 @@ use crate::theme::Mode;
 #[component]
 pub fn InspectorPanel() -> impl IntoView {
     let state = use_app_state();
+    let collapsed = state.inspector_collapsed;
+    let toggle = move |_| collapsed.update(|c| *c = !*c);
 
-    view! {
-        <aside class="inspector">
-            <div class="overline inspector__section-label">"INSPECTOR"</div>
-            {move || {
+    let aside_class = move || {
+        if collapsed.get() {
+            "inspector inspector--collapsed"
+        } else {
+            "inspector"
+        }
+    };
+
+    let body = move || {
                 let data = state.data.get();
                 let mode = state.mode.get();
 
@@ -98,7 +105,30 @@ pub fn InspectorPanel() -> impl IntoView {
                         </div>
                     })}
                 }.into_view()
-            }}
+    };
+
+    view! {
+        <aside class=aside_class>
+            <Show
+                when=move || collapsed.get()
+                fallback=move || view! {
+                    <div class="panel-collapse-header">
+                        <div class="overline inspector__section-label">"INSPECTOR"</div>
+                        <button
+                            class="panel-collapse-toggle"
+                            title="Collapse inspector"
+                            on:click=toggle
+                        >"›"</button>
+                    </div>
+                    {body()}
+                }
+            >
+                <button
+                    class="panel-collapse-toggle panel-collapse-toggle--rail"
+                    title="Expand inspector"
+                    on:click=toggle
+                >"‹"</button>
+            </Show>
         </aside>
     }
 }

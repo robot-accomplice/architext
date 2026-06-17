@@ -26,7 +26,48 @@ type DiagramInputs = (Plan, Flow, View, Vec<Node>);
 const ZOOM_MIN: f64 = 0.1;
 const ZOOM_MAX: f64 = 4.0;
 const ZOOM_STEP: f64 = 1.2;
-const FIT_PADDING: f64 = 32.0; // px of breathing room around the fitted diagram
+const FIT_PADDING: f64 = 24.0; // px of breathing room around the fitted content
+
+/// Axis-aligned content bounds (min/max corners). `None` if the plan has no
+/// renderable geometry.
+struct ContentBounds {
+    min_x: f64,
+    min_y: f64,
+    max_x: f64,
+    max_y: f64,
+}
+
+/// The bounding box of everything that actually renders — node rects unioned
+/// with label boxes and route polyline points — so `fit` frames the diagram, not
+/// the full padded canvas (which includes margins + disconnected-node columns).
+fn content_bounds(plan: &Plan) -> Option<ContentBounds> {
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+
+    let mut grow = |x0: f64, y0: f64, x1: f64, y1: f64| {
+        min_x = min_x.min(x0);
+        min_y = min_y.min(y0);
+        max_x = max_x.max(x1);
+        max_y = max_y.max(y1);
+    };
+
+    for rect in plan.node_rects.values().chain(plan.label_boxes.values()) {
+        grow(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
+    }
+    for route in plan.routes.values() {
+        for p in &route.points {
+            grow(p.x, p.y, p.x, p.y);
+        }
+    }
+
+    if min_x.is_finite() && max_x > min_x && max_y > min_y {
+        Some(ContentBounds { min_x, min_y, max_x, max_y })
+    } else {
+        None
+    }
+}
 
 #[component]
 pub fn CanvasPanel() -> impl IntoView {
@@ -82,24 +123,32 @@ pub fn CanvasPanel() -> impl IntoView {
     let fit = move || {
         let Some((plan, _, _, _)) = diagram_inputs.get_untracked() else { return };
         let Some(el) = viewport_ref.get_untracked() else { return };
+        let Some(bounds) = content_bounds(&plan) else { return };
         let rect = el.get_bounding_client_rect();
         let (vw, vh) = (rect.width(), rect.height());
-        if plan.canvas_width <= 0.0 || plan.canvas_height <= 0.0 || vw <= 0.0 || vh <= 0.0 {
+        let content_w = bounds.max_x - bounds.min_x;
+        let content_h = bounds.max_y - bounds.min_y;
+        if content_w <= 0.0 || content_h <= 0.0 || vw <= 0.0 || vh <= 0.0 {
             return;
         }
-        let scale_x = (vw - FIT_PADDING * 2.0) / plan.canvas_width;
-        let scale_y = (vh - FIT_PADDING * 2.0) / plan.canvas_height;
+        // As zoomed-in as possible while the whole content box stays in view.
+        let scale_x = (vw - FIT_PADDING * 2.0) / content_w;
+        let scale_y = (vh - FIT_PADDING * 2.0) / content_h;
         let scale = scale_x.min(scale_y).clamp(ZOOM_MIN, ZOOM_MAX);
         zoom.set(scale);
-        // Center the scaled diagram in the viewport.
-        pan_x.set((vw - plan.canvas_width * scale) / 2.0);
-        pan_y.set((vh - plan.canvas_height * scale) / 2.0);
+        // Center the CONTENT box (not the full canvas) in the viewport.
+        pan_x.set((vw - content_w * scale) / 2.0 - bounds.min_x * scale);
+        pan_y.set((vh - content_h * scale) / 2.0 - bounds.min_y * scale);
     };
 
-    // Re-fit whenever the diagram changes (new view/flow → fresh framing).
+    // Re-fit whenever the diagram changes (new view/flow → fresh framing) OR a
+    // sidebar collapses/expands (the center track resized → re-frame for the new
+    // viewport width).
     create_effect(move |_| {
         // Track the inputs so a selection change re-runs the fit.
         let _ = diagram_inputs.get();
+        let _ = state.nav_collapsed.get();
+        let _ = state.inspector_collapsed.get();
         // Defer to the next tick so the SVG (and its viewport) is laid out.
         request_animation_frame(fit);
     });
