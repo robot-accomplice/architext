@@ -306,6 +306,12 @@ mod tests {
         assert_eq!(entries.len(), 16, "Expected 16 entries (matching JS oracle)");
     }
 
+    // Validates the NATIVE farm's hashing (sha256 → 64-char hex). The
+    // non-native `plan_key_hash_native` intentionally returns "" (sha2/hex are
+    // unavailable without the feature; the farm is only ever driven by the
+    // farm_dump bin, which always enables `native`), so this assertion is only
+    // meaningful — and only correct — under the native feature.
+    #[cfg(feature = "native")]
     #[test]
     fn all_entries_have_valid_hash_and_key() {
         let data_dir = corpus_data_dir();
