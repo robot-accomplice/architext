@@ -1039,9 +1039,9 @@ button:focus-visible {
    current view renders. On-language: overline header, hairline, mono. */
 .legend {
   position: absolute;
-  left: var(--pad);
-  /* Sits above the identity placard (placard is ~2 short text rows). */
-  bottom: calc(var(--pad) + 84px);
+  /* Lower-right corner; the identity placard owns the lower-left. */
+  right: var(--pad);
+  bottom: var(--pad);
   width: max-content;
   max-width: 40%;
   background: color-mix(in srgb, var(--panel) 92%, transparent);
@@ -1050,7 +1050,7 @@ button:focus-visible {
   backdrop-filter: blur(2px);
 }
 .legend--collapsed {
-  bottom: calc(var(--pad) + 84px);
+  bottom: var(--pad);
 }
 .legend__header {
   display: flex;
