@@ -519,8 +519,18 @@ pub fn CanvasPanel() -> impl IntoView {
                     }
                 }}
             </div>
-            // Identity placard (bottom-left), bound to the selection.
+            // Identity placard (bottom-left) — it LABELS the canvas, so show it
+            // only over an actual diagram/sequence surface (same gate as the
+            // zoom controls). The diagram-less list modes (Repo Tree, Rules,
+            // Blast Radius, Release Truth) render their own full-height panel;
+            // there the placard showed a STALE selection identity overlapping
+            // the list, so suppress it.
             {move || {
+                if !(diagram_inputs.with(Option::is_some)
+                    || sequence_inputs.with(Option::is_some))
+                {
+                    return None;
+                }
                 let (view, flow) = placard();
                 view.map(|v| view! {
                     <div class="canvas-panel__placard">
