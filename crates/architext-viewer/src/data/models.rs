@@ -67,6 +67,18 @@ pub struct Node {
     /// owned by that node, and its row takes the node's `--c4-{type}` rail color.
     #[serde(rename = "sourcePaths", default)]
     pub source_paths: Vec<String>,
+    /// Authored cross-references — flow/decision/risk/data-class ids this node
+    /// declares it participates in. The Blast Radius reach unions these declared
+    /// links with the derived ones (flow steps / `relatedNodes` back-references).
+    /// Faithful to the JS `blastRadiusForNode` inputs.
+    #[serde(rename = "relatedFlows", default)]
+    pub related_flows: Vec<String>,
+    #[serde(rename = "relatedDecisions", default)]
+    pub related_decisions: Vec<String>,
+    #[serde(rename = "knownRisks", default)]
+    pub known_risks: Vec<String>,
+    #[serde(rename = "dataHandled", default)]
+    pub data_handled: Vec<String>,
 }
 
 // ─── views.json ────────────────────────────────────────────────────────────
@@ -238,6 +250,10 @@ pub struct Decision {
     pub context: Option<String>,
     #[serde(default)]
     pub decision: Option<String>,
+    /// Node ids this decision references (the reverse-link source for Blast
+    /// Radius: a node is reached by every decision whose `relatedNodes` names it).
+    #[serde(rename = "relatedNodes", default)]
+    pub related_nodes: Vec<String>,
 }
 
 // ─── risks.json ────────────────────────────────────────────────────────────
@@ -259,6 +275,9 @@ pub struct Risk {
     pub status: Option<String>,
     #[serde(default)]
     pub summary: Option<String>,
+    /// Node ids this risk references (the reverse-link source for Blast Radius).
+    #[serde(rename = "relatedNodes", default)]
+    pub related_nodes: Vec<String>,
 }
 
 // ─── glossary.json ─────────────────────────────────────────────────────────

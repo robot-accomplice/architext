@@ -176,6 +176,10 @@ mod tests {
             owner: None,
             dependencies: Vec::new(),
             source_paths: source_paths.iter().map(|s| s.to_string()).collect(),
+            related_flows: Vec::new(),
+            related_decisions: Vec::new(),
+            known_risks: Vec::new(),
+            data_handled: Vec::new(),
         }
     }
 

@@ -12,10 +12,12 @@
 //! - `diagram`   — in-process plan compute + SVG render (flows mode)
 //! - `components`— one component per file
 //! - `theme`     — enumerated design facts (the nine modes)
+pub mod blast_radius;
 pub mod components;
 pub mod data;
 pub mod diagram;
 pub mod flow_step_display;
+pub mod release_truth;
 pub mod repo_tree_model;
 pub mod rule_order;
 pub mod selection;

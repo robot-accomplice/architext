@@ -499,6 +499,10 @@ mod tests {
             owner: None,
             dependencies: vec![],
             source_paths: vec![],
+            related_flows: vec![],
+            related_decisions: vec![],
+            known_risks: vec![],
+            data_handled: vec![],
         }
     }
 
