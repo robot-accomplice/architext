@@ -10,7 +10,7 @@
 //! adapters so the selection logic lives in exactly one place
 //! (`architext_routing::plan_request::view_selection`).
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use architext_routing::plan_request::types::{
     Flow as RoutingFlow, FlowStep as RoutingFlowStep, Lane as RoutingLane, View as RoutingView,
@@ -300,30 +300,33 @@ pub struct RulesFile {
     pub rules: Vec<Rule>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// A project rule. `Serialize` is derived (not just `Deserialize`) because the
+/// Rules editor round-trips the FULL rule back to `POST /api/rules`
+/// (`{action:"update", rule:<full rule>}`); serializing with the same camelCase
+/// field names keeps the upsert payload faithful to the on-disk shape.
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Rule {
     pub id: String,
     pub title: String,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub category: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub criticality: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub order: Option<i64>,
     /// Provenance (`maintainer`, `extracted`, ...). Display-only.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub source: Option<String>,
-    /// Edit/delete protection flags. Display-only this slice — the protection
-    /// BADGE is shown, but no editing/reordering is wired (that is V5).
+    /// Edit/delete protection flags.
     #[serde(default)]
     pub protection: RuleProtection,
 }
 
 /// `rule.protection` — whether the rule is edit/delete protected.
-#[derive(Debug, Clone, Default, Deserialize)]
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
 pub struct RuleProtection {
     #[serde(default)]
     pub edit: bool,

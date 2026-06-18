@@ -1,17 +1,18 @@
-//! Rules surface (DISPLAY only).
+//! Rules surface (list + editor).
 //!
 //! A left list of rules ordered by criticality → order → title
 //! (`rule_order::ordered_rule_indices`, the faithful port of the JS
-//! `orderedRules` comparator), with an "All + per-category" chip filter. Each
-//! card shows order#, title, a criticality badge (its OWN `--sev-*` scale, never
-//! a `--c4-*` role hue), a category badge, an optional protection badge, and the
-//! summary. Selecting a card opens a read-only detail pane (id / title /
-//! criticality / category / source / summary / protection).
-//!
-//! Editing — the upsert form, reorder, POST — is V5; this slice is read-only.
+//! `orderedRules` comparator), with an "All + per-category" chip filter and an
+//! "+ Add rule" affordance. Each card shows order#, title, a criticality badge
+//! (its OWN `--sev-*` scale, never a `--c4-*` role hue), a category badge, an
+//! optional protection badge, and the summary. Selecting a card opens the EDITOR
+//! pane ([`super::rules_editor::RulesEditor`]) for that rule (id / title /
+//! criticality / category / source / summary / protection), with Save / Delete /
+//! Move up / Move down posting to `POST /api/rules`.
 
 use leptos::*;
 
+use crate::components::rules_editor::RulesEditor;
 use crate::data::models::Rule;
 use crate::rule_order::{
     criticality_color_var, ordered_categories, ordered_rule_indices, protection_label,
@@ -24,9 +25,13 @@ const ALL_CATEGORIES: &str = "__all__";
 pub fn RulesPanel() -> impl IntoView {
     let state = use_app_state();
 
-    // Local UI state: the active category filter + the selected rule id.
+    // Local UI state: the active category filter, the selected rule id, and
+    // whether the editor is in Add mode. These panel-local signals survive a
+    // live-reload (only the dataset swaps), so the selection is preserved across
+    // the post-write SSE refresh.
     let active_category = create_rw_signal(ALL_CATEGORIES.to_string());
     let selected_rule = create_rw_signal::<Option<String>>(None);
+    let adding = create_rw_signal(false);
 
     // Ordered rule indices (stable for the session — data is immutable).
     let ordered = move || {
@@ -42,7 +47,13 @@ pub fn RulesPanel() -> impl IntoView {
     view! {
         <div class="rules-panel">
             <div class="rules-panel__list">
-                <div class="overline rules-panel__section">"RULES"</div>
+                <div class="rules-panel__section">
+                    <span class="overline">"RULES"</span>
+                    <button class="rule-editor__btn rules-panel__add"
+                        class:is-active=move || adding.get()
+                        on:click=move |_| { selected_rule.set(None); adding.set(true); }
+                    >"+ Add rule"</button>
+                </div>
                 // Category filter: All + per-category chips.
                 <div class="rules-panel__filter">
                     {move || {
@@ -70,24 +81,19 @@ pub fn RulesPanel() -> impl IntoView {
                                 active == ALL_CATEGORIES
                                     || r.category.as_deref() == Some(active.as_str())
                             })
-                            .map(|(_, rule)| rule_card(rule, selected_rule))
+                            .map(|(_, rule)| rule_card(rule, selected_rule, adding))
                             .collect_view()
                     }}
                 </div>
             </div>
-            // Read-only detail pane for the selected rule.
+            // Editor pane: edits the selected rule (or adds a new one).
             <div class="rules-panel__detail">
-                {move || {
-                    let data = state.data.get();
-                    match selected_rule.get()
-                        .and_then(|id| data.rules.iter().find(|r| r.id == id).cloned())
-                    {
-                        Some(rule) => rule_detail(rule).into_view(),
-                        None => view! {
-                            <p class="rules-panel__hint">"Select a rule to see its detail."</p>
-                        }.into_view(),
-                    }
-                }}
+                <RulesEditor
+                    selected_rule=selected_rule
+                    active_category=active_category
+                    adding=adding
+                    all_categories_sentinel=ALL_CATEGORIES
+                />
             </div>
         </div>
     }
@@ -110,11 +116,19 @@ fn category_chip(
 /// One rule card: order#, title, criticality badge (severity scale), category
 /// badge, optional protection badge, summary. The left rail encodes criticality
 /// on its own `--sev-*` scale.
-fn rule_card(rule: Rule, selected_rule: RwSignal<Option<String>>) -> View {
+fn rule_card(
+    rule: Rule,
+    selected_rule: RwSignal<Option<String>>,
+    adding: RwSignal<bool>,
+) -> View {
     let rail = criticality_color_var(rule.criticality.as_deref());
     let id = rule.id.clone();
     let select_id = id.clone();
-    let on_click = move |_| selected_rule.set(Some(select_id.clone()));
+    // Selecting a card leaves Add mode and edits that rule.
+    let on_click = move |_| {
+        adding.set(false);
+        selected_rule.set(Some(select_id.clone()));
+    };
     let is_selected = create_memo({
         let id = id.clone();
         move |_| selected_rule.get().as_deref() == Some(id.as_str())
@@ -146,33 +160,4 @@ fn rule_card(rule: Rule, selected_rule: RwSignal<Option<String>>) -> View {
         </div>
     }
     .into_view()
-}
-
-/// Read-only detail for the selected rule.
-fn rule_detail(rule: Rule) -> impl IntoView {
-    let rail = criticality_color_var(rule.criticality.as_deref());
-    let criticality = rule.criticality.clone().unwrap_or_else(|| "unranked".to_string());
-    let protection = protection_label(&rule).unwrap_or("editable");
-
-    view! {
-        <div class="accent-surface rule-detail" style=format!("--accent:{rail}")>
-            <div class="overline">"RULE"</div>
-            <h2 class="rule-detail__title">{rule.title.clone()}</h2>
-            <dl class="rule-detail__meta">
-                <dt>"id"</dt><dd class="mono">{rule.id.clone()}</dd>
-                <dt>"criticality"</dt>
-                <dd><span class="chip" style=format!("color:{rail}")>{criticality}</span></dd>
-                {rule.category.clone().map(|c| view! {
-                    <dt>"category"</dt><dd>{c}</dd>
-                })}
-                {rule.source.clone().map(|s| view! {
-                    <dt>"source"</dt><dd>{s}</dd>
-                })}
-                <dt>"protection"</dt><dd>{protection}</dd>
-            </dl>
-            {rule.summary.clone().map(|s| view! {
-                <p class="rule-detail__summary">{s}</p>
-            })}
-        </div>
-    }
 }

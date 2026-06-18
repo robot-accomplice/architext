@@ -13,6 +13,7 @@ pub mod mode_list;
 pub mod node_icon;
 pub mod relationship_icon;
 pub mod repo_tree;
+pub mod rules_editor;
 pub mod rules_panel;
 pub mod selector_bar;
 pub mod shell;
