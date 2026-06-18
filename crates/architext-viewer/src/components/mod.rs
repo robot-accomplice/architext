@@ -5,6 +5,7 @@ pub mod data_risks_panel;
 pub mod header;
 pub mod inspector_panel;
 pub mod left_nav;
+pub mod mode_icon;
 pub mod mode_list;
 pub mod repo_tree;
 pub mod rules_panel;

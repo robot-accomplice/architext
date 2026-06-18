@@ -2,10 +2,12 @@
 //! view/flow selector region (data-driven, below the modes).
 use leptos::*;
 
+use crate::components::mode_icon::ModeIcon;
 use crate::components::mode_list::ModeList;
 use crate::components::selector_bar::SelectorBar;
 use crate::components::wordmark::Wordmark;
 use crate::state::use_app_state;
+use crate::theme::Mode;
 
 #[component]
 pub fn LeftNav() -> impl IntoView {
@@ -44,7 +46,43 @@ pub fn LeftNav() -> impl IntoView {
                     title="Expand navigation"
                     on:click=toggle
                 >"›"</button>
+                <ModeRail/>
             </Show>
         </nav>
+    }
+}
+
+/// Collapsed-rail mode switcher: the nine modes as icon-only buttons (vertical),
+/// reusing the same `Mode::ALL` list and `set_mode` selection as `ModeList`.
+/// Active mode carries the `--accent` state treatment (rule 1, never a role
+/// hue); each button's `title`/`aria-label` is the mode label (hover tooltip).
+/// Selecting a mode here leaves `nav_collapsed` untouched, so the rail stays
+/// collapsed after switching.
+#[component]
+fn ModeRail() -> impl IntoView {
+    let state = use_app_state();
+    let active = state.mode;
+
+    view! {
+        <ul class="mode-rail">
+            {Mode::ALL
+                .into_iter()
+                .map(|mode| {
+                    view! {
+                        <li>
+                            <button
+                                class="mode-rail__item"
+                                class:is-active=move || active.get() == mode
+                                title=mode.label()
+                                aria-label=mode.label()
+                                on:click=move |_| state.set_mode(mode)
+                            >
+                                <ModeIcon mode=mode/>
+                            </button>
+                        </li>
+                    }
+                })
+                .collect_view()}
+        </ul>
     }
 }
