@@ -104,6 +104,54 @@ fn content_bounds(plan: &Plan) -> Option<ContentBounds> {
     }
 }
 
+/// The pan/zoom transform that frames `bounds` in the viewport. Pure so the
+/// (subtle) framing math is unit-testable without a DOM.
+struct FitTransform {
+    scale: f64,
+    pan_x: f64,
+    pan_y: f64,
+}
+
+/// Compute the `<g>` transform (in viewBox units) that centers `bounds` in a
+/// `vw`×`vh` (px) viewport, given the SVG's `vb_w`×`vb_h` viewBox.
+///
+/// The SVG renders with `preserveAspectRatio="xMidYMid meet"`, so the browser
+/// first scales the viewBox into the viewport by `meet = min(vw/vb_w, vh/vb_h)`
+/// and centers it. Our transform then operates in viewBox coordinates. Two
+/// consequences the math must respect, both learned from real misframings:
+///   - SCALE is computed against the viewport re-expressed in viewBox units
+///     (`vw/meet`, `vh/meet`) — the full visible area, since content drawn
+///     outside the viewBox but inside the SVG element rect is still visible.
+///   - CENTERING is on the viewBox center (`vb_w/2`, `vb_h/2`), because `meet`
+///     centers the whole viewBox in the viewport; centering on the
+///     viewport-in-viewBox frame instead double-applies the letterbox offset.
+fn compute_fit(bounds: &ContentBounds, vb_w: f64, vb_h: f64, vw: f64, vh: f64) -> Option<FitTransform> {
+    let content_w = bounds.max_x - bounds.min_x;
+    let content_h = bounds.max_y - bounds.min_y;
+    if content_w <= 0.0 || content_h <= 0.0 || vw <= 0.0 || vh <= 0.0 || vb_w <= 0.0 || vb_h <= 0.0 {
+        return None;
+    }
+    let meet = (vw / vb_w).min(vh / vb_h);
+    if meet <= 0.0 {
+        return None;
+    }
+    let view_w = vw / meet;
+    let view_h = vh / meet;
+    let padding = FIT_PADDING_MIN.max(FIT_PADDING_FACTOR * vw.min(vh)) / meet;
+    let scale_x = (view_w - padding * 2.0) / content_w;
+    let scale_y = (view_h - padding * 2.0) / content_h;
+    // Cap at natural ON-SCREEN size (effective screen scale 1.0 → `FIT_ZOOM_MAX
+    // / meet` in viewBox units): small diagrams stay centered at natural size,
+    // never blown up; manual zoom can still reach ZOOM_MAX.
+    let zoom_cap = FIT_ZOOM_MAX / meet;
+    let scale = scale_x.min(scale_y).min(zoom_cap).clamp(ZOOM_MIN, ZOOM_MAX);
+    Some(FitTransform {
+        scale,
+        pan_x: (vb_w - content_w * scale) / 2.0 - bounds.min_x * scale,
+        pan_y: (vb_h - content_h * scale) / 2.0 - bounds.min_y * scale,
+    })
+}
+
 #[component]
 pub fn CanvasPanel() -> impl IntoView {
     let state = use_app_state();
@@ -284,28 +332,27 @@ pub fn CanvasPanel() -> impl IntoView {
         })
     });
 
-    // Fit a content box (min/max corners) into the measured viewport: as
-    // zoomed-in as possible while the whole box stays in view, then centered.
-    // Shared by the plan-diagram and sequence paths so framing is identical.
-    let fit_bounds = move |bounds: ContentBounds| {
+    // Fit a content box (min/max corners, in viewBox/plan coordinate units)
+    // into the measured viewport: as zoomed-in as possible while the whole box
+    // stays in view, then centered. Shared by the plan-diagram and sequence
+    // paths so framing is identical.
+    //
+    // `vb_w`/`vb_h` are the SVG's own viewBox dimensions (plan canvas size, or
+    // the sequence content box). The SVG renders with
+    // `preserveAspectRatio="xMidYMid meet"`, so the browser ALREADY scales the
+    // viewBox into the viewport by `meet = min(vw/vb_w, vh/vb_h)` BEFORE our
+    // `<g>` transform applies. Our `zoom`/`pan` therefore live in viewBox units,
+    // not viewport pixels — fitting in raw px (as this once did) rendered every
+    // diagram at `meet`× its intended size and off-centre, since `vb` rarely
+    // equals the viewport.
+    let fit_bounds = move |bounds: ContentBounds, vb_w: f64, vb_h: f64| {
         let Some(el) = viewport_ref.get_untracked() else { return };
         let rect = el.get_bounding_client_rect();
-        let (vw, vh) = (rect.width(), rect.height());
-        let content_w = bounds.max_x - bounds.min_x;
-        let content_h = bounds.max_y - bounds.min_y;
-        if content_w <= 0.0 || content_h <= 0.0 || vw <= 0.0 || vh <= 0.0 {
-            return;
+        if let Some(t) = compute_fit(&bounds, vb_w, vb_h, rect.width(), rect.height()) {
+            zoom.set(t.scale);
+            pan_x.set(t.pan_x);
+            pan_y.set(t.pan_y);
         }
-        let padding = FIT_PADDING_MIN.max(FIT_PADDING_FACTOR * vw.min(vh));
-        let scale_x = (vw - padding * 2.0) / content_w;
-        let scale_y = (vh - padding * 2.0) / content_h;
-        // Cap the auto-fit so small diagrams stay at natural size (centered),
-        // never blown up; manual zoom can still exceed this up to ZOOM_MAX.
-        let scale = scale_x.min(scale_y).min(FIT_ZOOM_MAX).clamp(ZOOM_MIN, ZOOM_MAX);
-        zoom.set(scale);
-        // Center the CONTENT box (not the full canvas) in the viewport.
-        pan_x.set((vw - content_w * scale) / 2.0 - bounds.min_x * scale);
-        pan_y.set((vh - content_h * scale) / 2.0 - bounds.min_y * scale);
     };
 
     // Fit-to-viewport: imperative (rAF / button), reads untracked. Sequence
@@ -313,17 +360,23 @@ pub fn CanvasPanel() -> impl IntoView {
     // tighter rendered-geometry bounds.
     let fit = move || {
         if let Some((layout, _)) = sequence_inputs.get_untracked() {
-            fit_bounds(ContentBounds {
-                min_x: 0.0,
-                min_y: 0.0,
-                max_x: layout.content_width,
-                max_y: layout.content_height,
-            });
+            // The sequence viewBox IS its content box, so vb == bounds.
+            fit_bounds(
+                ContentBounds {
+                    min_x: 0.0,
+                    min_y: 0.0,
+                    max_x: layout.content_width,
+                    max_y: layout.content_height,
+                },
+                layout.content_width,
+                layout.content_height,
+            );
             return;
         }
         let Some((plan, _, _, _, _)) = diagram_inputs.get_untracked() else { return };
         let Some(bounds) = content_bounds(&plan) else { return };
-        fit_bounds(bounds);
+        // The plan viewBox is the full canvas; content is a sub-region of it.
+        fit_bounds(bounds, plan.canvas_width, plan.canvas_height);
     };
 
     // Re-fit whenever the diagram changes (new view/flow → fresh framing) OR a
@@ -513,5 +566,72 @@ pub fn CanvasPanel() -> impl IntoView {
             // column), shown only for modes with an ordered flow.
             <StepsPanel/>
         </main>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bounds(min_x: f64, min_y: f64, max_x: f64, max_y: f64) -> ContentBounds {
+        ContentBounds { min_x, min_y, max_x, max_y }
+    }
+
+    // Map the CONTENT centre through the fit transform + the `meet` letterbox to
+    // its on-screen pixel position — the thing the viewer actually renders.
+    fn screen_center(b: &ContentBounds, vb_w: f64, vb_h: f64, vw: f64, vh: f64) -> (f64, f64) {
+        let t = compute_fit(b, vb_w, vb_h, vw, vh).expect("fit");
+        let meet = (vw / vb_w).min(vh / vb_h);
+        let letterbox_x = (vw - vb_w * meet) / 2.0;
+        let letterbox_y = (vh - vb_h * meet) / 2.0;
+        let ccx = (b.min_x + b.max_x) / 2.0;
+        let ccy = (b.min_y + b.max_y) / 2.0;
+        (
+            letterbox_x + (t.pan_x + ccx * t.scale) * meet,
+            letterbox_y + (t.pan_y + ccy * t.scale) * meet,
+        )
+    }
+
+    #[test]
+    fn centers_content_when_viewbox_matches_viewport() {
+        // No letterbox (viewBox == viewport). Content centred → screen centre.
+        let b = bounds(100.0, 100.0, 300.0, 260.0);
+        let (sx, sy) = screen_center(&b, 600.0, 600.0, 600.0, 600.0);
+        assert!((sx - 300.0).abs() < 0.5, "sx={sx}");
+        assert!((sy - 300.0).abs() < 0.5, "sy={sy}");
+    }
+
+    #[test]
+    fn centers_content_despite_letterbox_aspect_mismatch() {
+        // The regression case: a wide viewBox (1122x600, aspect 1.87) in a
+        // near-square viewport (678x660) is fit by width and letterboxed
+        // vertically (~149px). Content must STILL land at the viewport centre —
+        // centering on the viewBox centre, not the viewport-in-viewBox frame.
+        let b = bounds(180.0, 72.0, 736.0, 464.0);
+        let (sx, sy) = screen_center(&b, 1122.0, 600.0, 678.0, 660.0);
+        assert!((sx - 339.0).abs() < 1.0, "sx={sx} (want viewport centre 339)");
+        assert!((sy - 330.0).abs() < 1.0, "sy={sy} (want viewport centre 330)");
+    }
+
+    #[test]
+    fn auto_fit_never_exceeds_natural_on_screen_size() {
+        // A small diagram in a large viewport: effective on-screen scale
+        // (scale * meet) is capped at FIT_ZOOM_MAX (1.0), never blown up.
+        let b = bounds(0.0, 0.0, 80.0, 60.0);
+        let vb_w = 200.0;
+        let vb_h = 150.0;
+        let (vw, vh) = (1000.0, 800.0);
+        let t = compute_fit(&b, vb_w, vb_h, vw, vh).expect("fit");
+        let meet = (vw / vb_w).min(vh / vb_h);
+        let effective = t.scale * meet;
+        assert!(effective <= FIT_ZOOM_MAX + 1e-9, "effective={effective}");
+        assert!(effective > 0.0);
+    }
+
+    #[test]
+    fn degenerate_inputs_yield_no_transform() {
+        assert!(compute_fit(&bounds(0.0, 0.0, 0.0, 0.0), 100.0, 100.0, 100.0, 100.0).is_none());
+        assert!(compute_fit(&bounds(0.0, 0.0, 10.0, 10.0), 0.0, 100.0, 100.0, 100.0).is_none());
+        assert!(compute_fit(&bounds(0.0, 0.0, 10.0, 10.0), 100.0, 100.0, 0.0, 100.0).is_none());
     }
 }
