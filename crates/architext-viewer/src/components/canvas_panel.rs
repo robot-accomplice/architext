@@ -18,15 +18,21 @@ use leptos::*;
 use leptos::ev::{MouseEvent, WheelEvent};
 
 use architext_routing::model::Plan;
+use architext_routing::plan_diagram::plan_diagram;
+use architext_routing::plan_request::build_flow_plan_request;
 
 use crate::components::blast_radius_panel::BlastRadiusPanel;
 use crate::components::legend::Legend;
 use crate::components::release_truth_panel::ReleaseTruthPanel;
 use crate::components::repo_tree::RepoTree;
 use crate::components::rules_panel::RulesPanel;
+use crate::components::spinner::CanvasSpinner;
 use crate::components::steps_panel::StepsPanel;
+use crate::data::fetch_farm_plan;
 use crate::data::models::{Flow, Node, View};
-use crate::diagram::plan::{compute_plan, compute_structural_plan, layout_config_from_diagram};
+use crate::diagram::plan::{
+    compute_structural_plan, layout_config_from_diagram, plan_hash,
+};
 use crate::diagram::sequence::{build_sequence_layout, SequenceConfig, SequenceLayout};
 use crate::diagram::svg::legend_for;
 use crate::diagram::{DiagramSvg, SequenceSvg};
@@ -147,11 +153,27 @@ pub fn CanvasPanel() -> impl IntoView {
     });
     let diagram_inputs = create_rw_signal::<Option<DiagramInputs>>(None);
     let sequence_inputs = create_rw_signal::<Option<SequenceInputs>>(None);
+    // True while a (re)compute is in flight (fetch + parse, or in-process
+    // compute). Drives the on-canvas progress indicator. Set true when the
+    // selection changes, false when the render bundle is stored. Because the
+    // flows compute is now async (a `/api/plan/{hash}` fetch), the main thread
+    // is free and the indicator actually animates.
+    let routing = create_rw_signal(false);
+    // Monotonic generation: each selection change bumps it; an async result only
+    // commits if it is still the latest generation, so a slow farm fetch for a
+    // since-abandoned selection can't clobber a newer diagram.
+    let generation = create_rw_signal(0_u64);
     create_effect(move |_| {
         let (mode, view_idx, flow_idx) = selection_key.get();
         let data = state.data.get_untracked();
+        let gen = generation.get_untracked() + 1;
+        generation.set(gen);
+        // A compute is starting → show the indicator until the bundle is ready.
+        routing.set(true);
 
         // SEQUENCE is a custom (non-plan) layout; compute it on its own signal.
+        // Not in the farm → in-process, but still flagged through `routing` so
+        // the indicator behaves uniformly across modes.
         if mode == Mode::Sequence {
             let seq = (|| {
                 let view = view_idx.and_then(|i| data.views.get(i).cloned())?;
@@ -163,33 +185,72 @@ pub fn CanvasPanel() -> impl IntoView {
             })();
             sequence_inputs.set(seq);
             diagram_inputs.set(None);
+            routing.set(false);
             return;
         }
 
         sequence_inputs.set(None);
-        let bundle = (|| {
-            let view = view_idx.and_then(|i| data.views.get(i).cloned())?;
-            match mode {
-                // Flows and Data/Risks both render the selected flow as a routed
-                // plan through the SAME path; Data/Risks layers its side panel
-                // over the diagram (in the inspector), it does not fork rendering.
-                Mode::Flows | Mode::DataRisks => {
-                    let flow = flow_idx.and_then(|i| data.flows.get(i).cloned())?;
-                    let plan = compute_plan(&view, &flow, &layout_config());
-                    Some((plan, Some(flow), HashMap::new(), view, data.nodes.clone()))
-                }
-                // C4 + Deployment: structural plan (node dependencies → edges),
-                // labelled by the relationship rule, no flow.
-                Mode::C4 | Mode::Deployment => {
+
+        // C4 + Deployment: structural plan (node dependencies → edges), labelled
+        // by the relationship rule, no flow. NOT in the farm (flows-only) →
+        // compute in-process, synchronously, then clear the indicator.
+        match mode {
+            Mode::C4 | Mode::Deployment => {
+                let bundle = view_idx.and_then(|i| data.views.get(i).cloned()).map(|view| {
                     let structural =
                         compute_structural_plan(&view, &data.nodes, &layout_config());
-                    Some((structural.plan, None, structural.edge_labels, view, data.nodes.clone()))
-                }
-                // Diagram-less modes keep the placard.
-                _ => None,
+                    (structural.plan, None, structural.edge_labels, view, data.nodes.clone())
+                });
+                diagram_inputs.set(bundle);
+                routing.set(false);
+                return;
             }
-        })();
-        diagram_inputs.set(bundle);
+            // Flows / Data-Risks render the selected flow as a routed plan; fall
+            // through to the async fetch-first path below.
+            Mode::Flows | Mode::DataRisks => {}
+            // Diagram-less modes keep the placard.
+            _ => {
+                diagram_inputs.set(None);
+                routing.set(false);
+                return;
+            }
+        }
+
+        // FLOWS (and Data-Risks): fetch-first from the serve plan farm.
+        //
+        // Build the flow plan request (gives `.key` + `.plan_diagram_input`),
+        // hash the key, and try `GET /api/plan/{hash}`. On a HIT the farm plan
+        // (which IS the in-process plan, serialized) renders directly; on a MISS
+        // or any error we fall back to in-process `plan_diagram` — never blank.
+        let Some(view) = view_idx.and_then(|i| data.views.get(i).cloned()) else {
+            diagram_inputs.set(None);
+            routing.set(false);
+            return;
+        };
+        let Some(flow) = flow_idx.and_then(|i| data.flows.get(i).cloned()) else {
+            diagram_inputs.set(None);
+            routing.set(false);
+            return;
+        };
+        let layout = layout_config();
+        let nodes = data.nodes.clone();
+        let request =
+            build_flow_plan_request(&view.to_routing(), &flow.to_routing(), Some(&layout), "orthogonal");
+        let hash = plan_hash(&request.key);
+
+        spawn_local(async move {
+            // Farm HIT → deserialized plan; MISS / error → in-process fallback.
+            let plan = match fetch_farm_plan(&hash).await {
+                Some(plan) => plan,
+                None => plan_diagram(&request.plan_diagram_input),
+            };
+            // Only commit if this is still the active selection (guard against a
+            // newer selection that started while this fetch was in flight).
+            if generation.get_untracked() == gen {
+                diagram_inputs.set(Some((plan, Some(flow), HashMap::new(), view, nodes)));
+                routing.set(false);
+            }
+        });
     });
 
     // Legend rows derived from ONLY what the current diagram renders: present
@@ -426,6 +487,13 @@ pub fn CanvasPanel() -> impl IntoView {
                 collapsed=legend_collapsed
                 on_toggle=Callback::new(move |_| legend_collapsed.update(|c| *c = !*c))
             />
+            // Routing/loading indicator — shown only while a (re)compute is in
+            // flight (the async farm fetch / in-process fallback), removed the
+            // moment the render bundle is ready so it never obstructs the loaded
+            // diagram. Animates because the compute is async (main thread free).
+            <Show when=move || routing.get()>
+                <CanvasSpinner label="Routing"/>
+            </Show>
             </div>
             // Footer step-navigation panel — belongs to the diagram (canvas
             // column), shown only for modes with an ordered flow.

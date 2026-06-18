@@ -14,6 +14,8 @@
 use gloo_net::http::Request;
 use serde::de::DeserializeOwned;
 
+use architext_routing::model::Plan;
+
 use super::models::*;
 
 /// A fully loaded architecture dataset. Missing-but-optional docs degrade to
@@ -68,6 +70,36 @@ async fn get_json<T: DeserializeOwned>(url: &str) -> Result<T, FetchError> {
 /// GET `url` as a raw JSON value (for release detail docs whose shape varies).
 async fn get_value(url: &str) -> Result<serde_json::Value, FetchError> {
     get_json::<serde_json::Value>(url).await
+}
+
+/// Fetch a precomputed flows-mode `Plan` from the serve plan farm at
+/// `GET /api/plan/{hash}`.
+///
+/// The farm precomputes every flow×view plan at startup and indexes them by
+/// `sha256(plan key)`. On a HIT the body is `{"plan": <plan json>}`; on a MISS
+/// (or not-yet-warmed farm) it is `{"miss": true}`.
+///
+/// Returns:
+///   - `Some(plan)` on a clean HIT (the farm plan IS the in-process plan,
+///     serialized — the caller renders it directly);
+///   - `None` on a miss, a non-200, a network error, or a body we can't parse
+///     into a `Plan` — the caller MUST fall back to in-process `plan_diagram`,
+///     never blank.
+///
+/// `None` is deliberately the single "fall back to in-process" signal so a
+/// not-yet-warmed farm at startup degrades gracefully instead of breaking.
+pub async fn fetch_farm_plan(hash: &str) -> Option<Plan> {
+    let url = format!("/api/plan/{hash}");
+    let resp = Request::get(&url).send().await.ok()?;
+    if !resp.ok() {
+        return None;
+    }
+    // The farm wraps a hit as `{"plan": <plan>}` and a miss as `{"miss": true}`.
+    // Pull `plan` out and deserialize it into the routing `Plan`; anything else
+    // (miss, malformed) → `None` (in-process fallback).
+    let body: serde_json::Value = resp.json().await.ok()?;
+    let plan_value = body.get("plan")?;
+    serde_json::from_value::<Plan>(plan_value.clone()).ok()
 }
 
 /// Fetch the live repo file list from `/api/repo-tree`. Fetched on demand by the

@@ -16,5 +16,6 @@ pub mod repo_tree;
 pub mod rules_panel;
 pub mod selector_bar;
 pub mod shell;
+pub mod spinner;
 pub mod steps_panel;
 pub mod wordmark;

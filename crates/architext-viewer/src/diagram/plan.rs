@@ -61,6 +61,25 @@ pub fn compute_plan(view: &View, flow: &Flow, layout: &LayoutConfig) -> Plan {
     plan_diagram(&request.plan_diagram_input)
 }
 
+/// sha256 (lowercase hex) of a plan key string — the `/api/plan/{hash}` cache
+/// key the serve plan farm is indexed by.
+///
+/// This is the wasm-buildable counterpart of the native
+/// `architext_routing::precompute::plan_key_hash_native` (which is gated behind
+/// the `native` feature and returns `""` on wasm). The farm hashes the SAME
+/// `build_flow_plan_request(...).key` string with sha256, so a hash computed
+/// here matches the farm's index for the same (view, flow).
+pub fn plan_hash(key: &str) -> String {
+    use sha2::{Digest, Sha256};
+    let digest = Sha256::digest(key.as_bytes());
+    let mut hex = String::with_capacity(digest.len() * 2);
+    for byte in digest {
+        // lowercase hex, matching the farm's `hex::encode`.
+        hex.push_str(&format!("{byte:02x}"));
+    }
+    hex
+}
+
 /// A computed structural diagram: the `Plan` plus the per-edge labels (keyed by
 /// route/relationship id, `from-to`) the renderer needs — structural edges carry
 /// no numbered flow step, so the label rule's output is threaded through here.
@@ -112,6 +131,62 @@ mod tests {
     use super::*;
     use crate::data::models::{FlowsFile, NodesFile, ViewsFile};
     use crate::selection::compatible_flow_views;
+
+    /// `plan_hash` is sha256→lowercase-hex. Pin it to published NIST vectors so a
+    /// regression (wrong algorithm, uppercase, truncation) fails RED, and so the
+    /// hash provably matches the serve farm's `hex::encode(Sha256(key))` index.
+    #[test]
+    fn plan_hash_matches_known_sha256_vectors() {
+        // FIPS 180-2 published vectors.
+        assert_eq!(
+            plan_hash(""),
+            "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        );
+        assert_eq!(
+            plan_hash("abc"),
+            "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+        );
+        // 64 lowercase-hex chars, the exact shape the farm handler validates.
+        let h = plan_hash("abc");
+        assert_eq!(h.len(), 64);
+        assert!(h.chars().all(|c| c.is_ascii_hexdigit() && !c.is_ascii_uppercase()));
+    }
+
+    /// The hash is computed over the SAME key the farm hashes
+    /// (`build_flow_plan_request(...).key`), so the viewer's `/api/plan/{hash}`
+    /// request targets the farm's actual index entry for that (view, flow).
+    #[test]
+    fn plan_hash_is_taken_over_the_flow_plan_request_key() {
+        use architext_routing::diagram_config::DiagramConfigLayout;
+        use architext_routing::plan_request::build_flow_plan_request;
+
+        let root = concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/architext/data");
+        let views: ViewsFile = serde_json::from_str(
+            &std::fs::read_to_string(format!("{root}/views.json")).expect("read views.json"),
+        )
+        .expect("parse views.json");
+        let flows: FlowsFile = serde_json::from_str(
+            &std::fs::read_to_string(format!("{root}/flows.json")).expect("read flows.json"),
+        )
+        .expect("parse flows.json");
+
+        let flow_idx = 0;
+        let view_idx = *compatible_flow_views(&views.views, &flows.flows, flow_idx)
+            .first()
+            .expect("a compatible flow view exists");
+
+        let layout = DiagramConfigLayout::default().to_layout_config();
+        let req = build_flow_plan_request(
+            &views.views[view_idx].to_routing(),
+            &flows.flows[flow_idx].to_routing(),
+            Some(&layout),
+            "orthogonal",
+        );
+        // Hash of the request key is deterministic + well-shaped.
+        let h = plan_hash(&req.key);
+        assert_eq!(h.len(), 64);
+        assert_eq!(h, plan_hash(&req.key), "hashing is deterministic");
+    }
 
     fn data_root() -> String {
         concat!(env!("CARGO_MANIFEST_DIR"), "/../../docs/architext/data").to_string()

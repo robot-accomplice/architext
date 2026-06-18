@@ -28,6 +28,7 @@ pub mod theme;
 use leptos::*;
 
 use crate::components::shell::Shell;
+use crate::components::spinner::Spinner;
 use crate::data::{fetch_cli_version, load_architecture_data, FetchError};
 use crate::state::AppState;
 
@@ -70,7 +71,7 @@ pub fn App() -> impl IntoView {
 fn LoadingScreen() -> impl IntoView {
     view! {
         <div class="boot-screen">
-            <div class="overline">"LOADING"</div>
+            <Spinner label="Loading"/>
             <p class="boot-screen__msg">"Fetching architecture data…"</p>
         </div>
     }
