@@ -47,7 +47,13 @@ type SequenceInputs = (SequenceLayout, View);
 const ZOOM_MIN: f64 = 0.1;
 const ZOOM_MAX: f64 = 4.0;
 const ZOOM_STEP: f64 = 1.2;
-const FIT_PADDING: f64 = 24.0; // px of breathing room around the fitted content
+// Auto-fit margin: a generous floor with a small viewport-proportional bump so
+// content never crowds the stage edges. Manual zoom is unaffected.
+const FIT_PADDING_MIN: f64 = 48.0; // px of breathing room around fitted content
+const FIT_PADDING_FACTOR: f64 = 0.06; // fraction of the smaller viewport dimension
+// Auto-fit never zooms a small diagram past natural size — it sits centered, not
+// blown up to fill the viewport. Manual `+`/`−`/wheel can still reach ZOOM_MAX.
+const FIT_ZOOM_MAX: f64 = 1.0;
 
 /// Axis-aligned content bounds (min/max corners). `None` if the plan has no
 /// renderable geometry.
@@ -194,9 +200,12 @@ pub fn CanvasPanel() -> impl IntoView {
         if content_w <= 0.0 || content_h <= 0.0 || vw <= 0.0 || vh <= 0.0 {
             return;
         }
-        let scale_x = (vw - FIT_PADDING * 2.0) / content_w;
-        let scale_y = (vh - FIT_PADDING * 2.0) / content_h;
-        let scale = scale_x.min(scale_y).clamp(ZOOM_MIN, ZOOM_MAX);
+        let padding = FIT_PADDING_MIN.max(FIT_PADDING_FACTOR * vw.min(vh));
+        let scale_x = (vw - padding * 2.0) / content_w;
+        let scale_y = (vh - padding * 2.0) / content_h;
+        // Cap the auto-fit so small diagrams stay at natural size (centered),
+        // never blown up; manual zoom can still exceed this up to ZOOM_MAX.
+        let scale = scale_x.min(scale_y).min(FIT_ZOOM_MAX).clamp(ZOOM_MIN, ZOOM_MAX);
         zoom.set(scale);
         // Center the CONTENT box (not the full canvas) in the viewport.
         pan_x.set((vw - content_w * scale) / 2.0 - bounds.min_x * scale);
@@ -233,8 +242,10 @@ pub fn CanvasPanel() -> impl IntoView {
         // The footer steps panel reduces the canvas height when open; re-fit when
         // it toggles so the diagram re-frames for the resized viewport.
         let _ = state.steps_collapsed.get();
-        // Defer to the next tick so the SVG (and its viewport) is laid out.
-        request_animation_frame(fit);
+        // Defer past layout: the first rAF runs before the steps-panel/collapse
+        // reflow settles, so a second rAF measures the CURRENT stage rect and the
+        // diagram ends up centered+fitted for the real viewport.
+        request_animation_frame(move || request_animation_frame(fit));
     });
 
     let zoom_by = move |factor: f64| {
