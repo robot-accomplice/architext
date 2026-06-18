@@ -188,6 +188,29 @@ pub fn bind_listener(host: &str, port: u16) -> std::io::Result<(TcpListener, u16
     ))
 }
 
+/// Absolutize a possibly-relative path against `cwd`. A relative `data_dir`
+/// (e.g. `docs/architext/data`) must become absolute BEFORE we derive the
+/// target via `parent().parent().parent()`, or that chain collapses to empty.
+fn absolutize(path: PathBuf, cwd: PathBuf) -> PathBuf {
+    if path.is_absolute() {
+        path
+    } else {
+        cwd.join(path)
+    }
+}
+
+/// Derive the target repo root from an (absolute) data_dir laid out as
+/// `<target>/docs/architext/data` → `data_dir.parent().parent().parent()`.
+/// Falls back to `data_dir` itself if it has fewer than 3 ancestors.
+fn target_dir_from(data_dir: &std::path::Path) -> PathBuf {
+    data_dir
+        .parent()
+        .and_then(|p| p.parent())
+        .and_then(|p| p.parent())
+        .map(|p| p.to_path_buf())
+        .unwrap_or_else(|| data_dir.to_path_buf())
+}
+
 /// Top-level serve function: bind, build router, run.
 pub async fn serve(
     data_dir: PathBuf,
@@ -211,6 +234,9 @@ pub async fn serve_with_schema_dir(
     mutation_token: String,
     schema_dir: Option<PathBuf>,
 ) -> std::io::Result<()> {
+    // Absolutize a RELATIVE data_dir against the cwd first (see `absolutize`).
+    let data_dir = absolutize(data_dir, std::env::current_dir()?);
+
     let (listener, bound_port) = bind_listener(host, port)?;
 
     tracing::info!("Building plan farm from {}", data_dir.display());
@@ -218,12 +244,7 @@ pub async fn serve_with_schema_dir(
 
     // Derive target_dir from data_dir: data_dir is <target>/docs/architext/data
     // so target = data_dir.parent().parent().parent().
-    let target_dir = data_dir
-        .parent()
-        .and_then(|p| p.parent())
-        .and_then(|p| p.parent())
-        .map(|p| p.to_path_buf())
-        .unwrap_or_else(|| data_dir.clone());
+    let target_dir = target_dir_from(&data_dir);
 
     // Derive schema_dir: <repo-root>/viewer/schema  (same as core tests).
     // The repo root is where the Cargo.toml workspace lives — i.e. the parent
@@ -271,4 +292,44 @@ pub async fn serve_with_schema_dir(
     listener.set_nonblocking(true)?;
     let listener = tokio::net::TcpListener::from_std(listener)?;
     axum::serve(listener, router).await
+}
+
+#[cfg(test)]
+mod target_dir_tests {
+    use super::{absolutize, target_dir_from};
+    use std::path::{Path, PathBuf};
+
+    #[test]
+    fn absolutize_joins_relative_to_cwd_and_leaves_absolute_untouched() {
+        assert_eq!(
+            absolutize(PathBuf::from("docs/architext/data"), PathBuf::from("/repo")),
+            PathBuf::from("/repo/docs/architext/data")
+        );
+        assert_eq!(
+            absolutize(PathBuf::from("/abs/docs/architext/data"), PathBuf::from("/repo")),
+            PathBuf::from("/abs/docs/architext/data")
+        );
+    }
+
+    #[test]
+    fn target_dir_is_repo_root_for_absolute_data_dir() {
+        assert_eq!(
+            target_dir_from(Path::new("/repo/docs/architext/data")),
+            PathBuf::from("/repo")
+        );
+    }
+
+    #[test]
+    fn regression_relative_data_dir_must_be_absolutized_first() {
+        // The bug: parent().parent().parent() of a RELATIVE data_dir collapses,
+        // so target_dir is wrong (→ /api/repo-tree walked nothing → 0 files).
+        // Bare derivation on the relative path does NOT yield the repo root:
+        assert_ne!(
+            target_dir_from(Path::new("docs/architext/data")),
+            PathBuf::from("/repo")
+        );
+        // Absolutizing first fixes it:
+        let abs = absolutize(PathBuf::from("docs/architext/data"), PathBuf::from("/repo"));
+        assert_eq!(target_dir_from(&abs), PathBuf::from("/repo"));
+    }
 }
