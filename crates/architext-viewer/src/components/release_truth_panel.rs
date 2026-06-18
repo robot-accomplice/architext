@@ -1,10 +1,15 @@
 //! Release Truth surface (DISPLAY only).
 //!
-//! A release selector (over `releases/index.json`'s summaries) on the left; on
-//! the right, the selected release's reviewed truth: a compact summary header
-//! (name / version / status / posture / target window), the Release Path
+//! The center column is the selected release's reviewed truth: a compact summary
+//! header (name / version / status / posture / target window), the Release Path
 //! (milestone → item progression — the faithful port of the JS `ReleasePath`),
 //! and the workstreams list with progress. Read-only — planning / editing is V5.
+//!
+//! The release SELECTOR lives in the left nav's southern slot (`SelectorBar`,
+//! Release Truth mode), mirroring how Flows mode renders its FLOW/VIEW selectors
+//! there. Both bind to the shared `state.selected_release` signal, which this
+//! panel seeds (currentReleaseId / newest) on first render — single source of
+//! truth, so picking a release in the nav updates this detail.
 //!
 //! The detail document is parsed by the pure, native-tested `release_truth`
 //! module (`ReleaseDoc::from_value` over the already-loaded `release_details`
@@ -29,9 +34,10 @@ use crate::state::use_app_state;
 pub fn ReleaseTruthPanel() -> impl IntoView {
     let state = use_app_state();
 
-    // The selected release id. Seed from the index's currentReleaseId, else the
-    // last release summary (the newest).
-    let selected = create_rw_signal::<Option<String>>(None);
+    // The selected release id — SHARED with the left-nav RELEASE selector
+    // (`SelectorBar`), so picking there drives this detail. Seed from the index's
+    // currentReleaseId, else the last release summary (the newest).
+    let selected = state.selected_release;
     create_effect(move |_| {
         if selected.get_untracked().is_some() {
             return;
@@ -55,34 +61,9 @@ pub fn ReleaseTruthPanel() -> impl IntoView {
 
     view! {
         <div class="release-panel">
-            // ── Release selector ─────────────────────────────────────────────
-            <div class="release-panel__picker">
-                <div class="overline">"RELEASES"</div>
-                <div class="release-panel__list">
-                    {move || {
-                        let data = state.data.get();
-                        let active = selected.get();
-                        let Some(idx) = data.release_index.as_ref() else {
-                            return view! {
-                                <p class="release-panel__hint">"No releases recorded."</p>
-                            }.into_view();
-                        };
-                        // Newest first (the index lists oldest→newest).
-                        idx.releases.iter().rev().map(|r| {
-                            release_option(
-                                r.id.clone(),
-                                r.version.clone(),
-                                r.name.clone(),
-                                r.status.clone(),
-                                active.as_deref() == Some(r.id.as_str()),
-                                selected,
-                            )
-                        }).collect_view().into_view()
-                    }}
-                </div>
-            </div>
-
             // ── Selected release truth (or the planning editor) ──────────────
+            // The release SELECTOR lives in the left nav (SelectorBar); this
+            // column holds only the detail for the shared selection.
             <div class="release-panel__detail">
                 {move || {
                     let data = state.data.get();
@@ -160,38 +141,6 @@ pub fn ReleaseTruthPanel() -> impl IntoView {
             </div>
         </div>
     }
-}
-
-/// One selectable release row. Left rail in the status tone; `--accent` STATE
-/// treatment when it is the active selection.
-fn release_option(
-    id: String,
-    version: Option<String>,
-    name: Option<String>,
-    status: Option<String>,
-    active: bool,
-    selected: RwSignal<Option<String>>,
-) -> View {
-    let rail = release_tone_color_var(release_tone(status.as_deref()));
-    let pick_id = id.clone();
-    let on_click = move |_| selected.set(Some(pick_id.clone()));
-    let version_label = version.unwrap_or_else(|| id.clone());
-    let title = name.unwrap_or_else(|| id.clone());
-    view! {
-        <button
-            class="accent-surface release-option"
-            class:is-active=active
-            style=format!("--accent:{rail}")
-            on:click=on_click
-        >
-            <span class="mono release-option__version">{version_label}</span>
-            <span class="release-option__name">{title}</span>
-            {status.map(|s| view! {
-                <span class="chip release-option__status" style=format!("color:{rail}")>{s}</span>
-            })}
-        </button>
-    }
-    .into_view()
 }
 
 /// The selected release's header + Release Path + workstreams.
