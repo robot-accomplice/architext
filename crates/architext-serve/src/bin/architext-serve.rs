@@ -19,7 +19,9 @@ struct Args {
     data_dir: PathBuf,
 
     /// Path to the viewer dist directory containing index.html and assets.
-    #[arg(long, default_value = "viewer/dist")]
+    /// Defaults to the Trunk-built Leptos viewer dist (1.7.0). The legacy React
+    /// `viewer/dist` can still be passed explicitly during the transition.
+    #[arg(long, default_value = "crates/architext-viewer/dist")]
     dist: PathBuf,
 
     /// Port to listen on (will search up to 50 consecutive ports if busy).

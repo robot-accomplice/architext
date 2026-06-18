@@ -62,6 +62,13 @@
     "ajv": "^8.17.1",
     "ajv-formats": "^3.0.1"
   },
+  "optionalDependencies": {
+    "@robotaccomplice/architext-darwin-arm64": "1.6.3",
+    "@robotaccomplice/architext-darwin-x64": "1.6.3",
+    "@robotaccomplice/architext-linux-x64": "1.6.3",
+    "@robotaccomplice/architext-linux-arm64": "1.6.3",
+    "@robotaccomplice/architext-win32-x64": "1.6.3"
+  },
   "devDependencies": {
     "@types/react": "^19.0.2",
     "@types/react-dom": "^19.0.2",

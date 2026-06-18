@@ -235,23 +235,47 @@ fn maybe_open(opts: &ParsedArgs, url: &str) {
 
 // ─── viewer dist resolution ───────────────────────────────────────────────────
 
-/// Resolve the viewer dist directory (`<package-root>/viewer/dist`). The Rust
-/// binary may run from the repo root (cargo) or be installed; we honor an env
-/// override and fall back to the compile-time anchor.
+/// Resolve the viewer dist directory. The Rust serve path now prefers the
+/// Trunk-built Leptos viewer (`crates/architext-viewer/dist`); the legacy React
+/// `viewer/dist` is kept only as a transition fallback (its removal is Phase 3).
+/// The `ARCHITEXT_VIEWER_DIST` env override still wins for explicit control.
+///
+/// For each candidate we check both the current working directory (cargo run
+/// from the repo root) and the compile-time repo anchor (installed binary).
 fn viewer_dist_dir() -> PathBuf {
     if let Ok(d) = std::env::var("ARCHITEXT_VIEWER_DIST") {
         return PathBuf::from(d);
     }
-    let cwd_dist = PathBuf::from("viewer").join("dist");
-    if cwd_dist.join("index.html").exists() {
-        return cwd_dist;
-    }
-    // Compile-time anchor: <repo-root>/viewer/dist.
-    PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+
+    let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
-        .map(|root| root.join("viewer").join("dist"))
-        .unwrap_or(cwd_dist)
+        .map(PathBuf::from);
+
+    // Ordered candidates: Trunk dist first, legacy React dist as fallback.
+    let trunk_rel = PathBuf::from("crates").join("architext-viewer").join("dist");
+    let react_rel = PathBuf::from("viewer").join("dist");
+    let candidates = [trunk_rel.clone(), react_rel.clone()];
+
+    for rel in &candidates {
+        // cwd-relative (cargo from repo root).
+        if rel.join("index.html").exists() {
+            return rel.clone();
+        }
+        // repo-anchored (installed / run from elsewhere).
+        if let Some(root) = &repo_root {
+            let anchored = root.join(rel);
+            if anchored.join("index.html").exists() {
+                return anchored;
+            }
+        }
+    }
+
+    // Nothing built yet: return the Trunk anchor so the "missing assets" error
+    // points at the canonical 1.7.0 location.
+    repo_root
+        .map(|root| root.join(&trunk_rel))
+        .unwrap_or(trunk_rel)
 }
 
 fn data_dir_for(target: &Path) -> PathBuf {
