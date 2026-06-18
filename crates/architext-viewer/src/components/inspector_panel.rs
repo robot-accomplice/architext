@@ -7,6 +7,7 @@
 use leptos::*;
 
 use crate::components::data_risks_panel::DataRisksPanel;
+use crate::components::notes_editor::NotesSection;
 use crate::diagram::role_color_var;
 use crate::state::use_app_state;
 use crate::theme::Mode;
@@ -34,6 +35,7 @@ pub fn InspectorPanel() -> impl IntoView {
                 if let Some(node_id) = state.selected_node.get() {
                     if let Some(node) = data.nodes.iter().find(|n| n.id == node_id).cloned() {
                         let role = role_color_var(&node.node_type);
+                        let note_target = node.id.clone();
                         return view! {
                             <div class="accent-surface inspector__card">
                                 <div class="overline">"NODE"</div>
@@ -48,6 +50,7 @@ pub fn InspectorPanel() -> impl IntoView {
                                     <p class="inspector__meta">{format!("Owner: {o}")}</p>
                                 })}
                             </div>
+                            <NotesSection target_kind="node".to_string() target_id=note_target/>
                         }.into_view();
                     }
                 }
@@ -88,28 +91,36 @@ pub fn InspectorPanel() -> impl IntoView {
                 let flow = state.flow_idx.get().and_then(|i| data.flows.get(i).cloned());
 
                 view! {
-                    {view.map(|v| view! {
-                        <div class="accent-surface inspector__card">
-                            <div class="overline">"VIEW"</div>
-                            <h2 class="inspector__title">{v.name.clone()}</h2>
-                            <span class="chip">{v.view_type.clone()}</span>
-                            {v.summary.clone().map(|s| view! {
-                                <p class="inspector__meta">{s}</p>
-                            })}
-                        </div>
+                    {view.map(|v| {
+                        let view_id = v.id.clone();
+                        view! {
+                            <div class="accent-surface inspector__card">
+                                <div class="overline">"VIEW"</div>
+                                <h2 class="inspector__title">{v.name.clone()}</h2>
+                                <span class="chip">{v.view_type.clone()}</span>
+                                {v.summary.clone().map(|s| view! {
+                                    <p class="inspector__meta">{s}</p>
+                                })}
+                            </div>
+                            <NotesSection target_kind="view".to_string() target_id=view_id/>
+                        }
                     })}
-                    {flow.map(|f| view! {
-                        <div class="accent-surface inspector__card">
-                            <div class="overline">"FLOW"</div>
-                            <h2 class="inspector__title">{f.name.clone()}</h2>
-                            {f.status.clone().map(|s| view! { <span class="chip">{s}</span> })}
-                            {f.summary.clone().map(|s| view! {
-                                <p class="inspector__meta">{s}</p>
-                            })}
-                            {f.trigger.clone().map(|t| view! {
-                                <p class="inspector__meta">{format!("Trigger: {t}")}</p>
-                            })}
-                        </div>
+                    {flow.map(|f| {
+                        let flow_id = f.id.clone();
+                        view! {
+                            <div class="accent-surface inspector__card">
+                                <div class="overline">"FLOW"</div>
+                                <h2 class="inspector__title">{f.name.clone()}</h2>
+                                {f.status.clone().map(|s| view! { <span class="chip">{s}</span> })}
+                                {f.summary.clone().map(|s| view! {
+                                    <p class="inspector__meta">{s}</p>
+                                })}
+                                {f.trigger.clone().map(|t| view! {
+                                    <p class="inspector__meta">{format!("Trigger: {t}")}</p>
+                                })}
+                            </div>
+                            <NotesSection target_kind="flow".to_string() target_id=flow_id/>
+                        }
                     })}
                 }.into_view()
     };

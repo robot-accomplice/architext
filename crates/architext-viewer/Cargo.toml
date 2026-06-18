@@ -20,6 +20,11 @@ architext-routing = { path = "../architext-routing", features = ["wasm"] }
 leptos = { version = "0.6", features = ["csr"] }
 console_error_panic_hook = "0.1"
 wasm-bindgen = "0.2"
+# Browser clock for note timestamps (ISO string) and the client-minted note id
+# (`note-<base36 ms>`). `Date` is unavailable in plain Rust; js-sys exposes the
+# JS `Date` to wasm. Declared explicitly rather than relying on transitive
+# enablement via web-sys/gloo-net.
+js-sys = "0.3"
 
 # Pan/zoom-fit needs to measure the canvas viewport (DomRect from the container
 # element). The wheel/mouse event TYPES come from Leptos's typed event handlers;
