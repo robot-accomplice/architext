@@ -1204,6 +1204,45 @@ button:focus-visible {
   --accent: var(--c4-actor);
 }
 
+/* ── Progress indicator (data load + diagram routing) ────────────────────────
+   On-language: a 1px --accent ring (the only motion in otherwise-static
+   hairline chrome) + a mono uppercase label. Reused for the initial /data
+   fetch (boot screen) and the async plan compute (canvas overlay). It animates
+   because the work it covers is async — the main thread stays free. */
+.spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--grid);
+}
+.spinner__ring {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  /* faint full ring + a bright --accent arc that sweeps */
+  border: 1.5px solid var(--accent-glow);
+  border-top-color: var(--accent);
+  animation: spinner-rotate 0.7s linear infinite;
+}
+.spinner__label {
+  color: var(--accent);
+}
+@keyframes spinner-rotate {
+  to { transform: rotate(360deg); }
+}
+/* Centered, non-interactive overlay on the canvas stage — pointer-events:none so
+   pan/zoom stay live underneath; removed the moment the bundle is ready. */
+.canvas-panel__progress {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  padding: var(--pad-tight) var(--pad);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+}
+
 /* ── Non-diagram center surfaces (Repo Tree, Rules) ──────────────────────────
    These render inside the canvas viewport but are scrollable lists, not pan/zoom
    diagrams — so they fill the region, scroll their own overflow, and drop the

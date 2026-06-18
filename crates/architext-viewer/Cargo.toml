@@ -27,7 +27,14 @@ wasm-bindgen = "0.2"
 # than relying on transitive feature enablement.
 web-sys = { version = "0.3", features = ["DomRect", "Element"] }
 
-# Same-origin async fetch of the Architext data docs (/data/**, /api/config).
+# Same-origin async fetch of the Architext data docs (/data/**, /api/config)
+# and the serve plan farm (/api/plan/{hash}).
 gloo-net = { version = "0.6", default-features = false, features = ["http", "json"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+
+# sha256 of the plan key → the `/api/plan/{hash}` farm cache key. Pure-Rust,
+# compiles to wasm32; we deliberately do NOT use
+# `architext_routing::precompute::plan_key_hash_native` (it needs the native
+# feature and returns "" on wasm).
+sha2 = "0.10"
