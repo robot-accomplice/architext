@@ -12,9 +12,10 @@ use architext_routing::model::{Plan, Rect};
 use leptos::*;
 
 use super::edge::{DiagramEdge, EdgeView, ARROWHEAD_ID};
-use super::label::{DiagramLabel, LabelView};
+use super::label::{DiagramLabel, LabelKind, LabelView};
 use super::node::{DecisionDiamond, DiagramNode, NodeView};
 use super::{role_color_var, EdgeKind};
+use crate::components::relationship_icon::RelationshipKind;
 use crate::data::models::{Flow, Node, View as DataView};
 
 /// The fully-resolved render model for one diagram: everything the renderers
@@ -28,6 +29,18 @@ pub struct RenderModel {
     pub decisions: Vec<(Rect, String)>,
     pub edges: Vec<EdgeView>,
     pub labels: Vec<LabelView>,
+}
+
+/// The legend payload, derived from ONLY what the current view renders: the
+/// node types that appear (swatch + glyph + name) and, when structural edges
+/// are shown, the relationship kinds that appear (glyph + word). Empty lists
+/// mean "nothing of that family in this view" and the legend omits the section.
+#[derive(Clone, Default, PartialEq)]
+pub struct LegendModel {
+    /// Distinct node types present, in first-seen order (the authored `type`).
+    pub node_types: Vec<String>,
+    /// Distinct relationship kinds present (structural diagrams only).
+    pub relationship_kinds: Vec<RelationshipKind>,
 }
 
 /// Build the render model from a computed `Plan`, the selected flow (for edge
@@ -107,10 +120,18 @@ pub fn build_render_model(
                 .map(str::to_string)
                 .or_else(|| edge_labels.get(id).cloned())
                 .or_else(|| flow.and_then(|f| edge_label_from_flow(id, f)))?;
-            let text = pill_label(&raw_label);
-            // A number-only pill (the flow-step case) renders as a badge, not a
-            // full-width box sized for the original action text.
-            let is_number = text != raw_label;
+            let collapsed = pill_label(&raw_label);
+            // A flow-step label collapses to its number (a badge); anything else
+            // is a structural relationship label → a glyph pill (the word kept
+            // for the hover title + legend).
+            let kind = if collapsed != raw_label {
+                LabelKind::Number(collapsed)
+            } else {
+                LabelKind::Relationship {
+                    kind: RelationshipKind::classify(&raw_label),
+                    word: raw_label,
+                }
+            };
             let box_rect = plan.label_boxes.get(id).cloned().unwrap_or(Rect {
                 x: route.label_x,
                 y: route.label_y,
@@ -118,8 +139,7 @@ pub fn build_render_model(
                 height: 0.0,
             });
             Some(LabelView {
-                text,
-                is_number,
+                kind,
                 anchor_x: route.label_x,
                 anchor_y: route.label_y,
                 box_rect,
@@ -135,6 +155,35 @@ pub fn build_render_model(
         edges,
         labels,
     }
+}
+
+/// Public legend derivation for the canvas overlay: the distinct node types of
+/// the cards that will render (every visible node whose id resolves to a real
+/// dataset node) and the distinct relationship kinds of the structural edge
+/// labels. Flows mode passes empty `edge_labels`, so the relationship section
+/// is empty there. This mirrors what `build_render_model` renders without
+/// recomputing the full plan-bound model.
+pub fn legend_for(
+    plan: &Plan,
+    edge_labels: &HashMap<String, String>,
+    nodes_by_id: &HashMap<&str, &Node>,
+) -> LegendModel {
+    let mut node_types: Vec<String> = Vec::new();
+    for id in plan.node_rects.keys() {
+        if let Some(node) = nodes_by_id.get(id.as_str()) {
+            if !node_types.contains(&node.node_type) {
+                node_types.push(node.node_type.clone());
+            }
+        }
+    }
+    let mut relationship_kinds: Vec<RelationshipKind> = Vec::new();
+    for label in edge_labels.values() {
+        let kind = RelationshipKind::classify(label);
+        if !relationship_kinds.contains(&kind) {
+            relationship_kinds.push(kind);
+        }
+    }
+    LegendModel { node_types, relationship_kinds }
 }
 
 /// The role-type to tint a decision diamond: the type of the component the

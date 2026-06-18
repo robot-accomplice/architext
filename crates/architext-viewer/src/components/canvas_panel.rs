@@ -20,6 +20,7 @@ use leptos::ev::{MouseEvent, WheelEvent};
 use architext_routing::model::Plan;
 
 use crate::components::blast_radius_panel::BlastRadiusPanel;
+use crate::components::legend::Legend;
 use crate::components::release_truth_panel::ReleaseTruthPanel;
 use crate::components::repo_tree::RepoTree;
 use crate::components::rules_panel::RulesPanel;
@@ -27,6 +28,7 @@ use crate::components::steps_panel::StepsPanel;
 use crate::data::models::{Flow, Node, View};
 use crate::diagram::plan::{compute_plan, compute_structural_plan, layout_config_from_diagram};
 use crate::diagram::sequence::{build_sequence_layout, SequenceConfig, SequenceLayout};
+use crate::diagram::svg::legend_for;
 use crate::diagram::{DiagramSvg, SequenceSvg};
 use crate::selection::child_c4_view_for_node;
 use crate::state::use_app_state;
@@ -106,6 +108,8 @@ pub fn CanvasPanel() -> impl IntoView {
     let zoom = create_rw_signal(1.0_f64);
     // Container ref — measured for fit-to-viewport.
     let viewport_ref = create_node_ref::<html::Div>();
+    // Legend overlay open/closed state (default visible; dismissible).
+    let legend_collapsed = create_rw_signal(false);
 
     // The resolved layout config from /api/config (defaults if absent). The
     // dataset is loaded once and never mutated, so this reads untracked — it is
@@ -186,6 +190,23 @@ pub fn CanvasPanel() -> impl IntoView {
             }
         })();
         diagram_inputs.set(bundle);
+    });
+
+    // Legend rows derived from ONLY what the current diagram renders: present
+    // node types (from the plan's resolved cards) + present relationship kinds
+    // (from the structural edge labels; empty in flows mode). Recomputes when
+    // the diagram inputs change.
+    let legend_model = create_memo(move |_| {
+        diagram_inputs.with(|inputs| {
+            inputs
+                .as_ref()
+                .map(|(plan, _flow, edge_labels, _view, nodes)| {
+                    let nodes_by_id: HashMap<&str, &Node> =
+                        nodes.iter().map(|n| (n.id.as_str(), n)).collect();
+                    legend_for(plan, edge_labels, &nodes_by_id)
+                })
+                .unwrap_or_default()
+        })
     });
 
     // Fit a content box (min/max corners) into the measured viewport: as
@@ -397,6 +418,14 @@ pub fn CanvasPanel() -> impl IntoView {
                     <button title="Zoom in" on:click=move |_| zoom_by(ZOOM_STEP)>"+"</button>
                 </div>
             </Show>
+            // Type/relationship legend (bottom-left, above the placard). Reflects
+            // only the types/kinds present in the current diagram; hidden when the
+            // current surface has no diagram (empty model → renders nothing).
+            <Legend
+                model=Signal::derive(move || legend_model.get())
+                collapsed=legend_collapsed
+                on_toggle=Callback::new(move |_| legend_collapsed.update(|c| *c = !*c))
+            />
             </div>
             // Footer step-navigation panel — belongs to the diagram (canvas
             // column), shown only for modes with an ordered flow.
