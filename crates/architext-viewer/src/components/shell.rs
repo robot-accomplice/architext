@@ -7,6 +7,7 @@
 use leptos::*;
 
 use crate::components::canvas_panel::CanvasPanel;
+use crate::components::header::Header;
 use crate::components::inspector_panel::InspectorPanel;
 use crate::components::left_nav::LeftNav;
 use crate::state::use_app_state;
@@ -33,7 +34,10 @@ pub fn Shell() -> impl IntoView {
     };
 
     view! {
+        // `grid-template-rows: auto 1fr` — the header spans all three columns in
+        // the top row; the console triad fills the row below it.
         <div class="shell" style=grid_columns>
+            <Header/>
             <LeftNav/>
             <CanvasPanel/>
             <InspectorPanel/>

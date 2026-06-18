@@ -2,4 +2,6 @@
 pub mod fetch;
 pub mod models;
 
-pub use fetch::{fetch_repo_tree, load_architecture_data, ArchitectureData, FetchError};
+pub use fetch::{
+    fetch_cli_version, fetch_repo_tree, load_architecture_data, ArchitectureData, FetchError,
+};

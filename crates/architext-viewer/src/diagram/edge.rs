@@ -22,9 +22,23 @@ pub const ARROWHEAD_ID: &str = "flow-arrowhead";
 
 /// Render one routed edge. The path geometry is the engine's `d` verbatim; the
 /// kind class drives stroke styling; every edge ends in the shared arrowhead.
+///
+/// `selected` (the steps-panel selection, keyed route id == step id) adds the
+/// `flow-edge--active` STATE class — a brighter/thicker `--accent` stroke (rule
+/// 1: state is `--accent`, never a role hue). The route `d` is untouched.
 #[component]
-pub fn DiagramEdge(edge: EdgeView) -> impl IntoView {
-    let class = format!("flow-edge {}", edge.kind.css_class());
+pub fn DiagramEdge(
+    edge: EdgeView,
+    #[prop(into)] selected: Signal<bool>,
+) -> impl IntoView {
+    let base = format!("flow-edge {}", edge.kind.css_class());
+    let class = move || {
+        if selected.get() {
+            format!("{base} flow-edge--active")
+        } else {
+            base.clone()
+        }
+    };
     view! {
         <path
             class=class

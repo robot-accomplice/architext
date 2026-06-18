@@ -170,6 +170,10 @@ pub fn DiagramSvg(
     #[prop(into)] pan_y: Signal<f64>,
     #[prop(into)] zoom: Signal<f64>,
     #[prop(into)] selected_node: Signal<Option<String>>,
+    /// The selected flow step id (steps-panel selection). The flow route id
+    /// equals the step id, so an edge whose id matches gets the `--accent` active
+    /// treatment. Always `None` in structural (C4 / deployment) mode.
+    #[prop(into)] selected_step: Signal<Option<String>>,
     #[prop(into)] on_select: Callback<String>,
 ) -> impl IntoView {
     let nodes_by_id: HashMap<&str, &Node> = nodes.iter().map(|n| (n.id.as_str(), n)).collect();
@@ -201,7 +205,13 @@ pub fn DiagramSvg(
             <g class="flow-transform" transform=transform>
                 // Z-order: edges, then labels, then decisions, then node cards on top.
                 <g class="flow-edges">
-                    {edge_items.into_iter().map(|e| view! { <DiagramEdge edge=e/> }).collect_view()}
+                    {edge_items.into_iter().map(|e| {
+                        let id = e.id.clone();
+                        let is_selected = Signal::derive(move || {
+                            selected_step.get().as_deref() == Some(id.as_str())
+                        });
+                        view! { <DiagramEdge edge=e selected=is_selected/> }
+                    }).collect_view()}
                 </g>
                 <g class="flow-labels">
                     {label_items.into_iter().map(|l| view! { <DiagramLabel label=l/> }).collect_view()}

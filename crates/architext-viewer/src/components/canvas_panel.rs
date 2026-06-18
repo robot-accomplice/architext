@@ -21,6 +21,7 @@ use architext_routing::model::Plan;
 
 use crate::components::repo_tree::RepoTree;
 use crate::components::rules_panel::RulesPanel;
+use crate::components::steps_panel::StepsPanel;
 use crate::data::models::{Flow, Node, View};
 use crate::diagram::plan::{compute_plan, compute_structural_plan, layout_config_from_diagram};
 use crate::diagram::sequence::{build_sequence_layout, SequenceConfig, SequenceLayout};
@@ -227,6 +228,9 @@ pub fn CanvasPanel() -> impl IntoView {
         let _ = sequence_inputs.get();
         let _ = state.nav_collapsed.get();
         let _ = state.inspector_collapsed.get();
+        // The footer steps panel reduces the canvas height when open; re-fit when
+        // it toggles so the diagram re-frames for the resized viewport.
+        let _ = state.steps_collapsed.get();
         // Defer to the next tick so the SVG (and its viewport) is laid out.
         request_animation_frame(fit);
     });
@@ -289,6 +293,10 @@ pub fn CanvasPanel() -> impl IntoView {
 
     view! {
         <main class="canvas-panel">
+            // The stage holds the absolutely-positioned diagram surface; the
+            // footer steps panel is a sibling below it (a grid row), so opening it
+            // shrinks the stage and the canvas re-fits (see the fit effect).
+            <div class="canvas-panel__stage">
             <div class="canvas-panel__surface"></div>
             <div
                 class="canvas-panel__viewport"
@@ -326,6 +334,7 @@ pub fn CanvasPanel() -> impl IntoView {
                                 pan_y=pan_y
                                 zoom=zoom
                                 selected_node=state.selected_node
+                                selected_step=state.selected_step
                                 on_select=on_select
                             />
                         }.into_view(),
@@ -373,6 +382,10 @@ pub fn CanvasPanel() -> impl IntoView {
                     <button title="Zoom in" on:click=move |_| zoom_by(ZOOM_STEP)>"+"</button>
                 </div>
             </Show>
+            </div>
+            // Footer step-navigation panel — belongs to the diagram (canvas
+            // column), shown only for modes with an ordered flow.
+            <StepsPanel/>
         </main>
     }
 }
