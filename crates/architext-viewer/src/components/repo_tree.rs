@@ -2,12 +2,17 @@
 //!
 //! Fetches the live file list from `/api/repo-tree`, folds it into a nested
 //! directory tree (`repo_tree_model::build_repo_tree`), and renders expand/
-//! collapse rows in the central canvas region. Each file row carries a left
-//! accent rail in its OWNING component's `--c4-{type}` role color — resolved by
-//! `repo_tree_model::resolve_owner` (longest `sourcePaths` prefix) and colored
-//! by the single-source `diagram::role_color_var`. Clicking an owned file
-//! selects its owning node (the inspector then shows that component).
+//! collapse rows in the central canvas region. Each row carries a left accent
+//! rail in its OWNING node's `--c4-{type}` role color — files via
+//! `repo_tree_model::resolve_owner` (longest `sourcePaths` prefix), directories
+//! via `repo_tree_model::dominant_owner` (majority owner; "mixed" when several)
+//! — colored by the single-source `diagram::role_color_var`. Files also show a
+//! type icon (tinted `DiagramIcon` glyph), a size column, and a relative-time
+//! "modified" column; directories show a folder glyph. A column header labels
+//! the columns and a summary line reports the file count + source. Clicking an
+//! owned row selects its owning node (the inspector then shows that component).
 //!
+//! This restores parity with the React `RepoTreeWorkspace`'s data richness.
 //! Editing/mutation is out of scope (V5); this is read-only.
 
 use std::collections::HashSet;
@@ -18,7 +23,8 @@ use leptos::spawn_local;
 use crate::data::{fetch_repo_tree, models::RepoFile, FetchError};
 use crate::diagram::role_color_var;
 use crate::repo_tree_model::{
-    build_owner_index, build_repo_tree, resolve_owner, FileEntry, TreeKind, TreeNode,
+    build_owner_index, build_repo_tree, dominant_owner, file_icon, format_relative_time,
+    format_size, resolve_owner, FileEntry, TreeKind, TreeNode,
 };
 use crate::state::use_app_state;
 
@@ -27,6 +33,27 @@ const INDENT_PX: f64 = 14.0; // per-depth indent (matches the JS workspace)
 /// The repo-tree fetch outcome held in a plain signal (no nested `<Suspense>`,
 /// which conflicts with the App-level data Suspense). `None` while loading.
 type RepoState = Option<Result<crate::data::models::RepoTreePayload, FetchError>>;
+
+/// The SVG `path` `d` for a `DiagramIcon` glyph key used by the repo tree
+/// (file-type glyphs + folder glyphs). Mirrors the React `DiagramIcon` paths
+/// verbatim so the two viewers draw identical shapes. Unknown keys fall back to
+/// the generic file glyph.
+fn glyph_path(key: &str) -> &'static str {
+    match key {
+        "braces" => "M9 4c-2 0-2 2-2 3.5C7 9 6.5 11 5 12c1.5 1 2 3 2 4.5C7 18 7 20 9 20 M15 4c2 0 2 2 2 3.5 0 1.5.5 3.5 2 4.5-1.5 1-2 3-2 4.5 0 1.5 0 3.5-2 3.5",
+        "code" => "M9 8l-4 4 4 4 M15 8l4 4-4 4",
+        "gear" => "M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6 M12 3v2.5 M12 18.5V21 M21 12h-2.5 M5.5 12H3 M18.4 5.6l-1.8 1.8 M7.4 16.6l-1.8 1.8 M18.4 18.4l-1.8-1.8 M7.4 7.4 5.6 5.6",
+        "hash" => "M6 9h12 M5 15h12 M10 5l-2 14 M17 5l-2 14",
+        "image" => "M4 6h16v12H4z M4 15l4-4 3 3 4-4 5 5 M9 10a1.4 1.4 0 1 0 0 .01",
+        "lock" => "M6 11h12v9H6z M9 11V8a3 3 0 0 1 6 0v3",
+        "markdown" => "M3 8h18v8H3z M6 14v-4l2.5 2.5L11 10v4 M15 10v3 M13 12l2 2 2-2",
+        "database" => "M6 6c0-2 12-2 12 0v12c0 2-12 2-12 0z M6 6c0 2 12 2 12 0 M6 12c0 2 12 2 12 0",
+        "package" => "M4 8l8-4 8 4v8l-8 4-8-4z M4 8l8 4 8-4 M12 12v8",
+        "folder" => "M4 18h16V8h-9l-2-2H4z",
+        "folder-open" => "M3 8V6h6l2 2h8v2 M3 8h18l-2 10H5z",
+        _ => "M7 3h7l4 4v14H7z M14 3v4h4",
+    }
+}
 
 #[component]
 pub fn RepoTree() -> impl IntoView {
@@ -48,8 +75,18 @@ pub fn RepoTree() -> impl IntoView {
                 <div class="overline">"REPO TREE"</div>
                 {move || repo.get()
                     .and_then(|r| r.ok())
-                    .and_then(|p| p.source)
-                    .map(|s| view! { <span class="chip">{format!("source: {s}")}</span> })}
+                    .map(|p| {
+                        let count = p.files.len();
+                        let source = p.source.clone();
+                        view! {
+                            <span class="repo-tree__summary">
+                                <span class="repo-tree__count">{format!("{count} files")}</span>
+                                {source.map(|s| view! {
+                                    <span class="chip">{format!("source: {s}")}</span>
+                                })}
+                            </span>
+                        }
+                    })}
             </div>
             {move || match repo.get() {
                 None => view! {
@@ -61,6 +98,13 @@ pub fn RepoTree() -> impl IntoView {
                     </p>
                 }.into_view(),
                 Some(Ok(payload)) => {
+                    if payload.files.is_empty() {
+                        return view! {
+                            <p class="repo-tree__hint">
+                                "No files found. Run "<code>"architext serve"</code>" inside a git repository."
+                            </p>
+                        }.into_view();
+                    }
                     let files: Vec<FileEntry> = payload.files.iter()
                         .map(|f: &RepoFile| FileEntry {
                             path: f.path.clone(),
@@ -69,9 +113,20 @@ pub fn RepoTree() -> impl IntoView {
                         })
                         .collect();
                     let tree = build_repo_tree(&files);
+                    // Single clock read for the whole render — matches the React
+                    // `now = Date.now()` memo (stable across all rows).
+                    let now = js_sys::Date::now() as i64;
                     view! {
                         <div class="repo-tree__body">
-                            {render_children(&tree, 0, state, collapsed)}
+                            <div class="repo-row repo-row--colhead" aria-hidden="true">
+                                <span class="repo-row__caret"></span>
+                                <span class="repo-row__icon"></span>
+                                <span class="repo-row__name">"Name"</span>
+                                <span class="repo-row__size">"Size"</span>
+                                <span class="repo-row__time">"Modified"</span>
+                                <span class="repo-row__owner">"Owner"</span>
+                            </div>
+                            {render_children(&tree, 0, state, collapsed, now)}
                         </div>
                     }.into_view()
                 }
@@ -88,11 +143,12 @@ fn render_children(
     depth: usize,
     state: crate::state::AppState,
     collapsed: RwSignal<HashSet<String>>,
+    now: i64,
 ) -> View {
     parent
         .children
         .iter()
-        .map(|child| render_node(child, depth, state, collapsed))
+        .map(|child| render_node(child, depth, state, collapsed, now))
         .collect_view()
 }
 
@@ -101,8 +157,11 @@ fn render_node(
     depth: usize,
     state: crate::state::AppState,
     collapsed: RwSignal<HashSet<String>>,
+    now: i64,
 ) -> View {
     let indent = format!("padding-left:{}px", depth as f64 * INDENT_PX);
+    let data = state.data.get_untracked();
+    let owner_index = build_owner_index(&data.nodes);
 
     match node.kind {
         TreeKind::Dir => {
@@ -117,15 +176,57 @@ fn render_node(
                     }
                 });
             };
+
+            // Dominant-owner color for the dir rail + label ("mixed" when the
+            // subtree spans more than one owner). Port of JS `dominantOwner`.
+            let (owner_idx, mixed) = dominant_owner(node, &owner_index);
+            let owner = owner_idx.and_then(|i| data.nodes.get(i).cloned());
+            let (rail, owner_view) = if mixed {
+                (
+                    "var(--line)".to_string(),
+                    view! { <span class="repo-row__owner repo-row__owner--muted">"mixed"</span> }
+                        .into_view(),
+                )
+            } else if let Some(n) = &owner {
+                let color = role_color_var(&n.node_type);
+                (
+                    color.clone(),
+                    view! {
+                        <span class="repo-row__owner" style=format!("color:{color}")>
+                            {n.name.clone()}
+                        </span>
+                    }
+                    .into_view(),
+                )
+            } else {
+                (
+                    "var(--line)".to_string(),
+                    view! { <span class="repo-row__owner"></span> }.into_view(),
+                )
+            };
+            let style = format!("{indent};border-left-color:{rail}");
+
             // Children are rendered eagerly but hidden when collapsed, so the
             // expand toggle is instant and selection state is preserved.
-            let children_view = render_children(node, depth + 1, state, collapsed);
+            let children_view = render_children(node, depth + 1, state, collapsed, now);
             view! {
-                <div class="repo-row repo-row--dir" style=indent on:click=on_click>
+                <div class="repo-row repo-row--dir" style=style on:click=on_click>
                     <span class="repo-row__caret">
                         {move || if is_collapsed.get() { "▸" } else { "▾" }}
                     </span>
+                    <span class="repo-row__icon repo-row__icon--folder">
+                        <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d=move || if is_collapsed.get() {
+                                glyph_path("folder")
+                            } else {
+                                glyph_path("folder-open")
+                            }/>
+                        </svg>
+                    </span>
                     <span class="repo-row__name repo-row__name--dir">{name}</span>
+                    <span class="repo-row__size"></span>
+                    <span class="repo-row__time"></span>
+                    {owner_view}
                 </div>
                 <div class="repo-dir-children" class=("repo-dir-children--hidden", move || is_collapsed.get())>
                     {children_view}
@@ -138,8 +239,6 @@ fn render_node(
             let path = node.path.clone();
 
             // Owner resolution + single-source role color for the rail.
-            let data = state.data.get_untracked();
-            let owner_index = build_owner_index(&data.nodes);
             let owner = resolve_owner(&path, &owner_index).and_then(|i| data.nodes.get(i).cloned());
 
             let (rail, owner_label, owner_id) = match &owner {
@@ -156,6 +255,10 @@ fn render_node(
             };
             let owned = owner.is_some();
 
+            let icon = file_icon(&name);
+            let size_text = format_size(node.size);
+            let time_text = format_relative_time(node.mtime, now);
+
             view! {
                 <div
                     class="repo-row repo-row--file"
@@ -163,10 +266,24 @@ fn render_node(
                     style=style
                     on:click=on_click
                 >
+                    <span class="repo-row__caret"></span>
+                    <span class="repo-row__icon" style=format!("color:{}", icon.color)>
+                        <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                            <path d=glyph_path(icon.glyph)/>
+                        </svg>
+                    </span>
                     <span class="repo-row__name">{name}</span>
-                    {(!owner_label.is_empty()).then(|| view! {
-                        <span class="repo-row__owner" style=format!("color:{rail}")>{owner_label}</span>
-                    })}
+                    <span class="repo-row__size">{size_text}</span>
+                    <span class="repo-row__time">{time_text}</span>
+                    {if owner_label.is_empty() {
+                        view! { <span class="repo-row__owner"></span> }.into_view()
+                    } else {
+                        view! {
+                            <span class="repo-row__owner" style=format!("color:{rail}")>
+                                {owner_label}
+                            </span>
+                        }.into_view()
+                    }}
                 </div>
             }
             .into_view()

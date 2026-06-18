@@ -163,6 +163,177 @@ pub fn resolve_owner(path: &str, owner_index: &[OwnerEntry]) -> Option<usize> {
     best
 }
 
+/// The dominant owner of a directory subtree (for folder colouring): the most
+/// common owning node index among the files beneath it. `mixed` is true when
+/// more than one distinct owner appears, so the UI shows a "mixed" hint instead
+/// of a single owner color. Port of JS `dominantOwner`.
+pub fn dominant_owner(dir: &TreeNode, owner_index: &[OwnerEntry]) -> (Option<usize>, bool) {
+    use std::collections::HashMap;
+    let mut counts: HashMap<usize, usize> = HashMap::new();
+    visit_files(dir, owner_index, &mut counts);
+    let distinct = counts.len();
+    // Tie-break on the smallest node index so the result is deterministic
+    // (JS relies on Map insertion order; index order is the stable analogue).
+    let best = counts
+        .iter()
+        .max_by(|a, b| a.1.cmp(b.1).then(b.0.cmp(a.0)))
+        .map(|(idx, _)| *idx);
+    (best, distinct > 1)
+}
+
+fn visit_files(
+    node: &TreeNode,
+    owner_index: &[OwnerEntry],
+    counts: &mut std::collections::HashMap<usize, usize>,
+) {
+    match node.kind {
+        TreeKind::File => {
+            if let Some(idx) = resolve_owner(&node.path, owner_index) {
+                *counts.entry(idx).or_insert(0) += 1;
+            }
+        }
+        TreeKind::Dir => {
+            for child in &node.children {
+                visit_files(child, owner_index, counts);
+            }
+        }
+    }
+}
+
+// ─── File-type icon + metadata formatting ──────────────────────────────────
+//
+// Faithful port of `viewer/src/presentation/repoTreeFormat.js`. The Leptos
+// viewer renders inline `DiagramIcon` line glyphs (it does not vendor the
+// React build's brand SVGs), so the brand-extension families collapse onto the
+// closest stroke glyph in the shared `DiagramIcon` vocabulary, tinted per
+// technology family — consistent with `node_icon`/`mode_icon`.
+
+/// A file's icon: a `DiagramIcon` glyph key + a tint color literal. The tint is
+/// a brand hue, not a `--c4-*` role token, so it never collides with the
+/// owner-rail role color (DESIGN.md: role hue encodes node TYPE only).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FileIcon {
+    pub glyph: &'static str,
+    pub color: &'static str,
+}
+
+fn extension_of(name: &str) -> String {
+    match name.rfind('.') {
+        // A leading dot (".gitignore") is a dotfile, not an extension.
+        Some(dot) if dot > 0 => name[dot + 1..].to_lowercase(),
+        _ => String::new(),
+    }
+}
+
+/// Resolve the icon (glyph + tint) for a file name. Port of `fileIconSpec`,
+/// mapping brand extensions onto a representative stroke glyph + brand hue
+/// since the Leptos viewer is glyph-only.
+pub fn file_icon(name: &str) -> FileIcon {
+    let lower = name.to_lowercase();
+    // Special filenames that carry meaning without a useful extension.
+    match lower.as_str() {
+        "dockerfile" => return FileIcon { glyph: "package", color: "#2496ed" },
+        ".gitignore" | ".env" => return FileIcon { glyph: "gear", color: "#9aa0a6" },
+        _ => {}
+    }
+    let ext = extension_of(name);
+    let icon = |glyph, color| FileIcon { glyph, color };
+    match ext.as_str() {
+        // Brand families → representative glyph + brand hue.
+        "ts" | "mts" | "cts" => icon("braces", "#3178c6"),
+        "tsx" | "jsx" => icon("braces", "#61dafb"),
+        "js" | "mjs" | "cjs" => icon("braces", "#f1e05a"),
+        "html" | "htm" => icon("code", "#e34c26"),
+        "css" => icon("hash", "#563d7c"),
+        "scss" | "sass" => icon("hash", "#c76395"),
+        "py" => icon("code", "#3572a5"),
+        "go" => icon("code", "#00add8"),
+        "rs" => icon("code", "#dea584"),
+        "java" | "kt" => icon("code", "#b07219"),
+        "c" | "h" => icon("code", "#555555"),
+        "cpp" | "cc" | "cxx" | "hpp" => icon("code", "#f34b7d"),
+        "cs" => icon("code", "#178600"),
+        "php" => icon("code", "#4f5d95"),
+        "rb" => icon("code", "#701516"),
+        "swift" => icon("code", "#f05138"),
+        "sh" | "bash" | "zsh" | "fish" => icon("code", "#89e051"),
+        "vue" => icon("code", "#41b883"),
+        "graphql" | "gql" => icon("hash", "#e10098"),
+        // Tinted-glyph families (already glyph-only in React).
+        "json" | "jsonc" => icon("braces", "#e3b341"),
+        "yml" | "yaml" => icon("hash", "#e0654f"),
+        "md" | "mdx" => icon("markdown", "#58a6ff"),
+        "xml" => icon("code", "#8bc34a"),
+        "less" => icon("hash", "#5a8fd6"),
+        "toml" | "ini" | "env" | "conf" | "cfg" => icon("gear", "#9aa0a6"),
+        "sql" => icon("database", "#e38c00"),
+        "lock" => icon("lock", "#b08d57"),
+        "svg" | "png" | "jpg" | "jpeg" | "gif" | "webp" | "ico" => icon("image", "#d97757"),
+        "txt" | "log" | "csv" | "rst" => icon("file", "#9aa0a6"),
+        // Generic.
+        _ => icon("file", "#7d8590"),
+    }
+}
+
+/// Human-readable byte size. `None` renders as "". Port of `formatSize`.
+pub fn format_size(bytes: Option<u64>) -> String {
+    let bytes = match bytes {
+        Some(b) => b,
+        None => return String::new(),
+    };
+    if bytes < 1024 {
+        return format!("{bytes} B");
+    }
+    const UNITS: [&str; 4] = ["KB", "MB", "GB", "TB"];
+    let mut value = bytes as f64 / 1024.0;
+    let mut unit_index = 0;
+    while value >= 1024.0 && unit_index < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit_index += 1;
+    }
+    if value < 10.0 {
+        format!("{:.1} {}", value, UNITS[unit_index])
+    } else {
+        format!(
+            "{} {}",
+            architext_routing::js_compat::js_round(value) as i64,
+            UNITS[unit_index]
+        )
+    }
+}
+
+const MINUTE_MS: i64 = 60 * 1000;
+const HOUR_MS: i64 = 60 * MINUTE_MS;
+const DAY_MS: i64 = 24 * HOUR_MS;
+
+/// Compact relative time ("just now", "3m", "2h", "5d", "3mo", "1y"). `now` is
+/// injected for testability. `None` mtime renders as "". Port of
+/// `formatRelativeTime`.
+pub fn format_relative_time(mtime: Option<i64>, now: i64) -> String {
+    let mtime = match mtime {
+        Some(m) => m,
+        None => return String::new(),
+    };
+    let delta = (now - mtime).max(0);
+    if delta < MINUTE_MS {
+        return "just now".to_string();
+    }
+    if delta < HOUR_MS {
+        return format!("{}m", delta / MINUTE_MS);
+    }
+    if delta < DAY_MS {
+        return format!("{}h", delta / HOUR_MS);
+    }
+    let days = delta / DAY_MS;
+    if days < 30 {
+        format!("{days}d")
+    } else if days < 365 {
+        format!("{}mo", days / 30)
+    } else {
+        format!("{}y", days / 365)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -245,5 +416,80 @@ mod tests {
         let prefixes: Vec<&str> = idx.iter().map(|e| e.prefix.as_str()).collect();
         assert!(prefixes.contains(&"src"));
         assert!(!prefixes.contains(&""));
+    }
+
+    #[test]
+    fn dominant_owner_picks_majority_and_flags_mixed() {
+        // src → node 0; src/data → node 1. Tree: src has main.rs (0), lib.rs (0),
+        // and data/fetch.rs (1) → owner 0 dominates, but two distinct owners → mixed.
+        let nodes = vec![
+            node("svc", "service", &["src"]),
+            node("store", "data-store", &["src/data"]),
+        ];
+        let idx = build_owner_index(&nodes);
+        let tree = build_repo_tree(&[
+            file("src/main.rs"),
+            file("src/lib.rs"),
+            file("src/data/fetch.rs"),
+        ]);
+        let src = &tree.children[0];
+        let (owner, mixed) = dominant_owner(src, &idx);
+        assert_eq!(owner, Some(0), "service owns the majority of files under src");
+        assert!(mixed, "two distinct owners under src → mixed");
+
+        // A subtree with a single owner is not mixed.
+        let data = &src.children[0];
+        let (owner, mixed) = dominant_owner(data, &idx);
+        assert_eq!(owner, Some(1));
+        assert!(!mixed);
+
+        // No owner anywhere → None, not mixed.
+        let empty = build_repo_tree(&[file("docs/readme.md")]);
+        let (owner, mixed) = dominant_owner(&empty.children[0], &idx);
+        assert_eq!(owner, None);
+        assert!(!mixed);
+    }
+
+    #[test]
+    fn file_icon_maps_brands_glyphs_and_specials() {
+        // Brand extension → representative glyph + brand hue.
+        assert_eq!(file_icon("main.rs"), FileIcon { glyph: "code", color: "#dea584" });
+        assert_eq!(file_icon("app.tsx"), FileIcon { glyph: "braces", color: "#61dafb" });
+        // Tinted-glyph families.
+        assert_eq!(file_icon("data.json"), FileIcon { glyph: "braces", color: "#e3b341" });
+        assert_eq!(file_icon("README.md"), FileIcon { glyph: "markdown", color: "#58a6ff" });
+        assert_eq!(file_icon("Cargo.lock"), FileIcon { glyph: "lock", color: "#b08d57" });
+        // Special filenames (no usable extension).
+        assert_eq!(file_icon("Dockerfile"), FileIcon { glyph: "package", color: "#2496ed" });
+        assert_eq!(file_icon(".gitignore"), FileIcon { glyph: "gear", color: "#9aa0a6" });
+        // Unknown / extensionless → generic file glyph.
+        assert_eq!(file_icon("LICENSE"), FileIcon { glyph: "file", color: "#7d8590" });
+    }
+
+    #[test]
+    fn format_size_matches_js_thresholds() {
+        assert_eq!(format_size(None), "");
+        assert_eq!(format_size(Some(0)), "0 B");
+        assert_eq!(format_size(Some(512)), "512 B");
+        assert_eq!(format_size(Some(1024)), "1.0 KB");
+        assert_eq!(format_size(Some(1536)), "1.5 KB");
+        // ≥ 10 in a unit drops the decimal and rounds (Math.round).
+        assert_eq!(format_size(Some(10 * 1024)), "10 KB");
+        assert_eq!(format_size(Some(1024 * 1024)), "1.0 MB");
+    }
+
+    #[test]
+    fn format_relative_time_matches_js_buckets() {
+        let now = 1_000_000_000_000_i64;
+        assert_eq!(format_relative_time(None, now), "");
+        assert_eq!(format_relative_time(Some(now), now), "just now");
+        assert_eq!(format_relative_time(Some(now - 30 * 1000), now), "just now");
+        assert_eq!(format_relative_time(Some(now - 5 * MINUTE_MS), now), "5m");
+        assert_eq!(format_relative_time(Some(now - 3 * HOUR_MS), now), "3h");
+        assert_eq!(format_relative_time(Some(now - 5 * DAY_MS), now), "5d");
+        assert_eq!(format_relative_time(Some(now - 40 * DAY_MS), now), "1mo");
+        assert_eq!(format_relative_time(Some(now - 400 * DAY_MS), now), "1y");
+        // Future mtime clamps to "just now" (delta floored at 0).
+        assert_eq!(format_relative_time(Some(now + DAY_MS), now), "just now");
     }
 }
