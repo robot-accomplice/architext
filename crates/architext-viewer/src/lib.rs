@@ -29,6 +29,7 @@ use leptos::*;
 
 use crate::components::shell::Shell;
 use crate::components::spinner::Spinner;
+use crate::data::live::start_live_reload;
 use crate::data::{fetch_cli_version, load_architecture_data, FetchError};
 use crate::state::AppState;
 
@@ -58,6 +59,10 @@ pub fn App() -> impl IntoView {
                             cli_version.set(Some(v));
                         }
                     });
+                    // Open the live-reload SSE stream: on a validated on-disk data
+                    // change the dataset re-fetches and the diagram re-renders in
+                    // place (selection preserved); an invalid change shows a notice.
+                    start_live_reload(state);
                     view! { <Shell/> }.into_view()
                 }
                 Err(err) => view! { <ErrorScreen err=err/> }.into_view(),

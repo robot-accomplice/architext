@@ -61,6 +61,7 @@ pub fn Header() -> impl IntoView {
                 </div>
             </div>
             <div class="topbar__actions">
+                <LiveIndicator/>
                 <button
                     class="topbar__config-btn"
                     title="View resolved diagram configuration"
@@ -69,7 +70,42 @@ pub fn Header() -> impl IntoView {
                     <span aria-hidden="true">"⚙ "</span>"Config"
                 </button>
             </div>
+            <InvalidNotice/>
             <ConfigPanel open=config_open/>
         </header>
+    }
+}
+
+/// A hairline "live" indicator: a small mono dot+label keyed to the live-reload
+/// SSE connection. `--accent` when connected, muted when not. Display-only.
+#[component]
+fn LiveIndicator() -> impl IntoView {
+    let state = use_app_state();
+    let connected = move || state.live_connected.get();
+    view! {
+        <span
+            class="topbar__live"
+            class=("topbar__live--on", connected)
+            title=move || if connected() { "Live reload connected" } else { "Live reload offline" }
+        >
+            <span class="topbar__live-dot" aria-hidden="true"></span>
+            "LIVE"
+        </span>
+    }
+}
+
+/// Non-blocking notice strip shown when the on-disk data fails validation. The
+/// last-good diagram keeps rendering; this only surfaces the validator summary.
+/// Hairline + mono + `--sev-high` per DESIGN.md (a warning, not a hard error).
+#[component]
+fn InvalidNotice() -> impl IntoView {
+    let state = use_app_state();
+    view! {
+        {move || state.invalid_notice.get().map(|summary| view! {
+            <div class="topbar__notice" role="status">
+                <span class="topbar__notice-tag">"DATA INVALID"</span>
+                <span class="topbar__notice-msg">{summary}</span>
+            </div>
+        })}
     }
 }
