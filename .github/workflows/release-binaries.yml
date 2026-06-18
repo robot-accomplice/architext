@@ -1,0 +1,110 @@
+name: Release binaries
+
+# Cross-compile the native Architext CLI for the five supported platforms and
+# build the Trunk viewer dist, uploading each as a build artifact. This workflow
+# intentionally STOPS at artifacts — it does NOT publish to npm. Publishing the
+# per-platform packages is a later, separate step the maintainer wires up once
+# the artifacts are reviewed.
+
+on:
+  workflow_dispatch:
+  # Also runnable from a release event for convenience, but still artifacts-only.
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  build-cli:
+    name: cli ${{ matrix.target_key }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_key: darwin-arm64
+            runner: macos-14
+            rust_target: aarch64-apple-darwin
+            cross: false
+            bin: architext
+          - target_key: darwin-x64
+            runner: macos-15-intel
+            rust_target: x86_64-apple-darwin
+            cross: false
+            bin: architext
+          - target_key: linux-x64
+            runner: ubuntu-latest
+            rust_target: x86_64-unknown-linux-gnu
+            cross: false
+            bin: architext
+          - target_key: linux-arm64
+            runner: ubuntu-latest
+            rust_target: aarch64-unknown-linux-gnu
+            cross: true
+            bin: architext
+          - target_key: win32-x64
+            runner: windows-latest
+            rust_target: x86_64-pc-windows-msvc
+            cross: false
+            bin: architext.exe
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_target }}
+
+      - name: Install cross
+        if: ${{ matrix.cross }}
+        run: cargo install cross --locked
+
+      - name: Build native CLI (cargo)
+        if: ${{ !matrix.cross }}
+        run: cargo build --release -p architext-cli --target ${{ matrix.rust_target }}
+
+      - name: Build native CLI (cross)
+        if: ${{ matrix.cross }}
+        run: cross build --release -p architext-cli --target ${{ matrix.rust_target }}
+
+      - name: Stage binary into the platform layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "staged/${{ matrix.target_key }}"
+          cp "target/${{ matrix.rust_target }}/release/${{ matrix.bin }}" "staged/${{ matrix.target_key }}/${{ matrix.bin }}"
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: architext-binary-${{ matrix.target_key }}
+          path: staged/${{ matrix.target_key }}/${{ matrix.bin }}
+          if-no-files-found: error
+
+  build-viewer:
+    name: viewer dist (trunk)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install Trunk
+        run: cargo install trunk --locked
+
+      - name: Build viewer dist
+        working-directory: crates/architext-viewer
+        run: trunk build --release
+
+      - name: Upload viewer dist artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: architext-viewer-dist
+          path: crates/architext-viewer/dist
+          if-no-files-found: error

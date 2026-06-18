@@ -5,7 +5,7 @@
   "status": "implementing",
   "posture": "on-track",
   "targetWindow": "After 1.6.3 (1.6.x exhausted)",
-  "lastUpdated": "2026-06-16T01:00:00.000Z",
+  "lastUpdated": "2026-06-18T00:00:00.000Z",
   "updateSource": "2026-06-16: validation parity COMPLETE — architext-core validator (schema via jsonschema + references + release + roadmap-target) verdict-identical to the JS validator; conformance gate 44/44 across per-rule fixtures.",
   "summary": "Reimplement the entire product in Rust with NO Node dependency surviving — runtime AND build. One Rust routing core (native + WASM); validation, serve layer, and lifecycle ported; AND the React/Vite viewer rewritten as a Rust → WASM UI (Leptos/Dioxus/Yew, no JSX/Vite/npm) reusing the engine directly and implementing the Stitch design language. Native installers are the Node-free default; npm is an opt-in compatibility bridge only. Minor release: JSON data contract and CLI surface preserved exactly, proven by a byte-parity migration gate and a validation conformance corpus. Migration tooling (parity harness, ajv conformance, JS tests) is transitional and deleted with the JS code.",
   "scope": {
@@ -139,7 +139,7 @@
         "id": "native-binary-distribution",
         "title": "Signed native binaries + CI build matrix",
         "kind": "feature",
-        "status": "planned",
+        "status": "in-progress",
         "summary": "Cross-compile and sign per-platform binaries (macOS arm64/x64, Linux x64/arm64, Windows x64); ship via Homebrew, a curl installer, and GitHub releases as the recommended path for new users. CI builds the WASM artifact + viewer/dist, embeds, and runs the parity + conformance gates before publish.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-15T00:00:00.000Z",
@@ -147,13 +147,17 @@
         "priority": "medium",
         "dependsOn": [
           "cli-lifecycle-port"
+        ],
+        "evidence": [
+          "Phase 1 (additive, on branch feat/dist-launcher-bridge): .github/workflows/release-binaries.yml cross-compiles architext-cli for the five targets (macos-14/aarch64, macos-15-intel/x86_64, ubuntu/x86_64-gnu, ubuntu+cross/aarch64-gnu, windows/x86_64-msvc) and builds the Trunk viewer dist, uploading each as an artifact (actionlint-clean). scripts/build-binary-packages.mjs stamps the per-platform npm package dirs (package.json with os/cpu + binary) into dist-binaries/ from built binaries; verified against a local cargo --release build.",
+          "Deferred to a later phase (not blocking Phase 1): code signing/notarization, Homebrew + curl installer, and wiring the matrix to actually publish — Phase 1 is artifacts-only by design so the launcher bridge can be validated before any release."
         ]
       },
       {
         "id": "npm-launcher-bridge",
         "title": "npm thin-launcher upgrade bridge",
         "kind": "feature",
-        "status": "planned",
+        "status": "in-progress",
         "summary": "Keep publishing @robotaccomplice/architext as a thin launcher whose per-platform Rust binaries ship as optionalDependencies (esbuild/Biome model), so a plain npm update brings every prior npm user onto the Rust build with no manual step. The npm artifact carries no runtime JS beyond binary resolution/spawn.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-15T00:00:00.000Z",
@@ -161,6 +165,10 @@
         "priority": "high",
         "dependsOn": [
           "native-binary-distribution"
+        ],
+        "evidence": [
+          "Phase 1 (additive, on branch feat/dist-launcher-bridge): bin.architext (tools/architext-adopt.mjs) is now a thin resolver that computes the ${platform}-${arch} key, require.resolves @robotaccomplice/architext-<key>/architext[.exe], and execs it with stdio inherited + exit-code/signal forwarded. Resolution logic split into tools/native-binary-resolver.mjs and unit-tested (test/native-binary-launcher.test.mjs, 9 tests): platform-key, win32 .exe, unsupported-platform/not-installed → null, native-exec proof (temp shim → real target/release/architext exec, argv+exit code forwarded), and JS-fallback proof. Root package.json declares the five optionalDependencies. Full JS suite 415/415 green; cli/serve-lifecycle tests still drive the launcher via the JS fallback unchanged.",
+          "Deliberate Phase-1 transition affordance (Rule 16 justified deferral): when no native optionalDependency is installed (existing 1.6.x JS-only installs, unsupported platforms, failed optional install), the launcher falls back to the bundled Node CLI. The 'no runtime JS beyond resolution/spawn' end state — deleting the JS engine — is Phase 3, kept out of Phase 1 to preserve a working CLI for every current user during the cutover."
         ]
       },
       {
@@ -247,15 +255,17 @@
       "id": "distribution",
       "name": "Distribution & npm bridge",
       "owner": "maintainer",
-      "status": "planned",
+      "status": "in-progress",
       "posture": "on-track",
       "summary": "Signed native installers as the primary path; npm thin-launcher bridge so existing installs auto-upgrade onto the Rust build.",
-      "progress": 0,
+      "progress": 50,
       "itemIds": [
         "native-binary-distribution",
         "npm-launcher-bridge"
       ],
-      "evidence": []
+      "evidence": [
+        "Phase 1 landed (additive, on branch feat/dist-launcher-bridge, not yet merged/published): thin npm launcher + optionalDependency resolver with JS fallback, the per-platform binary-package generator, and the artifacts-only cross-compile + Trunk-dist CI matrix. Remaining for the workstream: actual cross-compiles/signing/installers and publish wiring."
+      ]
     },
     {
       "id": "viewer-rewrite",
