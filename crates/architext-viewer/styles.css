@@ -1954,44 +1954,11 @@ button.blast-chip { cursor: pointer; }
    A release picker + the selected release's header, Release Path, and
    workstreams. Status / posture color reads on the state/severity scale (never a
    --c4-* role hue); versions/dates are mono. */
+/* The release SELECTOR moved to the left-nav southern slot (SelectorBar); this
+   panel now holds only the selected release's detail, single column. */
 .release-panel {
-  display: grid;
-  grid-template-columns: minmax(200px, 1fr) minmax(0, 2.6fr);
-  gap: var(--pad);
-  align-items: start;
+  display: block;
 }
-.release-panel__picker {
-  display: flex;
-  flex-direction: column;
-  gap: var(--pad-tight);
-  position: sticky;
-  top: 0;
-}
-.release-panel__list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--grid);
-  max-height: calc(100vh - 180px);
-  overflow: auto;
-}
-.release-option {
-  display: flex;
-  align-items: center;
-  gap: var(--pad-tight);
-  text-align: left;
-  cursor: pointer;
-  padding: var(--pad-tight) var(--pad);
-}
-.release-option__version { color: var(--ink); font-weight: 700; flex: none; }
-.release-option__name {
-  color: var(--muted);
-  font-size: var(--overline-size);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.release-option__status { margin-left: auto; flex: none; }
-
 .release-panel__detail { display: flex; flex-direction: column; gap: var(--pad); }
 .release-panel__hint { color: var(--dim); }
 .release-panel__hint--error { color: var(--sev-critical); }

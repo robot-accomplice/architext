@@ -57,6 +57,12 @@ pub struct AppState {
     /// last-good diagram keeps rendering; this surfaces the validator summary so
     /// the user knows the on-disk data is currently invalid. `None` when valid.
     pub invalid_notice: RwSignal<Option<String>>,
+    /// The selected release id (Release Truth mode). Lifted out of the panel so
+    /// the left-nav release selector and the center detail share ONE source of
+    /// truth: selecting in the navbar updates the detail. Seeded lazily (from the
+    /// index's currentReleaseId / newest release) by `ReleaseTruthPanel`; `None`
+    /// until then or if no releases are recorded.
+    pub selected_release: RwSignal<Option<String>>,
 }
 
 impl AppState {
@@ -87,6 +93,7 @@ impl AppState {
             inspector_collapsed: create_rw_signal(false),
             live_connected: create_rw_signal(false),
             invalid_notice: create_rw_signal(None),
+            selected_release: create_rw_signal(None),
         }
     }
 
