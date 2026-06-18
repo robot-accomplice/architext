@@ -1906,3 +1906,150 @@ button.blast-chip { cursor: pointer; }
 .release-ws__name { color: var(--ink); font-size: var(--body-size); }
 .release-ws__progress { color: var(--dim); font-size: var(--overline-size); }
 .release-ws__summary { margin: 0; color: var(--muted); font-size: var(--overline-size); }
+
+/* ── Release Planning editor ────────────────────────────────────────────────
+   The editable counterpart to the read-only Release Truth display. This is a
+   STATE/editing surface: selection + the primary/approve actions use the
+   dedicated --accent treatment (border + ring), never a --c4-* role hue.
+   Mirrors the .rule-editor / .config-editor form idiom (tiered blacks, hairline
+   borders, mono labels). */
+.release-panel__edit-toggle {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  padding: 4px var(--pad);
+  margin-bottom: var(--pad-tight);
+}
+.release-planning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+}
+.release-planning__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--pad);
+}
+.release-planning__title { margin: var(--grid) 0 0; color: var(--ink); font-size: var(--headline-size); }
+.release-planning__sub { margin: var(--grid) 0 0; color: var(--muted); font-size: var(--overline-size); max-width: 52ch; }
+.release-planning__fields { display: flex; gap: var(--pad-tight); flex-wrap: wrap; }
+.release-planning__field { display: flex; flex-direction: column; gap: var(--grid); flex: 1 1 0; min-width: 140px; }
+.release-planning__label {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--dim);
+}
+.release-planning__input {
+  font: inherit;
+  width: 100%;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  padding: 4px var(--pad-tight);
+}
+.release-planning__input:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.release-planning__items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+  max-height: 420px;
+  overflow-y: auto;
+}
+/* One candidate / selected row. Selected rows take the --accent STATE ring. */
+.release-planning__option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--pad-tight);
+  padding: var(--grid) var(--pad-tight);
+  text-align: left;
+  cursor: pointer;
+}
+.release-planning__option.is-active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.release-planning__option input[type="checkbox"] { margin-top: 3px; flex: none; }
+.release-planning__option-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.release-planning__option-main strong { color: var(--ink); font-size: var(--body-size); }
+.release-planning__option-main small { color: var(--dim); font-size: var(--overline-size); }
+.release-planning__option-summary { color: var(--muted); font-size: var(--overline-size); font-style: italic; }
+.release-planning__scope { flex: 0 0 140px; align-self: flex-start; }
+.release-planning__ad-hoc-footer { display: flex; flex-direction: column; gap: var(--pad-tight); }
+.release-planning__ad-hoc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+  padding: var(--pad-tight);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  background: var(--panel);
+}
+.release-planning__ad-hoc strong {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--dim);
+}
+.release-planning__inline-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--grid);
+}
+.release-planning__form-actions { display: flex; gap: var(--pad-tight); }
+.release-planning__preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+  padding: var(--pad-tight);
+  border: var(--hairline) solid var(--line);
+  border-left: var(--accent-rail) solid var(--accent);
+  border-radius: var(--card-radius);
+  background: var(--panel);
+}
+.release-planning__preview span { color: var(--muted); font-size: var(--overline-size); }
+.release-planning__error { margin: 0; font-size: var(--body-size); color: var(--sev-critical); }
+.release-planning__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pad-tight);
+  margin-top: var(--grid);
+}
+.release-planning__count { color: var(--dim); font-size: var(--overline-size); }
+.release-planning__message { color: var(--muted); font-size: var(--overline-size); }
+.release-planning__spacer { flex: 1 1 auto; }
+.release-planning__btn {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 4px var(--pad);
+}
+/* Save draft = primary --accent STATE treatment. */
+.release-planning__btn--primary {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+  color: var(--ink);
+}
+/* Approve = stronger --accent treatment (the irreversible roadmap write). */
+.release-planning__btn--approve {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring), 0 0 0 1px var(--accent-glow);
+  color: var(--ink);
+}
+.release-planning__btn:disabled {
+  color: var(--dim);
+  border-color: var(--line);
+  box-shadow: none;
+  cursor: not-allowed;
+}

@@ -20,6 +20,7 @@
 
 use leptos::*;
 
+use crate::components::release_planning::ReleasePlanningEditor;
 use crate::release_truth::{release_path, release_tone, MilestoneView, PathItem, ReleaseDoc};
 use crate::severity::release_tone_color_var;
 use crate::state::use_app_state;
@@ -42,6 +43,14 @@ pub fn ReleaseTruthPanel() -> impl IntoView {
                 .or_else(|| idx.releases.last().map(|r| r.id.clone()))
         });
         selected.set(seed);
+    });
+
+    // Planning mode toggle (JS `planningMode`). Reset whenever the selected
+    // release changes so a non-editable selection never lands in the editor.
+    let planning_mode = create_rw_signal(false);
+    create_effect(move |_| {
+        selected.get();
+        planning_mode.set(false);
     });
 
     view! {
@@ -73,7 +82,7 @@ pub fn ReleaseTruthPanel() -> impl IntoView {
                 </div>
             </div>
 
-            // ── Selected release truth ───────────────────────────────────────
+            // ── Selected release truth (or the planning editor) ──────────────
             <div class="release-panel__detail">
                 {move || {
                     let data = state.data.get();
@@ -82,6 +91,17 @@ pub fn ReleaseTruthPanel() -> impl IntoView {
                             <p class="release-panel__hint">"Select a release to see its truth."</p>
                         }.into_view();
                     };
+                    // The selected summary decides whether planning is offered
+                    // (JS `canEditRelease = status !== "completed"`).
+                    let summary = data
+                        .release_index
+                        .as_ref()
+                        .and_then(|idx| idx.releases.iter().find(|r| r.id == id).cloned());
+                    let can_edit = summary
+                        .as_ref()
+                        .map(|s| s.status.as_deref() != Some("completed"))
+                        .unwrap_or(false);
+
                     let raw = data.release_details.iter().find(|d| d.id == id).map(|d| &d.raw);
                     let Some(raw) = raw else {
                         return view! {
@@ -90,16 +110,52 @@ pub fn ReleaseTruthPanel() -> impl IntoView {
                             </p>
                         }.into_view();
                     };
-                    match ReleaseDoc::from_value(raw) {
-                        Some(doc) => release_detail_view(doc).into_view(),
+                    let Some(doc) = ReleaseDoc::from_value(raw) else {
                         // FAIL LOUD: an unparseable detail surfaces a clear error,
                         // never a silently-empty path.
-                        None => view! {
+                        return view! {
                             <p class="release-panel__hint release-panel__hint--error">
                                 {format!("Release detail for {id} did not match the expected shape.")}
                             </p>
-                        }.into_view(),
+                        }.into_view();
+                    };
+
+                    let edit_toggle = can_edit.then(|| {
+                        view! {
+                            <button class="release-panel__edit-toggle" type="button"
+                                on:click=move |_| planning_mode.update(|v| *v = !*v)
+                            >
+                                {move || if planning_mode.get() { "View truth" } else { "Edit plan" }}
+                            </button>
+                        }
+                    });
+
+                    // Planning editor when toggled on AND the release is editable;
+                    // otherwise the read-only truth view.
+                    let versions: Vec<Option<String>> = data
+                        .release_index
+                        .as_ref()
+                        .map(|idx| idx.releases.iter().map(|r| r.version.clone()).collect())
+                        .unwrap_or_default();
+                    let body = if can_edit && planning_mode.get() {
+                        view! {
+                            <ReleasePlanningEditor
+                                versions=versions
+                                active_release_id=Some(id.clone())
+                                active_detail=Some(doc.clone())
+                                on_done=Callback::new(move |_| planning_mode.set(false))
+                            />
+                        }
+                        .into_view()
+                    } else {
+                        release_detail_view(doc).into_view()
+                    };
+
+                    view! {
+                        {edit_toggle}
+                        {body}
                     }
+                    .into_view()
                 }}
             </div>
         </div>

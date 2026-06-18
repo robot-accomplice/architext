@@ -4,6 +4,7 @@ pub mod canvas_panel;
 pub mod config_field;
 pub mod config_panel;
 pub mod data_risks_panel;
+pub mod release_planning;
 pub mod release_truth_panel;
 pub mod header;
 pub mod inspector_panel;

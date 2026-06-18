@@ -31,6 +31,9 @@ pub struct ReleaseItem {
     pub owner: Option<String>,
     #[serde(default)]
     pub workstream_id: Option<String>,
+    /// `"roadmap"` | `"ad-hoc"` — provenance used by Release Planning seeding.
+    #[serde(default)]
+    pub source: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Eq)]

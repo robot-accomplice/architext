@@ -348,9 +348,15 @@ pub struct RoadmapItem {
     pub id: String,
     pub title: String,
     #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
+    pub kind: Option<String>,
+    #[serde(default)]
     pub status: Option<String>,
     #[serde(default)]
     pub priority: Option<String>,
+    #[serde(default)]
+    pub section: Option<String>,
     #[serde(default)]
     pub target_release_id: Option<String>,
 }
