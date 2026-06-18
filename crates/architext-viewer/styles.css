@@ -802,10 +802,40 @@ button:focus-visible {
   dominant-baseline: middle;
   pointer-events: none;
 }
+/* Upper-left type glyph: a monochrome line icon tinted to the SAME --c4-* role
+   token as the top-bar (set via `color` on the group; the path uses
+   currentColor). Reinforces the color-encodes-type mapping at the card. */
+.flow-node__icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
 /* Selected = STATE treatment (rule 1): --accent ring/glow, never a role hue. */
 .flow-node--selected .flow-node__card {
   stroke: var(--accent);
   filter: drop-shadow(0 0 6px var(--accent-glow));
+}
+
+/* Structural relationship pill: a small --surface/--edge hairline square sized
+   to the relationship-kind GLYPH (the word lives in the <title> + legend). The
+   pill replaces the colliding WORD labels of C4/deployment diagrams. */
+.flow-label__rel-pill {
+  fill: var(--surface);
+  stroke: var(--edge);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.95;
+}
+.flow-label__rel-glyph {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
 }
 
 /* ── Canvas placard (data-bound identity, bottom-left) ────────────────────── */
@@ -818,6 +848,99 @@ button:focus-visible {
   gap: var(--grid);
   pointer-events: none;
   max-width: 60%;
+}
+
+/* ── Canvas legend (type/relationship key, bottom-left above the placard) ────
+   Colors encode TYPE, so the legend spells the mapping out: per present node
+   type a --c4-* swatch + the type glyph + the name, and per present
+   relationship kind its glyph + word. Collapsible; reflects only what the
+   current view renders. On-language: overline header, hairline, mono. */
+.legend {
+  position: absolute;
+  left: var(--pad);
+  /* Sits above the identity placard (placard is ~2 short text rows). */
+  bottom: calc(var(--pad) + 84px);
+  width: max-content;
+  max-width: 40%;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  backdrop-filter: blur(2px);
+}
+.legend--collapsed {
+  bottom: calc(var(--pad) + 84px);
+}
+.legend__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad);
+  width: 100%;
+  padding: var(--grid) var(--pad);
+  background: transparent;
+  border: 0;
+  border-bottom: var(--hairline) solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+}
+.legend--collapsed .legend__header {
+  border-bottom: 0;
+}
+.legend__header:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+.legend__toggle {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  line-height: 1;
+}
+.legend__body {
+  padding: var(--grid) var(--pad);
+}
+.legend__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.legend__row {
+  display: flex;
+  align-items: center;
+  gap: var(--grid);
+}
+.legend__swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.legend__glyph {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Relationship glyphs aren't role-tinted (relationships have no --c4- hue);
+   they read in the secondary tier like the rest of the technical key. */
+.legend__glyph--rel {
+  color: var(--muted);
+}
+.legend__name {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--ink);
+}
+.legend__divider {
+  height: var(--hairline);
+  background: var(--line);
+  margin: var(--grid) 0;
 }
 .canvas-panel__title {
   font-family: var(--font-ui);
