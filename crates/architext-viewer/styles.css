@@ -507,6 +507,61 @@ button:focus-visible {
 /* Active mode = state treatment (rule 1: --accent ring/glow, NOT a role hue). */
 .mode-list__item.is-active {
   color: var(--ink);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+/* Mono label sits beside the semantic icon. */
+.mode-list__label {
+  font-family: var(--font-mono);
+  flex: 1 1 auto;
+}
+
+/* Semantic mode glyph: monochrome line icon, tints with the host state via
+   currentColor (rule 1 — state is --accent only, never a role hue). */
+.mode-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── Collapsed-rail mode switcher ─────────────────────────────────────────── */
+/* Icon-only vertical switcher shown in the thin rail; reuses the mode list +
+   selection logic, expresses active state via --accent only. */
+.mode-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.mode-rail__item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: var(--hairline) solid transparent;
+  border-radius: var(--card-radius);
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.mode-rail__item:hover {
+  color: var(--ink);
+  border-color: var(--line);
+}
+.mode-rail__item.is-active {
+  color: var(--ink);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
 }
 
 /* ── Center: fluid canvas (rule 3 — never pinned w/h) ─────────────────────── */

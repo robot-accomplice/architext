@@ -6,6 +6,7 @@
 //! ported routing rules.
 use leptos::*;
 
+use crate::components::mode_icon::ModeIcon;
 use crate::state::use_app_state;
 use crate::theme::Mode;
 
@@ -26,7 +27,8 @@ pub fn ModeList() -> impl IntoView {
                                 class:is-active=move || active.get() == mode
                                 on:click=move |_| state.set_mode(mode)
                             >
-                                {mode.label()}
+                                <ModeIcon mode=mode/>
+                                <span class="mode-list__label">{mode.label()}</span>
                             </button>
                         </li>
                     }
