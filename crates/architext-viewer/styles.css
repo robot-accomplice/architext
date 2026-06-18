@@ -459,6 +459,126 @@ button:focus-visible {
   word-break: break-word;
 }
 
+/* ── Config EDITOR (field controls driven by the /api/config spec) ──────────── */
+.config-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+}
+.config-editor__scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.config-editor__scope-hint {
+  margin: 0;
+  font-size: var(--overline-size);
+  color: var(--dim);
+}
+/* Segmented control: hairline group, --accent STATE on the active segment. */
+.config-seg {
+  display: inline-flex;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  width: fit-content;
+}
+.config-seg__btn {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 4px var(--pad);
+  background: var(--panel-2);
+  color: var(--muted);
+  border: none;
+  border-right: var(--hairline) solid var(--line);
+  cursor: pointer;
+}
+.config-seg__btn:last-child { border-right: none; }
+.config-seg__btn.is-active {
+  color: var(--ink);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+  border-color: var(--accent);
+}
+.config-section {
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  padding: var(--pad-tight) var(--pad) var(--pad);
+  margin: 0;
+}
+.config-section__label {
+  color: var(--muted);
+  padding: 0 var(--grid);
+}
+.config-section__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+  margin-top: var(--pad-tight);
+}
+.config-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 140px);
+  gap: var(--pad);
+  align-items: center;
+}
+.config-field__label {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--dim);
+  display: flex;
+  gap: var(--grid);
+  align-items: baseline;
+}
+.config-field__unit {
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.config-field__input {
+  font: inherit;
+  font-family: var(--font-mono);
+  width: 100%;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  padding: 4px var(--pad-tight);
+  text-align: right;
+}
+.config-field__input:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.config-field__check { justify-self: end; }
+.config-editor__warnings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.config-editor__warning {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--sev-high);
+}
+.config-editor__error {
+  margin: 0;
+  font-size: var(--body-size);
+  color: var(--sev-critical);
+}
+.config-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pad-tight);
+  margin-top: var(--grid);
+}
+
 /* ── Panel collapse affordance (shared by nav + inspector) ────────────────── */
 /* Header row holding the panel label/wordmark and the collapse chevron. */
 .panel-collapse-header {
