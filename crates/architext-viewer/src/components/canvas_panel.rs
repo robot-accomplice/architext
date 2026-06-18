@@ -148,8 +148,22 @@ pub fn CanvasPanel() -> impl IntoView {
     // effect that recomputes the plan IN-PROCESS and stores the bundle in a
     // signal. This recomputes exactly when the selection changes, not on every
     // unrelated signal.
+    //
+    // The key folds in a cheap identity of the resolved diagram config (the
+    // `diagram` JSON, stringified). A config write (POST /api/config →
+    // `AppState::set_config`) replaces the `data` signal with a new resolved
+    // config but leaves mode/view/flow unchanged; tracking the config identity
+    // here is what makes the diagram REFLOW on a layout change (e.g. laneWidth /
+    // rowGap) rather than re-rendering the stale plan.
     let selection_key = create_memo(move |_| {
-        (state.mode.get(), state.view_idx.get(), state.flow_idx.get())
+        let config_id = state
+            .data
+            .get()
+            .config
+            .as_ref()
+            .map(|c| c.diagram.to_string())
+            .unwrap_or_default();
+        (state.mode.get(), state.view_idx.get(), state.flow_idx.get(), config_id)
     });
     let diagram_inputs = create_rw_signal::<Option<DiagramInputs>>(None);
     let sequence_inputs = create_rw_signal::<Option<SequenceInputs>>(None);
@@ -164,7 +178,7 @@ pub fn CanvasPanel() -> impl IntoView {
     // since-abandoned selection can't clobber a newer diagram.
     let generation = create_rw_signal(0_u64);
     create_effect(move |_| {
-        let (mode, view_idx, flow_idx) = selection_key.get();
+        let (mode, view_idx, flow_idx, _config_id) = selection_key.get();
         let data = state.data.get_untracked();
         let gen = generation.get_untracked() + 1;
         generation.set(gen);

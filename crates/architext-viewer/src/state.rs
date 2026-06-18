@@ -128,6 +128,23 @@ impl AppState {
         self.selected_step.set(None);
     }
 
+    /// Replace ONLY the resolved diagram config after a `POST /api/config`
+    /// write, preserving the loaded architecture data and the current
+    /// mode/view/flow/selection.
+    ///
+    /// Config lives outside the watched data dir, so a write does NOT fire the
+    /// data-events SSE; the editor must push the re-resolved config back through
+    /// here. Replacing the `data` signal re-runs the canvas's plan compute (whose
+    /// selection key folds in the config layout identity), so the diagram reflows
+    /// with the new layout — the just-refreshed plan farm serves the new key, or
+    /// the in-process fallback computes it.
+    pub fn set_config(&self, config: crate::data::models::ConfigPayload) {
+        let current = self.data.get_untracked();
+        let mut next = (*current).clone();
+        next.config = Some(config);
+        self.data.set(Rc::new(next));
+    }
+
     /// Select a node by id (diagram click → inspector).
     pub fn set_selected_node(&self, node_id: String) {
         self.selected_node.set(Some(node_id));
