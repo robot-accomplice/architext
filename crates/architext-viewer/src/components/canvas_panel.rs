@@ -443,6 +443,12 @@ pub fn CanvasPanel() -> impl IntoView {
         state.set_selected_node(node_id);
     });
 
+    // Click a sequence message → select its step (diagram → steps-panel
+    // highlight), the inverse of the steps-panel click → diagram highlight.
+    let on_select_step = Callback::new(move |step_id: String| {
+        state.set_selected_step(step_id);
+    });
+
     // Selected view/flow identity for the corner placard (kept for context).
     let placard = move || {
         let data = state.data.get();
@@ -478,7 +484,9 @@ pub fn CanvasPanel() -> impl IntoView {
                                 pan_y=pan_y
                                 zoom=zoom
                                 selected_node=state.selected_node
+                                selected_step=state.selected_step
                                 on_select=on_select
+                                on_select_step=on_select_step
                             />
                         }.into_view();
                     }

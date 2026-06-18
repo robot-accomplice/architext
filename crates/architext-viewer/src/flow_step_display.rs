@@ -60,6 +60,49 @@ pub fn is_decision_branch_support_step(steps: &[FlowStep], step: &FlowStep, inde
     step.outcome.is_some() && display_index != index + 1
 }
 
+/// One row in the footer steps panel: the step's original index (for glyph
+/// start/stop inference) and the number to render in the card.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct StepCardRow {
+    /// 0-based index of the step in `flow.steps` (drives glyph + click target).
+    pub index: usize,
+    /// The number shown on the card.
+    pub display_number: usize,
+}
+
+/// The ordered step rows the panel renders, mode-aware.
+///
+/// FLOWS / Data-Risks render a *routed* plan that folds a decision's branch
+/// outcomes back onto the decision number (`3a/3b`), so the list hides those
+/// support steps and uses the folded display index — see
+/// [`flow_step_display_indexes`] / [`is_decision_branch_support_step`].
+///
+/// SEQUENCE renders EVERY step as its own time-ordered message row (no folding),
+/// numbered 1-based in document order — exactly the
+/// `sequence::MessageRow.number`. The panel must mirror that, so in sequence
+/// mode it lists all steps with positional numbers. (Fixes the audit F5 where
+/// the panel showed the Flows-filtered subset while the sequence diagram showed
+/// all messages, so the two disagreed.)
+pub fn step_card_rows(steps: &[FlowStep], is_sequence: bool) -> Vec<StepCardRow> {
+    if is_sequence {
+        return steps
+            .iter()
+            .enumerate()
+            .map(|(index, _)| StepCardRow { index, display_number: index + 1 })
+            .collect();
+    }
+    let display_indexes = flow_step_display_indexes(steps);
+    steps
+        .iter()
+        .enumerate()
+        .filter(|(i, s)| !is_decision_branch_support_step(steps, s, *i))
+        .map(|(index, step)| StepCardRow {
+            index,
+            display_number: display_indexes.get(&step.id).copied().unwrap_or(index + 1),
+        })
+        .collect()
+}
+
 /// A single on-language glyph for a step's kind icon in the steps list.
 ///
 /// Mirrors `iconForStep`: an explicit `kind` maps to its semantic glyph; with no
@@ -155,6 +198,46 @@ mod tests {
         // position (1) and is not hidden.
         let steps = vec![step("s1", "a", "b", None, Some("only"))];
         assert!(!is_decision_branch_support_step(&steps, &steps[0], 0));
+    }
+
+    /// FLOWS mode: the panel hides decision-branch support steps and folds their
+    /// numbers — the routed-plan reading. Same data as
+    /// `decision_branch_outcomes_fold_and_are_support_steps`.
+    #[test]
+    fn step_card_rows_flows_mode_hides_support_steps_and_folds_numbers() {
+        let steps = vec![
+            step("s1", "a", "router", None, None),                 // 1
+            step("s2", "router", "gate", Some("decision"), None),  // 2
+            step("s3", "gate", "yes", None, Some("approved")),     // support → folds to 2
+            step("s4", "gate", "no", None, Some("rejected")),      // support → folds to 2
+            step("s5", "yes", "done", None, None),                 // 5
+        ];
+        let rows = step_card_rows(&steps, false);
+        // s3 + s4 hidden → 3 cards, original indexes 0,1,4.
+        assert_eq!(
+            rows.iter().map(|r| (r.index, r.display_number)).collect::<Vec<_>>(),
+            vec![(0, 1), (1, 2), (4, 5)]
+        );
+    }
+
+    /// SEQUENCE mode: the panel mirrors the diagram's message rows — EVERY step,
+    /// 1-based in document order, no folding/hiding. This is the F5 fix: with the
+    /// same decision-branch data, sequence shows all 5 rows numbered 1..=5
+    /// (matching `MessageRow.number`), not the Flows-filtered 3.
+    #[test]
+    fn step_card_rows_sequence_mode_lists_every_step_positionally() {
+        let steps = vec![
+            step("s1", "a", "router", None, None),
+            step("s2", "router", "gate", Some("decision"), None),
+            step("s3", "gate", "yes", None, Some("approved")),
+            step("s4", "gate", "no", None, Some("rejected")),
+            step("s5", "yes", "done", None, None),
+        ];
+        let rows = step_card_rows(&steps, true);
+        assert_eq!(
+            rows.iter().map(|r| (r.index, r.display_number)).collect::<Vec<_>>(),
+            vec![(0, 1), (1, 2), (2, 3), (3, 4), (4, 5)]
+        );
     }
 
     #[test]

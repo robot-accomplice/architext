@@ -1273,6 +1273,26 @@ button:focus-visible {
 .sequence-line--persistence { stroke-dasharray: 1 3; opacity: 0.8; }
 .sequence-line--self { stroke-dasharray: 3 2; opacity: 0.85; }
 
+/* Selected step → active message: the sequence analogue of `.flow-edge--active`
+   — a STATE treatment (rule 1), brighter/thicker --accent stroke, never a role
+   hue. The kind dash is removed so the active arrow reads as one solid line.
+   The chip + action label lift to --accent too. */
+.sequence-message--active .sequence-line {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-dasharray: none;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px var(--accent-glow));
+}
+.sequence-message--active .sequence-action { fill: var(--accent); }
+.sequence-message--active .sequence-step-chip__dot {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.sequence-message--active .sequence-step-chip__num { fill: var(--accent); }
+/* Whole message row is clickable (selects the step). */
+.sequence-message { cursor: pointer; }
+
 /* Activation bars straddling lifelines. */
 .sequence-activation-bar {
   fill: var(--surface);
