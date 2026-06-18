@@ -2,6 +2,7 @@ pub mod api_fallback;
 pub mod config_payload;
 pub mod config_write;
 pub mod data;
+pub mod data_events;
 pub mod doctor;
 pub mod notes;
 pub mod plan;

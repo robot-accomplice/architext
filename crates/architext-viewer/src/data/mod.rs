@@ -1,5 +1,6 @@
 //! Data layer: serde models for the Architext documents and same-origin fetch.
 pub mod fetch;
+pub mod live;
 pub mod models;
 
 pub use fetch::{

@@ -45,6 +45,13 @@ pub struct AppState {
     pub nav_collapsed: RwSignal<bool>,
     /// Whether the right inspector is collapsed to its thin rail.
     pub inspector_collapsed: RwSignal<bool>,
+    /// Whether the live-reload SSE stream (`/api/data-events`) is connected.
+    /// Drives the small "live" indicator; display-only.
+    pub live_connected: RwSignal<bool>,
+    /// A non-blocking notice shown when a data change failed validation. The
+    /// last-good diagram keeps rendering; this surfaces the validator summary so
+    /// the user knows the on-disk data is currently invalid. `None` when valid.
+    pub invalid_notice: RwSignal<Option<String>>,
 }
 
 impl AppState {
@@ -72,7 +79,47 @@ impl AppState {
             cli_version: create_rw_signal(None),
             nav_collapsed: create_rw_signal(false),
             inspector_collapsed: create_rw_signal(false),
+            live_connected: create_rw_signal(false),
+            invalid_notice: create_rw_signal(None),
         }
+    }
+
+    /// Replace the loaded dataset after a live-reload, PRESERVING the user's
+    /// current mode/view/flow selection. The selection is stored as indices into
+    /// the `views`/`flows` vectors; on reload those vectors may have changed
+    /// length, so we clamp each index to the new bounds (an index that points
+    /// past the end of the new data falls back to the mode/flow default rather
+    /// than dangling). A successful reload also clears any invalid notice.
+    pub fn reload_data(&self, next: ArchitectureData) {
+        let next = Rc::new(next);
+        let mode = self.mode.get_untracked();
+
+        // Clamp the view index to the new views vector; fall back to the
+        // mode-appropriate default if the old index is now out of range.
+        let view = match self.view_idx.get_untracked() {
+            Some(v) if v < next.views.len() => Some(v),
+            _ => selection::default_view_for_mode(&next.views, mode),
+        };
+        // Clamp the flow index likewise (only meaningful when the mode projects
+        // flows; otherwise it stays None).
+        let flow = if mode.projects_flows() {
+            match self.flow_idx.get_untracked() {
+                Some(f) if f < next.flows.len() => Some(f),
+                _ if !next.flows.is_empty() => Some(0),
+                _ => None,
+            }
+        } else {
+            None
+        };
+
+        self.data.set(next);
+        self.view_idx.set(view);
+        self.flow_idx.set(flow);
+        self.invalid_notice.set(None);
+        // A stale node/step selection may not exist in the reloaded projection;
+        // clear both so nothing dangles (mirrors set_view/set_flow behavior).
+        self.selected_node.set(None);
+        self.selected_step.set(None);
     }
 
     /// Select a node by id (diagram click → inspector).

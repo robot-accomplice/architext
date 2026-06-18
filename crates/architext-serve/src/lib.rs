@@ -14,15 +14,15 @@
 //!   - POST /api/release-plans (mutation: preview/approve/save-draft)
 //!   - POST /api/doctor       (mutation: dry-run or apply doctor repairs)
 //!   - POST /api/sync-repair  (mutation: non-interactive sync+validate)
+//!   - GET /api/data-events (SSE live-reload: watch → validate → broadcast)
 //!   - Unknown /api/* → 404
-//!
-//! Extension points for later slices: data-events (SSE).
 
 pub mod content_type;
 pub mod farm_state;
 pub mod handlers;
 pub mod safe_join;
 pub mod security;
+pub mod watch_hub;
 pub mod write_txn;
 
 use std::net::{IpAddr, SocketAddr, TcpListener};
@@ -43,6 +43,7 @@ use serde_json::json;
 
 use farm_state::Farm;
 use security::{is_mutating_api_request, mutation_authorized, same_origin_loopback};
+use watch_hub::WatchHub;
 
 /// Shared application state threaded through every handler via `Extension`.
 #[derive(Clone)]
@@ -75,8 +76,10 @@ pub const DEFAULT_PORT: u16 = 4317;
 
 /// Build the axum `Router`.
 ///
-/// All routes go through the loopback-security middleware.
-pub fn build_router(state: AppState, farm: Farm) -> Router {
+/// All routes go through the loopback-security middleware. `hub` is the live
+/// data-watch hub feeding `GET /api/data-events`; `None` leaves that endpoint
+/// well-formed but event-less (no data dir is being watched).
+pub fn build_router(state: AppState, farm: Farm, hub: Option<WatchHub>) -> Router {
     // Per-request loopback + mutation-token middleware — axum `middleware::from_fn_with_state`
     // can't capture non-Clone state cheaply, so we pass the token via Extension instead.
     let token_for_mw = state.mutation_token.clone();
@@ -86,13 +89,15 @@ pub fn build_router(state: AppState, farm: Farm) -> Router {
         async move { security_middleware(req, next, token).await }
     });
 
-    Router::new()
+    let router = Router::new()
         // API routes — GET
         .route("/api/session", get(handlers::session::get_session))
         .route("/api/plan/:hash", get(handlers::plan::get_plan))
         .route("/api/status", get(handlers::status::get_status))
         .route("/api/config", get(handlers::config_payload::get_config))
         .route("/api/repo-tree", get(handlers::repo_tree::get_repo_tree))
+        // SSE live-reload stream (watch → validate → broadcast)
+        .route("/api/data-events", get(handlers::data_events::get_data_events))
         // API routes — POST (mutations; guarded by security middleware)
         .route("/api/rules", post(handlers::rules::post_rules))
         .route("/api/notes", post(handlers::notes::post_notes))
@@ -109,9 +114,18 @@ pub fn build_router(state: AppState, farm: Farm) -> Router {
         .route("/*path", get(handlers::static_files::get_asset))
         // Shared state
         .layer(Extension(farm))
-        .layer(Extension(state))
-        // Security middleware (runs first — outermost layer)
-        .layer(security_layer)
+        .layer(Extension(state));
+
+    // The data-watch hub is optional: only layer it when serving a watched data
+    // dir. The handler reads `Option<Extension<WatchHub>>`, so an absent layer
+    // degrades to an empty (but open) SSE stream.
+    let router = match hub {
+        Some(hub) => router.layer(Extension(hub)),
+        None => router,
+    };
+
+    // Security middleware (runs first — outermost layer)
+    router.layer(security_layer)
 }
 
 /// Security middleware:
@@ -272,6 +286,17 @@ pub async fn serve_with_schema_dir(
             })
     });
 
+    // Start the data-watch hub: it watches `{data_dir}/**/*.json`, debounces,
+    // validates, and broadcasts to SSE clients of `/api/data-events`. A watcher
+    // start failure is non-fatal — serve still runs, live-reload is just off.
+    let hub = match watch_hub::start_watch_hub(data_dir.clone(), resolved_schema_dir.clone()) {
+        Ok(hub) => Some(hub),
+        Err(e) => {
+            tracing::warn!("data-watch hub disabled (live-reload off): {e}");
+            None
+        }
+    };
+
     let state = AppState {
         data_dir,
         dist_dir,
@@ -282,7 +307,7 @@ pub async fn serve_with_schema_dir(
         write_lock: write_txn::new_write_lock(),
     };
 
-    let router = build_router(state, farm);
+    let router = build_router(state, farm, hub);
 
     tracing::info!("Architext serve listening on http://{host}:{bound_port}");
 

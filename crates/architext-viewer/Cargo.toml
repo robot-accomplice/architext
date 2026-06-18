@@ -25,7 +25,14 @@ wasm-bindgen = "0.2"
 # element). The wheel/mouse event TYPES come from Leptos's typed event handlers;
 # we only need web-sys for the element measurement, declared explicitly rather
 # than relying on transitive feature enablement.
-web-sys = { version = "0.3", features = ["DomRect", "Element"] }
+web-sys = { version = "0.3", features = [
+    "DomRect",
+    "Element",
+    # Live-reload: SSE consumer over the serve `/api/data-events` stream.
+    "EventSource",
+    "MessageEvent",
+    "Event",
+] }
 
 # Same-origin async fetch of the Architext data docs (/data/**, /api/config)
 # and the serve plan farm (/api/plan/{hash}).

@@ -307,6 +307,8 @@ fn serve_foreground(target: &Path, opts: &ParsedArgs) {
         .map(|root| root.join("viewer").join("schema"))
         .unwrap_or_else(|| PathBuf::from("viewer/schema"));
 
+    let hub_data_dir = data_dir.clone();
+    let hub_schema_dir = schema_dir.clone();
     let app_state = AppState {
         data_dir,
         dist_dir,
@@ -316,7 +318,6 @@ fn serve_foreground(target: &Path, opts: &ParsedArgs) {
         schema_dir,
         write_lock: write_txn::new_write_lock(),
     };
-    let router = build_router(app_state, farm);
 
     println!("Serving Architext for {}", target.display());
     println!("Open {url}");
@@ -327,6 +328,17 @@ fn serve_foreground(target: &Path, opts: &ParsedArgs) {
     let target_owned = target.to_path_buf();
     let pid = std::process::id() as i64;
     runtime.block_on(async move {
+        // The data-watch hub spawns a tokio task, so it must start inside the
+        // runtime. A start failure is non-fatal — live-reload is simply off.
+        let hub = match architext_serve::watch_hub::start_watch_hub(hub_data_dir, hub_schema_dir) {
+            Ok(hub) => Some(hub),
+            Err(e) => {
+                eprintln!("data-watch hub disabled (live-reload off): {e}");
+                None
+            }
+        };
+        let router = build_router(app_state, farm, hub);
+
         // tokio requires the std listener to be non-blocking before from_std.
         listener.set_nonblocking(true).expect("set_nonblocking");
         let listener = tokio::net::TcpListener::from_std(listener).expect("from_std");

@@ -275,6 +275,7 @@ button:focus-visible {
   border-bottom: var(--hairline) solid var(--line);
   padding: var(--pad-tight) var(--pad);
   min-width: 0;
+  position: relative;        /* anchor for the data-invalid notice strip */
 }
 .topbar__identity {
   display: flex;
@@ -307,7 +308,68 @@ button:focus-visible {
   text-overflow: ellipsis;
   min-width: 0;
 }
-.topbar__actions { flex: none; }
+.topbar__actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+}
+/* Live-reload indicator: hairline mono pill with a status dot. Muted when the
+   SSE stream is offline; --accent (STATE signal, rule 1) when connected. */
+.topbar__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: var(--overline-tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.topbar__live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.topbar__live--on { color: var(--accent); }
+.topbar__live--on .topbar__live-dot {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+/* Data-invalid notice: a hairline strip pinned just under the topbar. A warning
+   (the last-good diagram still renders), so --sev-high, not a hard error hue. */
+.topbar__notice {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 5;
+  display: flex;
+  align-items: baseline;
+  gap: var(--pad-tight);
+  padding: var(--pad-tight) var(--pad);
+  background: var(--surface);
+  border-bottom: var(--hairline) solid var(--sev-high);
+  box-shadow: inset var(--accent-rail) 0 0 0 var(--sev-high);
+  min-width: 0;
+}
+.topbar__notice-tag {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: var(--overline-tracking);
+  text-transform: uppercase;
+  color: var(--sev-high);
+}
+.topbar__notice-msg {
+  color: var(--ink);
+  font-size: var(--body-size);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
 /* Config button: on-language hairline + mono, --accent only as a STATE signal
    (hover/active) — never a role hue (rule 1). */
 .topbar__config-btn {
