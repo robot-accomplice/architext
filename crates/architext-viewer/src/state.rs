@@ -39,6 +39,11 @@ pub struct AppState {
     /// Running CLI version (from `/api/status`), for the header eyebrow.
     /// Display-only; `None` until fetched (or if the server omits it).
     pub cli_version: RwSignal<Option<String>>,
+    /// Per-process mutation token (from `GET /api/session`) authorizing writes
+    /// via the `x-architext-mutation-token` header. `None` until fetched (or if
+    /// the server omits it), in which case editing affordances stay disabled —
+    /// the single source of write authorization for every editing surface.
+    pub mutation_token: RwSignal<Option<String>>,
     /// Whether the left nav is collapsed to its thin rail (DESIGN.md: auxiliary
     /// panels collapse to icons/drawers). Drives the shell grid + the canvas
     /// re-fit when the center track resizes.
@@ -77,6 +82,7 @@ impl AppState {
             selected_step: create_rw_signal(None),
             steps_collapsed: create_rw_signal(false),
             cli_version: create_rw_signal(None),
+            mutation_token: create_rw_signal(None),
             nav_collapsed: create_rw_signal(false),
             inspector_collapsed: create_rw_signal(false),
             live_connected: create_rw_signal(false),

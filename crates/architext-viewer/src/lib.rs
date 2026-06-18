@@ -30,7 +30,7 @@ use leptos::*;
 use crate::components::shell::Shell;
 use crate::components::spinner::Spinner;
 use crate::data::live::start_live_reload;
-use crate::data::{fetch_cli_version, load_architecture_data, FetchError};
+use crate::data::{fetch_cli_version, fetch_mutation_token, load_architecture_data, FetchError};
 use crate::state::AppState;
 
 /// Root view — loads the dataset, then mounts the data-bound shell.
@@ -57,6 +57,15 @@ pub fn App() -> impl IntoView {
                     spawn_local(async move {
                         if let Some(v) = fetch_cli_version().await {
                             cli_version.set(Some(v));
+                        }
+                    });
+                    // Fetch the mutation token once (GET /api/session); editing
+                    // surfaces stay disabled until it lands. A failed/absent
+                    // session leaves it None (viewer stays read-only).
+                    let mutation_token = state.mutation_token;
+                    spawn_local(async move {
+                        if let Some(t) = fetch_mutation_token().await {
+                            mutation_token.set(Some(t));
                         }
                     });
                     // Open the live-reload SSE stream: on a validated on-disk data

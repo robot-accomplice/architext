@@ -1432,6 +1432,102 @@ button:focus-visible {
 .rules-panel__hint { color: var(--dim); }
 .mono { font-family: var(--font-mono); }
 
+/* ── Rules editor: on-language hairline form controls ────────────────────────
+   Inputs are hairline-bordered fields on the panel surface; --accent is a STATE
+   signal only (focus ring + primary Save), never a role hue. The pane rail
+   tracks the chosen criticality (--sev-*), set inline on .rule-editor. */
+.rules-panel__section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad-tight);
+  margin-bottom: var(--pad-tight);
+}
+.rules-panel__add {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 2px var(--pad-tight);
+}
+.rule-editor { display: flex; flex-direction: column; gap: var(--pad-tight); }
+.rule-editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+  flex: 1 1 0;
+  min-width: 0;
+}
+.rule-editor__field--narrow { flex: 0 0 96px; }
+.rule-editor__row { display: flex; gap: var(--pad-tight); }
+.rule-editor__label {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--dim);
+}
+.rule-editor__input {
+  font: inherit;
+  width: 100%;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  padding: 4px var(--pad-tight);
+}
+.rule-editor__input:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.rule-editor__input:disabled {
+  color: var(--dim);
+  background: var(--panel);
+  cursor: not-allowed;
+}
+.rule-editor__textarea { min-height: 64px; resize: vertical; }
+.rule-editor__protection {
+  display: flex;
+  align-items: center;
+  gap: var(--pad);
+}
+.rule-editor__check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--grid);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--muted);
+  cursor: pointer;
+}
+.rule-editor__error {
+  margin: 0;
+  font-size: var(--body-size);
+  color: var(--sev-critical);
+}
+.rule-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pad-tight);
+  margin-top: var(--grid);
+}
+.rule-editor__btn {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 4px var(--pad);
+}
+/* Primary Save: --accent STATE treatment (border + ring), not a fill hue. */
+.rule-editor__btn--primary {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+  color: var(--ink);
+}
+.rule-editor__btn:disabled {
+  color: var(--dim);
+  border-color: var(--line);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 /* ── Data / Risks side panel (in the inspector) ─────────────────────────────
    Cards on their OWN ordinal scales: data class rail = sensitivity, risk rail =
    severity (never a --c4-* role hue). */
