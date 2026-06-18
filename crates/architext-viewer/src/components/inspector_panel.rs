@@ -51,8 +51,10 @@ pub fn InspectorPanel() -> impl IntoView {
                     }
                 }
 
-                // Diagram-less modes summarize their data set.
-                if !mode.is_flows() {
+                // Diagram-less / structural modes summarize their data set.
+                // Flow-projecting modes (Flows, Sequence) fall through to the
+                // view + flow metadata card below.
+                if !mode.projects_flows() {
                     let (label, count, sample) = match mode {
                         Mode::Rules => ("Rules", data.rules.len(),
                             data.rules.first().map(|r| r.title.clone())),

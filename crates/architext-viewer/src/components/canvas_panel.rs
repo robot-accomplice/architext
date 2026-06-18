@@ -21,7 +21,8 @@ use architext_routing::model::Plan;
 
 use crate::data::models::{Flow, Node, View};
 use crate::diagram::plan::{compute_plan, compute_structural_plan, layout_config_from_diagram};
-use crate::diagram::DiagramSvg;
+use crate::diagram::sequence::{build_sequence_layout, SequenceConfig, SequenceLayout};
+use crate::diagram::{DiagramSvg, SequenceSvg};
 use crate::selection::child_c4_view_for_node;
 use crate::state::use_app_state;
 use crate::theme::Mode;
@@ -31,6 +32,11 @@ use crate::theme::Mode;
 /// deployment) mode (the relationship labels). Exactly one of the two carries
 /// the edge labels.
 type DiagramInputs = (Plan, Option<Flow>, HashMap<String, String>, View, Vec<Node>);
+
+/// The bundle the sequence SVG needs: the computed layout + the selected view
+/// (kept for the placard). Sequence mode is NOT a `plan()` diagram, so it has
+/// its own input signal parallel to `DiagramInputs`.
+type SequenceInputs = (SequenceLayout, View);
 
 // Zoom bounds + step (centralized, not magic literals at call sites).
 const ZOOM_MIN: f64 = 0.1;
@@ -103,6 +109,18 @@ pub fn CanvasPanel() -> impl IntoView {
             .unwrap_or_else(|| layout_config_from_diagram(&serde_json::Value::Null))
     };
 
+    // The resolved sequence dims from `/api/config`'s `diagram.sequence`
+    // (defaults if absent) — the SEQUENCE analogue of `layout_config`.
+    let sequence_config = move || {
+        state
+            .data
+            .get_untracked()
+            .config
+            .as_ref()
+            .map(|c| SequenceConfig::from_diagram(&c.diagram))
+            .unwrap_or_default()
+    };
+
     // Reactive plan compute. The compute output (`Plan` + cloned data) is not a
     // cheap `PartialEq` type, so we don't memo over it directly. Instead a cheap
     // selector memo over the *identity* (is-flows, view idx, flow idx) gates an
@@ -113,9 +131,27 @@ pub fn CanvasPanel() -> impl IntoView {
         (state.mode.get(), state.view_idx.get(), state.flow_idx.get())
     });
     let diagram_inputs = create_rw_signal::<Option<DiagramInputs>>(None);
+    let sequence_inputs = create_rw_signal::<Option<SequenceInputs>>(None);
     create_effect(move |_| {
         let (mode, view_idx, flow_idx) = selection_key.get();
         let data = state.data.get_untracked();
+
+        // SEQUENCE is a custom (non-plan) layout; compute it on its own signal.
+        if mode == Mode::Sequence {
+            let seq = (|| {
+                let view = view_idx.and_then(|i| data.views.get(i).cloned())?;
+                let flow = flow_idx.and_then(|i| data.flows.get(i).cloned())?;
+                let nodes_by_id: HashMap<&str, &Node> =
+                    data.nodes.iter().map(|n| (n.id.as_str(), n)).collect();
+                let layout = build_sequence_layout(&flow, &nodes_by_id, &sequence_config());
+                Some((layout, view))
+            })();
+            sequence_inputs.set(seq);
+            diagram_inputs.set(None);
+            return;
+        }
+
+        sequence_inputs.set(None);
         let bundle = (|| {
             let view = view_idx.and_then(|i| data.views.get(i).cloned())?;
             match mode {
@@ -138,12 +174,11 @@ pub fn CanvasPanel() -> impl IntoView {
         diagram_inputs.set(bundle);
     });
 
-    // Fit-to-viewport: scale so the whole canvas fits, then center it. This is
-    // an imperative action (rAF / button click), so it reads untracked.
-    let fit = move || {
-        let Some((plan, _, _, _, _)) = diagram_inputs.get_untracked() else { return };
+    // Fit a content box (min/max corners) into the measured viewport: as
+    // zoomed-in as possible while the whole box stays in view, then centered.
+    // Shared by the plan-diagram and sequence paths so framing is identical.
+    let fit_bounds = move |bounds: ContentBounds| {
         let Some(el) = viewport_ref.get_untracked() else { return };
-        let Some(bounds) = content_bounds(&plan) else { return };
         let rect = el.get_bounding_client_rect();
         let (vw, vh) = (rect.width(), rect.height());
         let content_w = bounds.max_x - bounds.min_x;
@@ -151,7 +186,6 @@ pub fn CanvasPanel() -> impl IntoView {
         if content_w <= 0.0 || content_h <= 0.0 || vw <= 0.0 || vh <= 0.0 {
             return;
         }
-        // As zoomed-in as possible while the whole content box stays in view.
         let scale_x = (vw - FIT_PADDING * 2.0) / content_w;
         let scale_y = (vh - FIT_PADDING * 2.0) / content_h;
         let scale = scale_x.min(scale_y).clamp(ZOOM_MIN, ZOOM_MAX);
@@ -161,12 +195,31 @@ pub fn CanvasPanel() -> impl IntoView {
         pan_y.set((vh - content_h * scale) / 2.0 - bounds.min_y * scale);
     };
 
+    // Fit-to-viewport: imperative (rAF / button), reads untracked. Sequence
+    // fits its full content box `0,0 → width,height`; plan diagrams fit the
+    // tighter rendered-geometry bounds.
+    let fit = move || {
+        if let Some((layout, _)) = sequence_inputs.get_untracked() {
+            fit_bounds(ContentBounds {
+                min_x: 0.0,
+                min_y: 0.0,
+                max_x: layout.content_width,
+                max_y: layout.content_height,
+            });
+            return;
+        }
+        let Some((plan, _, _, _, _)) = diagram_inputs.get_untracked() else { return };
+        let Some(bounds) = content_bounds(&plan) else { return };
+        fit_bounds(bounds);
+    };
+
     // Re-fit whenever the diagram changes (new view/flow → fresh framing) OR a
     // sidebar collapses/expands (the center track resized → re-frame for the new
     // viewport width).
     create_effect(move |_| {
         // Track the inputs so a selection change re-runs the fit.
         let _ = diagram_inputs.get();
+        let _ = sequence_inputs.get();
         let _ = state.nav_collapsed.get();
         let _ = state.inspector_collapsed.get();
         // Defer to the next tick so the SVG (and its viewport) is laid out.
@@ -241,29 +294,45 @@ pub fn CanvasPanel() -> impl IntoView {
                 on:mouseup=end_drag
                 on:mouseleave=end_drag
             >
-                {move || match diagram_inputs.get() {
-                    Some((plan, flow, edge_labels, view, nodes)) => view! {
-                        <DiagramSvg
-                            plan=plan
-                            flow=flow
-                            edge_labels=edge_labels
-                            view=view
-                            nodes=nodes
-                            pan_x=pan_x
-                            pan_y=pan_y
-                            zoom=zoom
-                            selected_node=state.selected_node
-                            on_select=on_select
-                        />
-                    }.into_view(),
-                    None => view! {
-                        <p class="canvas-panel__hint">
-                            {move || format!(
-                                "{} has no diagram projection — see the inspector for its data.",
-                                state.mode.get().label(),
-                            )}
-                        </p>
-                    }.into_view(),
+                {move || {
+                    // SEQUENCE renders its custom layout; all other diagram
+                    // modes render the shared plan-based DiagramSvg.
+                    if let Some((layout, _)) = sequence_inputs.get() {
+                        return view! {
+                            <SequenceSvg
+                                layout=layout
+                                pan_x=pan_x
+                                pan_y=pan_y
+                                zoom=zoom
+                                selected_node=state.selected_node
+                                on_select=on_select
+                            />
+                        }.into_view();
+                    }
+                    match diagram_inputs.get() {
+                        Some((plan, flow, edge_labels, view, nodes)) => view! {
+                            <DiagramSvg
+                                plan=plan
+                                flow=flow
+                                edge_labels=edge_labels
+                                view=view
+                                nodes=nodes
+                                pan_x=pan_x
+                                pan_y=pan_y
+                                zoom=zoom
+                                selected_node=state.selected_node
+                                on_select=on_select
+                            />
+                        }.into_view(),
+                        None => view! {
+                            <p class="canvas-panel__hint">
+                                {move || format!(
+                                    "{} has no diagram projection — see the inspector for its data.",
+                                    state.mode.get().label(),
+                                )}
+                            </p>
+                        }.into_view(),
+                    }
                 }}
             </div>
             // Identity placard (bottom-left), bound to the selection.
