@@ -45,7 +45,14 @@ pub fn SequenceSvg(
     #[prop(into)] pan_y: Signal<f64>,
     #[prop(into)] zoom: Signal<f64>,
     #[prop(into)] selected_node: Signal<Option<String>>,
+    /// The steps-panel selection (step id). The matching message row gets the
+    /// `sequence-message--active` STATE class — the sequence analogue of the
+    /// flows `flow-edge--active` (rule 1: `--accent`, never a role hue).
+    #[prop(into)] selected_step: Signal<Option<String>>,
     #[prop(into)] on_select: Callback<String>,
+    /// Click a message → select its step (diagram → panel highlight), mirroring
+    /// the steps-panel's click → highlight (panel → diagram).
+    #[prop(into)] on_select_step: Callback<String>,
 ) -> impl IntoView {
     let view_box = format!("0 0 {} {}", layout.content_width, layout.content_height);
     let transform =
@@ -84,7 +91,15 @@ pub fn SequenceSvg(
                     {bars.into_iter().map(|b| view! { <SeqActivationBar bar=b/> }).collect_view()}
                 </g>
                 <g class="sequence-messages">
-                    {messages.into_iter().map(|m| view! { <SeqMessage message=m/> }).collect_view()}
+                    {messages.into_iter().map(|m| {
+                        let step_id = m.step_id.clone();
+                        let is_selected = Signal::derive(move || {
+                            selected_step.get().as_deref() == Some(step_id.as_str())
+                        });
+                        view! {
+                            <SeqMessage message=m selected=is_selected on_select_step=on_select_step/>
+                        }
+                    }).collect_view()}
                 </g>
                 <g class="sequence-participants">
                     {participants.into_iter().map(|p| {
@@ -136,11 +151,26 @@ fn SeqActivationBar(bar: ActivationBar) -> impl IntoView {
 }
 
 #[component]
-fn SeqMessage(message: MessageRow) -> impl IntoView {
-    let MessageRow { from_x, to_x, y, mid_x, number, action, kind, .. } = message;
-    let kind_class = format!("sequence-message sequence-message--{}", kind.css_suffix());
+fn SeqMessage(
+    message: MessageRow,
+    /// Whether this message's step is the steps-panel selection. Drives the
+    /// `sequence-message--active` STATE class (mirrors flows `flow-edge--active`).
+    #[prop(into)] selected: Signal<bool>,
+    /// Click → select this step (diagram → panel highlight).
+    #[prop(into)] on_select_step: Callback<String>,
+) -> impl IntoView {
+    let MessageRow { step_id, from_x, to_x, y, mid_x, number, action, kind, .. } = message;
+    let base_class = format!("sequence-message sequence-message--{}", kind.css_suffix());
+    let group_class = move || {
+        if selected.get() {
+            format!("{base_class} sequence-message--active")
+        } else {
+            base_class.clone()
+        }
+    };
     let line_class = format!("sequence-line sequence-line--{}", kind.css_suffix());
     let action_text = truncate_action(&action);
+    let step_id_for_click = step_id.clone();
 
     // Self-loop: a small rectangular loopback on the participant's own lifeline.
     // Otherwise a straight horizontal arrow at the row y.
@@ -170,7 +200,7 @@ fn SeqMessage(message: MessageRow) -> impl IntoView {
     };
 
     view! {
-        <g class=kind_class>
+        <g class=group_class on:click=move |_| on_select_step.call(step_id_for_click.clone())>
             {line_view}
             // Action label above the line.
             <text class="sequence-action" x=mid_x y=y - 17.0>{action_text}</text>

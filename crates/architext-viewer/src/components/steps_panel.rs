@@ -14,10 +14,9 @@
 
 use leptos::*;
 
-use crate::flow_step_display::{
-    flow_step_display_indexes, glyph_for_step, is_decision_branch_support_step,
-};
+use crate::flow_step_display::{glyph_for_step, step_card_rows};
 use crate::state::use_app_state;
+use crate::theme::Mode;
 
 #[component]
 pub fn StepsPanel() -> impl IntoView {
@@ -56,18 +55,19 @@ pub fn StepsPanel() -> impl IntoView {
                     "steps-panel"
                 };
 
-                // Build the visible step cards (support steps filtered out, JS-parity).
-                let display_indexes = flow_step_display_indexes(&flow.steps);
+                // Build the visible step cards. In Sequence mode the list mirrors
+                // the sequence diagram's message rows (every step, 1-based, no
+                // decision-branch folding); in Flows/Data-Risks it mirrors the
+                // routed plan (support steps hidden, folded display numbers).
+                let is_sequence = state.mode.get() == Mode::Sequence;
                 let total = flow.steps.len();
-                let cards = flow
-                    .steps
-                    .iter()
-                    .enumerate()
-                    .filter(|(i, s)| !is_decision_branch_support_step(&flow.steps, s, *i))
-                    .map(|(i, step)| {
+                let cards = step_card_rows(&flow.steps, is_sequence)
+                    .into_iter()
+                    .map(|row| {
+                        let step = &flow.steps[row.index];
                         let id = step.id.clone();
-                        let display = display_indexes.get(&step.id).copied().unwrap_or(i + 1);
-                        let glyph = glyph_for_step(step, i, total);
+                        let display = row.display_number;
+                        let glyph = glyph_for_step(step, row.index, total);
                         let from = node_name(&step.from);
                         let to = node_name(&step.to);
                         let action = step.action.clone();
