@@ -70,6 +70,13 @@ async fn get_value(url: &str) -> Result<serde_json::Value, FetchError> {
     get_json::<serde_json::Value>(url).await
 }
 
+/// Fetch the live repo file list from `/api/repo-tree`. Fetched on demand by the
+/// Repo Tree surface (the file list is volatile, served `no-store`, and not part
+/// of the once-loaded manifest dataset).
+pub async fn fetch_repo_tree() -> Result<RepoTreePayload, FetchError> {
+    get_json::<RepoTreePayload>("/api/repo-tree").await
+}
+
 /// Resolve a manifest logical name to its `/data/<path>` URL, if present.
 fn data_url(manifest: &Manifest, logical: &str) -> Option<String> {
     manifest.files.get(logical).map(|p| format!("/data/{p}"))

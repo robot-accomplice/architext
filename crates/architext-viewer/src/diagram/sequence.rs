@@ -498,6 +498,7 @@ mod tests {
             summary: None,
             owner: None,
             dependencies: vec![],
+            source_paths: vec![],
         }
     }
 

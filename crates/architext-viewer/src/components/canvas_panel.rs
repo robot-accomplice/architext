@@ -19,6 +19,8 @@ use leptos::ev::{MouseEvent, WheelEvent};
 
 use architext_routing::model::Plan;
 
+use crate::components::repo_tree::RepoTree;
+use crate::components::rules_panel::RulesPanel;
 use crate::data::models::{Flow, Node, View};
 use crate::diagram::plan::{compute_plan, compute_structural_plan, layout_config_from_diagram};
 use crate::diagram::sequence::{build_sequence_layout, SequenceConfig, SequenceLayout};
@@ -155,7 +157,10 @@ pub fn CanvasPanel() -> impl IntoView {
         let bundle = (|| {
             let view = view_idx.and_then(|i| data.views.get(i).cloned())?;
             match mode {
-                Mode::Flows => {
+                // Flows and Data/Risks both render the selected flow as a routed
+                // plan through the SAME path; Data/Risks layers its side panel
+                // over the diagram (in the inspector), it does not fork rendering.
+                Mode::Flows | Mode::DataRisks => {
                     let flow = flow_idx.and_then(|i| data.flows.get(i).cloned())?;
                     let plan = compute_plan(&view, &flow, &layout_config());
                     Some((plan, Some(flow), HashMap::new(), view, data.nodes.clone()))
@@ -324,14 +329,20 @@ pub fn CanvasPanel() -> impl IntoView {
                                 on_select=on_select
                             />
                         }.into_view(),
-                        None => view! {
-                            <p class="canvas-panel__hint">
-                                {move || format!(
-                                    "{} has no diagram projection — see the inspector for its data.",
-                                    state.mode.get().label(),
-                                )}
-                            </p>
-                        }.into_view(),
+                        // Non-diagram surfaces render their own component in the
+                        // center region; the rest keep the explanatory placard.
+                        None => match state.mode.get() {
+                            Mode::RepoTree => view! { <RepoTree/> }.into_view(),
+                            Mode::Rules => view! { <RulesPanel/> }.into_view(),
+                            _ => view! {
+                                <p class="canvas-panel__hint">
+                                    {move || format!(
+                                        "{} has no diagram projection — see the inspector for its data.",
+                                        state.mode.get().label(),
+                                    )}
+                                </p>
+                            }.into_view(),
+                        },
                     }
                 }}
             </div>
@@ -351,11 +362,17 @@ pub fn CanvasPanel() -> impl IntoView {
                     </div>
                 })
             }}
-            <div class="canvas-panel__controls">
-                <button title="Zoom out" on:click=move |_| zoom_by(1.0 / ZOOM_STEP)>"−"</button>
-                <button title="Fit to view" on:click=move |_| fit()>"⤢"</button>
-                <button title="Zoom in" on:click=move |_| zoom_by(ZOOM_STEP)>"+"</button>
-            </div>
+            // Zoom/fit controls belong only to the pan/zoom diagram surfaces;
+            // the scrollable list surfaces (Repo Tree, Rules) have no transform.
+            <Show when=move || {
+                diagram_inputs.with(Option::is_some) || sequence_inputs.with(Option::is_some)
+            }>
+                <div class="canvas-panel__controls">
+                    <button title="Zoom out" on:click=move |_| zoom_by(1.0 / ZOOM_STEP)>"−"</button>
+                    <button title="Fit to view" on:click=move |_| fit()>"⤢"</button>
+                    <button title="Zoom in" on:click=move |_| zoom_by(ZOOM_STEP)>"+"</button>
+                </div>
+            </Show>
         </main>
     }
 }

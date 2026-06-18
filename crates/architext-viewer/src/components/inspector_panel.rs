@@ -6,6 +6,7 @@
 //! is never empty. Node-level inspection on diagram click is a V3 concern.
 use leptos::*;
 
+use crate::components::data_risks_panel::DataRisksPanel;
 use crate::diagram::role_color_var;
 use crate::state::use_app_state;
 use crate::theme::Mode;
@@ -51,6 +52,12 @@ pub fn InspectorPanel() -> impl IntoView {
                     }
                 }
 
+                // Data/Risks: the diagram renders in the center; the inspector
+                // hosts the data-class + risk side panel (its own scales).
+                if mode == Mode::DataRisks {
+                    return view! { <DataRisksPanel/> }.into_view();
+                }
+
                 // Diagram-less / structural modes summarize their data set.
                 // Flow-projecting modes (Flows, Sequence) fall through to the
                 // view + flow metadata card below.
@@ -62,8 +69,6 @@ pub fn InspectorPanel() -> impl IntoView {
                             .map(|r| r.releases.len()).unwrap_or(0),
                             data.release_index.as_ref()
                                 .and_then(|r| r.current_release_id.clone())),
-                        Mode::DataRisks => ("Risks", data.risks.len(),
-                            data.risks.first().map(|r| r.title.clone())),
                         _ => ("Nodes", data.nodes.len(),
                             data.nodes.first().map(|n| n.name.clone())),
                     };

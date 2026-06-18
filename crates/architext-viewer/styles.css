@@ -99,6 +99,23 @@
   --c4-external: #b9cacb;
   --c4-deployment: #ff9f1a;
   --c4-module: #35ff96;
+  --c4-system: #00e5ff;
+  --c4-queue: #ff9f1a;
+
+  /* ── Severity / criticality scale — a STATE/SEVERITY ramp, NOT role hues ───
+     DESIGN.md: criticality (rules) and severity (risks) read on their OWN
+     ordinal scale, distinct from the --c4-* component-type palette. One scale,
+     reused by rule criticality badges and risk severity rails so "critical"
+     looks the same everywhere. */
+  --sev-critical: #ff5c7a;   /* highest urgency */
+  --sev-high:     #ff9f1a;
+  --sev-medium:   #ffd21f;
+  --sev-low:      #849495;   /* lowest — fades to dim */
+
+  /* ── Sensitivity scale (data classification) — its own ordinal ramp ──────── */
+  --sens-high:   #ff5c7a;
+  --sens-medium: #ffd21f;
+  --sens-low:    #849495;
 
   /* ── State / accent treatment (DESIGN.md rule 1) ──────────────────────────
      STATE (active / selected / primary action) is a dedicated signal — a
@@ -709,4 +726,155 @@ button:focus-visible {
 }
 .boot-screen--error .accent-surface {
   --accent: var(--c4-actor);
+}
+
+/* ── Non-diagram center surfaces (Repo Tree, Rules) ──────────────────────────
+   These render inside the canvas viewport but are scrollable lists, not pan/zoom
+   diagrams — so they fill the region, scroll their own overflow, and drop the
+   grab cursor. */
+.repo-tree,
+.rules-panel {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  cursor: default;
+  padding: var(--pad);
+}
+
+/* ── Repo Tree ──────────────────────────────────────────────────────────── */
+.repo-tree__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad-tight);
+  margin-bottom: var(--pad);
+}
+.repo-tree__hint {
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+}
+.repo-tree__hint--error { color: var(--c4-actor); }
+.repo-dir-children--hidden { display: none; }
+
+/* A tree row: a 3px left rail (owner color on files), mono path text. */
+.repo-row {
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+  height: 24px;
+  font-family: var(--font-mono);
+  font-size: var(--body-size);
+  border-left: var(--accent-rail) solid transparent;
+  color: var(--muted);
+  user-select: none;
+}
+.repo-row--dir { cursor: pointer; }
+.repo-row--owned { cursor: pointer; }
+.repo-row:hover { background: var(--panel-2); }
+.repo-row__caret {
+  width: 12px;
+  color: var(--dim);
+  flex: none;
+}
+.repo-row__name { color: var(--ink); }
+.repo-row__name--dir { color: var(--muted); font-weight: 600; }
+.repo-row__owner {
+  margin-left: auto;
+  font-size: var(--overline-size);
+  opacity: 0.9;
+  white-space: nowrap;
+}
+
+/* ── Rules ──────────────────────────────────────────────────────────────────
+   Two panes: an ordered list (with category filter) + a read-only detail. */
+.rules-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--pad);
+  align-items: start;
+}
+.rules-panel__section { margin-bottom: var(--pad-tight); }
+.rules-panel__filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--grid);
+  margin-bottom: var(--pad);
+}
+.rules-chip { cursor: pointer; }
+.rules-panel__cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+}
+.rule-card { cursor: pointer; }
+.rule-card__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pad-tight);
+}
+.rule-card__order {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+  flex: none;
+}
+.rule-card__title {
+  font-size: var(--body-size);
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink);
+}
+.rule-card__badges { margin-top: var(--grid); }
+.rule-card__summary {
+  margin: var(--pad-tight) 0 0;
+  color: var(--muted);
+  font-size: var(--body-size);
+}
+.rule-detail__title {
+  font-size: var(--headline-size);
+  margin: var(--grid) 0 var(--pad-tight);
+}
+.rule-detail__meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--grid) var(--pad);
+  margin: 0 0 var(--pad);
+}
+.rule-detail__meta dt {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--dim);
+}
+.rule-detail__meta dd { margin: 0; color: var(--ink); }
+.rule-detail__summary { color: var(--muted); margin: 0; }
+.rules-panel__hint { color: var(--dim); }
+.mono { font-family: var(--font-mono); }
+
+/* ── Data / Risks side panel (in the inspector) ─────────────────────────────
+   Cards on their OWN ordinal scales: data class rail = sensitivity, risk rail =
+   severity (never a --c4-* role hue). */
+.data-risks-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+}
+.data-risks-panel__section { margin-top: var(--pad-tight); }
+.data-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.data-card__title {
+  font-size: var(--body-size);
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink);
+}
+.data-card__summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--overline-size);
 }
