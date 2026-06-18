@@ -59,9 +59,6 @@ const ZOOM_STEP: f64 = 1.2;
 // content never crowds the stage edges. Manual zoom is unaffected.
 const FIT_PADDING_MIN: f64 = 48.0; // px of breathing room around fitted content
 const FIT_PADDING_FACTOR: f64 = 0.06; // fraction of the smaller viewport dimension
-// Auto-fit never zooms a small diagram past natural size — it sits centered, not
-// blown up to fill the viewport. Manual `+`/`−`/wheel can still reach ZOOM_MAX.
-const FIT_ZOOM_MAX: f64 = 1.0;
 
 /// Axis-aligned content bounds (min/max corners). `None` if the plan has no
 /// renderable geometry.
@@ -140,11 +137,12 @@ fn compute_fit(bounds: &ContentBounds, vb_w: f64, vb_h: f64, vw: f64, vh: f64) -
     let padding = FIT_PADDING_MIN.max(FIT_PADDING_FACTOR * vw.min(vh)) / meet;
     let scale_x = (view_w - padding * 2.0) / content_w;
     let scale_y = (view_h - padding * 2.0) / content_h;
-    // Cap at natural ON-SCREEN size (effective screen scale 1.0 → `FIT_ZOOM_MAX
-    // / meet` in viewBox units): small diagrams stay centered at natural size,
-    // never blown up; manual zoom can still reach ZOOM_MAX.
-    let zoom_cap = FIT_ZOOM_MAX / meet;
-    let scale = scale_x.min(scale_y).min(zoom_cap).clamp(ZOOM_MIN, ZOOM_MAX);
+    // FIT scales to EACH diagram: take the tighter axis so the whole content
+    // fits with padding, scaling small diagrams UP to fill (and large ones
+    // down) — bounded only by the manual zoom range. (Earlier this capped at
+    // natural size, leaving small diagrams marooned in a big viewport; the
+    // maintainer's call: "fit by definition scales to each diagram.")
+    let scale = scale_x.min(scale_y).clamp(ZOOM_MIN, ZOOM_MAX);
     Some(FitTransform {
         scale,
         pan_x: (vb_w - content_w * scale) / 2.0 - bounds.min_x * scale,
@@ -624,18 +622,27 @@ mod tests {
     }
 
     #[test]
-    fn auto_fit_never_exceeds_natural_on_screen_size() {
-        // A small diagram in a large viewport: effective on-screen scale
-        // (scale * meet) is capped at FIT_ZOOM_MAX (1.0), never blown up.
+    fn fit_scales_small_diagram_up_to_fill_the_viewport() {
+        // FIT scales to EACH diagram: a small diagram in a large viewport is
+        // scaled UP so its limiting axis fills the viewport (minus padding) —
+        // NOT capped at natural size. Neither axis overflows.
         let b = bounds(0.0, 0.0, 80.0, 60.0);
-        let vb_w = 200.0;
-        let vb_h = 150.0;
+        let (vb_w, vb_h) = (200.0, 150.0);
         let (vw, vh) = (1000.0, 800.0);
         let t = compute_fit(&b, vb_w, vb_h, vw, vh).expect("fit");
         let meet = (vw / vb_w).min(vh / vb_h);
-        let effective = t.scale * meet;
-        assert!(effective <= FIT_ZOOM_MAX + 1e-9, "effective={effective}");
-        assert!(effective > 0.0);
+        let pad = FIT_PADDING_MIN.max(FIT_PADDING_FACTOR * vw.min(vh));
+        // On-screen content size: viewBox units → px (scale, then the meet pre-scale).
+        let on_w = 80.0 * t.scale * meet;
+        let on_h = 60.0 * t.scale * meet;
+        assert!(t.scale > 1.0, "should scale UP, scale={}", t.scale);
+        let fills_w = (on_w - (vw - 2.0 * pad)).abs() < 1.0;
+        let fills_h = (on_h - (vh - 2.0 * pad)).abs() < 1.0;
+        assert!(fills_w || fills_h, "limiting axis must fill: on_w={on_w} on_h={on_h}");
+        assert!(
+            on_w <= vw - 2.0 * pad + 1.0 && on_h <= vh - 2.0 * pad + 1.0,
+            "must not overflow: on_w={on_w} on_h={on_h}"
+        );
     }
 
     #[test]
