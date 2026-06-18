@@ -114,8 +114,8 @@ pub fn CanvasPanel() -> impl IntoView {
     let zoom = create_rw_signal(1.0_f64);
     // Container ref — measured for fit-to-viewport.
     let viewport_ref = create_node_ref::<html::Div>();
-    // Legend overlay open/closed state (default visible; dismissible).
-    let legend_collapsed = create_rw_signal(false);
+    // Legend overlay open/closed state (default minimized; expandable).
+    let legend_collapsed = create_rw_signal(true);
 
     // The resolved layout config from /api/config (defaults if absent). The
     // dataset is loaded once and never mutated, so this reads untracked — it is
