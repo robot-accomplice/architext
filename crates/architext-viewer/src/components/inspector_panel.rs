@@ -119,19 +119,23 @@ pub fn InspectorPanel() -> impl IntoView {
             <Show
                 when=move || collapsed.get()
                 fallback=move || view! {
+                    // Inspector mirrors the nav: its collapse toggle hugs the
+                    // central canvas — here the inspector's LEFT edge (the
+                    // canvas↔inspector boundary). The header reverses order so the
+                    // chevron is left-aligned and the label trails it.
                     <div class="panel-collapse-header">
-                        <div class="overline inspector__section-label">"INSPECTOR"</div>
                         <button
                             class="panel-collapse-toggle"
                             title="Collapse inspector"
                             on:click=toggle
                         >"›"</button>
+                        <div class="overline inspector__section-label">"INSPECTOR"</div>
                     </div>
                     {body()}
                 }
             >
                 <button
-                    class="panel-collapse-toggle panel-collapse-toggle--rail"
+                    class="panel-collapse-toggle panel-collapse-toggle--rail-left"
                     title="Expand inspector"
                     on:click=toggle
                 >"‹"</button>

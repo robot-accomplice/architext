@@ -254,10 +254,147 @@ button:focus-visible {
 .shell {
   display: grid;
   grid-template-columns: var(--nav-w) 1fr var(--inspector-w);
+  /* Row 1: the full-width header strip; row 2: the fluid console triad. */
+  grid-template-rows: auto 1fr;
   gap: var(--hairline);
   background: var(--line);   /* hairline gaps = the grid background bleeding through */
   height: 100vh;
   width: 100vw;
+}
+
+/* ── Header strip (DESIGN.md "Cyber-Tactical" topbar) ─────────────────────────
+   A thin full-width row above the triad: hairline bottom border, mono eyebrow,
+   Hanken project name, muted single-line summary, and the Config action. */
+.topbar {
+  grid-column: 1 / -1;       /* span all three triad columns */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad);
+  background: var(--surface);
+  border-bottom: var(--hairline) solid var(--line);
+  padding: var(--pad-tight) var(--pad);
+  min-width: 0;
+}
+.topbar__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;              /* let the summary ellipsis kick in */
+}
+.topbar__eyebrow { margin: 0; }
+.topbar__title-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pad);
+  min-width: 0;
+}
+.topbar__project {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: var(--headline-size);
+  color: var(--ink);
+  margin: 0;
+  white-space: nowrap;
+  flex: none;
+}
+.topbar__summary {
+  color: var(--muted);
+  font-size: var(--body-size);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.topbar__actions { flex: none; }
+/* Config button: on-language hairline + mono, --accent only as a STATE signal
+   (hover/active) — never a role hue (rule 1). */
+.topbar__config-btn {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: var(--overline-tracking);
+  text-transform: uppercase;
+  padding: var(--pad-tight) var(--pad);
+  background: var(--panel-2);
+  color: var(--muted);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+}
+.topbar__config-btn:hover,
+.topbar__config-btn:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+
+/* ── Config drawer (read-only resolved diagram config) ───────────────────────
+   A right-side drawer over the shell + a click-away scrim. Values are read-only
+   this slice (editing is a later pass). */
+.config-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 20;
+}
+.config-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 90vw);
+  z-index: 21;
+  background: var(--panel);
+  border-left: var(--hairline) solid var(--line);
+  padding: var(--pad);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+  overflow-y: auto;
+}
+.config-drawer__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--pad-tight);
+}
+.config-drawer__title {
+  font-size: var(--headline-size);
+  font-weight: 600;
+  color: var(--ink);
+  margin: var(--grid) 0 0;
+}
+.config-drawer__note {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+  margin: 0 0 var(--pad-tight);
+}
+.config-drawer__empty { color: var(--dim); }
+.config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+.config-list__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--pad);
+  align-items: baseline;
+  padding: var(--pad-tight) 0;
+  border-bottom: var(--hairline) solid var(--line);
+}
+.config-list__key {
+  font-size: var(--overline-size);
+  color: var(--muted);
+  word-break: break-word;
+}
+.config-list__val {
+  font-size: var(--overline-size);
+  color: var(--ink);
+  text-align: right;
+  word-break: break-word;
 }
 
 /* ── Panel collapse affordance (shared by nav + inspector) ────────────────── */
@@ -296,6 +433,16 @@ button:focus-visible {
 /* In the collapsed rail the toggle is the only affordance — center it. */
 .panel-collapse-toggle--rail {
   margin: 0 auto;
+}
+/* Inspector mirrors the nav: both collapse toggles hug the central canvas. The
+   nav's toggle is right-aligned (label first, toggle last → space-between pushes
+   it to the right edge); the inspector reverses the content order so the toggle
+   is FIRST and `space-between` pushes it to the left edge (= the
+   canvas↔inspector boundary), with the label trailing to the right. */
+/* Collapsed inspector rail: the expand chevron sits at the left (boundary) edge,
+   not centered, to keep the affordance hugging the canvas. */
+.panel-collapse-toggle--rail-left {
+  margin: 0 auto 0 0;
 }
 
 /* ── Left nav ───────────────────────────────────────────────────────────── */
@@ -364,10 +511,22 @@ button:focus-visible {
 
 /* ── Center: fluid canvas (rule 3 — never pinned w/h) ─────────────────────── */
 .canvas-panel {
-  position: relative;
+  /* Column layout: the diagram stage fills the space; the footer steps panel
+     (when shown) takes an `auto` row below it — opening it shrinks the stage and
+     the canvas re-fits. */
+  display: grid;
+  grid-template-rows: 1fr auto;
   background: var(--canvas-black);   /* the one canvas-black */
   overflow: hidden;
   min-width: 0;                      /* allow the fluid track to shrink */
+  min-height: 0;
+}
+/* The stage is the absolute-positioning context for the diagram surface,
+   viewport, controls, and placard (all `inset: 0` relative to here). */
+.canvas-panel__stage {
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
 }
 .canvas-panel__surface {
   position: absolute;
@@ -510,6 +669,16 @@ button:focus-visible {
   stroke: var(--edge);
   vector-effect: non-scaling-stroke;
 }
+/* Selected step → active edge: a STATE treatment (rule 1) — brighter/thicker
+   --accent stroke, never a role hue. The route `d` is untouched (parity-proven);
+   only the stroke styling changes. Wins over the kind dash by removing it. */
+.flow-edge--active {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-dasharray: none;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px var(--accent-glow));
+}
 
 /* ── Step labels (JetBrains Mono over a chrome-radius box) ────────────────── */
 .flow-label__box {
@@ -590,6 +759,119 @@ button:focus-visible {
   display: flex;
   flex-wrap: wrap;
   gap: var(--grid);
+}
+
+/* ── Footer steps panel (diagram-owned step navigation) ──────────────────────
+   Lives at the bottom of the canvas column. Header line (flow name + summary +
+   status chip + collapse toggle) over a scrollable list of step cards. Click a
+   card → select the step → the matching diagram edge gets the --accent active
+   treatment. Surface sits above the canvas-black on the --surface tone. */
+.steps-panel {
+  background: var(--surface);
+  border-top: var(--hairline) solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 38vh;
+}
+.steps-panel--collapsed { max-height: none; }
+.steps-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--pad);
+  padding: var(--pad-tight) var(--pad);
+}
+.steps-panel__title-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--pad-tight) var(--pad);
+  min-width: 0;
+}
+.steps-panel__title {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: var(--body-size);
+  color: var(--ink);
+  margin: 0;
+}
+.steps-panel__summary {
+  color: var(--muted);
+  font-size: var(--overline-size);
+  margin: 0;
+  min-width: 0;
+}
+.steps-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+  flex: none;
+}
+/* Collapse toggle: on-language, --accent only as a STATE signal (rule 1). */
+.steps-panel__toggle {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: var(--overline-tracking);
+  text-transform: uppercase;
+  padding: var(--grid) var(--pad-tight);
+  background: var(--panel-2);
+  color: var(--muted);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+}
+.steps-panel__toggle:hover,
+.steps-panel__toggle:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.steps-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+  padding: 0 var(--pad) var(--pad-tight);
+  overflow-y: auto;
+  min-height: 0;
+}
+/* One step card: glyph + mono number + `from → to` route + action. Selected =
+   the shared `.is-active` --accent STATE treatment. */
+.step-card {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) minmax(0, 1.4fr);
+  align-items: baseline;
+  gap: var(--pad-tight) var(--pad);
+  text-align: left;
+  width: 100%;
+  padding: var(--pad-tight) var(--pad);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  color: var(--muted);
+}
+.step-card:hover { color: var(--ink); border-color: var(--line-strong); }
+.step-card__glyph {
+  color: var(--muted);
+  flex: none;
+}
+.step-card__num {
+  font-size: var(--overline-size);
+  color: var(--dim);
+  flex: none;
+}
+.step-card__route {
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.step-card__action {
+  color: var(--muted);
+  font-size: var(--overline-size);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* ── Sequence diagram (lifelines + time-ordered messages + frames) ────────── */

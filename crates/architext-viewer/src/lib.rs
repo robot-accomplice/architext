@@ -15,6 +15,7 @@
 pub mod components;
 pub mod data;
 pub mod diagram;
+pub mod flow_step_display;
 pub mod repo_tree_model;
 pub mod rule_order;
 pub mod selection;
@@ -25,7 +26,7 @@ pub mod theme;
 use leptos::*;
 
 use crate::components::shell::Shell;
-use crate::data::{load_architecture_data, FetchError};
+use crate::data::{fetch_cli_version, load_architecture_data, FetchError};
 use crate::state::AppState;
 
 /// Root view — loads the dataset, then mounts the data-bound shell.
@@ -46,6 +47,14 @@ pub fn App() -> impl IntoView {
                 Ok(loaded) => {
                     let state = AppState::new(loaded);
                     provide_context(state);
+                    // The CLI version is a separate, non-fatal fetch (display-only
+                    // header eyebrow); load it into state once, after mount.
+                    let cli_version = state.cli_version;
+                    spawn_local(async move {
+                        if let Some(v) = fetch_cli_version().await {
+                            cli_version.set(Some(v));
+                        }
+                    });
                     view! { <Shell/> }.into_view()
                 }
                 Err(err) => view! { <ErrorScreen err=err/> }.into_view(),

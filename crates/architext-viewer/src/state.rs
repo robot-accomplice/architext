@@ -28,6 +28,17 @@ pub struct AppState {
     /// when the view/flow changes so a stale node never inspects a node absent
     /// from the new projection.
     pub selected_node: RwSignal<Option<String>>,
+    /// Flow step selected by clicking a steps-panel card (== the step id, which
+    /// is also the matching diagram route id in flows mode → drives the
+    /// `--accent` active edge treatment). Cleared on every flow/view/mode change
+    /// so a stale step never highlights an edge absent from the new projection.
+    pub selected_step: RwSignal<Option<String>>,
+    /// Whether the footer steps panel is collapsed to its header line. Toggling
+    /// it resizes the canvas, so the canvas re-fit effect tracks it.
+    pub steps_collapsed: RwSignal<bool>,
+    /// Running CLI version (from `/api/status`), for the header eyebrow.
+    /// Display-only; `None` until fetched (or if the server omits it).
+    pub cli_version: RwSignal<Option<String>>,
     /// Whether the left nav is collapsed to its thin rail (DESIGN.md: auxiliary
     /// panels collapse to icons/drawers). Drives the shell grid + the canvas
     /// re-fit when the center track resizes.
@@ -56,6 +67,9 @@ impl AppState {
             view_idx: create_rw_signal(view_idx),
             flow_idx: create_rw_signal(flow_idx),
             selected_node: create_rw_signal(None),
+            selected_step: create_rw_signal(None),
+            steps_collapsed: create_rw_signal(false),
+            cli_version: create_rw_signal(None),
             nav_collapsed: create_rw_signal(false),
             inspector_collapsed: create_rw_signal(false),
         }
@@ -66,10 +80,18 @@ impl AppState {
         self.selected_node.set(Some(node_id));
     }
 
+    /// Select a flow step by id (steps-panel click → highlight the matching
+    /// diagram edge). The step id equals the flow route id, so the diagram keys
+    /// its `--accent` active edge on this.
+    pub fn set_selected_step(&self, step_id: String) {
+        self.selected_step.set(Some(step_id));
+    }
+
     /// Switch modes and re-seed the view/flow selection per the routing rules.
     pub fn set_mode(&self, mode: Mode) {
         let data = self.data.get_untracked();
         self.selected_node.set(None);
+        self.selected_step.set(None);
         self.mode.set(mode);
         if mode.renders_routed_flow() {
             // Flows / Data-Risks: the flow drives; resolve the view to a
@@ -100,6 +122,7 @@ impl AppState {
     pub fn set_flow(&self, flow_idx: usize) {
         let data = self.data.get_untracked();
         self.selected_node.set(None);
+        self.selected_step.set(None);
         self.flow_idx.set(Some(flow_idx));
         let current = self.view_idx.get_untracked();
         let view = selection::default_view_for_flow(
@@ -116,6 +139,7 @@ impl AppState {
     pub fn set_view(&self, view_idx: usize) {
         let data = self.data.get_untracked();
         self.selected_node.set(None);
+        self.selected_step.set(None);
         self.view_idx.set(Some(view_idx));
         if self.mode.get_untracked().projects_flows() {
             let current = self.flow_idx.get_untracked();

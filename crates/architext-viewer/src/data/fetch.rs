@@ -77,6 +77,18 @@ pub async fn fetch_repo_tree() -> Result<RepoTreePayload, FetchError> {
     get_json::<RepoTreePayload>("/api/repo-tree").await
 }
 
+/// Fetch the running CLI version from `/api/status` (`status.cliVersion`) for the
+/// header eyebrow. Non-fatal — the version is display-only, so a failure (or an
+/// older server without the field) degrades to `None` and the eyebrow omits it.
+pub async fn fetch_cli_version() -> Option<String> {
+    let status = get_value("/api/status").await.ok()?;
+    status
+        .get("status")
+        .and_then(|s| s.get("cliVersion"))
+        .and_then(|v| v.as_str())
+        .map(str::to_string)
+}
+
 /// Resolve a manifest logical name to its `/data/<path>` URL, if present.
 fn data_url(manifest: &Manifest, logical: &str) -> Option<String> {
     manifest.files.get(logical).map(|p| format!("/data/{p}"))
