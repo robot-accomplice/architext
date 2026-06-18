@@ -159,6 +159,7 @@ dependencies = [
  "architext-routing",
  "console_error_panic_hook",
  "gloo-net",
+ "js-sys",
  "leptos",
  "serde",
  "serde_json",

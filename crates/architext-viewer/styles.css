@@ -1648,6 +1648,146 @@ button:focus-visible {
   cursor: not-allowed;
 }
 
+/* ── Notes section (in the inspector) ───────────────────────────────────────
+   Per-element annotations under the inspector card. Reuses the editor idiom:
+   tiered blacks, hairline borders, mono meta/timestamps, .overline label.
+   The note category reads on the SEVERITY ordinal ramp (its own scale, not a
+   --c4-* role hue): note=neutral, mitigation=calm-low, caveat=high, todo=medium.
+   STATE (focus ring + primary Save) is the dedicated --accent treatment. */
+.notes-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+}
+.notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad-tight);
+}
+.notes-add {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 2px var(--pad-tight);
+}
+.notes-empty {
+  margin: 0;
+  font-size: var(--body-size);
+  color: var(--dim);
+}
+.notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+}
+/* Each note: a hairline card with a 3px category rail (--note-cat, set per
+   category below). */
+.note-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-left: var(--accent-rail) solid var(--note-cat, var(--line));
+  border-radius: var(--card-radius);
+  padding: var(--pad-tight);
+}
+/* Category → severity-ramp rail/badge color (its own ordinal, not a role hue). */
+.cat-note { --note-cat: var(--dim); }
+.cat-mitigation { --note-cat: var(--sev-low); }
+.cat-caveat { --note-cat: var(--sev-high); }
+.cat-todo { --note-cat: var(--sev-medium); }
+.note-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+}
+.note-cat {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--note-cat, var(--dim));
+}
+.note-when {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+}
+.note-actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: var(--grid);
+}
+.note-body {
+  margin: 0;
+  font-size: var(--body-size);
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+.notes-error {
+  margin: 0;
+  font-size: var(--body-size);
+  color: var(--sev-critical);
+}
+/* Notes form controls: the rule-editor idiom (hairline fields on panel-2). */
+.note-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+}
+.note-editor__select,
+.note-editor__body {
+  font: inherit;
+  width: 100%;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  padding: 4px var(--pad-tight);
+}
+.note-editor__body {
+  min-height: 64px;
+  resize: vertical;
+}
+.note-editor__select:focus-visible,
+.note-editor__body:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.note-editor__select:disabled,
+.note-editor__body:disabled {
+  color: var(--dim);
+  background: var(--panel);
+  cursor: not-allowed;
+}
+.note-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pad-tight);
+}
+.notes-btn {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 4px var(--pad);
+}
+/* Primary Save: --accent STATE treatment (border + ring), not a fill hue. */
+.notes-btn--primary {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+  color: var(--ink);
+}
+.notes-btn:disabled {
+  color: var(--dim);
+  border-color: var(--line);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
 /* ── Data / Risks side panel (in the inspector) ─────────────────────────────
    Cards on their OWN ordinal scales: data class rail = sensitivity, risk rail =
    severity (never a --c4-* role hue). */

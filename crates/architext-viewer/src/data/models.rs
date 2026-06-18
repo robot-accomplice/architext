@@ -334,6 +334,42 @@ pub struct RuleProtection {
     pub delete: bool,
 }
 
+// ─── notes.json ────────────────────────────────────────────────────────────
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct NotesFile {
+    #[serde(default)]
+    pub notes: Vec<Note>,
+}
+
+/// An element note — a user annotation attached to an architecture element
+/// (node/flow/decision/risk/view/data-class), persisted in `notes.json`.
+///
+/// `Serialize` is derived (not just `Deserialize`) because the Notes editor
+/// round-trips the FULL note back to `POST /api/notes`
+/// (`{action:"update", note:<full note>}`); serializing with the same camelCase
+/// field names keeps the upsert payload faithful to the on-disk shape and the
+/// `additionalProperties:false` schema (no extra fields are emitted).
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Note {
+    pub id: String,
+    pub target: NoteTarget,
+    pub category: String,
+    pub body: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub author: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// `note.target` — the element a note is attached to.
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct NoteTarget {
+    pub kind: String,
+    pub id: String,
+}
+
 // ─── roadmap.json ──────────────────────────────────────────────────────────
 
 #[derive(Debug, Clone, Deserialize)]

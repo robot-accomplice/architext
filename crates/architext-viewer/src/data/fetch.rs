@@ -31,6 +31,7 @@ pub struct ArchitectureData {
     pub risks: Vec<Risk>,
     pub glossary: Vec<GlossaryTerm>,
     pub rules: Vec<Rule>,
+    pub notes: Vec<Note>,
     pub roadmap: Vec<RoadmapItem>,
     pub release_index: Option<ReleaseIndex>,
     pub release_details: Vec<ReleaseDetail>,
@@ -157,6 +158,9 @@ pub async fn load_architecture_data() -> Result<ArchitectureData, FetchError> {
     }
     if let Some(url) = data_url(&manifest, "rules") {
         data.rules = get_json::<RulesFile>(&url).await?.rules;
+    }
+    if let Some(url) = data_url(&manifest, "notes") {
+        data.notes = get_json::<NotesFile>(&url).await?.notes;
     }
     if let Some(url) = data_url(&manifest, "roadmap") {
         data.roadmap = get_json::<RoadmapFile>(&url).await?.items;
