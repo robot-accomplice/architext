@@ -750,6 +750,22 @@ button:focus-visible {
   dominant-baseline: middle;
   pointer-events: none;
 }
+/* Flow-step number pill: a compact mono badge (the step number), mirroring the
+   steps-panel step-number idiom. Full action text lives in the steps panel. */
+.flow-label__badge {
+  fill: var(--surface);
+  stroke: var(--edge);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.flow-label__badge-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  fill: var(--muted);
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
 
 /* ── Decision diamonds (tinted with the affiliated node's role color) ─────── */
 .flow-decision {

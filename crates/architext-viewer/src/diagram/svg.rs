@@ -93,17 +93,24 @@ pub fn build_render_model(
         .collect();
 
     // Labels: anchor from the route, background from the matching label box.
+    // Flow-step labels (`"N. action"`) collapse to a compact number badge — the
+    // full exposition lives in the steps panel; structural labels (`"uses"`)
+    // keep the box+text treatment.
     let labels = plan
         .routes
         .iter()
         .filter_map(|(id, route)| {
-            let label_text = route
+            let raw_label = route
                 .extra
                 .get("label")
                 .and_then(|v| v.as_str())
                 .map(str::to_string)
                 .or_else(|| edge_labels.get(id).cloned())
                 .or_else(|| flow.and_then(|f| edge_label_from_flow(id, f)))?;
+            let text = pill_label(&raw_label);
+            // A number-only pill (the flow-step case) renders as a badge, not a
+            // full-width box sized for the original action text.
+            let is_number = text != raw_label;
             let box_rect = plan.label_boxes.get(id).cloned().unwrap_or(Rect {
                 x: route.label_x,
                 y: route.label_y,
@@ -111,7 +118,8 @@ pub fn build_render_model(
                 height: 0.0,
             });
             Some(LabelView {
-                text: label_text,
+                text,
+                is_number,
                 anchor_x: route.label_x,
                 anchor_y: route.label_y,
                 box_rect,
@@ -143,6 +151,23 @@ fn decision_component_type<'a>(
         .and_then(|s| nodes_by_id.get(s.to.as_str()))
         .map(|n| n.node_type.as_str())
         .unwrap_or("external")
+}
+
+/// The on-diagram pill text. Flow-step labels arrive as `"N. action"` (e.g.
+/// `"1. resolveTargetPath"`); the pill shows only the step number `N`, with the
+/// full action text living in the steps-panel footer. Structural labels
+/// (`"uses"`, `"depends on"` from C4 / deployment relationships) carry no
+/// leading `N.`/`N)` and are returned unchanged.
+fn pill_label(text: &str) -> String {
+    let trimmed = text.trim_start();
+    let digits: String = trimmed.chars().take_while(char::is_ascii_digit).collect();
+    if !digits.is_empty() {
+        let rest = &trimmed[digits.len()..];
+        if matches!(rest.chars().next(), Some('.') | Some(')')) {
+            return digits;
+        }
+    }
+    text.to_string()
 }
 
 /// Reconstruct an edge's display label from the flow when the route doesn't
@@ -232,5 +257,26 @@ pub fn DiagramSvg(
                 </g>
             </g>
         </svg>
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pill_label;
+
+    #[test]
+    fn flow_step_labels_collapse_to_the_step_number() {
+        assert_eq!(pill_label("1. resolveTargetPath"), "1");
+        assert_eq!(pill_label("12. x"), "12");
+        // The `N)` outcome-branch form also collapses to its number.
+        assert_eq!(pill_label("3) hit"), "3");
+    }
+
+    #[test]
+    fn structural_labels_are_returned_unchanged() {
+        assert_eq!(pill_label("uses"), "uses");
+        assert_eq!(pill_label("depends on"), "depends on");
+        // A bare number with no `.`/`)` separator is not a step label.
+        assert_eq!(pill_label("7 retries"), "7 retries");
     }
 }
