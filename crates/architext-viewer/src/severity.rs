@@ -28,6 +28,22 @@ pub fn sensitivity_color_var(level: Option<&str>) -> &'static str {
     }
 }
 
+/// Release status / posture tone → a STATE/SEVERITY token (never a `--c4-*` role
+/// hue), DESIGN.md. The `release_truth::Tone` buckets map onto the existing
+/// ordinal scale: healthy → calm green-teal accent, progressing → mid severity,
+/// blocked → top severity, inactive/neutral → dim. Single-sourced here so a
+/// "blocked" release reads the same urgency as a "critical" risk.
+pub fn release_tone_color_var(tone: crate::release_truth::Tone) -> &'static str {
+    use crate::release_truth::Tone;
+    match tone {
+        Tone::Healthy => "var(--accent)",
+        Tone::Progressing => "var(--sev-medium)",
+        Tone::Blocked => "var(--sev-critical)",
+        Tone::Inactive => "var(--dim)",
+        Tone::Neutral => "var(--line-strong)",
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -19,6 +19,8 @@ use leptos::ev::{MouseEvent, WheelEvent};
 
 use architext_routing::model::Plan;
 
+use crate::components::blast_radius_panel::BlastRadiusPanel;
+use crate::components::release_truth_panel::ReleaseTruthPanel;
 use crate::components::repo_tree::RepoTree;
 use crate::components::rules_panel::RulesPanel;
 use crate::components::steps_panel::StepsPanel;
@@ -343,6 +345,8 @@ pub fn CanvasPanel() -> impl IntoView {
                         None => match state.mode.get() {
                             Mode::RepoTree => view! { <RepoTree/> }.into_view(),
                             Mode::Rules => view! { <RulesPanel/> }.into_view(),
+                            Mode::BlastRadius => view! { <BlastRadiusPanel/> }.into_view(),
+                            Mode::ReleaseTruth => view! { <ReleaseTruthPanel/> }.into_view(),
                             _ => view! {
                                 <p class="canvas-panel__hint">
                                     {move || format!(
