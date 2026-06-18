@@ -13,6 +13,7 @@ use leptos::*;
 
 use super::edge::{DiagramEdge, EdgeView, ARROWHEAD_ID};
 use super::label::{DiagramLabel, LabelKind, LabelView};
+use super::pill_placement::{place_pills, PillInput};
 use super::node::{DecisionDiamond, DiagramNode, NodeView};
 use super::{role_color_var, EdgeKind};
 use crate::components::relationship_icon::RelationshipKind;
@@ -109,43 +110,60 @@ pub fn build_render_model(
     // Flow-step labels (`"N. action"`) collapse to a compact number badge — the
     // full exposition lives in the steps panel; structural labels (`"uses"`)
     // keep the box+text treatment.
-    let labels = plan
-        .routes
-        .iter()
-        .filter_map(|(id, route)| {
-            let raw_label = route
-                .extra
-                .get("label")
-                .and_then(|v| v.as_str())
-                .map(str::to_string)
-                .or_else(|| edge_labels.get(id).cloned())
-                .or_else(|| flow.and_then(|f| edge_label_from_flow(id, f)))?;
-            let collapsed = pill_label(&raw_label);
-            // A flow-step label collapses to its number (a badge); anything else
-            // is a structural relationship label → a glyph pill (the word kept
-            // for the hover title + legend).
-            let kind = if collapsed != raw_label {
-                LabelKind::Number(collapsed)
-            } else {
-                LabelKind::Relationship {
-                    kind: RelationshipKind::classify(&raw_label),
-                    word: raw_label,
-                }
-            };
-            let box_rect = plan.label_boxes.get(id).cloned().unwrap_or(Rect {
-                x: route.label_x,
-                y: route.label_y,
-                width: 0.0,
-                height: 0.0,
-            });
-            Some(LabelView {
-                kind,
-                anchor_x: route.label_x,
-                anchor_y: route.label_y,
-                box_rect,
-            })
-        })
-        .collect();
+    //
+    // The engine's `route.label_x/label_y` is only a SEED here (see
+    // `pill_placement` for why): we re-anchor each pill onto its own route
+    // polyline and stagger/de-overlap the small rendered glyphs in screen space
+    // (F1 flow number pills, F9 structural kind pills). We first build each
+    // label with the engine seed, collect the placement inputs in the same
+    // order, then overwrite the anchors with the resolved positions.
+    let mut labels: Vec<LabelView> = Vec::new();
+    let mut pill_inputs: Vec<PillInput> = Vec::new();
+    for (id, route) in &plan.routes {
+        let Some(raw_label) = route
+            .extra
+            .get("label")
+            .and_then(|v| v.as_str())
+            .map(str::to_string)
+            .or_else(|| edge_labels.get(id).cloned())
+            .or_else(|| flow.and_then(|f| edge_label_from_flow(id, f)))
+        else {
+            continue;
+        };
+        let collapsed = pill_label(&raw_label);
+        // A flow-step label collapses to its number (a badge); anything else
+        // is a structural relationship label → a glyph pill (the word kept
+        // for the hover title + legend).
+        let kind = if collapsed != raw_label {
+            LabelKind::Number(collapsed)
+        } else {
+            LabelKind::Relationship {
+                kind: RelationshipKind::classify(&raw_label),
+                word: raw_label,
+            }
+        };
+        let box_rect = plan.label_boxes.get(id).cloned().unwrap_or(Rect {
+            x: route.label_x,
+            y: route.label_y,
+            width: 0.0,
+            height: 0.0,
+        });
+        labels.push(LabelView {
+            kind,
+            anchor_x: route.label_x,
+            anchor_y: route.label_y,
+            box_rect,
+        });
+        pill_inputs.push(PillInput {
+            route_points: route.points.clone(),
+            seed: (route.label_x, route.label_y),
+        });
+    }
+    // Anchor-on-line + stagger + de-overlap, in screen space.
+    for (label, (x, y)) in labels.iter_mut().zip(place_pills(&pill_inputs)) {
+        label.anchor_x = x;
+        label.anchor_y = y;
+    }
 
     RenderModel {
         canvas_width: plan.canvas_width,
