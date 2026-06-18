@@ -16,6 +16,7 @@
 pub mod edge;
 pub mod label;
 pub mod node;
+pub mod pill_placement;
 pub mod plan;
 pub mod sequence;
 pub mod sequence_svg;
