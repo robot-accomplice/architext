@@ -66,17 +66,28 @@ impl Mode {
         }
     }
 
-    /// Whether this mode projects a diagram (has view types). Diagram-less modes
-    /// render data surfaces (rules, releases, repo tree, blast radius) instead.
+    /// Whether this is the Flows mode specifically (the flow drives the view and
+    /// the view selector offers every compatible flow projection).
     pub fn is_flows(self) -> bool {
         matches!(self, Mode::Flows)
     }
 
+    /// Whether this mode renders one selected flow as a ROUTED `plan()` diagram
+    /// (flow drives → view resolves to a compatible flow-projection → the shared
+    /// `DiagramSvg` renders it). Both Flows and Data/Risks do this; Data/Risks
+    /// adds the data-class/risk side panel over the same diagram path. (Sequence
+    /// also renders a flow, but as lifelines, not a routed plan — see
+    /// [`Self::projects_flows`].)
+    pub fn renders_routed_flow(self) -> bool {
+        matches!(self, Mode::Flows | Mode::DataRisks)
+    }
+
     /// Whether this mode is driven by a selected FLOW (so the UI shows a flow
-    /// selector and the state seeds/​resolves a flow). Both the Flows projection
-    /// and the Sequence projection render one selected flow; the difference is
-    /// how each lays it out (routed plan vs. lifelines), handled downstream.
+    /// selector and the state seeds/​resolves a flow). The Flows and Data/Risks
+    /// routed-plan projections and the Sequence lifeline projection all render
+    /// one selected flow; the difference is how each lays it out, handled
+    /// downstream.
     pub fn projects_flows(self) -> bool {
-        matches!(self, Mode::Flows | Mode::Sequence)
+        matches!(self, Mode::Flows | Mode::Sequence | Mode::DataRisks)
     }
 }

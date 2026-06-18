@@ -36,11 +36,15 @@ pub fn SelectorBar() -> impl IntoView {
         let data = state.data.get();
         let mode = state.mode.get();
         let indices = if mode.is_flows() {
+            // Flows: every flow-projection view compatible with the selected flow.
             match state.flow_idx.get() {
                 Some(f) => selection::compatible_flow_views(&data.views, &data.flows, f),
                 None => Vec::new(),
             }
         } else {
+            // Every other mode (incl. Data/Risks): the mode's own view types.
+            // For Data/Risks that scopes the selector to risk-overlay / dataflow
+            // even though the diagram itself renders the selected flow.
             selection::views_for_mode(&data.views, mode)
         };
         indices

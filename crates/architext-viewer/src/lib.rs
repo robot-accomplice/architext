@@ -15,7 +15,10 @@
 pub mod components;
 pub mod data;
 pub mod diagram;
+pub mod repo_tree_model;
+pub mod rule_order;
 pub mod selection;
+pub mod severity;
 pub mod state;
 pub mod theme;
 

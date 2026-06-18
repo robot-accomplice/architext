@@ -71,8 +71,9 @@ impl AppState {
         let data = self.data.get_untracked();
         self.selected_node.set(None);
         self.mode.set(mode);
-        if mode.is_flows() {
-            // Flows: the flow drives; resolve the view to a compatible projection.
+        if mode.renders_routed_flow() {
+            // Flows / Data-Risks: the flow drives; resolve the view to a
+            // compatible flow-projection.
             let flow = if data.flows.is_empty() { None } else { Some(0) };
             self.flow_idx.set(flow);
             let view = match flow {

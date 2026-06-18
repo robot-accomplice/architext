@@ -62,6 +62,11 @@ pub struct Node {
     /// structural-relationship edges.
     #[serde(default)]
     pub dependencies: Vec<String>,
+    /// Repo paths (files or directory prefixes) this node owns. Drives Repo Tree
+    /// ownership: a file whose path matches a node's `sourcePaths` prefix is
+    /// owned by that node, and its row takes the node's `--c4-{type}` rail color.
+    #[serde(rename = "sourcePaths", default)]
+    pub source_paths: Vec<String>,
 }
 
 // ─── views.json ────────────────────────────────────────────────────────────
@@ -289,6 +294,22 @@ pub struct Rule {
     pub criticality: Option<String>,
     #[serde(default)]
     pub order: Option<i64>,
+    /// Provenance (`maintainer`, `extracted`, ...). Display-only.
+    #[serde(default)]
+    pub source: Option<String>,
+    /// Edit/delete protection flags. Display-only this slice — the protection
+    /// BADGE is shown, but no editing/reordering is wired (that is V5).
+    #[serde(default)]
+    pub protection: RuleProtection,
+}
+
+/// `rule.protection` — whether the rule is edit/delete protected.
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct RuleProtection {
+    #[serde(default)]
+    pub edit: bool,
+    #[serde(default)]
+    pub delete: bool,
 }
 
 // ─── roadmap.json ──────────────────────────────────────────────────────────
@@ -348,6 +369,27 @@ pub struct ReleaseSummary {
 pub struct ReleaseDetail {
     pub id: String,
     pub raw: serde_json::Value,
+}
+
+// ─── /api/repo-tree ────────────────────────────────────────────────────────
+
+/// `/api/repo-tree` payload (`{ source, files: [{path,size,mtime}] }`). Fetched
+/// on demand by the Repo Tree surface (not part of the manifest-driven load).
+#[derive(Debug, Clone, Deserialize)]
+pub struct RepoTreePayload {
+    #[serde(default)]
+    pub source: Option<String>,
+    #[serde(default)]
+    pub files: Vec<RepoFile>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct RepoFile {
+    pub path: String,
+    #[serde(default)]
+    pub size: Option<u64>,
+    #[serde(default)]
+    pub mtime: Option<i64>,
 }
 
 /// `/api/config` payload (`{ diagram, warnings, fields, sections }`). Kept as a
