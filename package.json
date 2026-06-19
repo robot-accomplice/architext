@@ -1,7 +1,7 @@
 {
   "name": "@robotaccomplice/architext",
-  "version": "1.6.3",
-  "description": "Local JSON-backed architecture and dataflow viewer for engineering teams and LLM-maintained architecture maps.",
+  "version": "1.7.0",
+  "description": "Local JSON-backed architecture and dataflow viewer for engineering teams and LLM-maintained architecture maps. Rust-native CLI + WASM viewer.",
   "type": "module",
   "engines": {
     "node": ">=20"
@@ -15,21 +15,11 @@
     "docs/assets/screenshots",
     "docs/architext/data",
     "crates/architext-viewer/dist",
-    "viewer/dist",
-    "viewer/src",
     "viewer/schema",
-    "viewer/tools",
-    "viewer/public",
-    "viewer/index.html",
-    "viewer/package.json",
-    "viewer/package-lock.json",
-    "viewer/tsconfig.json",
-    "viewer/vite.config.ts",
     "viewer/AGENTS_APPENDIX.md",
     "viewer/LLM_ARCHITEXT.md",
     "viewer/README.md",
     "skills",
-    "src",
     "tools",
     "LICENSE",
     "README.md",
@@ -42,45 +32,26 @@
     "architext:doctor": "architext doctor .",
     "architext:prompt": "architext prompt .",
     "architext:validate": "architext validate .",
-    "build": "npm --prefix viewer run build",
     "build:viewer": "trunk build --release --config crates/architext-viewer/Trunk.toml",
-    "cli": "node tools/architext-adopt.mjs",
-    "doctor": "node tools/architext-adopt.mjs doctor --target .",
-    "prepack": "npm run build && npm run build:viewer",
-    "test": "node --test test/*.test.mjs",
-    "test:all": "npm test",
-    "test:benchmark": "node --test test/c4-documents.test.mjs test/routing-fitness.test.mjs test/routing-corpus-fitness.test.mjs",
-    "test:uat": "node scripts/uat-harness.mjs",
+    "prepack": "npm run build:viewer",
     "check:install-docs": "node scripts/check-install-docs.mjs",
-    "validate": "node viewer/tools/validate-architext.mjs --data-dir docs/architext/data",
-    "validate:rust": "ARCHITEXT_SCHEMA_DIR=viewer/schema cargo run --quiet -p architext-cli -- validate .",
-    "verify": "npm run check:install-docs && npm test && npm run validate && npm run build && npm run test:benchmark",
-    "release:check": "npm run verify && npm run test:uat && npm pack --dry-run && npm run smoke:pack",
+    "validate": "cargo run --quiet -p architext-cli -- validate .",
+    "verify": "npm run check:install-docs && npm run validate && npm run build:viewer",
+    "release:check": "npm run verify && npm pack --dry-run && npm run smoke:pack",
     "smoke:pack": "node scripts/smoke-packed-cli.mjs"
   },
   "publishConfig": {
     "access": "public"
   },
-  "dependencies": {
-    "ajv": "^8.17.1",
-    "ajv-formats": "^3.0.1"
-  },
   "optionalDependencies": {
-    "@robotaccomplice/architext-darwin-arm64": "1.6.3",
-    "@robotaccomplice/architext-darwin-x64": "1.6.3",
-    "@robotaccomplice/architext-linux-x64": "1.6.3",
-    "@robotaccomplice/architext-linux-arm64": "1.6.3",
-    "@robotaccomplice/architext-win32-x64": "1.6.3"
+    "@robotaccomplice/architext-darwin-arm64": "1.7.0",
+    "@robotaccomplice/architext-darwin-x64": "1.7.0",
+    "@robotaccomplice/architext-linux-x64": "1.7.0",
+    "@robotaccomplice/architext-linux-arm64": "1.7.0",
+    "@robotaccomplice/architext-win32-x64": "1.7.0"
   },
   "devDependencies": {
-    "@types/react": "^19.0.2",
-    "@types/react-dom": "^19.0.2",
-    "@vitejs/plugin-react": "^4.3.4",
-    "playwright": "^1.60.0",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
-    "typescript": "^5.7.2",
-    "vite": "^6.0.7"
+    "playwright": "^1.60.0"
   },
   "license": "MIT",
   "repository": {
