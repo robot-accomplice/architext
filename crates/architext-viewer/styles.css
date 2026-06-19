@@ -1124,11 +1124,25 @@ button:focus-visible {
   filter: drop-shadow(0 0 6px var(--accent-glow));
 }
 
-/* Out-of-flow ("unrelated") node (UX #2): dimmed to ~0.3 and non-interactive
-   so the active flow stays the visual focus. Shown only when the user opts in
-   via the "Show unrelated nodes" toggle. */
+/* Out-of-flow ("unrelated") node (UX #2): dimmed to ~0.3 and non-interactive,
+   parked in a compact, smaller cluster to the right of the flow so the active
+   flow stays the visual focus while the unrelated nodes remain VISIBLE. The
+   user can fully hide the cluster via the "Hide unrelated" toggle. */
 .flow-node--unrelated {
   opacity: 0.3;
+  pointer-events: none;
+}
+
+/* "NOT IN THIS FLOW" overline above the parked cluster (SVG text). Mono caps,
+   dim — labels the parked group without competing with the flow. */
+.flow-parked-label {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  fill: var(--dim);
+  text-anchor: start;
+  dominant-baseline: text-after-edge;
   pointer-events: none;
 }
 

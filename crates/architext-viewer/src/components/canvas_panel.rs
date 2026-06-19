@@ -17,7 +17,7 @@ use std::collections::{HashMap, HashSet};
 use leptos::*;
 use leptos::ev::{MouseEvent, WheelEvent};
 
-use architext_routing::model::Plan;
+use architext_routing::model::{Plan, Rect};
 use architext_routing::plan_diagram::plan_diagram;
 use architext_routing::plan_request::build_flow_plan_request;
 
@@ -34,7 +34,7 @@ use crate::diagram::plan::{
     compute_structural_plan, layout_config_from_diagram, plan_hash,
 };
 use crate::diagram::sequence::{build_sequence_layout, SequenceConfig, SequenceLayout};
-use crate::diagram::svg::{flow_node_ids, legend_for};
+use crate::diagram::svg::{flow_node_ids, legend_for, park_layout};
 use crate::diagram::{DiagramSvg, SequenceSvg};
 use crate::selection::child_c4_view_for_node;
 use crate::state::use_app_state;
@@ -73,13 +73,23 @@ struct ContentBounds {
 /// with label boxes and route polyline points — so `fit` frames the diagram, not
 /// the full padded canvas (which includes margins).
 ///
-/// When `in_flow` is `Some`, only the IN-FLOW node rects are unioned (plus all
-/// routes + label boxes, which only exist between in-flow endpoints). This is
-/// the fix for the orphan-column misframing: the engine parks out-of-flow nodes
-/// in a tall side column, and unioning them stretched the bounds so the actual
-/// flow rendered tiny in the corner. `None` (structural C4/Deployment mode →
-/// no flow, no orphans) unions every node rect, unchanged.
-fn content_bounds(plan: &Plan, in_flow: Option<&HashSet<String>>) -> Option<ContentBounds> {
+/// `in_flow` is `None` in structural (C4/Deployment) mode → every node rect is
+/// unioned, unchanged. In flows mode it is `Some(set)`; the out-of-flow
+/// ("unrelated") cards are NEVER framed at their engine positions (the engine
+/// interleaves them with the flow, so unioning them shrank the flow into a
+/// corner — the UX #2 bug). Instead:
+///   - `show_parked == true`: union the in-flow rects with the PARKED cluster's
+///     repositioned, compact slots (and its overline anchor), exactly the layout
+///     the render model uses — fit frames flow + parked together, yet the flow
+///     dominates because the parked cards are small;
+///   - `show_parked == false`: frame only the in-flow geometry.
+///
+/// Decision rects (`decision:<step>`) are never out-of-flow, so they stay framed.
+fn content_bounds(
+    plan: &Plan,
+    in_flow: Option<&HashSet<String>>,
+    show_parked: bool,
+) -> Option<ContentBounds> {
     let mut min_x = f64::INFINITY;
     let mut min_y = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
@@ -92,16 +102,19 @@ fn content_bounds(plan: &Plan, in_flow: Option<&HashSet<String>>) -> Option<Cont
         max_y = max_y.max(y1);
     };
 
+    // In-flow + decision rects at their engine positions; collect the out-of-flow
+    // real-node rects (not framed in place) for the parked-cluster pass.
+    let mut in_flow_rects: Vec<Rect> = Vec::new();
+    let mut parked_natural: Vec<Rect> = Vec::new();
     for (id, rect) in &plan.node_rects {
-        // Skip out-of-flow node cards: they're hidden by default and parked in a
-        // disconnected column, so framing them would shrink the actual flow.
-        // Decision rects (`decision:<step>`) are never out-of-flow, so the
-        // `in_flow` membership test keeps them (they aren't real node ids).
-        if let Some(set) = in_flow {
-            if !set.contains(id) && !id.starts_with("decision:") {
-                continue;
-            }
+        let out_of_flow = in_flow
+            .map(|set| !set.contains(id) && !id.starts_with("decision:"))
+            .unwrap_or(false);
+        if out_of_flow {
+            parked_natural.push(rect.clone());
+            continue;
         }
+        in_flow_rects.push(rect.clone());
         grow(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
     }
     for rect in plan.label_boxes.values() {
@@ -110,6 +123,18 @@ fn content_bounds(plan: &Plan, in_flow: Option<&HashSet<String>>) -> Option<Cont
     for route in plan.routes.values() {
         for p in &route.points {
             grow(p.x, p.y, p.x, p.y);
+        }
+    }
+
+    // Frame the parked cluster at its repositioned slots (same layout the render
+    // model uses) so fit shows both the flow and the parked column.
+    if show_parked {
+        if let Some(layout) = park_layout(&in_flow_rects, &parked_natural) {
+            let (lx, ly) = layout.label_anchor;
+            grow(lx, ly, lx, ly);
+            for s in &layout.slots {
+                grow(s.x, s.y, s.x + s.width, s.y + s.height);
+            }
         }
     }
 
@@ -181,10 +206,11 @@ pub fn CanvasPanel() -> impl IntoView {
     let viewport_ref = create_node_ref::<html::Div>();
     // Legend overlay open/closed state (default minimized; expandable).
     let legend_collapsed = create_rw_signal(true);
-    // Whether to show the out-of-flow ("unrelated") node cards (UX #2). Default
-    // OFF: the active flow is the sole focus, orphan cards are hidden. Toggling
-    // ON reveals them dimmed and re-fits to frame everything (see the fit path).
-    let show_unrelated = create_rw_signal(false);
+    // Whether to show the parked out-of-flow ("unrelated") cluster (UX #2).
+    // Default ON: the parked cards are visible but secondary (dimmed, smaller,
+    // clustered to the right) so the active flow dominates. Toggling OFF fully
+    // hides them and re-fits to the in-flow bbox only (see the fit path).
+    let show_unrelated = create_rw_signal(true);
 
     // The resolved layout config from /api/config (defaults if absent). The
     // dataset is loaded once and never mutated, so this reads untracked — it is
@@ -420,13 +446,14 @@ pub fn CanvasPanel() -> impl IntoView {
             return;
         }
         let Some((plan, flow, _, _, _)) = diagram_inputs.get_untracked() else { return };
-        // Frame the IN-FLOW geometry only (the fix for UX #1/#2): the engine
-        // parks out-of-flow nodes in a tall side column, so framing them left
-        // the actual flow tiny in a corner. When the user opts to SHOW the
-        // unrelated nodes, frame the full plan so they're visible.
+        // Frame the IN-FLOW geometry plus the PARKED cluster (UX #1/#2): the
+        // engine interleaves out-of-flow nodes with the flow, so they're never
+        // framed at their engine positions. With the cluster shown we union the
+        // in-flow rects with the parked slots (small + dimmed → the flow still
+        // dominates); when the user hides the cluster we frame the flow only.
         let in_flow = flow.as_ref().map(|f| flow_node_ids(Some(f)));
-        let restrict = if show_unrelated.get_untracked() { None } else { in_flow.as_ref() };
-        let Some(bounds) = content_bounds(&plan, restrict) else { return };
+        let show_parked = show_unrelated.get_untracked();
+        let Some(bounds) = content_bounds(&plan, in_flow.as_ref(), show_parked) else { return };
         // The plan viewBox is the full canvas; content is a sub-region of it.
         fit_bounds(bounds, plan.canvas_width, plan.canvas_height);
     };
@@ -620,12 +647,14 @@ pub fn CanvasPanel() -> impl IntoView {
                     <button title="Zoom in" on:click=move |_| zoom_by(ZOOM_STEP)>"+"</button>
                 </div>
             </Show>
-            // "Show unrelated nodes" toggle (UX #2) — only over a flows diagram
-            // that actually has out-of-flow nodes to reveal.
+            // Parked-cluster toggle (UX #2) — only over a flows diagram that
+            // actually has out-of-flow nodes. The cluster is shown by default
+            // (visible but secondary); the toggle lets the user fully hide it to
+            // declutter, and re-fits to the in-flow bbox only.
             <Show when=move || has_unrelated.get()>
                 <button
                     class="canvas-panel__unrelated-toggle"
-                    class:is-active=move || show_unrelated.get()
+                    class:is-active=move || !show_unrelated.get()
                     on:click=move |_| show_unrelated.update(|s| *s = !*s)
                 >
                     {move || {
@@ -688,22 +717,49 @@ mod tests {
     }
 
     #[test]
-    fn content_bounds_excludes_orphans_when_in_flow_restricted() {
-        // The fix for UX #1/#2: restricting to the in-flow set ("a") must NOT
-        // stretch the bounds down to the parked orphan at y=900.
+    fn content_bounds_never_frames_orphan_at_its_engine_position() {
+        // UX #2: the engine parks the orphan far down (y=900). Whether the parked
+        // cluster is shown or hidden, that engine position must NEVER stretch the
+        // bounds — otherwise the flow shrinks into a corner.
         let plan = plan_with_orphan();
         let in_flow: HashSet<String> = ["a".to_string()].into_iter().collect();
-        let b = content_bounds(&plan, Some(&in_flow)).expect("bounds");
-        assert!(b.max_y < 200.0, "orphan must be excluded, max_y={}", b.max_y);
-        assert_eq!(b.min_y, 100.0);
-        assert_eq!(b.max_y, 154.0);
+        for show_parked in [true, false] {
+            let b = content_bounds(&plan, Some(&in_flow), show_parked).expect("bounds");
+            assert!(
+                b.max_y < 200.0,
+                "orphan engine y=900 must not be framed (show_parked={show_parked}), max_y={}",
+                b.max_y
+            );
+            assert_eq!(b.min_y, 100.0, "in-flow top anchors the frame");
+        }
     }
 
     #[test]
-    fn content_bounds_includes_all_nodes_when_unrestricted() {
-        // Structural mode (None) and "show unrelated" both union every node.
+    fn content_bounds_frames_parked_cluster_to_the_right_when_shown() {
+        // With the cluster shown, the orphan is REPOSITIONED to a compact slot to
+        // the right of the in-flow bbox — so the bounds extend right (past the
+        // in-flow max-x at 236), not down.
         let plan = plan_with_orphan();
-        let b = content_bounds(&plan, None).expect("bounds");
+        let in_flow: HashSet<String> = ["a".to_string()].into_iter().collect();
+        let shown = content_bounds(&plan, Some(&in_flow), true).expect("bounds");
+        let hidden = content_bounds(&plan, Some(&in_flow), false).expect("bounds");
+        // Hidden frames the in-flow card only (x 100..236).
+        assert_eq!(hidden.max_x, 236.0, "hidden frames in-flow only");
+        // Shown extends the frame rightward to include the parked slot.
+        assert!(
+            shown.max_x > 236.0,
+            "parked cluster sits to the right, max_x={}",
+            shown.max_x
+        );
+        // The parked slot is compact (scaled), so the frame stays modest.
+        assert!(shown.max_x < 400.0, "parked cluster is compact, max_x={}", shown.max_x);
+    }
+
+    #[test]
+    fn content_bounds_includes_all_nodes_in_structural_mode() {
+        // Structural mode (`None`): no flow, no orphans → every node rect unioned.
+        let plan = plan_with_orphan();
+        let b = content_bounds(&plan, None, true).expect("bounds");
         assert_eq!(b.max_y, 954.0, "all nodes unioned, max_y={}", b.max_y);
     }
 
