@@ -891,6 +891,66 @@ button:focus-visible {
   color: var(--dim);
 }
 
+/* ── C4 drill-down breadcrumb (top-left canvas overlay) ──────────────────────
+   The path of C4 views the user drilled through (Context › Container: X › …).
+   On-language: overline eyebrow + mono path on a raised, blurred panel chip,
+   matching the legend/placard chrome. Ancestor crumbs are buttons (climb back
+   up); the active crumb is plain text in --accent (STATE, rule 1) so the
+   current level reads as "you are here". */
+.c4-breadcrumb {
+  position: absolute;
+  left: var(--pad);
+  top: var(--pad);
+  display: flex;
+  align-items: center;
+  gap: var(--pad);
+  max-width: calc(100% - 2 * var(--pad));
+  padding: var(--grid) var(--pad);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  backdrop-filter: blur(2px);
+}
+.c4-breadcrumb__trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--grid);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.c4-breadcrumb__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--grid);
+}
+/* The `›` separator precedes every crumb except the first. */
+.c4-breadcrumb__item + .c4-breadcrumb__item::before {
+  content: "›";
+  color: var(--dim);
+  font-family: var(--font-mono);
+}
+.c4-breadcrumb__crumb {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.c4-breadcrumb__crumb:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.c4-breadcrumb__crumb--current {
+  color: var(--accent);
+  cursor: default;
+}
+
 /* ── Right inspector ──────────────────────────────────────────────────────── */
 .inspector {
   background: var(--panel);
@@ -1118,6 +1178,24 @@ button:focus-visible {
   stroke-linejoin: round;
   pointer-events: none;
 }
+/* Drilldown affordance: a bottom-right chevron rendered ONLY on a drillable C4
+   card (a node with a scoped child view). Dim at rest, --accent (STATE) on
+   hover, so the card reads as "click to open the child view"; a node without a
+   child has no chevron, making the absence of drilldown legible. The base
+   `.flow-node` cursor already signals interactivity; the chevron disambiguates
+   drill from inspect. */
+.flow-node__drill {
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.flow-node--drillable:hover .flow-node__drill {
+  stroke: var(--accent);
+}
+
 /* Selected = STATE treatment (rule 1): --accent ring/glow, never a role hue. */
 .flow-node--selected .flow-node__card {
   stroke: var(--accent);

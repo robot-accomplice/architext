@@ -66,6 +66,7 @@ pub fn build_render_model(
     flow: Option<&Flow>,
     edge_labels: &HashMap<String, String>,
     nodes_by_id: &HashMap<&str, &Node>,
+    drillable_ids: &HashSet<String>,
 ) -> RenderModel {
     // Edge kind per step id (the route key == the flow step id). Empty in
     // structural mode → every edge defaults to Process.
@@ -93,6 +94,7 @@ pub fn build_render_model(
                 rect: rect.clone(),
                 in_flow: is_in_flow(id),
                 scale: 1.0,
+                drillable: drillable_ids.contains(id),
             }),
             None => {
                 // An augmented (decision) rect — tint with the component's role
@@ -389,6 +391,11 @@ pub fn DiagramSvg(
     edge_labels: HashMap<String, String>,
     #[allow(unused)] view: DataView,
     nodes: Vec<Node>,
+    /// Node ids whose card DRILLS DOWN to a scoped C4 child view (C4 mode only;
+    /// empty in every other mode). Drives the per-card drilldown affordance. The
+    /// caller computes this from the active C4 view + all views, so the SVG layer
+    /// stays agnostic of the C4 hierarchy rules.
+    #[prop(optional)] drillable_node_ids: HashSet<String>,
     #[prop(into)] pan_x: Signal<f64>,
     #[prop(into)] pan_y: Signal<f64>,
     #[prop(into)] zoom: Signal<f64>,
@@ -406,7 +413,8 @@ pub fn DiagramSvg(
     #[prop(into)] on_select: Callback<String>,
 ) -> impl IntoView {
     let nodes_by_id: HashMap<&str, &Node> = nodes.iter().map(|n| (n.id.as_str(), n)).collect();
-    let model = build_render_model(&plan, flow.as_ref(), &edge_labels, &nodes_by_id);
+    let model =
+        build_render_model(&plan, flow.as_ref(), &edge_labels, &nodes_by_id, &drillable_node_ids);
 
     let view_box = format!("0 0 {} {}", model.canvas_width, model.canvas_height);
     let transform = move || format!("translate({} {}) scale({})", pan_x.get(), pan_y.get(), zoom.get());
