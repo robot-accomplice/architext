@@ -20,7 +20,9 @@ use std::collections::HashSet;
 use leptos::*;
 use leptos::spawn_local;
 
-use crate::data::{fetch_repo_tree, models::RepoFile, FetchError};
+use crate::data::{
+    fetch_file, fetch_repo_tree, models::FilePreviewPayload, models::RepoFile, FetchError,
+};
 use crate::diagram::role_color_var;
 use crate::repo_tree_model::{
     build_owner_index, build_repo_tree, dominant_owner, file_icon, format_relative_time,
@@ -33,6 +35,12 @@ const INDENT_PX: f64 = 14.0; // per-depth indent (matches the JS workspace)
 /// The repo-tree fetch outcome held in a plain signal (no nested `<Suspense>`,
 /// which conflicts with the App-level data Suspense). `None` while loading.
 type RepoState = Option<Result<crate::data::models::RepoTreePayload, FetchError>>;
+
+/// The file-preview fetch outcome for the right pane. `None` while no file is
+/// selected OR while the selected file's contents are still loading — the pane
+/// distinguishes the two via `selected_file` being set (loading) vs unset
+/// (empty hint).
+type PreviewState = Option<Result<FilePreviewPayload, FetchError>>;
 
 /// The SVG `path` `d` for a `DiagramIcon` glyph key used by the repo tree
 /// (file-type glyphs + folder glyphs). Mirrors the React `DiagramIcon` paths
@@ -69,8 +77,27 @@ pub fn RepoTree() -> impl IntoView {
     // Collapsed directory paths (expanded by default).
     let collapsed = create_rw_signal::<HashSet<String>>(HashSet::new());
 
+    // The currently-previewed file path (right pane). `None` = empty state.
+    let selected_file = create_rw_signal::<Option<String>>(None);
+    // The preview fetch outcome. `None` while loading the selected file.
+    let preview = create_rw_signal::<PreviewState>(None);
+
+    // When `selected_file` changes to a path, fetch its highlighted contents.
+    // Each click clears the prior result first (loading state), then resolves.
+    create_effect(move |_| {
+        let Some(path) = selected_file.get() else { return };
+        preview.set(None);
+        spawn_local(async move {
+            preview.set(Some(fetch_file(&path).await));
+        });
+    });
+
     view! {
-        <div class="repo-tree">
+        <div
+            class="repo-tree"
+            class=("repo-tree--previewing", move || selected_file.get().is_some())
+        >
+            <div class="repo-tree__main">
             <div class="repo-tree__header">
                 <div class="overline">"REPO TREE"</div>
                 {move || repo.get()
@@ -119,19 +146,111 @@ pub fn RepoTree() -> impl IntoView {
                     view! {
                         <div class="repo-tree__body">
                             <div class="repo-row repo-row--colhead" aria-hidden="true">
-                                <span class="repo-row__caret"></span>
-                                <span class="repo-row__icon"></span>
-                                <span class="repo-row__name">"Name"</span>
+                                <div class="repo-row__lead">
+                                    <span class="repo-row__caret"></span>
+                                    <span class="repo-row__icon"></span>
+                                    <span class="repo-row__name">"Name"</span>
+                                </div>
                                 <span class="repo-row__size">"Size"</span>
                                 <span class="repo-row__time">"Modified"</span>
                                 <span class="repo-row__owner">"Owner"</span>
                             </div>
-                            {render_children(&tree, 0, state, collapsed, now)}
+                            {render_children(&tree, 0, state, collapsed, selected_file, now)}
                         </div>
                     }.into_view()
                 }
             }}
+            </div>
+            <FilePreview selected_file preview/>
         </div>
+    }
+}
+
+/// The right pane: renders the selected file's syntax-highlighted contents, or
+/// an empty hint when nothing is selected. Loading and error states are
+/// explicit (FAIL LOUD — never a blank pane). Binary/truncated files carry a
+/// clear notice.
+#[component]
+fn FilePreview(
+    selected_file: RwSignal<Option<String>>,
+    preview: RwSignal<PreviewState>,
+) -> impl IntoView {
+    view! {
+        <div class="repo-file-preview">
+            {move || match (selected_file.get(), preview.get()) {
+                // Nothing selected yet → empty hint.
+                (None, _) => view! {
+                    <p class="repo-file-preview__hint">"Select a file to preview"</p>
+                }.into_view(),
+                // Selected but not yet resolved → loading.
+                (Some(path), None) => view! {
+                    <div class="repo-file-preview__header">
+                        <span class="repo-file-preview__path">{path}</span>
+                    </div>
+                    <p class="repo-file-preview__hint">"Loading file…"</p>
+                }.into_view(),
+                // Fetch failed → explicit error (FAIL LOUD).
+                (Some(path), Some(Err(err))) => view! {
+                    <div class="repo-file-preview__header">
+                        <span class="repo-file-preview__path">{path}</span>
+                    </div>
+                    <p class="repo-file-preview__hint repo-file-preview__hint--error">
+                        {format!("Could not load file: {err}")}
+                    </p>
+                }.into_view(),
+                // Resolved.
+                (Some(_), Some(Ok(payload))) => {
+                    let meta = preview_meta(&payload);
+                    let notice = preview_notice(&payload);
+                    let body = if payload.binary {
+                        view! {
+                            <p class="repo-file-preview__hint">
+                                "Binary file — no text preview."
+                            </p>
+                        }.into_view()
+                    } else {
+                        // Server-rendered, inline-styled highlight HTML.
+                        let html = payload.html.clone().unwrap_or_default();
+                        view! {
+                            <div class="repo-file-preview__code" inner_html=html></div>
+                        }.into_view()
+                    };
+                    view! {
+                        <div class="repo-file-preview__header">
+                            <span class="repo-file-preview__path">{payload.path.clone()}</span>
+                            <span class="repo-file-preview__meta">{meta}</span>
+                        </div>
+                        {notice}
+                        {body}
+                    }.into_view()
+                }
+            }}
+        </div>
+    }
+}
+
+/// The header metadata line: `size · language`.
+fn preview_meta(p: &FilePreviewPayload) -> String {
+    let size = if p.size.is_some() { format_size(p.size) } else { String::new() };
+    match (&size, &p.language) {
+        (s, Some(lang)) if !s.is_empty() => format!("{s} · {lang}"),
+        (s, _) if !s.is_empty() => s.clone(),
+        (_, Some(lang)) => lang.clone(),
+        _ => String::new(),
+    }
+}
+
+/// A truncation notice, shown above the code when the server only sent the head.
+fn preview_notice(p: &FilePreviewPayload) -> View {
+    if p.truncated && !p.binary {
+        view! {
+            <p class="repo-file-preview__notice">
+                "Large file — showing the first 512 KiB."
+            </p>
+        }
+        .into_view()
+    } else {
+        ().into_view()
     }
 }
 
@@ -143,12 +262,13 @@ fn render_children(
     depth: usize,
     state: crate::state::AppState,
     collapsed: RwSignal<HashSet<String>>,
+    selected_file: RwSignal<Option<String>>,
     now: i64,
 ) -> View {
     parent
         .children
         .iter()
-        .map(|child| render_node(child, depth, state, collapsed, now))
+        .map(|child| render_node(child, depth, state, collapsed, selected_file, now))
         .collect_view()
 }
 
@@ -157,6 +277,7 @@ fn render_node(
     depth: usize,
     state: crate::state::AppState,
     collapsed: RwSignal<HashSet<String>>,
+    selected_file: RwSignal<Option<String>>,
     now: i64,
 ) -> View {
     let indent = format!("padding-left:{}px", depth as f64 * INDENT_PX);
@@ -204,26 +325,29 @@ fn render_node(
                     view! { <span class="repo-row__owner"></span> }.into_view(),
                 )
             };
-            let style = format!("{indent};border-left-color:{rail}");
+            let style = format!("border-left-color:{rail}");
 
             // Children are rendered eagerly but hidden when collapsed, so the
             // expand toggle is instant and selection state is preserved.
-            let children_view = render_children(node, depth + 1, state, collapsed, now);
+            let children_view =
+                render_children(node, depth + 1, state, collapsed, selected_file, now);
             view! {
                 <div class="repo-row repo-row--dir" style=style on:click=on_click>
-                    <span class="repo-row__caret">
-                        {move || if is_collapsed.get() { "▸" } else { "▾" }}
-                    </span>
-                    <span class="repo-row__icon repo-row__icon--folder">
-                        <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d=move || if is_collapsed.get() {
-                                glyph_path("folder")
-                            } else {
-                                glyph_path("folder-open")
-                            }/>
-                        </svg>
-                    </span>
-                    <span class="repo-row__name repo-row__name--dir">{name}</span>
+                    <div class="repo-row__lead" style=indent>
+                        <span class="repo-row__caret">
+                            {move || if is_collapsed.get() { "▸" } else { "▾" }}
+                        </span>
+                        <span class="repo-row__icon repo-row__icon--folder">
+                            <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d=move || if is_collapsed.get() {
+                                    glyph_path("folder")
+                                } else {
+                                    glyph_path("folder-open")
+                                }/>
+                            </svg>
+                        </span>
+                        <span class="repo-row__name repo-row__name--dir">{name}</span>
+                    </div>
                     <span class="repo-row__size"></span>
                     <span class="repo-row__time"></span>
                     {owner_view}
@@ -246,12 +370,17 @@ fn render_node(
                 // Unowned files get a neutral rail (the hairline), never a role hue.
                 None => ("var(--line)".to_string(), String::new(), None),
             };
-            let style = format!("{indent};border-left-color:{rail}");
+            let style = format!("border-left-color:{rail}");
 
+            // Clicking a file row keeps the existing behaviour (select the
+            // owning node, if any) AND sets the preview path so the right pane
+            // fetches + renders the file's contents.
+            let click_path = path.clone();
             let on_click = move |_| {
                 if let Some(id) = owner_id.clone() {
                     state.set_selected_node(id);
                 }
+                selected_file.set(Some(click_path.clone()));
             };
             let owned = owner.is_some();
 
@@ -266,13 +395,15 @@ fn render_node(
                     style=style
                     on:click=on_click
                 >
-                    <span class="repo-row__caret"></span>
-                    <span class="repo-row__icon" style=format!("color:{}", icon.color)>
-                        <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d=glyph_path(icon.glyph)/>
-                        </svg>
-                    </span>
-                    <span class="repo-row__name">{name}</span>
+                    <div class="repo-row__lead" style=indent>
+                        <span class="repo-row__caret"></span>
+                        <span class="repo-row__icon" style=format!("color:{}", icon.color)>
+                            <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d=glyph_path(icon.glyph)/>
+                            </svg>
+                        </span>
+                        <span class="repo-row__name">{name}</span>
+                    </div>
                     <span class="repo-row__size">{size_text}</span>
                     <span class="repo-row__time">{time_text}</span>
                     {if owner_label.is_empty() {

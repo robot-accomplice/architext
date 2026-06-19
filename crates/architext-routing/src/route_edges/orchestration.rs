@@ -62,7 +62,7 @@ use crate::route_ports::{offset_for_endpoint_order, surface_capacity, SideAnchor
 use crate::route_scoring::{QualityCosts, RouteCandidate};
 use crate::route_strategies::{
     select_route_candidate, CandidateRelationship, EndpointSideUsage as EndpointSideUsageTrait,
-    SelectRouteCandidateInput,
+    PlanStats, SelectRouteCandidateInput,
 };
 use crate::route_style::normalize_route_style;
 use crate::route_candidate_ports::EndpointOffsets;
@@ -396,9 +396,47 @@ pub struct PlannerContext {
     lane_index_by_node: IndexMap<String, i64>,
     /// Row index per node, mirroring JS `input.rowIndexByNode`.
     row_index_by_node: IndexMap<String, i64>,
+    /// Deterministic planner work counters (mirror JS `stats`). Interior-mutable
+    /// because `edge_path` takes `&self` and is reached from reroute callbacks.
+    /// Accumulates `edges_planned` / `cheap_candidate_count` across every
+    /// `select_route_candidate` call, including reroutes — matching the JS perf
+    /// counters. `grid_route_calls` is collected separately in
+    /// `route_candidates.stats` (BuilderStats) and merged in `plan_stats()`.
+    stats: RefCell<PlanStats>,
+}
+
+/// Deterministic planner work counters surfaced for the perf ratchet. Mirrors the
+/// JS `stats` object's three gated counters (`edgesPlanned`, `cheapCandidateCount`,
+/// `gridRouteCalls`). Exact for fixed inputs on any machine, so the ratchet gates
+/// them strictly with zero CI flake.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct CorpusPlanStats {
+    pub edges_planned: i64,
+    pub cheap_candidate_count: i64,
+    pub grid_route_calls: u64,
 }
 
 impl PlannerContext {
+    /// Read the accumulated planner work counters. `edges_planned` /
+    /// `cheap_candidate_count` come from the candidate-selection pass (including
+    /// reroutes); `grid_route_calls` is merged from the candidate builders'
+    /// own counter. Call after the full planning + quality passes have run.
+    pub fn plan_stats(&self) -> CorpusPlanStats {
+        let s = self.stats.borrow();
+        let grid_route_calls = self
+            .route_candidates
+            .stats
+            .borrow()
+            .as_ref()
+            .map(|b| b.grid_route_calls)
+            .unwrap_or(0);
+        CorpusPlanStats {
+            edges_planned: s.edges_planned,
+            cheap_candidate_count: s.cheap_candidate_count,
+            grid_route_calls,
+        }
+    }
+
     /// Port of JS `edgePath(...)`.
     #[allow(clippy::too_many_arguments)]
     pub fn edge_path<E: EndpointSideUsageTrait>(
@@ -488,6 +526,7 @@ impl PlannerContext {
         let from_row_index  = from_row_index.or_else(||  self.row_index_by_node.get(from_id.as_str()).copied());
         let to_row_index    = to_row_index.or_else(||    self.row_index_by_node.get(to_id.as_str()).copied());
 
+        let mut stats_guard = self.stats.borrow_mut();
         let select_input = SelectRouteCandidateInput {
             collision_count: &collision_count_fn,
             corridors: &corridors,
@@ -499,7 +538,7 @@ impl PlannerContext {
             relationship: cand_rel,
             route_candidates: &self.route_candidates,
             route_index,
-            stats: None,
+            stats: Some(&mut stats_guard),
             progress_tick: None,
             style,
             to_id,
@@ -742,7 +781,9 @@ pub fn route_planner_context(input: &RouteEdgesInput) -> PlannerContext {
         Some(input.grid_route_max_points),
         rect_for_fn,
         route_quality,
-        None,
+        // Enable BuilderStats collection so grid_route_calls accumulates (the JS
+        // perf counter). Was `None` (uncounted); now Some so plan_stats() can read it.
+        Some(crate::route_candidate_builders::BuilderStats::default()),
         None,
     );
 
@@ -758,6 +799,7 @@ pub fn route_planner_context(input: &RouteEdgesInput) -> PlannerContext {
         route_candidates,
         lane_index_by_node: input.lane_index_by_node.clone(),
         row_index_by_node: input.row_index_by_node.clone(),
+        stats: RefCell::new(PlanStats::default()),
     }
 }
 
@@ -964,6 +1006,15 @@ impl<'a> BuildRouteForSides for ReliefRouteBuilder<'a> {
 ///
 /// Returns a map from relationship id to final `RouteData`.
 pub fn route_edges(input: &RouteEdgesInput) -> IndexMap<String, RouteData> {
+    route_edges_with_stats(input).0
+}
+
+/// Same as [`route_edges`] but also returns the deterministic planner work
+/// counters ([`CorpusPlanStats`]) accumulated over the planning + reroute passes.
+/// Used by the perf ratchet; production callers use the stats-free `route_edges`.
+pub fn route_edges_with_stats(
+    input: &RouteEdgesInput,
+) -> (IndexMap<String, RouteData>, CorpusPlanStats) {
     let style = normalize_route_style(&input.style);
 
     let cache_key_input = build_cache_key_input(input, style);
@@ -1122,7 +1173,8 @@ pub fn route_edges(input: &RouteEdgesInput) -> IndexMap<String, RouteData> {
         }
     }
 
-    routes
+    let stats = relief_planner.plan_stats();
+    (routes, stats)
 }
 
 // ---------------------------------------------------------------------------

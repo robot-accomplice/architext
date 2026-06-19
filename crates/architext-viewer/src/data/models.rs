@@ -478,6 +478,27 @@ pub struct RepoFile {
     pub mtime: Option<i64>,
 }
 
+// ─── /api/file ─────────────────────────────────────────────────────────────
+
+/// `/api/file?path=` payload (`{ path, size, language, truncated, binary, html }`).
+/// Fetched on demand by the Repo Tree file-preview pane when a file row is
+/// clicked. `html` is server-rendered, inline-styled syntax-highlight HTML
+/// (null for binary files); the viewer renders it directly with `inner_html`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct FilePreviewPayload {
+    pub path: String,
+    #[serde(default)]
+    pub size: Option<u64>,
+    #[serde(default)]
+    pub language: Option<String>,
+    #[serde(default)]
+    pub truncated: bool,
+    #[serde(default)]
+    pub binary: bool,
+    #[serde(default)]
+    pub html: Option<String>,
+}
+
 /// `/api/config` payload (`{ diagram, warnings, fields, sections }`).
 ///
 /// `diagram` is the server-resolved config (defaults + the user/project layers);

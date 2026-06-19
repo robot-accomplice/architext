@@ -52,6 +52,12 @@ pub fn App() -> impl IntoView {
                 Ok(loaded) => {
                     let state = AppState::new(loaded);
                     provide_context(state);
+                    // Apply + persist the color theme: seed `<html data-theme>`
+                    // from the (localStorage-seeded) signal now, and re-apply
+                    // whenever the header toggle flips it.
+                    create_effect(move |_| {
+                        crate::theme::apply_theme(state.theme.get());
+                    });
                     // The CLI version is a separate, non-fatal fetch (display-only
                     // header eyebrow); load it into state once, after mount.
                     let cli_version = state.cli_version;

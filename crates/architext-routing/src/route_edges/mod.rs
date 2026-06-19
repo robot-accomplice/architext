@@ -49,8 +49,8 @@ pub use crossings::{crossings_between, crossings_involving, gutter_lane_of};
 
 // -- orchestration --
 pub use orchestration::{
-    route_edges, route_planner_context, InputRelationship, NodeRect, PlannerContext,
-    RouteEdgesInput, RouteQualityImpl,
+    route_edges, route_edges_with_stats, route_planner_context, CorpusPlanStats, InputRelationship,
+    NodeRect, PlannerContext, RouteEdgesInput, RouteQualityImpl,
 };
 
 // -- separation --
