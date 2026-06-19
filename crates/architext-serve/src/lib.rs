@@ -97,6 +97,7 @@ pub fn build_router(state: AppState, farm: Farm, hub: Option<WatchHub>) -> Route
         .route("/api/status", get(handlers::status::get_status))
         .route("/api/config", get(handlers::config_payload::get_config))
         .route("/api/repo-tree", get(handlers::repo_tree::get_repo_tree))
+        .route("/api/node-git", get(handlers::node_git::get_node_git))
         .route("/api/file", get(handlers::file_preview::get_file_preview))
         // SSE live-reload stream (watch → validate → broadcast)
         .route("/api/data-events", get(handlers::data_events::get_data_events))
