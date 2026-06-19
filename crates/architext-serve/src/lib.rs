@@ -255,8 +255,11 @@ pub async fn serve_with_schema_dir(
 
     let (listener, bound_port) = bind_listener(host, port)?;
 
-    tracing::info!("Building plan farm from {}", data_dir.display());
-    let farm = farm_state::build_farm(&data_dir);
+    // Warm the farm in the BACKGROUND so the server binds + listens immediately
+    // (a synchronous build blocked startup for seconds on large repos). Lookups
+    // miss until it's populated; the viewer falls back to in-process compute.
+    tracing::info!("Warming plan farm in the background from {}", data_dir.display());
+    let farm = farm_state::empty_farm();
 
     // Derive target_dir from data_dir: data_dir is <target>/docs/architext/data
     // so target = data_dir.parent().parent().parent().
@@ -299,6 +302,11 @@ pub async fn serve_with_schema_dir(
         }
     };
 
+    // Clone handles for the background farm warm-up before `state`/`router` take
+    // ownership of data_dir / farm.
+    let warm_farm = farm.clone();
+    let warm_data_dir = data_dir.clone();
+
     let state = AppState {
         data_dir,
         dist_dir,
@@ -310,6 +318,11 @@ pub async fn serve_with_schema_dir(
     };
 
     let router = build_router(state, farm, hub);
+
+    // Populate the farm off the async runtime (CPU-heavy synchronous work) —
+    // fire-and-forget; `refresh_farm` swaps the populated map in atomically and
+    // logs the plan count when done.
+    tokio::task::spawn_blocking(move || farm_state::refresh_farm(&warm_farm, &warm_data_dir));
 
     tracing::info!("Architext serve listening on http://{host}:{bound_port}");
 

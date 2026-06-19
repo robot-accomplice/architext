@@ -31,9 +31,17 @@ pub type Farm = Arc<RwLock<HashMap<String, PlanEntry>>>;
 /// flows.json or views.json yet — this matches the JS behaviour where the
 /// farm starts empty and fills in asynchronously.
 pub fn build_farm(data_dir: &Path) -> Farm {
-    let farm: Farm = Arc::new(RwLock::new(HashMap::new()));
+    let farm = empty_farm();
     refresh_farm(&farm, data_dir);
     farm
+}
+
+/// An empty farm. The serve startup uses this so it can bind + listen
+/// immediately, then warm the farm on a background task ([`refresh_farm`]).
+/// Lookups against an empty/warming farm simply miss, and the viewer falls back
+/// to its in-process plan compute until the farm is populated.
+pub fn empty_farm() -> Farm {
+    Arc::new(RwLock::new(HashMap::new()))
 }
 
 /// (Re)populate the farm from `data_dir`.  Swaps in the new map atomically.
@@ -45,7 +53,13 @@ pub fn refresh_farm(farm: &Farm, data_dir: &Path) {
             for entry in entries {
                 map.insert(entry.hash, PlanEntry { plan_json: entry.plan_json });
             }
+            let count = map.len();
             *farm.write().expect("farm write lock") = map;
+            // One line per refresh — fires once at startup and once per explicit
+            // config write, NOT on data-watch events (the farm is deliberately
+            // not wired to the watch hub, so it can't loop the way the legacy
+            // Node farm did when its refresh was bound to every watcher event).
+            tracing::info!("plan farm: precomputed {count} diagram plan(s)");
         }
         Err(err) => {
             tracing::warn!("plan farm enumeration failed: {err}");
