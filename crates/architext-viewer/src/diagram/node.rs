@@ -82,12 +82,22 @@ pub struct NodeView {
     pub id: String,
     pub name: String,
     pub node_type: String,
+    /// The placed top-left (`x`/`y`) and NATURAL card size (`width`/`height`).
+    /// The card's inner content (icon, wrapped name, type chip) is laid out
+    /// against this natural size, then the whole card is uniformly scaled by
+    /// [`NodeView::scale`] at render time — so a parked card shrinks crisply
+    /// instead of clipping a fixed-px name into a tiny rect.
     pub rect: Rect,
     /// Whether the node is part of the active flow (an endpoint of some flow
     /// step). `true` when there is no flow (structural C4/Deployment mode →
-    /// every node is "in flow"). When `false` the card is dimmed and
-    /// non-interactive (the `flow-node--unrelated` state).
+    /// every node is "in flow"). When `false` the card is dimmed,
+    /// non-interactive, and parked beside the flow (the `flow-node--unrelated`
+    /// state).
     pub in_flow: bool,
+    /// Uniform render scale for the card (1.0 in-flow; ~0.62 for parked
+    /// out-of-flow cards, so the flow dominates while the parked cluster stays
+    /// compact). The rendered footprint is `width*scale` × `height*scale`.
+    pub scale: f64,
 }
 
 /// Render one node card. `selected` toggles the `--accent` state treatment;
@@ -126,10 +136,13 @@ pub fn DiagramNode(
     let block_top = height / 2.0 - (n_lines * NAME_LINE_H + TYPE_GAP + TYPE_H) / 2.0;
     let type_cy = block_top + n_lines * NAME_LINE_H + TYPE_GAP + TYPE_H / 2.0;
 
+    // Parked cards render at NATURAL size then scale uniformly, so the inner
+    // text/icon shrink proportionally rather than clipping (UX #2 parked look).
+    let scale = node.scale;
     view! {
         <g
             class=group_class
-            transform=format!("translate({x} {y})")
+            transform=format!("translate({x} {y}) scale({scale})")
             on:click=move |_| on_select.call(id_for_click.clone())
         >
             // Card body — 8px radius via --node-card-radius (set in CSS).
