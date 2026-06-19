@@ -68,6 +68,17 @@ pub struct AppState {
     /// `new`; an effect in `App` applies it as `data-theme` on <html> and
     /// persists changes.
     pub theme: RwSignal<Theme>,
+
+    /// C4 drill-down breadcrumb trail: the chain of view indices from the C4
+    /// root down to the currently shown view. The LAST entry is always the
+    /// active view (`view_idx`); earlier entries are the ancestor views a node
+    /// click drilled through. Only meaningful in C4 mode — entering C4 (or
+    /// picking a C4 view from the selector) re-roots it to a single-entry trail,
+    /// and leaving C4 clears it. A node click that resolves a scoped child view
+    /// PUSHES onto it; clicking a breadcrumb crumb POPS back to that depth. This
+    /// is the only navigation history the viewer keeps; modes that don't drill
+    /// never read it.
+    pub c4_trail: RwSignal<Vec<usize>>,
 }
 
 impl AppState {
@@ -100,7 +111,26 @@ impl AppState {
             invalid_notice: create_rw_signal(None),
             selected_release: create_rw_signal(None),
             theme: create_rw_signal(load_theme()),
+            // Initial mode is Flows, which doesn't drill — start with no trail.
+            c4_trail: create_rw_signal(Vec::new()),
         }
+    }
+
+    /// Re-root the C4 breadcrumb trail at `view_idx` if it is a C4 view, else
+    /// clear it. Used whenever the C4 root changes (entering C4 mode, picking a
+    /// C4 view from the selector, or a reload that re-resolves the view): the
+    /// trail collapses to a single crumb (the new root) so it never carries a
+    /// stale ancestor chain from a different root. A non-C4 view yields an empty
+    /// trail (no breadcrumb renders outside C4 mode).
+    fn reroot_c4_trail(&self, view: Option<usize>) {
+        let data = self.data.get_untracked();
+        let trail = match view {
+            Some(i) if data.views.get(i).is_some_and(|v| v.view_type.starts_with("c4-")) => {
+                vec![i]
+            }
+            _ => Vec::new(),
+        };
+        self.c4_trail.set(trail);
     }
 
     /// Replace the loaded dataset after a live-reload, PRESERVING the user's
@@ -139,6 +169,9 @@ impl AppState {
         // clear both so nothing dangles (mirrors set_view/set_flow behavior).
         self.selected_node.set(None);
         self.selected_step.set(None);
+        // The reloaded views vector may have shifted; the old trail's indices
+        // can't be trusted, so re-root at the (clamped) active view.
+        self.reroot_c4_trail(view);
     }
 
     /// Replace ONLY the resolved diagram config after a `POST /api/config`
@@ -199,6 +232,9 @@ impl AppState {
             self.flow_idx.set(None);
             self.view_idx.set(selection::default_view_for_mode(&data.views, mode));
         }
+        // Re-root the breadcrumb trail at the new mode's view: a single crumb
+        // when entering C4 (the Context root), empty for every non-C4 mode.
+        self.reroot_c4_trail(self.view_idx.get_untracked());
     }
 
     /// Select a flow (flows mode); re-resolve the view to a compatible one.
@@ -218,7 +254,11 @@ impl AppState {
         self.view_idx.set(view);
     }
 
-    /// Select a view; in flows mode re-resolve the flow to a compatible one.
+    /// Select a view directly (the VIEW selector, Blast Radius cross-links). In
+    /// flows mode re-resolves the flow to a compatible one. Because this is a
+    /// "jump straight to this view" action — not a drill — it RE-ROOTS the C4
+    /// breadcrumb trail: picking a C4 view from the selector starts a fresh trail
+    /// at that view rather than appending to an unrelated drill path.
     pub fn set_view(&self, view_idx: usize) {
         let data = self.data.get_untracked();
         self.selected_node.set(None);
@@ -229,6 +269,36 @@ impl AppState {
             let flow = selection::default_flow_for_view(&data.views, &data.flows, view_idx, current);
             self.flow_idx.set(flow);
         }
+        self.reroot_c4_trail(Some(view_idx));
+    }
+
+    /// Drill DOWN into a scoped C4 child view (a node click in C4 mode resolved
+    /// `child_view_idx` via `child_c4_view_for_node`). Unlike [`Self::set_view`],
+    /// this PUSHES the child onto the breadcrumb trail so the ancestor chain is
+    /// preserved and the breadcrumb can navigate back up. Clears the node/step
+    /// selection like every other view change. C4 mode only — the caller has
+    /// already established we are in C4 and a scoped child exists.
+    pub fn drill_to_c4_view(&self, child_view_idx: usize) {
+        self.selected_node.set(None);
+        self.selected_step.set(None);
+        self.view_idx.set(Some(child_view_idx));
+        self.c4_trail.update(|t| t.push(child_view_idx));
+    }
+
+    /// Navigate to breadcrumb `depth` (0 == the C4 root). Truncates the trail to
+    /// that depth + 1 (dropping the descendants the user is climbing out of) and
+    /// makes that view active. A no-op if `depth` is already the last crumb or
+    /// out of range. Clears the node/step selection like any view change.
+    pub fn navigate_to_c4_crumb(&self, depth: usize) {
+        let trail = self.c4_trail.get_untracked();
+        let Some(&view_idx) = trail.get(depth) else { return };
+        if depth + 1 == trail.len() {
+            return; // already here
+        }
+        self.selected_node.set(None);
+        self.selected_step.set(None);
+        self.view_idx.set(Some(view_idx));
+        self.c4_trail.update(|t| t.truncate(depth + 1));
     }
 }
 

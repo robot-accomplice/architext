@@ -22,6 +22,7 @@ use architext_routing::plan_diagram::plan_diagram;
 use architext_routing::plan_request::build_flow_plan_request;
 
 use crate::components::blast_radius_panel::BlastRadiusPanel;
+use crate::components::c4_breadcrumb::C4Breadcrumb;
 use crate::components::legend::Legend;
 use crate::components::release_truth_panel::ReleaseTruthPanel;
 use crate::components::repo_tree::RepoTree;
@@ -509,9 +510,14 @@ pub fn CanvasPanel() -> impl IntoView {
     };
     let end_drag = move |_: MouseEvent| dragging.set(false);
 
-    // Node click: in C4 mode, a decomposable node (one with a scoped child C4
-    // view) drills DOWN to that child view; otherwise (and in every other mode)
-    // it selects the node for the inspector — exactly the JS viewer's behavior.
+    // Node click reconciliation (C4 mode): a node that HAS a scoped child C4
+    // view (some view's `scopeNodeId == node.id` at the next C4 level) drills
+    // DOWN into that child — pushing it onto the breadcrumb trail so there is a
+    // clear way back. A node WITHOUT a scoped child view (a leaf, an external /
+    // out-of-boundary actor) does NOT drill; it selects the node for the
+    // inspector instead, so every node click still does *something* legible and
+    // we never fabricate a child view. Outside C4 mode the click always selects
+    // (the inspector behavior every other diagram surface relies on).
     let on_select = Callback::new(move |node_id: String| {
         if state.mode.get_untracked() == Mode::C4 {
             let data = state.data.get_untracked();
@@ -519,7 +525,7 @@ pub fn CanvasPanel() -> impl IntoView {
                 if let Some(child_idx) =
                     child_c4_view_for_node(&data.views, &view.view_type, &node_id)
                 {
-                    state.set_view(child_idx);
+                    state.drill_to_c4_view(child_idx);
                     return;
                 }
             }
@@ -575,13 +581,26 @@ pub fn CanvasPanel() -> impl IntoView {
                         }.into_view();
                     }
                     match diagram_inputs.get() {
-                        Some((plan, flow, edge_labels, view, nodes)) => view! {
+                        Some((plan, flow, edge_labels, view, nodes)) => {
+                            // In C4 mode, the nodes that have a scoped child view
+                            // are drillable; the card shows the drilldown cue and
+                            // a click opens that child. Empty in every other mode
+                            // (no drilldown), so no affordance renders there.
+                            let drillable = if state.mode.get() == Mode::C4 {
+                                state.data.with(|d| {
+                                    crate::selection::drillable_node_ids(&d.views, &view.view_type)
+                                })
+                            } else {
+                                std::collections::HashSet::new()
+                            };
+                            view! {
                             <DiagramSvg
                                 plan=plan
                                 flow=flow
                                 edge_labels=edge_labels
                                 view=view
                                 nodes=nodes
+                                drillable_node_ids=drillable
                                 pan_x=pan_x
                                 pan_y=pan_y
                                 zoom=zoom
@@ -590,7 +609,8 @@ pub fn CanvasPanel() -> impl IntoView {
                                 show_unrelated=show_unrelated
                                 on_select=on_select
                             />
-                        }.into_view(),
+                            }.into_view()
+                        }
                         // Non-diagram surfaces render their own component in the
                         // center region; the rest keep the explanatory placard.
                         None => match state.mode.get() {
@@ -647,6 +667,10 @@ pub fn CanvasPanel() -> impl IntoView {
                     <button title="Zoom in" on:click=move |_| zoom_by(ZOOM_STEP)>"+"</button>
                 </div>
             </Show>
+            // C4 drill-down breadcrumb (top-left) — the trail of views the user
+            // drilled through. Self-gating: renders only in C4 mode with a
+            // multi-crumb trail, so it stays out of every other mode's canvas.
+            <C4Breadcrumb/>
             // Parked-cluster toggle (UX #2) — only over a flows diagram that
             // actually has out-of-flow nodes. The cluster is shown by default
             // (visible but secondary); the toggle lets the user fully hide it to

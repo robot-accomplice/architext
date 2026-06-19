@@ -98,6 +98,12 @@ pub struct NodeView {
     /// out-of-flow cards, so the flow dominates while the parked cluster stays
     /// compact). The rendered footprint is `width*scale` × `height*scale`.
     pub scale: f64,
+    /// Whether clicking this card DRILLS DOWN to a scoped C4 child view (C4 mode,
+    /// the node has a scoped child view). Drives the drilldown affordance — a
+    /// pointer cursor plus a small corner chevron — so a decomposable node reads
+    /// as open-able while a leaf/external node (no child) shows no such cue and
+    /// merely selects for the inspector. `false` in every non-C4 mode.
+    pub drillable: bool,
 }
 
 /// Render one node card. `selected` toggles the `--accent` state treatment;
@@ -123,10 +129,17 @@ pub fn DiagramNode(
     // out-of-flow ("unrelated") node carries `flow-node--unrelated` (CSS dims it
     // and disables pointer events) so the active flow stays the visual focus.
     let in_flow = node.in_flow;
-    let group_class = move || match (in_flow, selected.get()) {
-        (false, _) => "flow-node flow-node--unrelated",
-        (true, true) => "flow-node flow-node--selected",
-        (true, false) => "flow-node",
+    // A drillable card (C4 node with a scoped child) carries `flow-node--drillable`
+    // so CSS gives it the pointer cursor + reveals the corner chevron — the
+    // affordance that this card opens a child view. Non-drillable cards omit it,
+    // so the *absence* of the cue tells the user drilldown is unavailable.
+    let drillable = node.drillable;
+    let group_class = move || match (in_flow, selected.get(), drillable) {
+        (false, _, _) => "flow-node flow-node--unrelated",
+        (true, true, true) => "flow-node flow-node--selected flow-node--drillable",
+        (true, true, false) => "flow-node flow-node--selected",
+        (true, false, true) => "flow-node flow-node--drillable",
+        (true, false, false) => "flow-node",
     };
 
     // Wrap the name once; the line count drives both the name tspans and the
@@ -171,6 +184,20 @@ pub fn DiagramNode(
             <text class="flow-node__type" x=width / 2.0 y=type_cy fill=role>
                 {node.node_type.clone()}
             </text>
+            // Drilldown affordance: a small bottom-right chevron, shown by CSS
+            // only on `flow-node--drillable` cards. Signals "click to open the
+            // scoped child view"; a node without a child has no chevron, so the
+            // cue's absence reads as "no drilldown here".
+            {drillable.then(|| {
+                let gx = width - ICON_PAD - ICON_SIZE;
+                let gy = height - ICON_PAD - ICON_SIZE;
+                let g_transform = format!("translate({gx} {gy}) scale({icon_scale})");
+                view! {
+                    <g class="flow-node__drill" transform=g_transform>
+                        <path d="M9 6l6 6-6 6"></path>
+                    </g>
+                }
+            })}
         </g>
     }
 }
