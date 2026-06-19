@@ -1,0 +1,850 @@
+{
+  "rules": [
+    {
+      "id": "embedder-runtime-pinned-invariant",
+      "title": "The embedder runtime is a pinned, asserted invariant; floors are calibrated against it",
+      "summary": "Behavioral guard and classifier floors are cosine thresholds derived from a specific local embedder (embed-model) under a specific embedded-runtime runtime and task-prefix scheme. The runtime is therefore a pinned invariant: memory.expected_embedder_runtime records the calibrated version, and models embedder-check plus daemon startup probe /api/version and FAIL LOUD on mismatch. embed-model must be embedded with its task-instruction prefix (never raw text). Stored vectors carry an embedding_version fingerprint (model | prefix-scheme | runtime); a change marks them stale for re-embedding. If the runtime pin changes, every absolute floor must be re-derived against the new pinned, prefixed baseline.",
+      "category": "Architecture",
+      "criticality": "high",
+      "order": 331,
+      "source": "maintainer",
+      "rationale": "2026-06-06 RCA: an unpinned embedded-runtime runtime auto-updated 0.24.0 -> 0.30.6 and silently shifted embed-model output past a calibrated guard floor, a behavioral regression with byte-identical code and model weights. Pinning + asserting the runtime turns silent drift into a loud, diagnosable gate failure; prefixing keeps embeddings in-distribution so margins are larger and more stable.",
+      "appliesTo": [
+        "embedder foundation",
+        "behavioral guards and classifiers",
+        "release gates",
+        "memory embeddings"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "systemic-problems-first",
+      "title": "Treat problems as systemic first",
+      "summary": "Treat all problems as systemic problems until proven otherwise, and prefer systemic solutions over ad hoc or localized fixes wherever they can be effectively implemented.",
+      "category": "Architecture",
+      "criticality": "critical",
+      "order": 10,
+      "source": "maintainer",
+      "rationale": "Source-backed by AGENTS.md and repeated release decisions: FlowForge failures usually come from divergent execution paths, duplicated policy, or local patches that leave the same defect elsewhere.",
+      "appliesTo": [
+        "architecture",
+        "bug fixes",
+        "release blockers",
+        "connector audits",
+        "pipeline changes"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "architecture-docs-before-code",
+      "title": "Architecture and docs before code",
+      "summary": "Start substantial work with architecture analysis and documentation, then implement code after the intended boundary or behavior is explicit.",
+      "category": "Development",
+      "criticality": "critical",
+      "order": 20,
+      "source": "maintainer",
+      "rationale": "Source-backed by AGENTS.md and docs/contributing.md. FlowForge release work must not begin from implementation guesses when architecture boundaries are at stake.",
+      "appliesTo": [
+        "feature work",
+        "bug fixes",
+        "refactors",
+        "release gates"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "centralized-pipeline-authority",
+      "title": "Pipeline owns behavior",
+      "summary": "Agent-turn business logic belongs in the unified pipeline or connector-agnostic application services, not in connectors, UI surfaces, scheduler shortcuts, or channel-specific helpers.",
+      "category": "Architecture",
+      "criticality": "critical",
+      "order": 30,
+      "source": "maintainer",
+      "rationale": "Source-backed by ARCHITECTURE_RULES.md and docs/architecture-rules-diagrams.md. Single-path execution is required for consistency, reliability, and RCA traceability.",
+      "appliesTo": [
+        "src/engine",
+        "connectors",
+        "channels",
+        "scheduler",
+        "agency",
+        "Web UI",
+        "CLI",
+        "TUI"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "connectors-parse-call-format-only",
+      "title": "Connectors parse, call, and format only",
+      "summary": "Connectors may normalize transport input, delegate to a shared seam, map typed service errors, and format output; they must not execute business policy, routing, guards, model choice, tools, memory, STT, TTS, camera policy, or media interpretation.",
+      "category": "Architecture",
+      "criticality": "critical",
+      "order": 40,
+      "source": "maintainer",
+      "rationale": "Source-backed by ARCHITECTURE_RULES.md. Moving helper functions into a connector package does not make connector-executed business sequencing acceptable.",
+      "appliesTo": [
+        "API routes",
+        "streaming routes",
+        "websocket transport",
+        "Chat Connector",
+        "email",
+        "voice",
+        "camera",
+        "cron"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "api-is-external-only",
+      "title": "API is external integration only",
+      "summary": "FlowForge first-party surfaces must not use FlowForge /api/** routes as an internal bus; APIs are for external integration, contract tests, automation, debugging, and explicit API clients.",
+      "category": "Architecture",
+      "criticality": "critical",
+      "order": 50,
+      "source": "maintainer",
+      "rationale": "Source-backed by docs/testing/application-api-boundary-audit.md and ARCHITECTURE_RULES.md. Internal REST mutation paths remain unsafe until real authentication and SSL/TLS support exist.",
+      "appliesTo": [
+        "Web UI",
+        "CLI",
+        "TUI",
+        "daemon-local control",
+        "scheduler",
+        "benchmarks",
+        "self-healing"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "evidence-chain-required",
+      "title": "Preserve the evidence chain",
+      "summary": "All code from connector ingress through connector egress must preserve structured diagnostic evidence for every agent-involved activity, including user turns, cron, proactive agency, media, tools, recovery, fallbacks, notifications, and framework failures.",
+      "category": "Evidence",
+      "criticality": "critical",
+      "order": 60,
+      "source": "maintainer",
+      "rationale": "Source-backed by ARCHITECTURE_RULES.md and docs/architecture-rules-diagrams.md. RCA and logs are only useful if new code does not introduce blind spots.",
+      "appliesTo": [
+        "connectors",
+        "pipeline",
+        "guards",
+        "verifiers",
+        "retry",
+        "fallback",
+        "scheduler",
+        "agency",
+        "voice",
+        "video"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "production-state-is-off-limits",
+      "title": "Production state is off limits",
+      "summary": "Development tests, soaks, benchmarks, and manual drills must never inspect, start, mutate, migrate, repair, defrag, reset, overwrite, or corrupt the operator production instance; use isolated hydrated or fresh test homes instead.",
+      "category": "Testing",
+      "criticality": "critical",
+      "order": 70,
+      "source": "maintainer",
+      "rationale": "Source-backed by docs/operations/isolated-test-instance.md. Production may be read only through the managed snapshot self-healing when explicitly authorized, and test execution must use the resulting non-production clone.",
+      "appliesTo": [
+        "tests",
+        "soaks",
+        "benchmarks",
+        "manual drills",
+        "database work",
+        "daemon work"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "supported-platforms-first-class",
+      "title": "Keep all supported platforms first-class",
+      "summary": "Design, tests, release drills, and operator guidance must keep macOS, Linux, and Windows behavior in mind at all times; platform-specific behavior must be explicit, tested, and documented rather than discovered late in release triage.",
+      "category": "Testing",
+      "criticality": "critical",
+      "order": 75,
+      "source": "maintainer",
+      "rationale": "Windows release validation exposed Unix-only test fixtures, shell-script execution assumptions, and POSIX permission helpers that were invisible on macOS. Future release work must prevent platform drift rather than rediscover it manually.",
+      "appliesTo": [
+        "tests",
+        "release gates",
+        "CLI",
+        "TUI",
+        "Web UI",
+        "installers",
+        "updaters",
+        "media services",
+        "operator guidance"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "authority-config-central-policy",
+      "title": "Authority changes require central policy",
+      "summary": "Agency, autonomy, scopes, action classes, cadence, concurrency, notification visibility, and cloud token budgets are authority-bearing settings and must pass through central confirmation, warning, audit, and policy enforcement.",
+      "category": "Security",
+      "criticality": "critical",
+      "order": 80,
+      "source": "maintainer",
+      "rationale": "Source-backed by ARCHITECTURE_RULES.md and release decisions. User footguns are allowed only after explicit warning and confirmation; rogue internal mutation paths are not.",
+      "appliesTo": [
+        "agency",
+        "autonomy",
+        "config",
+        "dashboard controls",
+        "CLI",
+        "cloud budgets"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "money-moving-single-transaction-seam",
+      "title": "Money movement uses one serialized transaction seam",
+      "summary": "All EVM transaction broadcasts must pass through a single billing account transaction manager that serializes nonce allocation through broadcast and records structured financial evidence.",
+      "category": "Security",
+      "criticality": "critical",
+      "order": 82,
+      "source": "maintainer",
+      "rationale": "The v1.1.0 code audit found nonce reuse risk when back-to-back or concurrent sends fetched mined-only transaction counts independently. Financial correctness requires systemic serialization and idempotency, not per-caller discipline.",
+      "appliesTo": [
+        "billing account",
+        "yield",
+        "agency financial actions",
+        "cron financial actions",
+        "transaction broadcasting"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "untrusted-ingress-auth-dedup",
+      "title": "Authenticate and deduplicate untrusted ingress",
+      "summary": "External or channel-originated input must be authenticated, deduplicated when the platform is at-least-once, normalized, and recorded before it can drive tool-capable agent behavior.",
+      "category": "Security",
+      "criticality": "critical",
+      "order": 84,
+      "source": "maintainer",
+      "rationale": "The v1.1.0 code audit found unauthenticated webhook and unbounded agent-query surfaces. Treating ingress as a formal trust boundary prevents connector-specific patches and repeated side effects.",
+      "appliesTo": [
+        "webhooks",
+        "channels",
+        "API routes",
+        "websocket controls",
+        "plugin tools",
+        "agent database tools"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "search-uses-api-not-consumer-browser",
+      "title": "Search uses APIs, not consumer browser scraping",
+      "summary": "Provider C, Search Engine B, and similar CAPTCHA-gated consumer search pages must not be operated through normal browser sessions as canonical search tools; configured search APIs or gateways are required.",
+      "category": "Integrations",
+      "criticality": "high",
+      "order": 90,
+      "source": "maintainer",
+      "rationale": "Source-backed by ARCHITECTURE_RULES.md and v1.1.0 current-info failures. CAPTCHA pages are not successful web-read evidence and must fail closed.",
+      "appliesTo": [
+        "web search",
+        "tool registration",
+        "product knowledge",
+        "current-info prompts",
+        "agent guidance"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": false
+      }
+    },
+    {
+      "id": "proactive-metadata-before-guard-repair",
+      "title": "Prefer proactive metadata shaping before guard repair",
+      "summary": "When a recurring agent behavior failure can be prevented by clearer structured turn metadata, tool capability metadata, provider-profile metadata, selected operation contracts, or source-backed guidance, shape that metadata before inference instead of relying primarily on heavier post-inference guard repair loops.",
+      "category": "Architecture",
+      "criticality": "high",
+      "order": 95,
+      "source": "maintainer",
+      "rationale": "Source-backed by ARCHITECTURE_RULES.md and v1.1.0 current-info/tool-use triage. Guards still enforce safety and evidence, but proactive model-visible state reduces retries, leakage, and brittle correction loops.",
+      "appliesTo": [
+        "pipeline",
+        "tool metadata",
+        "provider profiles",
+        "current-info prompts",
+        "product knowledge",
+        "guards",
+        "verifier recovery",
+        "behavior soaks"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": false
+      }
+    },
+    {
+      "id": "sequence-diagrams-show-return-paths",
+      "title": "Sequence diagrams show return paths",
+      "summary": "Architext sequence data must explicitly model response, acknowledgement, error, evidence, or delivery return paths for request/response interactions; unidirectional call-only sequences are incomplete unless the modeled interaction is truly one-way.",
+      "category": "Architecture Documentation",
+      "criticality": "high",
+      "order": 97,
+      "source": "maintainer",
+      "rationale": "Sequence diagrams are used to understand lifecycle completeness. If returns are omitted, valid request/response flows look like incomplete one-way dependency chains and hide where evidence, typed failures, and user-visible outcomes are produced.",
+      "appliesTo": [
+        "docs/architext/data/flows.json",
+        "sequence views",
+        "request/response flows",
+        "connector ingress and egress",
+        "pipeline lifecycle documentation",
+        "release validation documentation"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": false
+      }
+    },
+    {
+      "id": "flow-diagrams-remain-contiguous",
+      "title": "Flow diagrams remain contiguous",
+      "summary": "Architext flow views must keep primary diagram elements connected to the modeled flow. Do not include orphaned contextual nodes in the main canvas; split them into a separate scoped view, add truthful connecting steps, or remove them from that view.",
+      "category": "Architecture Documentation",
+      "criticality": "high",
+      "order": 98,
+      "source": "maintainer",
+      "rationale": "Disconnected diagram elements make architecture maps look broken and obscure the real lifecycle. If context is useful but not part of the flow, it belongs in another view or details panel, not as an orphaned primary diagram element.",
+      "appliesTo": [
+        "docs/architext/data/views.json",
+        "docs/architext/data/flows.json",
+        "flow-explorer views",
+        "sequence views",
+        "C4 scoped drilldowns",
+        "release flow documentation"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": false
+      }
+    },
+    {
+      "id": "no-canned-first-person-fallbacks",
+      "title": "Framework speaks as the platform (\"we\"), not the agent (\"I\")",
+      "summary": "Framework-originated fallback messages speak in plain human language as the platform using first-person plural (\"we\"), never in the agent persona's first-person singular (\"I\"). The voice shift is deliberate: the agent+model pairing speaks as \"I\", so \"we\" signals to the user that this is FlowForge the platform, not the agent. Messages stay brief, honest, jargon-free, and prefer dynamic model-grounded explanations whenever available.",
+      "category": "Design",
+      "criticality": "high",
+      "order": 100,
+      "source": "maintainer",
+      "rationale": "Source-backed by ARCHITECTURE_RULES.md. First-person-singular canned prose impersonates the agent and hides the real cause; opaque jargon (\"model failed before producing a verified answer\", \"turn could not be completed\") is gobbledygook to users. The platform \"we\" voice delineates framework from agent and shares honest, actionable detail (e.g. attempt count, recovery action) in language a non-technical user understands.",
+      "appliesTo": [
+        "terminal failures",
+        "guards",
+        "framework fallbacks",
+        "channel delivery",
+        "Web UI",
+        "CLI",
+        "TUI"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": false
+      }
+    },
+    {
+      "id": "canned-responses-panic-only",
+      "title": "Canned responses only in panic-level failures",
+      "summary": "Pipeline-authored canned or templated user-facing text is reserved for panic-level failures; every other turn surfaces honest natural language, preferably the model's own content. Never fabricate or normalize quality that does not exist.",
+      "category": "Design",
+      "criticality": "high",
+      "order": 105,
+      "source": "maintainer",
+      "rationale": "Response quality is a product of model efficacy and cannot be substituted where it does not exist. A panic-level failure is one where the platform cannot produce a trustworthy response in its own generated voice: no model turn is possible at all (no model/route configured, all providers down or auth/credits/rate-limited), or a hard safety/integrity boundary forbids speaking (injection block, security stop, corrupted state). Outside panic, canned strings like 'model failed before producing a verified answer' or a templated 'Source evidence from <url>: <header>' built from transport-only CDN metadata are nonsensical to users and fabricate quality. Sharpens no-canned-first-person-fallbacks from a form constraint into a hard when-allowed gate.",
+      "appliesTo": [
+        "terminal failures",
+        "failure presentation",
+        "guards",
+        "web-evidence recovery",
+        "channel delivery",
+        "Web UI",
+        "CLI",
+        "TUI"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": false
+      }
+    },
+    {
+      "id": "model-is-judgment-not-determinism",
+      "title": "Use the model only for judgment calls",
+      "summary": "Use models for classification, drafting, summarization, and extraction; deterministic routing, retries, transforms, schema normalization, and proof checks must be handled by code.",
+      "category": "Development",
+      "criticality": "high",
+      "order": 110,
+      "source": "maintainer",
+      "rationale": "Source-backed by AGENTS.md. If code can answer, code answers; model calls should not replace deterministic control flow.",
+      "appliesTo": [
+        "routing",
+        "retry policy",
+        "tool normalization",
+        "guards",
+        "verification",
+        "benchmarks"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": false
+      }
+    },
+    {
+      "id": "literals-become-constants-then-config",
+      "title": "No durable magic values",
+      "summary": "A literal is acceptable only when used exactly once with no realistic expectation of change; otherwise migrate literals to constants and constants to configuration when operator control is appropriate.",
+      "category": "Development",
+      "criticality": "medium",
+      "order": 120,
+      "source": "maintainer",
+      "rationale": "Source-backed by maintainer direction during v1.1.0. Magic values erode consistency and make release behavior difficult to audit.",
+      "appliesTo": [
+        "runtime policy",
+        "timeouts",
+        "limits",
+        "model names",
+        "paths",
+        "UI labels"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "consistency",
+      "title": "Consistent UI/UX",
+      "summary": "Always consider the current UI design language before modifying an existing component or introducing a new one.",
+      "category": "Design",
+      "criticality": "high",
+      "order": 130,
+      "source": "agent",
+      "protection": {
+        "edit": false,
+        "delete": false
+      },
+      "appliesTo": []
+    },
+    {
+      "id": "state-your-assumptions-explicitly-if-uncertain-a",
+      "title": "State your assumptions explicitly",
+      "summary": "State your assumptions explicitly. If uncertain, ask.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 140,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "if-multiple-interpretations-exist-present-them-d",
+      "title": "If multiple interpretations exist, present them - d...",
+      "summary": "If multiple interpretations exist, present them - don't pick silently.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 150,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "if-a-simpler-approach-exists-say-so-push-back-wh",
+      "title": "If a simpler approach exists, say so",
+      "summary": "If a simpler approach exists, say so. Push back when warranted.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 160,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "if-something-is-unclear-stop-name-what-s-confusi",
+      "title": "If something is unclear, stop",
+      "summary": "If something is unclear, stop. Name what's confusing. Ask.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 170,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "no-features-beyond-what-was-asked",
+      "title": "No features beyond what was asked",
+      "summary": "No features beyond what was asked.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 180,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "no-abstractions-for-single-use-code",
+      "title": "No abstractions for single-use code",
+      "summary": "No abstractions for single-use code.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 190,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "no-flexibility-or-configurability-that-wasn-t-re",
+      "title": "No \"flexibility\" or \"configurability\" that wasn't r...",
+      "summary": "No \"flexibility\" or \"configurability\" that wasn't requested.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 200,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "no-error-handling-for-impossible-scenarios",
+      "title": "No error handling for impossible scenarios",
+      "summary": "No error handling for impossible scenarios.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 210,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "if-you-write-200-lines-and-it-could-be-50-rewrit",
+      "title": "If you write 200 lines and it could be 50, rewrite it",
+      "summary": "If you write 200 lines and it could be 50, rewrite it.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 220,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "don-t-improve-adjacent-code-comments-or-formatti",
+      "title": "Don't \"improve\" adjacent code, comments, or formatting",
+      "summary": "Don't \"improve\" adjacent code, comments, or formatting.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 230,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "don-t-refactor-things-that-aren-t-broken",
+      "title": "Don't refactor things that aren't broken",
+      "summary": "Don't refactor things that aren't broken.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 240,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "match-existing-style-even-if-you-d-do-it-differe",
+      "title": "Match existing style, even if you'd do it differently",
+      "summary": "Match existing style, even if you'd do it differently.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 250,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "if-you-notice-unrelated-dead-code-mention-it-don",
+      "title": "If you notice unrelated dead code, mention it - don...",
+      "summary": "If you notice unrelated dead code, mention it - don't delete it.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 260,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "remove-imports-variables-functions-that-your-cha",
+      "title": "Remove imports/variables/functions that YOUR change...",
+      "summary": "Remove imports/variables/functions that YOUR changes made unused.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 270,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "don-t-remove-pre-existing-dead-code-unless-asked",
+      "title": "Don't remove pre-existing dead code unless asked",
+      "summary": "Don't remove pre-existing dead code unless asked.",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 280,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "add-validation-write-tests-for-invalid-inputs-th",
+      "title": "\"Add validation\" → \"Write tests for invalid inputs,...",
+      "summary": "\"Add validation\" → \"Write tests for invalid inputs, then make them pass\"",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 290,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "fix-the-bug-write-a-test-that-reproduces-it-then",
+      "title": "\"Fix the bug\" → \"Write a test that reproduces it, t...",
+      "summary": "\"Fix the bug\" → \"Write a test that reproduces it, then make it pass\"",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 300,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "refactor-x-ensure-tests-pass-before-and-after",
+      "title": "\"Refactor X\" → \"Ensure tests pass before and after\"",
+      "summary": "\"Refactor X\" → \"Ensure tests pass before and after\"",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 310,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "step-verify-check",
+      "title": "[Step] → verify",
+      "summary": "[Step] → verify: [check]",
+      "category": "Agent Collaboration",
+      "criticality": "medium",
+      "order": 320,
+      "source": "maintainer",
+      "rationale": "Migrated from AGENTS.md so model-specific instruction files can point at one model-agnostic rules source.",
+      "appliesTo": [
+        "agent instructions",
+        "project rules"
+      ],
+      "protection": {
+        "edit": false,
+        "delete": false
+      }
+    },
+    {
+      "id": "memory-tiering-internal",
+      "title": "Memory tiering is internal; the agent's relationship to memory is transactional",
+      "summary": "Memory tiers (semantic, episodic, working, procedural, relationship, knowledge_facts) are internal organization only. They govern persistence duration, retrieval speed, and maintenance, and exist to support promotion/demotion, scoring/reinforcement, housekeeping, and acuity segregation. They must never be a model-facing concept: recall takes no tier parameter and emits no tier label in tool output or in the injected memory index. The agent asks, receives, and stores; it does not choose a tool, a tier, or how memory is organized. Machine-only consumers (the verifier/index fact harvester) read tier information from Result.Metadata, never from the rendered output.",
+      "category": "Architecture",
+      "criticality": "high",
+      "order": 330,
+      "source": "maintainer",
+      "rationale": "A human does not consciously retrieve from short-term memory; surfacing tiers forced local models to make routing decisions they fail (cross-session grounding A/B, c336288b). Hiding tiers is not removing them — the tiered substrate keeps doing real work beneath a transactional interface.",
+      "appliesTo": [
+        "memory tools",
+        "recall and retrieval",
+        "agent prompt",
+        "pipeline memory injection"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    },
+    {
+      "id": "minimize-soak-runs",
+      "title": "Minimize soak and benchmark runs to only what is necessary",
+      "summary": "Run release behavioral soaks and full-system benchmark exercises only when necessary, never prematurely or redundantly. The behavioral soak is the LAST pre-release step; re-benchmarks run on the final frozen HEAD. A premature or speculative run wastes wall-clock and provider tokens and produces evidence that later code supersedes.",
+      "category": "Testing",
+      "criticality": "high",
+      "order": 76,
+      "source": "maintainer",
+      "rationale": "Soaks and through-framework benchmarks are expensive in both wall-clock and provider tokens. Operator directive 2026-06-19, after a premature the cloud provider re-benchmark was launched mid-release and killed: minimize the number run per release. Run a soak or benchmark only to verify a fix that is ready, or to gate the release on the final frozen HEAD. Do not re-run a full soak when a scoped check suffices, and do not benchmark on a HEAD that ongoing work will change.",
+      "appliesTo": [
+        "soaks",
+        "benchmarks",
+        "release process",
+        "token budget"
+      ],
+      "protection": {
+        "edit": true,
+        "delete": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,483 @@
+{
+  "id": "v1-0-6",
+  "version": "1.0.6",
+  "name": "FlowForge 1.0.6",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Two distinct streams converged into v1.0.6.",
+  "targetDate": "2026-04-19",
+  "releasedAt": "2026-04-19T12:00:00.000Z",
+  "lastUpdated": "2026-04-19T12:00:00.000Z",
+  "updateSource": "docs/releases/v1.0.6-release-notes.md, CHANGELOG.md",
+  "scope": {
+    "required": [
+      {
+        "id": "r-1-0-6-parity-closure-verdict-the-scoped-parity-systems-have-fina",
+        "title": "The scoped parity systems have final dispositions in",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "The scoped parity systems have final dispositions in",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Parity Closure Verdict section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "parity-closure-verdict",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-parity-closure-verdict-the-release-is-not-claiming-verbati",
+        "title": "The release is not claiming verbatim Rust recreation where the platform now has a",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "The release is not claiming verbatim Rust recreation where the platform now has a",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Parity Closure Verdict section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "parity-closure-verdict",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-parity-closure-verdict-prompt-compression-is-explicitly-de",
+        "title": "Prompt compression is explicitly **deferred** for this release on negative",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Prompt compression is explicitly deferred for this release on negative",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Parity Closure Verdict section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "parity-closure-verdict",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-phase-1-memory-architecture-m3-m8-closure-fts-trigger-comp",
+        "title": "FTS trigger completeness",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "M3.1",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 1 — Memory Architecture (M3, M8 closure) section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "phase-1-memory-architecture-m3-m8-closure",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-phase-1-memory-architecture-m3-m8-closure-hybridsearch-fir",
+        "title": "HybridSearch-first retrieval",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "M3.2",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 1 — Memory Architecture (M3, M8 closure) section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "phase-1-memory-architecture-m3-m8-closure",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-phase-1-memory-architecture-m3-m8-closure-relational-disti",
+        "title": "Relational distillation",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "M8",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 1 — Memory Architecture (M3, M8 closure) section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "phase-1-memory-architecture-m3-m8-closure",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-phase-1-memory-architecture-m3-m8-closure-telemetry-backed",
+        "title": "Telemetry-backed LIKE retirement",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "M3.3",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 1 — Memory Architecture (M3, M8 closure) section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "phase-1-memory-architecture-m3-m8-closure",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-phase-2-operational-hardening-migration-042-sql-complia",
+        "title": "Migration 042 embedded SQL store-compliant",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "The original ALTER TABLE ... ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now')) violated embedded SQL store's \"no non-constant default on ADD COLUMN\" rule and failed every fresh install with Cannot add a column with non-constant default (1).",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 2 — Operational Hardening section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "phase-2-operational-hardening",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-phase-2-operational-hardening-pid-file-based-stop-1",
+        "title": "PID-file based stop",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "flowforge daemon stop reads ~/.flowforge-dev (or cfg.Daemon.PIDFile if set), sends SIGTERM, waits up to 30s for graceful shutdown, escalates to SIGKILL if needed. No sudo. No DB open. Idempotent — stop on a not-running daemon retu",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 2 — Operational Hardening section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "phase-2-operational-hardening",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-phase-2-operational-hardening-minimal-newserviceonly-const",
+        "title": "Minimal NewServiceOnly constructor",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Install / Uninstall / Control / Status no longer call daemon.New() (which ran the entire 12-step boot sequence just to construct a service handle). Eliminates the chown-side-effect chain that turned a single sudo invocation into a multi-day",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 2 — Operational Hardening section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "phase-2-operational-hardening",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-phase-2-operational-hardening-macos-uses-launchctl-bootout",
+        "title": "macOS uses launchctl bootout",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Phase 2 — Operational Hardening",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 2 — Operational Hardening section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "phase-2-operational-hardening",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-phase-2-operational-hardening-r-daemon-pid-1-3-r-daemon-st",
+        "title": "R-DAEMON-PID-1..3, R-DAEMON-STOP-1..4, R-DAEMON-LAUNCHCTL-1, R-DAEMON-NOBOOT-1",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Lock the contract end-to-end.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 2 — Operational Hardening section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "phase-2-operational-hardening",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-db-layer-migration-042-sql-compliant-0",
+        "title": "Migration 042 embedded SQL store-compliant",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "The original ALTER TABLE ... ADD COLUMN updated_at TEXT NOT NULL DEFAULT (datetime('now')) violated embedded SQL store's \"no non-constant default on ADD COLUMN\" rule and failed every fresh install with Cannot add a column with non-constant default (1).",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the DB layer section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "db-layer",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-daemon-control-pid-file-based-stop-0",
+        "title": "PID-file based stop",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "flowforge daemon stop reads ~/.flowforge-dev (or cfg.Daemon.PIDFile if set), sends SIGTERM, waits up to 30s for graceful shutdown, escalates to SIGKILL if needed. No sudo. No DB open. Idempotent — stop on a not-running daemon retu",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Daemon control section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "daemon-control",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-daemon-control-minimal-newserviceonly-constructor-1",
+        "title": "Minimal NewServiceOnly constructor",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Install / Uninstall / Control / Status no longer call daemon.New() (which ran the entire 12-step boot sequence just to construct a service handle). Eliminates the chown-side-effect chain that turned a single sudo invocation into a multi-day",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Daemon control section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "daemon-control",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-daemon-control-macos-uses-launchctl-bootout-2",
+        "title": "macOS uses launchctl bootout",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Daemon control",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Daemon control section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "daemon-control",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-daemon-control-r-daemon-pid-1-3-r-daemon-stop-1-4-r-daemon",
+        "title": "R-DAEMON-PID-1..3, R-DAEMON-STOP-1..4, R-DAEMON-LAUNCHCTL-1, R-DAEMON-NOBOOT-1",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Lock the contract end-to-end.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Daemon control section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "daemon-control",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-6-operator-visibility-system-warnings-collector-0",
+        "title": "System-warnings collector",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Process-singleton at core.AddSystemWarning / SystemWarningsSnapshot. Dedupes on (Code, Detail) so warnings recorded by multiple subsystems collapse to one operator-visible entry. Concurrent-safe via internal mutex; snapshots are independent",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Operator visibility section of the 1.0.6 release notes.",
+        "decisionSource": "docs/releases/v1.0.6-release-notes.md",
+        "workstreamId": "operator-visibility",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.6-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "parity-closure-verdict",
+      "name": "Parity Closure Verdict",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Parity Closure Verdict scope shipped in FlowForge 1.0.6.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-6-parity-closure-verdict-the-scoped-parity-systems-have-fina",
+        "r-1-0-6-parity-closure-verdict-the-release-is-not-claiming-verbati",
+        "r-1-0-6-parity-closure-verdict-prompt-compression-is-explicitly-de"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.6-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "phase-1-memory-architecture-m3-m8-closure",
+      "name": "Phase 1 Memory Architecture M3 M8 Closure",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Phase 1 Memory Architecture M3 M8 Closure scope shipped in FlowForge 1.0.6.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-6-phase-1-memory-architecture-m3-m8-closure-fts-trigger-comp",
+        "r-1-0-6-phase-1-memory-architecture-m3-m8-closure-hybridsearch-fir",
+        "r-1-0-6-phase-1-memory-architecture-m3-m8-closure-relational-disti",
+        "r-1-0-6-phase-1-memory-architecture-m3-m8-closure-telemetry-backed"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.6-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "phase-2-operational-hardening",
+      "name": "Phase 2 Operational Hardening",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Phase 2 Operational Hardening scope shipped in FlowForge 1.0.6.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-6-phase-2-operational-hardening-migration-042-sql-complia",
+        "r-1-0-6-phase-2-operational-hardening-pid-file-based-stop-1",
+        "r-1-0-6-phase-2-operational-hardening-minimal-newserviceonly-const",
+        "r-1-0-6-phase-2-operational-hardening-macos-uses-launchctl-bootout",
+        "r-1-0-6-phase-2-operational-hardening-r-daemon-pid-1-3-r-daemon-st"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.6-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "db-layer",
+      "name": "Db Layer",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Db Layer scope shipped in FlowForge 1.0.6.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-6-db-layer-migration-042-sql-compliant-0"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.6-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "daemon-control",
+      "name": "Daemon Control",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Daemon Control scope shipped in FlowForge 1.0.6.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-6-daemon-control-pid-file-based-stop-0",
+        "r-1-0-6-daemon-control-minimal-newserviceonly-constructor-1",
+        "r-1-0-6-daemon-control-macos-uses-launchctl-bootout-2",
+        "r-1-0-6-daemon-control-r-daemon-pid-1-3-r-daemon-stop-1-4-r-daemon"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.6-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "operator-visibility",
+      "name": "Operator Visibility",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Operator Visibility scope shipped in FlowForge 1.0.6.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-6-operator-visibility-system-warnings-collector-0"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.6-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-shipped",
+      "label": "1.0.6 shipped",
+      "status": "complete",
+      "date": "2026-04-19",
+      "order": 1,
+      "itemIds": [
+        "r-1-0-6-parity-closure-verdict-the-scoped-parity-systems-have-fina",
+        "r-1-0-6-parity-closure-verdict-the-release-is-not-claiming-verbati",
+        "r-1-0-6-parity-closure-verdict-prompt-compression-is-explicitly-de",
+        "r-1-0-6-phase-1-memory-architecture-m3-m8-closure-fts-trigger-comp",
+        "r-1-0-6-phase-1-memory-architecture-m3-m8-closure-hybridsearch-fir",
+        "r-1-0-6-phase-1-memory-architecture-m3-m8-closure-relational-disti",
+        "r-1-0-6-phase-1-memory-architecture-m3-m8-closure-telemetry-backed",
+        "r-1-0-6-phase-2-operational-hardening-migration-042-sql-complia",
+        "r-1-0-6-phase-2-operational-hardening-pid-file-based-stop-1",
+        "r-1-0-6-phase-2-operational-hardening-minimal-newserviceonly-const",
+        "r-1-0-6-phase-2-operational-hardening-macos-uses-launchctl-bootout",
+        "r-1-0-6-phase-2-operational-hardening-r-daemon-pid-1-3-r-daemon-st",
+        "r-1-0-6-db-layer-migration-042-sql-compliant-0",
+        "r-1-0-6-daemon-control-pid-file-based-stop-0",
+        "r-1-0-6-daemon-control-minimal-newserviceonly-constructor-1",
+        "r-1-0-6-daemon-control-macos-uses-launchctl-bootout-2",
+        "r-1-0-6-daemon-control-r-daemon-pid-1-3-r-daemon-stop-1-4-r-daemon",
+        "r-1-0-6-operator-visibility-system-warnings-collector-0"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-notes",
+      "label": "1.0.6 release notes",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "docs/releases/v1.0.6-release-notes.md"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog entry",
+      "kind": "document",
+      "status": "complete",
+      "href": "CHANGELOG.md"
+    }
+  ]
+}

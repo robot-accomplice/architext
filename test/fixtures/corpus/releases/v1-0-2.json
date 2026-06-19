@@ -1,0 +1,468 @@
+{
+  "id": "v1-0-2",
+  "version": "1.0.2",
+  "name": "FlowForge 1.0.2",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Comprehensive parity sweep: bot command parity with Rust, FTS coverage for all memory tiers, auto-indexing at ingestion, security claim wiring, CLI command parity, model baselining for memory recall, and banner version fix.",
+  "targetDate": "2026-04-12",
+  "releasedAt": "2026-04-12T12:00:00.000Z",
+  "lastUpdated": "2026-04-12T12:00:00.000Z",
+  "updateSource": "docs/releases/v1.0.2-release-notes.md, CHANGELOG.md",
+  "scope": {
+    "required": [
+      {
+        "id": "r-1-0-2-changes-model-0",
+        "title": "/model",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Show/set/reset model override",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-changes-models-1",
+        "title": "/models",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "List primary + fallbacks + provider status",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-changes-breaker-2",
+        "title": "/breaker",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Circuit breaker status + reset",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-changes-retry-3",
+        "title": "/retry",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Replay last assistant response",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-changes-fulltext-triggers-for-procedural-relationship-tiers-wa",
+        "title": "full-text search triggers for procedural + relationship tiers (was",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "full-text search triggers for procedural + relationship tiers (was: LIKE fallback only)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-bot-command-parity-pr-30-model-0",
+        "title": "/model",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Show/set/reset model override",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Bot Command Parity (PR #30) section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "bot-command-parity-pr-30",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-bot-command-parity-pr-30-models-1",
+        "title": "/models",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "List primary + fallbacks + provider status",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Bot Command Parity (PR #30) section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "bot-command-parity-pr-30",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-bot-command-parity-pr-30-breaker-2",
+        "title": "/breaker",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Circuit breaker status + reset",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Bot Command Parity (PR #30) section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "bot-command-parity-pr-30",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-bot-command-parity-pr-30-retry-3",
+        "title": "/retry",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Replay last assistant response",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Bot Command Parity (PR #30) section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "bot-command-parity-pr-30",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-memory-system-pr-31-fulltext-triggers-for-procedural-relations",
+        "title": "full-text search triggers for procedural + relationship tiers (was",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "full-text search triggers for procedural + relationship tiers (was: LIKE fallback only)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Memory System (PR #31) section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "memory-system-pr-31",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-memory-system-pr-31-table-name-normalization-1",
+        "title": "Table name normalization",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Table name normalization: memory_fts uses full names (episodic_memory not episodic)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Memory System (PR #31) section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "memory-system-pr-31",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-memory-system-pr-31-migration-037-2",
+        "title": "Migration 037",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Migration 037: normalizes existing data + recreates triggers",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Memory System (PR #31) section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "memory-system-pr-31",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-memory-system-pr-31-auto-indexing-in-ingest-path-3",
+        "title": "Auto-indexing in ingest path",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Auto-indexing in ingest path: autoIndex() after every store_* call",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Memory System (PR #31) section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "memory-system-pr-31",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-security-architecture-gaps-closed-pr-31-gap-1-0",
+        "title": "Gap 1",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Gap 1: SecurityClaim resolvers confirmed wired (session stores claim + trace)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Security Architecture Gaps Closed (PR #31) section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "security-architecture-gaps-closed-pr-31",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-security-architecture-gaps-closed-pr-31-gap-2-1",
+        "title": "Gap 2",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Gap 2: API routes now construct ChannelClaimContext (was: Claim: nil)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Security Architecture Gaps Closed (PR #31) section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "security-architecture-gaps-closed-pr-31",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-security-architecture-gaps-closed-pr-31-gap-3-2",
+        "title": "Gap 3",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Gap 3: HMAC trust boundary instructions in system prompt",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Security Architecture Gaps Closed (PR #31) section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "security-architecture-gaps-closed-pr-31",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-model-baselining-pr-28-intentmemoryrecall-intent-class-5th",
+        "title": "IntentMemoryRecall intent class (5th, beyond Rust parity)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "IntentMemoryRecall intent class (5th, beyond Rust parity)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Model Baselining (PR #28) section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "model-baselining-pr-28",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-2-model-baselining-pr-28-5-exercise-prompts-testing-memory-t",
+        "title": "5 exercise prompts testing memory tool selection + anti-confabulation",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "5 exercise prompts testing memory tool selection + anti-confabulation",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Model Baselining (PR #28) section of the 1.0.2 release notes.",
+        "decisionSource": "docs/releases/v1.0.2-release-notes.md",
+        "workstreamId": "model-baselining-pr-28",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.2-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "changes",
+      "name": "Changes",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Changes scope shipped in FlowForge 1.0.2.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-2-changes-model-0",
+        "r-1-0-2-changes-models-1",
+        "r-1-0-2-changes-breaker-2",
+        "r-1-0-2-changes-retry-3",
+        "r-1-0-2-changes-fulltext-triggers-for-procedural-relationship-tiers-wa"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.2-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "bot-command-parity-pr-30",
+      "name": "Bot Command Parity Pr 30",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Bot Command Parity Pr 30 scope shipped in FlowForge 1.0.2.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-2-bot-command-parity-pr-30-model-0",
+        "r-1-0-2-bot-command-parity-pr-30-models-1",
+        "r-1-0-2-bot-command-parity-pr-30-breaker-2",
+        "r-1-0-2-bot-command-parity-pr-30-retry-3"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.2-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "memory-system-pr-31",
+      "name": "Memory System Pr 31",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Memory System Pr 31 scope shipped in FlowForge 1.0.2.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-2-memory-system-pr-31-fulltext-triggers-for-procedural-relations",
+        "r-1-0-2-memory-system-pr-31-table-name-normalization-1",
+        "r-1-0-2-memory-system-pr-31-migration-037-2",
+        "r-1-0-2-memory-system-pr-31-auto-indexing-in-ingest-path-3"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.2-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "security-architecture-gaps-closed-pr-31",
+      "name": "Security Architecture Gaps Closed Pr 31",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Security Architecture Gaps Closed Pr 31 scope shipped in FlowForge 1.0.2.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-2-security-architecture-gaps-closed-pr-31-gap-1-0",
+        "r-1-0-2-security-architecture-gaps-closed-pr-31-gap-2-1",
+        "r-1-0-2-security-architecture-gaps-closed-pr-31-gap-3-2"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.2-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "model-baselining-pr-28",
+      "name": "Model Baselining Pr 28",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Model Baselining Pr 28 scope shipped in FlowForge 1.0.2.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-2-model-baselining-pr-28-intentmemoryrecall-intent-class-5th",
+        "r-1-0-2-model-baselining-pr-28-5-exercise-prompts-testing-memory-t"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.2-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-shipped",
+      "label": "1.0.2 shipped",
+      "status": "complete",
+      "date": "2026-04-12",
+      "order": 1,
+      "itemIds": [
+        "r-1-0-2-changes-model-0",
+        "r-1-0-2-changes-models-1",
+        "r-1-0-2-changes-breaker-2",
+        "r-1-0-2-changes-retry-3",
+        "r-1-0-2-changes-fulltext-triggers-for-procedural-relationship-tiers-wa",
+        "r-1-0-2-bot-command-parity-pr-30-model-0",
+        "r-1-0-2-bot-command-parity-pr-30-models-1",
+        "r-1-0-2-bot-command-parity-pr-30-breaker-2",
+        "r-1-0-2-bot-command-parity-pr-30-retry-3",
+        "r-1-0-2-memory-system-pr-31-fulltext-triggers-for-procedural-relations",
+        "r-1-0-2-memory-system-pr-31-table-name-normalization-1",
+        "r-1-0-2-memory-system-pr-31-migration-037-2",
+        "r-1-0-2-memory-system-pr-31-auto-indexing-in-ingest-path-3",
+        "r-1-0-2-security-architecture-gaps-closed-pr-31-gap-1-0",
+        "r-1-0-2-security-architecture-gaps-closed-pr-31-gap-2-1",
+        "r-1-0-2-security-architecture-gaps-closed-pr-31-gap-3-2",
+        "r-1-0-2-model-baselining-pr-28-intentmemoryrecall-intent-class-5th",
+        "r-1-0-2-model-baselining-pr-28-5-exercise-prompts-testing-memory-t"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-notes",
+      "label": "1.0.2 release notes",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "docs/releases/v1.0.2-release-notes.md"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog entry",
+      "kind": "document",
+      "status": "complete",
+      "href": "CHANGELOG.md"
+    }
+  ]
+}

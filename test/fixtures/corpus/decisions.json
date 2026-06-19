@@ -1,0 +1,706 @@
+{
+  "decisions": [
+    {
+      "id": "adversarial-regression-harness",
+      "status": "accepted",
+      "title": "Exposed issues become declarative adversarial cases in one registry",
+      "context": "Previously-exposed behavioral issues (bug-fix items across releases + the regression matrix + RCA records) were guarded by a fragmented set of harnesses (5 Python soak scripts, build-tagged soak tests, the exercise.ts eval harness) with no single auditable source of truth that every exposed issue still has a permanent adversarial guard, and the soaks mostly probed happy/known paths rather than the guard edges (paraphrase, context-pressure, continuation, current-info) where regressions reappear.",
+      "decision": "Add an adversarial regression harness as an ADDITIVE layer over the existing soak plumbing (not a big-bang consolidation). Exposed issues become declarative JSON cases in testdata/adversarial/issues/, each linked to a Release Truth item id (auditable coverage), carrying a hand-authored fixed mutation taxonomy (the deterministic, gating regression firewall) and a deterministic failureSignature composed from a shared check library. A live runner (scripts/run-adversarial-soak.py) reuses the behavior-soak managed clone-server + send_message against a clone of ~/.flowforge-dev on :8080 (never production); a build-tagged unit runner (src/engine/adversarial_soak_test.ts) data-drives the in-process divergence guard against the real pinned embedder. A coverage report (scripts/adversarial_coverage.py) maps cases to the bug-fix corpus and surfaces gaps loudly. Judging is deterministic failure-signature checks (the gate); a model-judge discovery tier is a later, non-gating addition.",
+      "consequences": [
+        "Every exposed issue can become a permanent adversarial guard, and the coverage report makes gaps loud instead of silent (first slice seeds 6 cases; backfill is incremental and tracked).",
+        "The harness reuses existing soak infrastructure rather than duplicating it; the registry is the single source of truth for issue coverage.",
+        "The fixed-taxonomy deterministic tier is intended as a release gate; a model-generated discovery tier and full backfill of the bug-fix corpus + flagged regression-matrix rows are deferred (justified: prove the deterministic firewall first; avoid ballooning the first slice and refactoring release-critical scripts)."
+      ],
+      "relatedNodes": [],
+      "relatedFlows": []
+    },
+    {
+      "id": "embedding-task-prefix-foundation",
+      "status": "accepted",
+      "title": "Embed embed-model with task prefixes; pin + assert the embedder runtime",
+      "context": "Behavioral guards and classifiers depend on cosine margins from a local embed-model embedder served by embedded-runtime. On 2026-06-06 the v1.1.0 final-release-gate re-run found the pending-action topic-divergence soak RED. RCA (logs + git topology): the embedded-runtime runtime auto-updated 0.24.0 -> 0.30.6 between the 2026-06-02 floor calibration (gate green at 422e2400, embedded-runtime 0.24.0 per ~/.embedded-runtime/logs/app-5.log) and the re-run, shifting embed-model output enough that two genuine continuations crossed the calibrated PendingActionAffirmationFloor. Model GGUF digest (0a109f422b47) and the divergence/embedder code were byte-identical across 422e2400..HEAD, so the only changed variable was the runtime. Two pre-existing fragilities amplified it: embed-model was embedded with NO task-instruction prefix (out-of-distribution, razor-thin runtime-sensitive margins) and the guard floors were absolute and runtime-tied.",
+      "decision": "Embed embed-model in-distribution with its required task-instruction prefixes via a typed EmbedTask (search_query / search_document / classification / clustering) applied at the single embed seam; symmetric comparisons share one task (the pending-action divergence reuses the GuardSemanticClassifier centroids, so it uses the classification task). Pin the embedder runtime (memory.expected_embedder_runtime) and make models embedder-check + daemon startup probe /api/version and fail loud on drift. Tag stored vectors with an embedding_version fingerprint (model | prefix-scheme | runtime) so a model/prefix/runtime change marks them stale and the consolidation backfill re-embeds them in place. Recalibrate the divergence floor from the observed affirmation/shift cluster gap under the pinned, prefixed embedder (broadened the bare-affirmation anchors, set floor to the gap midpoint). Floors remain absolute. Two larger options are deferred WITH justification: (a) a relative/anchor-based guard decision (drift-robust floors) is deferred because the prefix + runtime pin + recalibration already resolve the regression with balanced margins and 0 false-positives — the redesign is a broader behavioral-correctness change that warrants its own phase and soak coverage rather than being bundled into a release fix; (b) bundling/vendoring the embedded-runtime runtime is deferred because pinning + asserting the runtime already turns drift into a loud, diagnosable gate failure, and packaging a runtime is a distribution effort disproportionate to the immediate correctness need and independent of it.",
+      "consequences": [
+        "Embeddings are in-distribution and far more stable across embedded-runtime upgrades; runtime drift surfaces as a loud gate failure instead of a silent behavioral regression.",
+        "Persisted prefix-less vectors self-heal via the versioned re-embed in the consolidation backfill.",
+        "Every behavioral floor is now calibrated against a specific pinned runtime and must be re-derived if the pin changes; a prefix-scheme bump invalidates all stored vectors (handled by the embedding_version fingerprint + backfill).",
+        "tool_embeddings DB cache was left as-is (unused; tool ranking re-embeds in-memory at startup)."
+      ],
+      "relatedNodes": [],
+      "relatedFlows": []
+    },
+    {
+      "id": "centralized-pipeline",
+      "status": "accepted",
+      "title": "Agent-turn behavior belongs in the unified pipeline",
+      "context": "FlowForge has many entry points and historically suffered from channel-specific behavior drift.",
+      "decision": "All agent-turn business logic must be implemented in src/engine and inherited by connectors through engine.RunWorkflow.",
+      "consequences": [
+        "New channels inherit behavior automatically.",
+        "Pipeline changes require broad regression and soak coverage.",
+        "Connector-local fixes are treated as suspect until proven transport-only."
+      ],
+      "relatedNodes": [
+        "unified-pipeline",
+        "external-channel-adapters",
+        "daemon-runtime"
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "scheduler-execution",
+        "tool-execution"
+      ]
+    },
+    {
+      "id": "connector-factory-boundary",
+      "status": "accepted",
+      "title": "Connectors parse, call, and format only",
+      "context": "Business logic executed in connectors creates duplicated paths and inconsistent runtime behavior.",
+      "decision": "Connectors may parse transport input, call the pipeline or connector-agnostic service seam, and format output. Domain sequencing, routing, policy, model choice, tools, guards, and memory do not belong there.",
+      "consequences": [
+        "Connector audits are release-relevant.",
+        "Helper functions inside connector packages are not sufficient if they still execute domain sequencing.",
+        "Tests should defend both behavior and ownership."
+      ],
+      "relatedNodes": [
+        "external-channel-adapters",
+        "api-server",
+        "unified-pipeline"
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "external-api-request",
+        "tool-execution"
+      ]
+    },
+    {
+      "id": "dashboard-webchannels-not-rest",
+      "status": "accepted",
+      "title": "Browser dashboard uses websocket topics/control, not internal REST",
+      "context": "The browser cannot import the platform internals, but using same-origin REST as an internal bus bypasses intended control and auth boundaries.",
+      "decision": "The dashboard hydrates and updates through websocket topics/events and mutates through confirmed websocket control commands backed by shared producers/services.",
+      "consequences": [
+        "Dashboard controls must be validated for websocket behavior.",
+        "Media-bearing websocket controls must size their read limits from runtime media limits instead of framework defaults.",
+        "Disconnected states must be clear to users.",
+        "API routes remain external integration surfaces."
+      ],
+      "relatedNodes": [
+        "web-dashboard",
+        "websocket-control-plane",
+        "api-server"
+      ],
+      "relatedFlows": [
+        "dashboard-control",
+        "first-party-state-sync"
+      ]
+    },
+    {
+      "id": "external-api-is-not-internal-bus",
+      "status": "accepted",
+      "title": "/api routes are for external integration only",
+      "context": "REST loopback from FlowForge first-party surfaces is unnecessary and unsafe without real auth/TLS.",
+      "decision": "FlowForge itself, including Web UI, TUI, CLI, scheduler, benchmark, daemon-local control, and self-healing flows, must not use /api/** as an internal bus.",
+      "consequences": [
+        "API callsites from first-party surfaces are architectural defects.",
+        "External API clients remain supported.",
+        "This rule may only be reconsidered after real authentication and TLS support exist."
+      ],
+      "relatedNodes": [
+        "api-server",
+        "external-api-client",
+        "web-dashboard",
+        "cli",
+        "tui"
+      ],
+      "relatedFlows": [
+        "external-api-request",
+        "dashboard-control",
+        "first-party-local-control"
+      ]
+    },
+    {
+      "id": "verifier-retries-no-tools-by-default",
+      "status": "accepted",
+      "title": "Verifier retries default to no structured tools",
+      "context": "Verifier retries are correction turns over already observed evidence. Reusing or widening the original tool surface can send structured tools to models selected for media or conversation routes that do not support tools.",
+      "decision": "Generic verifier retries clear structured tools. Only retry plans with a named authoritative evidence-gathering obligation may retain a narrow tool surface.",
+      "consequences": [
+        "Media and conversation retries do not fail because the final model lacks tool support.",
+        "Source-artifact corrections may still use a confined read-oriented tool surface.",
+        "Verifier policy remains centralized in the pipeline retry planner."
+      ],
+      "relatedNodes": [
+        "unified-pipeline",
+        "llm-service",
+        "skill-plugin-system"
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "media-turn"
+      ]
+    },
+    {
+      "id": "local-surfaces-direct-services",
+      "status": "accepted",
+      "title": "CLI and TUI use local services directly",
+      "context": "Unlike the browser dashboard, local service process surfaces can use shared application services and repositories directly.",
+      "decision": "CLI and TUI should call shared local services, repositories, or engine.RunWorkflow directly, and must not be forced through REST or browser-only webchannel seams.",
+      "consequences": [
+        "TUI implementation should be same-process where state is local.",
+        "Daemon-live-only state needs a non-REST daemon-control seam.",
+        "Local surfaces must still avoid duplicating business logic."
+      ],
+      "relatedNodes": [
+        "cli",
+        "tui",
+        "unified-pipeline",
+        "sql-store"
+      ],
+      "relatedFlows": [
+        "first-party-local-control",
+        "interactive-turn"
+      ]
+    },
+    {
+      "id": "authority-config-central-policy",
+      "status": "accepted",
+      "title": "Authority-bearing configuration requires central policy and confirmation",
+      "context": "Agency, autonomy, scope, action-class, cadence, concurrency, notification, and token budget settings can materially change unattended runtime behavior.",
+      "decision": "Authority-bearing changes must pass through a connector-agnostic config/policy service with explicit operator confirmation, audit evidence, and operator-visible explanation.",
+      "consequences": [
+        "Generic config save paths must not silently raise authority.",
+        "Dashboard sliders are stopped controls, not freeform ambiguity.",
+        "Dangerous choices are allowed only after warning and confirmation."
+      ],
+      "relatedNodes": [
+        "agency-service",
+        "config-keystore",
+        "websocket-control-plane",
+        "cli"
+      ],
+      "relatedFlows": [
+        "dashboard-control",
+        "agency-execution",
+        "first-party-local-control"
+      ]
+    },
+    {
+      "id": "agency-cloud-budget-control",
+      "status": "accepted",
+      "title": "Agency/autonomy includes cloud token budget controls",
+      "context": "Autonomous work can consume paid cloud model tokens without immediate operator attention.",
+      "decision": "Cloud token and spend budgets are part of the authority-bearing agency/autonomy envelope and must be configured, confirmed, audited, and enforced centrally.",
+      "consequences": [
+        "Raising or disabling budgets requires confirmation.",
+        "Provider-credit failures can become self-healing suggestions.",
+        "Budget telemetry must be visible in agency reporting."
+      ],
+      "relatedNodes": [
+        "agency-service",
+        "external-model-providers",
+        "config-keystore"
+      ],
+      "relatedFlows": [
+        "agency-execution",
+        "model-inference"
+      ]
+    },
+    {
+      "id": "isolated-test-state",
+      "status": "accepted",
+      "title": "Tests must not touch production state",
+      "context": "Development/testing previously risked corrupting the production local installation database.",
+      "decision": "Tests, soaks, benchmarks, and manual drills must use isolated config roots/stores and must not inspect or mutate production ~/.flowforge-dev",
+      "consequences": [
+        "Release gates require explicit isolated state.",
+        "Production daemon state is out of bounds.",
+        "TempStore and dedicated test homes are mandatory for DB-touching tests."
+      ],
+      "relatedNodes": [
+        "sql-store",
+        "test-release-harness",
+        "operator"
+      ],
+      "relatedFlows": [
+        "release-validation",
+        "memory-lifecycle"
+      ]
+    },
+    {
+      "id": "sql-local-persistence",
+      "status": "accepted",
+      "title": "embedded SQL store is the durable local state authority",
+      "context": "FlowForge is local-first and stores sessions, memory, traces, cron, skills, and domain state locally.",
+      "decision": "The local embedded SQL store store remains the durable state authority, with maintenance, backups, migrations, and repair paths treated as release-critical operational concerns.",
+      "consequences": [
+        "Database quick_check and repair output matter.",
+        "FTS/vector corruption needs explicit remediation.",
+        "Concurrent tests require isolated databases."
+      ],
+      "relatedNodes": [
+        "sql-store",
+        "memory-system",
+        "scheduler",
+        "daemon-runtime"
+      ],
+      "relatedFlows": [
+        "memory-lifecycle",
+        "scheduler-execution",
+        "release-validation"
+      ]
+    },
+    {
+      "id": "scheduler-uses-pipeline",
+      "status": "accepted",
+      "title": "Scheduled work uses central runtime behavior",
+      "context": "Cron/heartbeat jobs can trigger agent work but must not become a second agent runtime.",
+      "decision": "Scheduler due-job execution must call pipeline/agency/service seams rather than owning business logic in scheduler code.",
+      "consequences": [
+        "Cron lifecycle tests must cover creation, persistence, pickup, execution, and notification.",
+        "Scheduler-triggered agency is allowed only through central policy.",
+        "Missed scheduled output is release-relevant."
+      ],
+      "relatedNodes": [
+        "scheduler",
+        "unified-pipeline",
+        "agency-service"
+      ],
+      "relatedFlows": [
+        "scheduler-execution",
+        "agency-execution"
+      ]
+    },
+    {
+      "id": "model-boundary-sanitizes-history",
+      "status": "accepted",
+      "title": "LLM request boundary sanitizes malformed tool-call history",
+      "context": "Malformed assistant.tool_calls history poisoned provider fallback requests and caused invalid request errors.",
+      "decision": "Historical, orphaned, partial, or unpaired tool-call spans are downgraded to plain transcript at the LLM request boundary for all providers.",
+      "consequences": [
+        "Provider-specific fixes are insufficient.",
+        "Final successful model route must be distinct from failed attempts.",
+        "Tool-call history tests are architecture-relevant."
+      ],
+      "relatedNodes": [
+        "llm-service",
+        "unified-pipeline",
+        "external-model-providers"
+      ],
+      "relatedFlows": [
+        "model-inference",
+        "interactive-turn"
+      ]
+    },
+    {
+      "id": "user-visible-failure-rca",
+      "status": "planned",
+      "title": "Terminal failures should become user-visible RCA",
+      "context": "Silent turn death is worse than failure; the operator needs to know whether the model, provider, permission, funding, or framework failed.",
+      "decision": "FlowForge should use telemetry and, when available, model-generated synthesis to explain terminal failures to the user. Canned framework fallback text must be brief, non-first-person, and only used when no dynamic path exists.",
+      "consequences": [
+        "RCA telemetry serves both developers and users.",
+        "Fallback text must not impersonate the agent.",
+        "Self-healing recommendations can be derived from structured failure causes."
+      ],
+      "relatedNodes": [
+        "observability-system",
+        "unified-pipeline",
+        "llm-service"
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "model-inference",
+        "release-validation"
+      ]
+    },
+    {
+      "id": "canonical-multimodal-parts",
+      "status": "accepted",
+      "title": "Multimodal inputs use canonical content parts",
+      "context": "Voice, camera, images, files, and text must travel through one consistent pipeline rather than per-channel interpretation.",
+      "decision": "Media and files are normalized by runtime-owned media ingress into canonical multimodal message parts with metadata, provenance, consent, storage reference, and retention state before pipeline execution.",
+      "consequences": [
+        "Connectors remain transport-only for media.",
+        "Web and Chat Connector media use the same canonical preparation seam.",
+        "Response speech uses a shared media egress seam after canonical text exists.",
+        "Vision and voice can share persistence and telemetry semantics.",
+        "Permission and retention state become testable."
+      ],
+      "relatedNodes": [
+        "media-services",
+        "unified-pipeline",
+        "llm-service"
+      ],
+      "relatedFlows": [
+        "media-turn",
+        "interactive-turn"
+      ]
+    },
+    {
+      "id": "voice-camera-runtime-services",
+      "status": "accepted",
+      "title": "Voice and camera policy are runtime-owned services",
+      "context": "STT/TTS, media device selection, camera consent, capture, and media routing are business/runtime policy, not connector behavior.",
+      "decision": "Voice and camera are implemented behind runtime services with pluggable backends such as whisper.cpp, macOS say, Provider A, and platform camera capture. Device discovery and selection are part of the same runtime media service.",
+      "consequences": [
+        "Full voice requires audible bidirectional conversation.",
+        "Full camera requires a real captured frame and grounded response/action.",
+        "Users can identify and select microphones, audio outputs, cameras, and capture sources before media operations.",
+        "Channel-native compressed audio is normalized in the runtime voice service before STT.",
+        "Connectors only transport media availability."
+      ],
+      "relatedNodes": [
+        "media-services",
+        "external-channel-adapters",
+        "llm-service"
+      ],
+      "relatedFlows": [
+        "media-turn",
+        "release-validation"
+      ]
+    },
+    {
+      "id": "mail-standard-protocols",
+      "status": "accepted",
+      "title": "Mail integration uses standard protocols",
+      "context": "Proton Bridge exposes local inbound mail/outbound mail endpoints, so special Proton-specific support is unnecessary for core functionality.",
+      "decision": "FlowForge supports inbound mail, inbound mail, and outbound mail as the core mail integration surface; Proton Bridge setup belongs in user-facing docs/wiki.",
+      "consequences": [
+        "Live mail gates can use local bridge endpoints.",
+        "Docs need user-friendly setup guidance.",
+        "Provider-specific mail code is avoided unless a protocol gap proves it necessary."
+      ],
+      "relatedNodes": [
+        "mail-service",
+        "config-keystore",
+        "external-channel-adapters"
+      ],
+      "relatedFlows": [
+        "mail-operations",
+        "release-validation"
+      ]
+    },
+    {
+      "id": "benchmark-scorecards",
+      "status": "accepted",
+      "title": "Benchmarks and soaks produce readable scorecards",
+      "context": "Raw benchmark output was hard to read and qualitative scoring needed consistency with soaks.",
+      "decision": "Behavioral soaks and model benchmarks use quantitative scores plus A/B/C/D/F qualitative grades, aligned columns, wrapped responses, route/latency attribution, and final-model aggregation.",
+      "consequences": [
+        "CLI theming should centralize output language and color gradients.",
+        "Model/framework latency split is release-relevant.",
+        "Benchmark generated-code validation is a planned improvement."
+      ],
+      "relatedNodes": [
+        "test-release-harness",
+        "llm-service",
+        "observability-system",
+        "cli"
+      ],
+      "relatedFlows": [
+        "model-inference",
+        "release-validation"
+      ]
+    },
+    {
+      "id": "source-backed-knowledge-base",
+      "status": "planned",
+      "title": "FlowForge expertise is source-backed, not memory-backed",
+      "context": "The agent must become an expert on FlowForge while preserving the rule that FlowForge does not store data that can be derived.",
+      "decision": "Canonical docs, user-facing wiki pages, and source-derived inventories remain the product knowledge authority. CLI command inventory is derived from flowforge --help and subcommand help; if help is insufficient, the CLI must be fixed. Installed runtimes receive a registry-managed source snapshot under the FlowForge home, while development runtimes can load directly from the source tree. Generated indexes may be persisted only as rebuildable caches with source provenance; copied documentation chunks must not become authoritative semantic-memory facts. Product knowledge is exposed to the agent as an ordinary read-only tool, not as a broad pre-LLM conversational shortcut.",
+      "consequences": [
+        "Wiki freshness becomes a runtime-quality and release-gate concern.",
+        "Visible UI/CLI/TUI surfaces require mapped explanatory docs or explicit release exclusions.",
+        "The agent must cite source-backed product knowledge and admit stale or missing docs when it chooses the tool for a FlowForge product question.",
+        "Greetings and ordinary conversation addressed to Duncan must not be hijacked by product-knowledge retrieval.",
+        "Command-reference drift is prevented by deriving CLI knowledge from the executable help surface.",
+        "Product knowledge distribution belongs to update/registry mechanics, not semantic memory ingestion."
+      ],
+      "relatedNodes": [
+        "knowledge-base-service",
+        "unified-pipeline",
+        "memory-system"
+      ],
+      "relatedFlows": [
+        "knowledge-base-retrieval",
+        "interactive-turn",
+        "release-validation"
+      ]
+    },
+    {
+      "id": "cli-design-language",
+      "status": "planned",
+      "title": "CLI output needs a centralized design language",
+      "context": "Output readability and visual appeal vary across commands.",
+      "decision": "CLI formatting, color, tables, wrapping, warnings, progress indicators, and robot-themed affordances should be centralized instead of redefined per command.",
+      "consequences": [
+        "Benchmarks are the pilot surface.",
+        "Future CLI beautification should be systematic.",
+        "Color is a design tool, not only pass/fail signal."
+      ],
+      "relatedNodes": [
+        "cli",
+        "test-release-harness"
+      ],
+      "relatedFlows": [
+        "release-validation",
+        "first-party-local-control"
+      ]
+    },
+    {
+      "id": "service-install-preserves-runtime-context",
+      "status": "accepted",
+      "title": "Daemon service install preserves operator runtime context",
+      "context": "Installed services previously risked starting with the wrong config, HOME, or PATH.",
+      "decision": "Service install embeds serve --config, FLOWFORGE_* environment, PATH, and HOME needed to reproduce the operator-validated runtime.",
+      "consequences": [
+        "Daemon install behavior is release-gate material.",
+        "Service manager errors need platform-specific repair language.",
+        "Stale updater sidecars require shared update/self-healing repair handling."
+      ],
+      "relatedNodes": [
+        "daemon-runtime",
+        "os-service-manager",
+        "config-keystore"
+      ],
+      "relatedFlows": [
+        "release-validation"
+      ]
+    },
+    {
+      "id": "semantic-correction-over-lexical-matching",
+      "status": "accepted",
+      "title": "Behavioral correction uses embedding-backed semantic classification as the primary signal",
+      "context": "Guard and verifier correction detected narrated delegation, task deferral, false completion, and fabricated financial/action claims with first-person magic-string substring lists. The embedding-backed semantic classifier meant to be the primary detector had no production caller, so correction silently ran on the substring lists alone: brittle, bypassable by trivial rephrasing, and giving false confidence in coverage. Exact-Rust-parity was retired as a constraint in favor of correctness.",
+      "decision": "The guard chain consumes embedding-backed semantic category scores (NARRATED_DELEGATION, TASK_DEFERRAL, FALSE_COMPLETION, CAPABILITY_DENIAL, FINANCIAL_ACTION_CLAIM) as the primary correction signal, wired through buildGuardContext. Exemplar centroids are computed once and cached; only the response is embedded per turn. The brittle magic-string lexical fallback is to be expunged once a quality embedder is a guaranteed floor.",
+      "consequences": [
+        "Correction quality now depends on embedder quality (see risk embedder-quality-foundational).",
+        "Deterministic on the local n-gram embedding path; a remote embedding provider trades determinism for paraphrase recall and should be pinned.",
+        "Expunging the lexical fallback is gated on making a quality embedder a required, surfaced default.",
+        "The financial/action verification gate now fails closed on claim-level proof failures (proof_obligation_unmet, unsupported_absolute_claim, unresolved_contradicted_claim, weak_provenance_coverage) even after tool progress; softer narrative-tone findings remain suppressed by design."
+      ],
+      "relatedNodes": [
+        "guard-verifier-stage",
+        "llm-service",
+        "context-builder",
+        "unified-pipeline"
+      ],
+      "relatedFlows": []
+    },
+    {
+      "id": "capability-access-grounded-not-shortcut",
+      "status": "accepted",
+      "title": "Capability and configured-access questions are answered by the grounded model, not a verbatim runtime-state shortcut",
+      "context": "Runtime-owned capability and configured-access snapshots are model-facing grounding: they carry authoritative-state headers and model-directed instructions (e.g. 'Do not infer access from installed skills, selected tools, memory, filesystem paths, or generic integration wording'). ConfiguredAccessShortcut and IntrospectionShortcut short-circuited the model and returned these snapshots verbatim as the user-facing answer, leaking internal scaffolding to the user. The post-response guard chain ran on the shortcut output but had no guard that recognized model-facing scaffolding, so it passed clean.",
+      "decision": "ConfiguredAccessShortcut and IntrospectionShortcut are removed. The configured-access snapshot is injected into the model prompt as grounding (pipeline stagePrepareInference computes it onto the session; the daemon adapter maps it to agent.PromptConfig.ConfiguredAccessSummary under a '## Configured Access' section); the capability snapshot is already prompt-injected under '## Capability Snapshot'. The model answers in platform voice, grounded by the authoritative facts, with the capability-truth guards preventing confabulation. As defense-in-depth, SystemPromptLeakGuard's markers are extended with the scaffolding signatures (shared constants in configured_access.go) so any echo of model-facing scaffolding triggers a clean re-inference rather than reaching the user.",
+      "consequences": [
+        "Capability/access answers are model-generated (subject to model quality) instead of deterministic; the capability-truth guards and the leak guard backstop bound the risk.",
+        "The configured-access snapshot is computed once per integration-access turn in stagePrepareInference (was duplicated in the removed shortcut path).",
+        "Adding new runtime-owned grounding scaffolding requires registering its signature with the leak guard to preserve the no-leak trust boundary.",
+        "Aligns with the existing decision that product knowledge is a read-only tool, not a pre-LLM conversational shortcut."
+      ],
+      "relatedNodes": [
+        "unified-pipeline",
+        "context-builder",
+        "guard-verifier-stage"
+      ],
+      "relatedFlows": []
+    },
+    {
+      "id": "tool-surface-catalog-hydration",
+      "status": "accepted",
+      "title": "Per-turn tool surface is a small always-native floor + a thin embedder-ranked catalog hydrated on demand",
+      "context": "Every ReAct iteration sent the full JSON schemas of the selected tool set in the request. Because AlwaysInclude (~15 operational tools) was pinned and consumed the whole TopK cap, the resident surface was ~15 schemas (~1.7-2.1k tokens) with near-zero room for query-ranked tools — bulk that crowded out memory/history (production issue #1) and a recall ceiling where the tool a turn actually needed often had no native slot (false 'I don't have that tool' denials, incomplete answers). Memory was already index-not-storage; tools were the unrealized half of the catalog -> on-demand-fetch pattern.",
+      "decision": "The per-turn tool surface splits into three bands. Resident-native = a small always-native floor (AlwaysInclude shrunk to request_tools + recall_memory + search_memories + get_memory_stats + introspect + get_runtime_context) plus the top query-ranked tools up to TopK (default lowered 15->9), all sent as full schemas. Catalog = every remaining embedder-ranked tool as a thin name+description row, injected as a system block (token-capped) sibling to the memory index. The model loads a catalog tool via the request_tools meta-tool, which appends its full def to session.SelectedToolDefs; the ContextBuilder refreshes its tool surface from the session every BuildRequest, so the hydrated tool is natively callable on the next iteration. Catalog ranking and the native head reuse the existing embedder cosine ranker (SelectToolDefsWithCatalog/SearchAndPruneWithCatalog) — no string matching; when the embedder is at the n-gram floor the catalog still lists all tail tools so reachability is invariant to ranking quality. Memory recall is a first-class floor (never catalog-only). Operational tools dropped from the default floor remain profile-pinned per turn (appendAlwaysInclude) when a turn needs them.",
+      "consequences": [
+        "Resident schema bulk shrinks from ~15 tools to ~6 floor + a few ranked (live-verified: selected_tool_count 6, catalog carries the ~56-tool tail), addressing the issue-#1 context-budget pressure.",
+        "Recall ceiling removed: any registered tool is reachable via the catalog + request_tools, not just the pruner's top-N guess.",
+        "Tools beyond the native head incur one request_tools hydration round-trip before first use; the turn's obvious tool stays native (no hop) because it ranks into the head.",
+        "Dispatch already resolves tools by name from the full registry and toolAllowedForTurnSurface gates calls to the selected set; request_tools is exempt from duplicate-call suppression as a legitimate repeatable observe step.",
+        "request_tools must stay in the always-native floor or hydration cannot bootstrap.",
+        "Bare MCP tool names resolve to their namespaced registration: MCP tools register as mcp__server__tool but models reference them by the bare suffix (browser_navigate), so request_tools hydration (Registry.ResolveName) and the per-turn surface gate (CanonicalToolNameForSelectedSurface) both do exact->unique-suffix resolution; ambiguous bare names across servers resolve to nothing rather than guessing. Found via manual-agent-exercise (a weather session where browser_navigate could not hydrate) and live-verified end-to-end."
+      ],
+      "relatedNodes": [
+        "unified-pipeline",
+        "context-builder",
+        "llm-service"
+      ],
+      "relatedFlows": []
+    },
+    {
+      "id": "central-grounding-judge",
+      "status": "accepted",
+      "title": "Central LLM grounding judge forgives behavioral-guard false positives (forgive-only, fail-to-guard)",
+      "context": "Behavioral guards (task_deferral, capability, false-completion, and others) use coarse lexical and embedder-proxy signals that cannot reliably distinguish an honest runtime-grounded answer (e.g. 'I can't read your email, it isn't configured') from the violation they hunt. Manual agent exercise confirmed task_deferral rejecting honest capability denials, and per-guard semantic exemptions were insufficient because the embedder scores these phrasings as more deferral than denial.",
+      "decision": "A forgive-only adjudicator (GroundingJudge.Adjudicate) is invoked from the authoritative retry loop (retryWithGuardsDetailed) via an injected judgeForgive closure, only when an in-scope behavioral guard requested a retry. It asks a fast model — given the runtime grounding (configured-access snapshot, tools executed this turn, user prompt) — whether the response is honest grounded content vs the flagged violation, and may only override the rejection to PASS, never add a rejection. Hard-safety and security guards (injection, config_protection, filesystem_denial, content_classification, system_prompt_leak, empty_response, output_contract) are never adjudicated, and neither are the trust-critical completion/delegation-claim guards (financial_action_truth, execution_truth, subagent_claim): a falsely claimed completion or delegation destroys trust and leaves the real task undone, so it is kept absolute rather than softened by a probabilistic judge (task_deferral remains forgivable, so honest capability denials are still rescued). Any error, timeout, non-JSON response, or missing model fails to the guard verdict. The operator flag core.Config.Agent.grounding_judge_enabled defaults to true. Telemetry records a grounding_judge_consulted trace event for EVERY consultation (outcome forgave/upheld/error + reason + latency) plus a grounding_judge_forgave event on each override, so the judge's decision and latency are never silent.",
+      "consequences": [
+        "Forgive-only: worst-case error makes the agent less over-cautious, never less safe.",
+        "Adds a fast-model call only on an in-scope behavioral-guard rejection (zero cost on the passing path); fail-to-guard on any error or non-JSON response.",
+        "New behavioral grounding scaffolding and guards must opt into the forgivable allowlist to be adjudicated; hard-safety guards stay absolute.",
+        "Eval harness (build tag eval) enforces a safety-critical 'never forgive a genuine violation' metric.",
+        "Every consultation emits a grounding_judge_consulted event (forgave/upheld/error + latency) so an uphold is distinguishable from a fail-to-guard timeout; in-stack validation on cloud-provider confirmed the judge forgives over-fires, upholds genuine violations, and runs at ~2-2.8s (well under the 6s budget).",
+        "Completion/delegation-claim guards (execution_truth, subagent_claim) are excluded from the forgivable set alongside financial_action_truth: the judge can never soften a falsely claimed completion or delegation. The accepted cost is that honest answers merely using completion/delegation phrasing exhaust the retry budget before standing; task_deferral stays forgivable so honest capability denials are still rescued."
+      ],
+      "relatedNodes": [
+        "unified-pipeline",
+        "guard-verifier-stage",
+        "llm-service"
+      ],
+      "relatedFlows": []
+    },
+    {
+      "id": "mcp-tool-namespacing",
+      "status": "accepted",
+      "title": "MCP tools are registered under namespaced names (mcp__server__tool)",
+      "context": "MCP-backed tools were registered in the agent tool registry under their raw server-side names (e.g. browser_navigate). Two connected MCP servers exposing the same bare tool name collided on the same registry key — one silently won (SyncMCPTools carried explicit skip-on-collision logic confirming the hazard). The McpBridgeTool doc comment claimed namespacing but the code never applied it, and downstream name resolution (request_tools hydration, the per-turn surface gate) plus operation classification assumed bare names, so behavior was inconsistent with the documented intent.",
+      "decision": "RegisterMCPTools and SyncMCPTools register each MCP tool under the namespaced name MCPToolName(server, tool) = mcp__<server>__<tool> (the server segment is sanitized so it cannot contain the __ separator). The namespaced name is the registry key and the model-facing name; McpBridgeTool keeps the raw server tool name separately (toolName / serverToolName()) and uses it for the actual mcp.CallTool, so the protocol call is unchanged. Cross-server name collisions are impossible. Name resolution tolerates the bare suffix the model commonly uses: Registry.ResolveName and CanonicalToolNameForSelectedSurface resolve browser_navigate to the unique mcp__server__browser_navigate (ambiguous matches across servers resolve to nothing, never guessed). OperationClassForName strips the namespace (bareMCPToolName) before classifying so namespaced web/execution tools keep their operation class instead of degrading to Unknown.",
+      "consequences": [
+        "Two MCP servers can expose the same bare tool name without clobbering each other.",
+        "The model is offered namespaced names but may call the bare suffix; both resolve. Ambiguous bare names across servers are not guessed.",
+        "OperationClassForName, the focused web-read filter, replay, and proof-obligation logic all see the correct operation class for namespaced MCP tools.",
+        "Bare-named MCP tools registered directly (legacy/tests) still work: serverToolName() falls back to the registry name when no raw name is set.",
+        "Live: namespaced names (mcp__playwright__browser_navigate) are offered with zero tool_not_selected rejections; the namespaced playwright Execute path was not model-exercised live (the model preferred http_fetch), serverToolName() unit-proves the raw-name server call."
+      ],
+      "relatedNodes": [
+        "unified-pipeline",
+        "context-builder"
+      ],
+      "relatedFlows": []
+    },
+    {
+      "id": "subagent-delegation-tool-profile",
+      "status": "accepted",
+      "title": "Explicit sub-agent delegation routes to a focused delegation tool profile; request_tools is a universal surface invariant",
+      "context": "Manual agent exercise found a delegation request ('delegate a research task to a sub-agent to compile a report') sending the model into a 13-turn thrash. The turn-policy classifier (DeriveTurnEnvelopePolicyWithPerception) matched the 'compile a ... report' phrasing as a fresh-external-info / artifact-authoring turn and routed it to a web-read/authoring envelope, whose per-turn filter (filterToolDefsForPolicy / filterToolDefsForFocusedWebRead) strips every non-web-read tool. The orchestration tools (compose-subagent, orchestrate-subagents) are registered and real, but were filtered off the surface each iteration, so the model — correctly believing it should delegate — kept trying to reload tools that were dropped again next turn. request_tools, the catalog-hydration bootstrap, was also being filtered off non-web-read focused surfaces because it relied on an AlwaysInclude pin that was not protecting it in the pipeline path, so the model could see catalog tools but never load them.",
+      "decision": "An explicit-delegation detector (looksLikeSubagentDelegationTask: substring match on subagent/sub-agent, or a delegate/orchestrate verb paired with an agent/roster reference) runs before the web-read and authoring branches and routes the turn to a new ToolProfileFocusedDelegation. That profile's toolAllowedForPolicy admits OperationDelegation plus the supporting OperationCapabilityInventory (roster/skills), OperationTaskInspection (subagent status), and OperationRuntimeContextRead classes (mirroring how FocusedScheduling already admits OperationDelegation), with memory gated on AllowRetrieval. Separately, request_tools is now kept by name in filterToolDefsForPolicy for every focused profile (mirroring the focused-web-read special-case): the catalog bootstrap is a universal invariant and must never be filtered off any surface, pin or no pin.",
+      "consequences": [
+        "Explicit sub-agent delegation is no longer mis-routed to a web-read envelope; orchestration tools stay reachable and, once hydrated via request_tools, persist across iterations because the delegation filter keeps them.",
+        "request_tools survives on every focused tool surface, closing a latent hole where the model saw catalog tools it could never load.",
+        "Live-verified on ~/.flowforge-dev the delegation turn dropped from 13 to 4 react turns, the sub-agent roster is reachable, request_tools successfully hydrates orchestrate-subagents ('Loaded: orchestrate-subagents. Call them directly now.'), and the model returns a clean honest answer that the grounding judge forgives.",
+        "Open follow-up (not a surface defect): the model does not always proactively chain request_tools -> orchestrate-subagents on a natural delegation turn; whether to steer it more strongly is a prompt nuance, akin to the open MCP browser-vs-fetch steering observation."
+      ],
+      "relatedNodes": [
+        "unified-pipeline",
+        "context-builder"
+      ],
+      "relatedFlows": []
+    },
+    {
+      "id": "memory-single-recall-verb",
+      "status": "accepted",
+      "title": "Memory is one transactional recall verb; tiering is internal",
+      "context": "The agent exposed two memory tools — recall_memory (by id) and search_memories (by query) — and was made aware of memory tiers through a source_table parameter and tier labels in both tool output and the injected memory index. The cross-session grounding A/B (evidence committed at c336288b) showed local models such as local-model-a fail to route between the two tools: a failed recall_memory(id) had no query to fall back to, successful search results were buried in a JSON array dump, and tier vocabulary leaked into the agent surface.",
+      "decision": "Collapse recall_memory and search_memories into a single polymorphic recall_memory(memory_id?, query?) verb that routes in code — id resolves to full content, a topic returns a ranked list of value-shaped de-tiered previews, and empty arguments backfill the query from the last user message. Retire search_memories across every internal reference with no deprecation alias. Abstract tiering away from the agent entirely: recall takes no tier parameter and emits no tier label in tool output or the injected index. Tiers are retained purely as internal organization that supports promotion/demotion, scoring/reinforcement, housekeeping, and acuity segregation. Decouple verifier/index fact harvesting from the rendered output by carrying facts in Result.Metadata, so the model-facing output can be de-tiered and legible without losing fact extraction.",
+      "consequences": [
+        "The agent has a purely transactional relationship with memory: ask, receive, store — it never chooses a tool, a tier, or even a query.",
+        "Retiring search_memories updates all internal references atomically (recall floor, always-include lists, truthfulness guard, proactive-action synthesis, prompt, fact harvester, eval harness); there is no alias band-aid.",
+        "Facts are emitted in Result.Metadata rather than parsed from the output string; the harvester reads a fact envelope that the existing AddToolResultWithMetadata plumbing already carries to the message.",
+        "The memory-system node and the memory-lifecycle and tool-execution flows must be updated to a single retrieval verb once the change is implemented.",
+        "Out of scope, revisited only once the recall loop is robust: loop-level nudging for think-only zero-tool turns, and making memory tiers index-only."
+      ],
+      "relatedNodes": [
+        "memory-system",
+        "tool-evidence-engine"
+      ],
+      "relatedFlows": [
+        "memory-lifecycle",
+        "tool-execution",
+        "interactive-turn"
+      ]
+    },
+    {
+      "id": "db-maintenance-consolidation",
+      "status": "accepted",
+      "title": "Consolidate DB maintenance into self-healing --repair, routed through the daemon",
+      "context": "The recurring 'memory_fts corruption' on production was diagnosed as a transient false positive: running full-text-search quick_check against the LIVE database while triggers write memory_fts and WAL checkpoints run yields torn reads (the existing maintenance.go snapshot-disambiguation already labels it 'transient live FTS/WAL check'; durability PRAGMAs are sound: WAL + synchronous=NORMAL + mmap_size=0). Separately, the defrag/self-healing CLI commands opened the live DB from a SECOND process to run VACUUM/FTS-rebuild — itself a cross-process write corruption vector — and DB maintenance was split across two commands (defrag --mode=db and self-healing --repair).",
+      "decision": "Centralize the maintenance pipeline in Store.RunMaintenance (snapshot-safe integrity check, FTS rebuild, stale-data prune, vacuum). self-healing --repair is the single entry point: when the daemon is up it routes the heavy maintenance through the daemon's own connection over the WS control seam (db.maintenance.run, online-safe incremental vacuum), otherwise it runs locally with a full VACUUM. Daemon liveness is probed via a control-seam Ping (not an internal REST call, per the API-boundary rule). The defrag subcommand is retired: DB maintenance folds into self-healing --repair, and its code-quality scanner is rehomed to a dev/CI tool (go run ./scripts/codescan).",
+      "consequences": [
+        "One auditable maintenance pipeline shared by the CLI and the daemon; the heavy, corruption-prone operations (VACUUM, FTS rebuild) no longer run from a second process while the daemon is live.",
+        "self-healing --repair gains defrag's capabilities (FTS rebuild, lease/abuse pruning) without a separate command.",
+        "Deferred, justified (Rule 16) as defense-in-depth sequenced after the v1.1.0 cut: (a) auto-rebuild memory_fts from source when an full-text-search error cannot be parsed to a rootpage (today still reports needs_manual_action); (b) make the heartbeat health gate trust only the consistent snapshot; (c) a single-writer read/write pool split; (d) routing self-healing's lightweight hygiene helpers (orphan-trace/quarantine deletes) through the daemon too. Each carries hot-path risk and warrants its own soak, and the transient false positives are already neutralized in HEAD by snapshot-disambiguation.",
+        "Follow-on status (wrapped into 1.1.0): auto-rebuild memory_fts from source on full-text-search corruption — DONE; snapshot-only heartbeat — already correct in HEAD, verified; route hygiene through the daemon — DONE (Store.RunHygiene; self-healing skips local hygiene when daemon-routed). Only the single-writer read/write pool split remains deferred (defense-in-depth, needs its own soak)."
+      ],
+      "relatedNodes": [],
+      "relatedFlows": []
+    },
+    {
+      "id": "behavior-correction-advisory-posture",
+      "status": "accepted",
+      "title": "Keep the pipeline, flip behavior-correction from overriding to advisory",
+      "context": "FlowForge's recurring weird behavior was traced not to the pipeline's existence but to CONTENT-LEVEL OVERRIDING in it: a semantic response cache that replays a stale answer for a new input, pre-model shortcuts that answer conversational turns, and behavioral guards that reject/replace valid model output. Reproduced harms (live): the 'Yes, please do' -> 'What's on your mind?' turn-collapse (cache replay of a context-free greeting), cron confabulation (config-only tool surface), and guard over-firing on benign turns. The common thread: deterministic logic competes with the model for control of the conversational turn.",
+      "decision": "Keep the pipeline architecture but change its default posture from OVERRIDING to ADVISORY: stages may shape the context the model sees and gate unsafe ACTIONS, but must not replace what the model SAYS. Sort every stage: KEEP-overriding only the hard safety gates (financial-action verification, L1 injection decode, irreversible-tool confirmation); LIGHTEN behavioral guards/verifiers to advisory (prompt-level nudge into a bounded retry, or annotate-and-pass-through); REMOVE the semantic response cache for conversational turns and any pre-model shortcut that answers a conversational turn (context-enrichment shortcuts and provider prompt-prefix caching stay). Every removal is earned by a harness number (disable-and-measure), never by feel.",
+      "consequences": [
+        "DONE: the conversational-turn predicate is centralized in core.IsContextDependentPrompt (acknowledgements/affirmations/continuations/<=3-word follow-ups) so both cache tiers gate on one definition; the pipeline cache wrapper adds its embedding-exemplar augmentation on top.",
+        "DONE: both content-keyed cache tiers now bypass context-dependent turns for lookup AND store — the pipeline semantic response cache (src/engine/pipeline_cache.go) and the lower n-gram-semantic llm cache (internal/llm/cache.go, Get + Put). The conversational-cache removal is complete; neither tier can resurrect the turn-collapse.",
+        "DONE: turn-collapse measurement instrument (must_not_revert_to_greeting check + ADV-TURN-COLLAPSE adversarial case) so the validation gate has a number.",
+        "ROOT-CAUSE (2026-06-09, live dev verification): a large share of the recurring 'weird behavior' is STALE/FALSE DURABLE MEMORY recalled as current truth, overriding live tool data — the same mechanism as the self-funding/financial fixation. Tool outputs were persisted as durable recallable memories, so retrieval resurfaced a one-time mutation ('created cron job X') as a current fact and the model trusted it over the live cron list, confabulating jobs that no longer exist. This is a third overriding vector beyond the response cache and the guards: the memory layer asserting stale state over reality. Fix shipped (commit 4d80c576): formation hygiene (volatile/noise tool events never become durable memory), recall-grounding precedence ([Active Memory] caveat: live evidence supersedes recalled context for current/changeable state), and a one-time quarantine of existing volatile tool-event rows. DONE: the existing-row quarantine is systematized into RunHygiene/`self-healing --repair` (repairVolatileToolEventMemories), so production self-heals without manual SQL; live-verified.",
+        "DIRECTIVE (2026-06-09): a bypass is interim, not the destination. Once the disable-and-measure number shows a bypassed layer is dead (no behavioral value, or the bypass covers every real conversational input so the path never runs), REMOVE the code rather than leave a permanently-bypassed branch. Applies first to the conversational response caches: if measurement confirms conversational turns never legitimately cache, delete the conversational-cache path instead of carrying the bypass.",
+        "NEXT (gated on harness numbers): classify the guard touchpoints into safety-critical (keep) vs behavioral (lighten/delete), and remove pre-model shortcuts that answer conversational turns; keep a layer only if disabling it measurably worsens turn-collapse / guard-false-fire / confabulation / scorecard.",
+        "DONE (v1.1.1, 2026-06-11): the semantic response cache is REMOVED ENTIRELY, not just bypassed for conversational turns — both tiers (pipeline stage + llm two-tier Cache), the semantic_cache table (migration 065), eviction task, and admin/stats surfaces (wire shapes report zero). Trigger: a live incident where a cached context-bound directive answered a greeting and contaminated session state; production data showed zero stores since 2026-04-16, tokens_saved=0 lifetime, and an entirely pathological hit population (a stale clock served 11x). Behavioral soaks always wiped the cache, so certified behavior was already cache-off. In-flight request dedup (a concurrency concern) is retained."
+      ],
+      "relatedNodes": [],
+      "relatedFlows": []
+    },
+    {
+      "id": "contextual-logging-correlation",
+      "status": "accepted",
+      "title": "Logs carry context-propagated correlation IDs and select console/JSON encoding",
+      "context": "Correlation IDs already existed in the runtime — turn_id and session_id on the pipeline context (core.WithTurnID/WithSessionID), and the HTTP router's per-request ID on the HTTP gateway — but they never reached the log lines: the request logger emitted method/path only, pipeline code repeated .Str(\"turn_id\", …) by hand at each call site, and core.ConfigureLogger hard-coded the human-readable console encoding, so a service-installed daemon could not emit machine-parseable logs. A review of the operator's reference the platform project (~/code/go-facade-template) surfaced its ctx-first Logger wrapper (Info(ctx,msg) with WithContext auto-extracting request_id/user_id/trace_id) and its console-vs-JSON format flag as the candidate patterns to adopt.",
+      "decision": "Adopt context-propagated correlation the structured logger-native way, not via a wrapper struct. Add core.LogCtx(ctx) *the structured logger.Logger, which binds request_id/session_id/turn_id from the existing core context keys onto the logger; the HTTP gateway bridges the HTTP router's request ID into the core context (core.WithRequestID) at the request boundary so request_id flows through LogCtx without core importing the HTTP router. Add console/JSON selection to the single logger-construction seam core.ConfigureLogger(out, format), driven by agent.log_format / FLOWFORGE_LOG_FORMAT (console default; json for aggregation). Field-name spellings are centralized constants in src/core/logging.go. REJECTED: the full ctx-first Logger wrapper from the template (~240 LOC re-wrapping the structured logger's fluent API plus 10 NoCtx variants) — disproportionate, it kills the structured logger's zero-alloc event chaining and forces a repo-wide migration off log.Info(); the seam delivers the same forensic benefit with no call-site rewrite. SKIPPED: trace_id (no OpenTelemetry in the single binary) and X-Request-ID downstream propagation (not a multi-service mesh).",
+      "consequences": [
+        "A request or turn can be traced end-to-end by grepping a single correlation ID (grep turn_id=… / request_id=…), satisfying the RCA-instrumentation requirement without per-call-site plumbing.",
+        "A service-installed daemon can emit structured JSON for jq/aggregators while interactive use stays human-readable console; one ConfigureLogger seam owns the choice.",
+        "Adoption is incremental: the LogCtx seam exists and the HTTP request logger uses it, but the wholesale conversion of existing manual .Str(\"turn_id\", …) sites is intentionally deferred (justified: avoid a large mechanical churn with no behavior change; convert opportunistically on hot paths as they are touched).",
+        "Logging stays centralized — one logger construction, one level seam, one correlation seam, all in src/core/logging.go."
+      ],
+      "relatedNodes": [
+        "observability-system",
+        "api-server"
+      ],
+      "relatedFlows": []
+    },
+    {
+      "id": "activate-autonomous-metered-billing-payments",
+      "status": "accepted",
+      "title": "Activate autonomous metered-billing micropayments, treasury-gated, self-custody-capable",
+      "context": "The metered-billing payment scaffolding (handler, TreasuryPolicy, EVMSubmitter) was inert: SetPaymentHandler was never wired in production, so the agent could not autonomously satisfy a 402, and there was no record of outgoing spend (the metered-billing path only SIGNS an EIP-3009 authorization; settlement is server-side). A single hard-coded $1.00 MaxPaymentAmount rail was the only would-be gate; TreasuryPolicy used float64 and was dead.",
+      "decision": "Activate autonomous metered-billing payments (operator-authorized 2026-06-15). (1) TreasuryPolicy converted to Money (int64 cents); config stays float at the TOML edge. (2) Replace the hard $1 rail with the config per-payment cap (default $100 Rust-parity, operator choice). (3) Spend ledger metered_billing_payments (migration 067) — the only record of outgoing spend and the RCA trail; counted at AUTHORIZATION (conservative: a budget cannot be exceeded by racing unsettled authorizations). (4) Every payment gated fail-closed: per-payment cap + hourly/daily (ledger sums) + minimum-reserve (credit units balance via billing account.credit_account; reserve disabled+warned if unset). (5) Daemon wires the treasury-gated handler onto the LLM service (Service.SetPaymentHandler fan-out) only when a billing account+RPC+passphrase are present. (6) BYO/self-custody: `billing account import` lets a user supply their OWN private key (read from --key-file/stdin, never the command line; refuses to overwrite an existing key); the agent signs from whatever billing account is at billing account.path.",
+      "consequences": [
+        "The agent can autonomously pay 402 micropayments, bounded by configurable per-payment/hourly/daily/reserve limits enforced in Money (no float drift).",
+        "Every authorized payment is recorded (amount, recipient, ts) — the RCA trail for autonomous money movement (Rule 14).",
+        "Self-custody is explicit: a user can bring their own key, so flowforge is not perceived as custodying funds; the active address is surfaced (billing account show + import confirmation + activation log).",
+        "Removing the hard $1 rail raises the default autonomous ceiling to $100/payment; the gate is fail-closed (no policy => no payment) and the reserve gate is skipped-with-warning when billing account.credit_account is unset.",
+        "Counting at authorization can over-count if a server never settles; accepted as the conservative direction for a safety budget."
+      ],
+      "relatedNodes": [
+        "wallet-service",
+        "llm-service",
+        "observability-system"
+      ],
+      "relatedFlows": []
+    },
+    {
+      "id": "supervised-process-confinement",
+      "status": "accepted",
+      "title": "Confine supervised child processes via Linux Landlock re-exec shim",
+      "context": "The security package gained Landlock enforcement (sandbox_linux.go: HandleLandlockReexec, the Apply re-exec shim, ApplyLandlock with ABI detection and ENOSYS degradation) but nothing called it — confinement was dead code. flowforge spawns three kinds of child process through the internal/proc seam (MCP stdio servers, the Carbonyl browser, and the embedder sidecar / llama-server) and all ran unconfined.",
+      "decision": "Activate confinement end to end. (1) cmd.Execute calls security.HandleLandlockReexec as its first statement so a process launched as the re-exec shim applies Landlock and execs the real target instead of re-running flowforge; it is a no-op for normal invocations and on non-Linux. (2) core.Config.SandboxConfig maps operator config onto security.SandboxConfig — the flowforge data dir (InstanceDir) is the writable workspace root and sandbox.allowed_paths the additional allow-list — and core.Config.SandboxApplier returns the proc.Options.Sandbox hook (nil when sandboxing is disabled). (3) security.Applier adapts a Sandbox to that hook (whose func(*exec.Cmd) signature has no error return), logging Apply failures and running the child UNCONFINED rather than dropping it. (4) The three spawn sites pass the applier: the MCP ConnectionManager via WithSandbox (wired from the daemon, the mcpstate test path, and the CLI), the embedder sidecar via proc.Options.Sandbox, and the Carbonyl browser via CarbonylConfig.Sandbox.",
+      "consequences": [
+        "On Linux >= 5.13 every supervised child runs with the filesystem read+execute only except /tmp, the data dir, and the operator allow-list — the agent's external subprocesses can no longer write outside their sanctioned roots.",
+        "Confinement is fail-open: an Apply error or an unsupported kernel logs a warning and the child runs UNCONFINED, matching the existing non-Linux posture, so enabling the sandbox never bricks a host.",
+        "The config->sandbox mapping is centralized in core.Config.SandboxApplier; the three spawn sites share one construction point instead of duplicating it.",
+        "The re-exec shim depends on being the first thing cmd.Execute does; moving it after the CLI framework parsing would let a confined child re-run flowforge instead of its target."
+      ],
+      "relatedNodes": [
+        "security-sandbox",
+        "supervised-process-seam",
+        "mcp-system",
+        "daemon-runtime"
+      ],
+      "relatedFlows": [
+        "tool-execution"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,3327 @@
+{
+  "nodes": [
+    {
+      "id": "operator",
+      "type": "actor",
+      "name": "Operator",
+      "summary": "Human user who interacts with FlowForge through local and channel surfaces.",
+      "responsibilities": [
+        "Provide prompts, credentials, confirmations, media consent, and release decisions."
+      ],
+      "owner": "Human operator",
+      "sourcePaths": [
+        "docs/contributing.md",
+        "ARCHITECTURE.md"
+      ],
+      "runtime": "Human",
+      "interfaces": [
+        "CLI",
+        "TUI",
+        "Web dashboard",
+        "Chat Connector and other configured channels"
+      ],
+      "dependencies": [],
+      "dataHandled": [
+        "operator-input",
+        "runtime-config",
+        "secrets",
+        "media-capture",
+        "mail-content",
+        "wallet-data"
+      ],
+      "security": [
+        "Must explicitly consent to cross-channel continuity and authority-bearing changes."
+      ],
+      "observability": [
+        "Receives operator-visible status, failure messages, scorecards, and release evidence."
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "dashboard-control",
+        "first-party-local-control",
+        "media-turn",
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "local-surfaces-direct-services",
+        "authority-config-central-policy",
+        "isolated-test-state"
+      ],
+      "knownRisks": [
+        "silent-turn-failure",
+        "authority-escalation",
+        "production-state-corruption"
+      ],
+      "verification": [
+        "Manual release drills",
+        "Behavioral soaks",
+        "First-party UI audit"
+      ]
+    },
+    {
+      "id": "cli",
+      "type": "client",
+      "name": "CLI",
+      "summary": "Local command-line surface for runtime operations, configuration, models, skills, scheduling, media, and diagnostics.",
+      "responsibilities": [
+        "Invoke shared local services directly.",
+        "Provide command taxonomy, validation, and operator prompts.",
+        "Avoid platform REST loopback for product behavior."
+      ],
+      "owner": "cmd/",
+      "sourcePaths": [
+        "cmd/",
+        "ARCHITECTURE_RULES.md",
+        "docs/contributing.md"
+      ],
+      "runtime": "service process",
+      "interfaces": [
+        "the CLI framework commands",
+        "local repositories",
+        "daemon-control seam",
+        "engine.RunWorkflow where appropriate"
+      ],
+      "dependencies": [
+        "daemon-runtime",
+        "sql-store",
+        "config-keystore",
+        "unified-pipeline",
+        "media-services"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "runtime-config",
+        "secrets",
+        "telemetry",
+        "media-capture",
+        "wallet-data"
+      ],
+      "security": [
+        "Authority-bearing changes require explicit confirmation and central policy enforcement."
+      ],
+      "observability": [
+        "CLI output, release gates, benchmark and soak scorecards."
+      ],
+      "relatedFlows": [
+        "first-party-local-control",
+        "model-inference",
+        "media-turn",
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "local-surfaces-direct-services",
+        "authority-config-central-policy",
+        "cli-design-language"
+      ],
+      "knownRisks": [
+        "api-loopback-drift",
+        "authority-escalation",
+        "local-model-contention"
+      ],
+      "verification": [
+        "CLI contract tests",
+        "Manual CLI audit",
+        "the linter and unit-test suite"
+      ]
+    },
+    {
+      "id": "tui",
+      "type": "client",
+      "name": "TUI",
+      "summary": "Local interactive terminal UI that should use same-process application internals rather than REST or browser-only websocket seams.",
+      "responsibilities": [
+        "Render sessions, streaming, final messages, reconnect/error state, and framework-originated terminal failures.",
+        "Use shared local runtime services instead of duplicating connector behavior."
+      ],
+      "owner": "cmd/tuicmd and internal/tui",
+      "sourcePaths": [
+        "cmd/tuicmd/",
+        "internal/tui/",
+        "ARCHITECTURE_RULES.md"
+      ],
+      "runtime": "service process with Bubble Tea",
+      "interfaces": [
+        "local runtime services",
+        "engine.RunWorkflow",
+        "local repositories"
+      ],
+      "dependencies": [
+        "daemon-runtime",
+        "unified-pipeline",
+        "sql-store",
+        "config-keystore"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "runtime-config",
+        "telemetry"
+      ],
+      "security": [
+        "Must not fake daemon-live state by constructing a parallel runtime."
+      ],
+      "observability": [
+        "Visible terminal failures and connection state."
+      ],
+      "relatedFlows": [
+        "first-party-local-control",
+        "interactive-turn"
+      ],
+      "relatedDecisions": [
+        "local-surfaces-direct-services",
+        "centralized-pipeline"
+      ],
+      "knownRisks": [
+        "api-loopback-drift",
+        "parallel-truth-source"
+      ],
+      "verification": [
+        "TUI no-REST loopback tests",
+        "Manual TUI chat drill"
+      ]
+    },
+    {
+      "id": "web-dashboard",
+      "type": "client",
+      "name": "Browser dashboard",
+      "summary": "First-party browser UI that cannot import the platform internals and therefore uses dashboard websocket topics and confirmed websocket control commands.",
+      "responsibilities": [
+        "Render runtime state from topic snapshots/events.",
+        "Mutate state through confirmed websocket controls.",
+        "Avoid same-origin FlowForge REST as an internal bus."
+      ],
+      "owner": "internal/api/dashboard_spa.html",
+      "sourcePaths": [
+        "internal/api/dashboard_spa.html",
+        "internal/api/dashboard_modularity_test.go",
+        "ARCHITECTURE.md"
+      ],
+      "runtime": "Browser JavaScript",
+      "interfaces": [
+        "/ws topic subscriptions",
+        "/ws control commands",
+        "static dashboard assets"
+      ],
+      "dependencies": [
+        "websocket-control-plane",
+        "api-server",
+        "config-keystore"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "runtime-config",
+        "telemetry",
+        "memory-records",
+        "scheduler-state",
+        "public-metadata",
+        "media-capture"
+      ],
+      "security": [
+        "Authority-bearing controls require explicit operator confirmation through the central config/policy service."
+      ],
+      "observability": [
+        "Connection status, toast notifications, topic refresh states, dead-letter visibility."
+      ],
+      "relatedFlows": [
+        "dashboard-control",
+        "first-party-state-sync",
+        "interactive-turn"
+      ],
+      "relatedDecisions": [
+        "dashboard-webchannels-not-rest",
+        "authority-config-central-policy"
+      ],
+      "knownRisks": [
+        "api-loopback-drift",
+        "stale-dashboard-state",
+        "misleading-health-state"
+      ],
+      "verification": [
+        "Dashboard modularity tests",
+        "Manual Web UI audit",
+        "No same-origin /api product callsite tests"
+      ]
+    },
+    {
+      "id": "external-api-client",
+      "type": "actor",
+      "name": "External API client",
+      "summary": "Explicit integration or automation client using externally addressable FlowForge API routes.",
+      "responsibilities": [
+        "Call public management, diagnostic, bootstrap, or integration endpoints intentionally."
+      ],
+      "owner": "External operators/integrations",
+      "sourcePaths": [
+        "ARCHITECTURE.md",
+        "internal/api/server.go",
+        "internal/api/routes/"
+      ],
+      "runtime": "External process",
+      "interfaces": [
+        "/api/**"
+      ],
+      "dependencies": [
+        "api-server"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "runtime-config",
+        "telemetry",
+        "public-metadata"
+      ],
+      "security": [
+        "Must be treated as independently permission-controlled; not trusted as an internal bus."
+      ],
+      "observability": [
+        "HTTP request logs and route-level status."
+      ],
+      "relatedFlows": [
+        "external-api-request"
+      ],
+      "relatedDecisions": [
+        "external-api-is-not-internal-bus"
+      ],
+      "knownRisks": [
+        "api-loopback-drift",
+        "auth-and-tls-gap"
+      ],
+      "verification": [
+        "API tests",
+        "Architecture rules audit"
+      ]
+    },
+    {
+      "id": "flowforge-platform",
+      "type": "software-system",
+      "name": "FlowForge Platform",
+      "summary": "Local-first autonomous agent runtime spanning first-party user surfaces, daemon runtime, unified pipeline, local state, media services, scheduler, and model provider integration.",
+      "responsibilities": [
+        "Provide a coherent local-first agent system boundary.",
+        "Expose first-party CLI, TUI, dashboard, and channel integrations through centralized runtime behavior.",
+        "Preserve one canonical pipeline for agent turns and authority-sensitive behavior."
+      ],
+      "owner": "FlowForge project",
+      "sourcePaths": [
+        "ARCHITECTURE.md",
+        "ARCHITECTURE_RULES.md",
+        "docs/architext/data/**/*.json"
+      ],
+      "runtime": "Local application system",
+      "interfaces": [
+        "CLI",
+        "TUI",
+        "Web dashboard",
+        "External channels",
+        "Public API"
+      ],
+      "dependencies": [
+        "external-model-providers",
+        "local-model-provider"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "runtime-config",
+        "memory-records",
+        "tool-artifacts",
+        "media-capture",
+        "telemetry"
+      ],
+      "security": [
+        "Centralized authority, connector boundaries, isolated test state, and source-backed product knowledge are system rules."
+      ],
+      "relatedDecisions": [
+        "centralized-pipeline",
+        "connector-factory-boundary",
+        "external-api-is-not-internal-bus"
+      ],
+      "verification": [
+        "Architecture rules audit",
+        "Manual release drill",
+        "Behavioral soaks"
+      ],
+      "observability": [],
+      "relatedFlows": [],
+      "knownRisks": []
+    },
+    {
+      "id": "external-channel-adapters",
+      "type": "service",
+      "name": "Integration Connectors",
+      "summary": "Transport adapters for Chat Connector, Discord, email, Matrix, Signal, phone, web, A2A, and related channels.",
+      "responsibilities": [
+        "Parse channel payloads.",
+        "Call the unified pipeline with channel context.",
+        "Format channel-specific output."
+      ],
+      "owner": "internal/channel",
+      "sourcePaths": [
+        "internal/channel/",
+        "ARCHITECTURE.md"
+      ],
+      "runtime": "Daemon process",
+      "interfaces": [
+        "channel.Router",
+        "adapter interfaces",
+        "engine.RunWorkflow"
+      ],
+      "dependencies": [
+        "unified-pipeline",
+        "daemon-runtime",
+        "config-keystore"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "secrets",
+        "telemetry",
+        "media-capture",
+        "mail-content"
+      ],
+      "security": [
+        "No business logic in adapters; channel allowlists and secrets must be enforced centrally or through shared services."
+      ],
+      "observability": [
+        "Channel delivery logs, dead letters, channel status snapshots."
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "mail-operations",
+        "media-turn"
+      ],
+      "relatedDecisions": [
+        "connector-factory-boundary",
+        "centralized-pipeline"
+      ],
+      "knownRisks": [
+        "connector-business-logic-drift",
+        "silent-turn-failure"
+      ],
+      "verification": [
+        "Channel adapter tests",
+        "Formatter parity tests",
+        "Architecture connector audits"
+      ]
+    },
+    {
+      "id": "daemon-runtime",
+      "type": "deployment-unit",
+      "name": "Daemon runtime",
+      "summary": "Long-running process that wires configuration, database, LLM service, pipeline, channel router, API server, scheduler, memory, skills, MCP, plugins, and agency.",
+      "responsibilities": [
+        "Own subsystem lifecycle.",
+        "Manage OS service integration.",
+        "Propagate cancellation and graceful shutdown.",
+        "Compose shared services.",
+        "Wire sandbox confinement (SandboxApplier) onto the MCP manager, embedder sidecar, and browser children."
+      ],
+      "owner": "internal/daemon",
+      "sourcePaths": [
+        "internal/daemon/daemon.go",
+        "internal/daemon/control.go",
+        "internal/daemon/embedder_sidecar.go",
+        "src/core/config_sandbox.go"
+      ],
+      "runtime": "the platform daemon/service",
+      "interfaces": [
+        "serve",
+        "daemon start/stop/install",
+        "HTTP server",
+        "channel router",
+        "scheduler worker"
+      ],
+      "dependencies": [
+        "sql-store",
+        "llm-service",
+        "unified-pipeline",
+        "api-server",
+        "scheduler",
+        "memory-system",
+        "agency-service",
+        "supervised-process-seam",
+        "security-sandbox"
+      ],
+      "dataHandled": [
+        "runtime-config",
+        "secrets",
+        "telemetry",
+        "scheduler-state",
+        "memory-records"
+      ],
+      "security": [
+        "Service install captures explicit config path, PATH, HOME, and FLOWFORGE_* env to avoid wrong-home startup.",
+        "Supervised children (MCP stdio, embedder sidecar, browser) are confined by the Landlock applier on Linux; confinement is fail-open with a logged warning."
+      ],
+      "observability": [
+        "Structured logs, startup phases, status snapshots, pipeline traces.",
+        "Boot-time embedder reachability probe result and resolved EmbeddingTier (semantic vs ngram-fallback) recorded in startup logs and surfaced on AppState for status snapshots."
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "scheduler-execution",
+        "first-party-state-sync",
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "centralized-pipeline",
+        "isolated-test-state",
+        "supervised-process-confinement"
+      ],
+      "knownRisks": [
+        "production-state-corruption",
+        "stale-service-environment",
+        "silent-turn-failure"
+      ],
+      "verification": [
+        "Daemon control tests",
+        "Live smoke",
+        "Service install manual drill"
+      ]
+    },
+    {
+      "id": "api-server",
+      "type": "service",
+      "name": "HTTP server and API adapter",
+      "summary": "Serves the dashboard, websocket endpoint, external API routes, and post-hoc observability routes.",
+      "responsibilities": [
+        "Own HTTP/WebSocket transport.",
+        "Register routes.",
+        "Serve static dashboard.",
+        "Delegate domain state to shared producers/services."
+      ],
+      "owner": "internal/api",
+      "sourcePaths": [
+        "internal/api/server.go",
+        "internal/api/routes/",
+        "internal/api/ws.go"
+      ],
+      "runtime": "the platform HTTP server",
+      "interfaces": [
+        "/",
+        "/ws",
+        "/api/**"
+      ],
+      "dependencies": [
+        "websocket-control-plane",
+        "sql-store",
+        "unified-pipeline",
+        "llm-service",
+        "observability-system"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "runtime-config",
+        "telemetry",
+        "memory-records",
+        "scheduler-state",
+        "public-metadata"
+      ],
+      "security": [
+        "External API routes are not internal UI buses; dashboard state uses webchannels."
+      ],
+      "observability": [
+        "Request duration logs, route errors, websocket control responses."
+      ],
+      "relatedFlows": [
+        "dashboard-control",
+        "external-api-request",
+        "first-party-state-sync"
+      ],
+      "relatedDecisions": [
+        "dashboard-webchannels-not-rest",
+        "external-api-is-not-internal-bus"
+      ],
+      "knownRisks": [
+        "api-loopback-drift",
+        "auth-and-tls-gap",
+        "misleading-health-state"
+      ],
+      "verification": [
+        "internal/api tests",
+        "Dashboard static contract tests",
+        "Smoke tests"
+      ]
+    },
+    {
+      "id": "websocket-control-plane",
+      "type": "service",
+      "name": "Dashboard websocket topic/control plane",
+      "summary": "Dashboard-private topic snapshot, event, and control command seam for browser UI state and mutations.",
+      "responsibilities": [
+        "Deliver topic snapshots/events.",
+        "Dispatch confirmed control commands.",
+        "Accept configured-size media control payloads.",
+        "Return typed control errors.",
+        "Avoid becoming a business-logic owner."
+      ],
+      "owner": "internal/api/ws.go and internal/api/ws_topics.go",
+      "sourcePaths": [
+        "internal/api/ws.go",
+        "internal/api/ws_topics.go",
+        "internal/api/ws_control_test.go"
+      ],
+      "runtime": "the platform WebSocket handler",
+      "interfaces": [
+        "/ws subscribe/unsubscribe",
+        "/ws control commands"
+      ],
+      "dependencies": [
+        "api-server",
+        "sql-store",
+        "config-keystore",
+        "unified-pipeline",
+        "scheduler",
+        "skill-plugin-system",
+        "media-services"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "runtime-config",
+        "telemetry",
+        "memory-records",
+        "scheduler-state",
+        "public-metadata",
+        "media-capture"
+      ],
+      "security": [
+        "Authority-bearing commands must route through central config/policy confirmation."
+      ],
+      "observability": [
+        "Control acks/errors, topic snapshots, dead-letter replay events."
+      ],
+      "relatedFlows": [
+        "dashboard-control",
+        "first-party-state-sync",
+        "interactive-turn"
+      ],
+      "relatedDecisions": [
+        "dashboard-webchannels-not-rest",
+        "authority-config-central-policy"
+      ],
+      "knownRisks": [
+        "stale-dashboard-state",
+        "authority-escalation"
+      ],
+      "verification": [
+        "WebSocket control tests",
+        "Dashboard no-REST tests",
+        "Manual Web UI audit"
+      ]
+    },
+    {
+      "id": "unified-pipeline",
+      "type": "service",
+      "name": "Workflow Execution Engine",
+      "summary": "Canonical factory for agent turns and the single owner of request-to-response business behavior.",
+      "responsibilities": [
+        "Validate input.",
+        "Defend against injection.",
+        "Resolve sessions and consent.",
+        "Store messages and turns.",
+        "Run decomposition, authority, memory, tools, inference, guards, post-turn ingest, and telemetry."
+      ],
+      "owner": "src/engine",
+      "sourcePaths": [
+        "src/engine/pipeline.go",
+        "src/engine/pipeline_run_stages.go",
+        "ARCHITECTURE.md"
+      ],
+      "runtime": "platform service",
+      "interfaces": [
+        "engine.RunWorkflow(ctx, Runner, Config, Input)"
+      ],
+      "dependencies": [
+        "sql-store",
+        "llm-service",
+        "memory-system",
+        "skill-plugin-system",
+        "mcp-system",
+        "observability-system"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "memory-records",
+        "tool-artifacts",
+        "telemetry",
+        "runtime-config",
+        "media-capture"
+      ],
+      "security": [
+        "Cross-channel consent, authority policy, guards, and typed artifact proof obligations are pipeline-owned."
+      ],
+      "observability": [
+        "Pipeline traces, turn diagnostics, stage liveness warnings, model/framework latency breakdown."
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "scheduler-execution",
+        "model-inference",
+        "media-turn",
+        "memory-lifecycle"
+      ],
+      "relatedDecisions": [
+        "centralized-pipeline",
+        "connector-factory-boundary",
+        "canonical-multimodal-parts"
+      ],
+      "knownRisks": [
+        "silent-turn-failure",
+        "tool-call-history-poisoning",
+        "connector-business-logic-drift"
+      ],
+      "verification": [
+        "Pipeline tests",
+        "Behavioral soaks",
+        "Architecture fitness tests"
+      ]
+    },
+    {
+      "id": "llm-service",
+      "type": "service",
+      "name": "Automation Engine and Rule Router",
+      "summary": "Provider abstraction, model routing, fallback, embeddings, streaming, in-flight request dedup, message sanitization, and benchmarking support.",
+      "responsibilities": [
+        "Route model requests.",
+        "Normalize provider message formats.",
+        "Record model route and latency.",
+        "Enforce provider fallback and circuit behavior.",
+        "Support benchmark exercises."
+      ],
+      "owner": "internal/llm",
+      "sourcePaths": [
+        "internal/llm/service.go",
+        "internal/llm/router.go",
+        "internal/llm/message_sanitize.go",
+        "internal/llm/exercise.ts",
+        "internal/llm/embedder_resolve.go"
+      ],
+      "runtime": "platform service with external/local provider calls",
+      "interfaces": [
+        "Complete",
+        "streaming completion",
+        "embedding",
+        "BuildEmbedder (local-first resolve, construct, and reachability probe)",
+        "EmbeddingClient.Rebind (in-place provider hot-swap on the one shared client, so a single reprovision activates the tier across memory, the pipeline guards, and plugin/tool routes)",
+        "model exercise"
+      ],
+      "dependencies": [
+        "external-model-providers",
+        "local-model-provider",
+        "config-keystore",
+        "observability-system"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "telemetry",
+        "runtime-config",
+        "secrets"
+      ],
+      "security": [
+        "Must sanitize malformed tool-call history at the LLM request boundary and avoid leaking secrets to providers."
+      ],
+      "observability": [
+        "Provider/model fields, route traces, model latency, framework latency, fallback/circuit events."
+      ],
+      "relatedFlows": [
+        "model-inference",
+        "interactive-turn",
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "model-boundary-sanitizes-history",
+        "benchmark-scorecards"
+      ],
+      "knownRisks": [
+        "provider-credit-exhaustion",
+        "local-model-contention",
+        "tool-call-history-poisoning"
+      ],
+      "verification": [
+        "LLM unit tests",
+        "Model exercise benchmarks",
+        "the cloud provider diagnostic soak"
+      ]
+    },
+    {
+      "id": "external-model-providers",
+      "type": "external-service",
+      "name": "External Automation Providers",
+      "summary": "External LLM, embedding, and model gateway providers such as the cloud provider, OpenRouter, Moonshot, Provider A, Provider C, Provider B, Provider D, and similar configured providers.",
+      "responsibilities": [
+        "Serve inference and embedding requests under provider-specific quotas, authentication, and response formats."
+      ],
+      "owner": "External providers",
+      "sourcePaths": [
+        "internal/llm/provider.go",
+        "internal/llm/client.go",
+        "src/core/config.go"
+      ],
+      "runtime": "External network services",
+      "interfaces": [
+        "Provider A-compatible APIs",
+        "provider-specific APIs"
+      ],
+      "dependencies": [],
+      "dataHandled": [
+        "operator-input",
+        "secrets",
+        "telemetry"
+      ],
+      "security": [
+        "Subject to provider trust, funding, rate limits, and data retention policies."
+      ],
+      "observability": [
+        "Provider errors, credit exhaustion, rate limits, route and latency attribution."
+      ],
+      "relatedFlows": [
+        "model-inference",
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "model-boundary-sanitizes-history",
+        "agency-cloud-budget-control"
+      ],
+      "knownRisks": [
+        "provider-credit-exhaustion",
+        "auth-and-tls-gap"
+      ],
+      "verification": [
+        "Provider integration tests where configured",
+        "Diagnostic the cloud provider soak"
+      ]
+    },
+    {
+      "id": "local-model-provider",
+      "type": "external-service",
+      "name": "Embedded Automation Runtime",
+      "summary": "Local model runtimes such as Embedded Runtime, llama.cpp, Docker model runner, alt-runtime-2, and related local inference surfaces.",
+      "responsibilities": [
+        "Serve local model inference under host CPU/GPU/memory constraints.",
+        "Expose Embedded Runtime model-management endpoints (/api/tags, /api/pull) used for CLI model discovery, embedder provisioning, and the daemon boot-time embedding reachability probe."
+      ],
+      "owner": "Operator-managed local services",
+      "sourcePaths": [
+        "internal/llm/provider.go",
+        "internal/llm/exercise_models.go",
+        "internal/hostresources/",
+        "cmd/models/provision_embedder.go"
+      ],
+      "runtime": "Local external processes",
+      "interfaces": [
+        "Provider A-compatible local endpoints",
+        "provider-specific local endpoints",
+        "Embedded Runtime /api/tags (model list and reachability probe)",
+        "Embedded Runtime /api/pull (model pull)"
+      ],
+      "dependencies": [],
+      "dataHandled": [
+        "operator-input",
+        "telemetry"
+      ],
+      "security": [
+        "No cloud egress for local model calls, but host resource contention can alter outcomes."
+      ],
+      "observability": [
+        "Host resource snapshots, model latency, timeout/unreachable classification."
+      ],
+      "relatedFlows": [
+        "model-inference",
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "benchmark-scorecards"
+      ],
+      "knownRisks": [
+        "local-model-contention"
+      ],
+      "verification": [
+        "Local-only behavioral soaks",
+        "Model exercise benchmarks"
+      ]
+    },
+    {
+      "id": "sql-store",
+      "type": "data-store",
+      "name": "embedded SQL store store",
+      "summary": "Durable local database for sessions, turns, memory, traces, config-derived runtime state, cron jobs, skills, tools, metrics, and domain repositories.",
+      "responsibilities": [
+        "Persist runtime state.",
+        "Run migrations.",
+        "Provide repositories.",
+        "Support maintenance and repair."
+      ],
+      "owner": "internal/db",
+      "sourcePaths": [
+        "internal/db/store.go",
+        "internal/db/schema.ts",
+        "internal/db/migrations/",
+        "internal/db/maintenance.go"
+      ],
+      "runtime": "embedded SQL store database",
+      "interfaces": [
+        "db.Store repositories",
+        "migrations",
+        "maintenance checks"
+      ],
+      "dependencies": [],
+      "dataHandled": [
+        "operator-input",
+        "memory-records",
+        "tool-artifacts",
+        "telemetry",
+        "scheduler-state",
+        "runtime-config",
+        "mail-content",
+        "wallet-data"
+      ],
+      "security": [
+        "Tests must use isolated stores and must never mutate production state."
+      ],
+      "observability": [
+        "Database health checks, quick_check, migration status, repair reports."
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "memory-lifecycle",
+        "scheduler-execution",
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "isolated-test-state",
+        "sql-local-persistence"
+      ],
+      "knownRisks": [
+        "production-state-corruption",
+        "database-corruption",
+        "parallel-truth-source"
+      ],
+      "verification": [
+        "Repository tests with testutil.TempStore",
+        "DB maintenance tests",
+        "Manual backup/repair drills"
+      ]
+    },
+    {
+      "id": "memory-system",
+      "type": "service",
+      "name": "Context Store",
+      "summary": "Working, episodic, semantic, relationship, retrieval, FTS/vector, curation, and post-turn ingest capabilities.",
+      "responsibilities": [
+        "Retrieve relevant context.",
+        "Persist post-turn memory.",
+        "Maintain indexes.",
+        "Curate and repair memory records."
+      ],
+      "owner": "internal/agent/memory, internal/memorystate, internal/db memory repositories",
+      "sourcePaths": [
+        "internal/agent/memory/",
+        "internal/memorystate/",
+        "internal/db/memory_repo.go",
+        "docs/memory-architecture-spec.md"
+      ],
+      "runtime": "platform service backed by embedded SQL store",
+      "interfaces": [
+        "memory manager",
+        "retrieval",
+        "memory topic snapshots"
+      ],
+      "dependencies": [
+        "sql-store",
+        "llm-service"
+      ],
+      "dataHandled": [
+        "memory-records",
+        "operator-input",
+        "telemetry"
+      ],
+      "security": [
+        "Memory retrieval must respect session scope and explicit cross-channel consent."
+      ],
+      "observability": [
+        "Memory curation logs, retrieval artifacts, memory topic snapshots."
+      ],
+      "relatedFlows": [
+        "memory-lifecycle",
+        "interactive-turn"
+      ],
+      "relatedDecisions": [
+        "centralized-pipeline",
+        "sql-local-persistence"
+      ],
+      "knownRisks": [
+        "database-corruption",
+        "hallucinated-memory-context"
+      ],
+      "verification": [
+        "Memory repository tests",
+        "Behavioral memory recall soaks"
+      ]
+    },
+    {
+      "id": "scheduler",
+      "type": "worker",
+      "name": "Scheduler and cron worker",
+      "summary": "Durable cron scheduler, lease worker, heartbeat tasks, and scheduled agent execution path.",
+      "responsibilities": [
+        "Persist cron jobs.",
+        "Acquire due work safely.",
+        "Execute scheduled tasks through central runtime/pipeline services.",
+        "Emit results through configured notification paths."
+      ],
+      "owner": "internal/schedule and internal/cronstate",
+      "sourcePaths": [
+        "internal/schedule/",
+        "internal/cronstate/",
+        "internal/db/cron_repo.go"
+      ],
+      "runtime": "Daemon background worker",
+      "interfaces": [
+        "cron repositories",
+        "scheduler worker",
+        "websocket cron controls",
+        "CLI cron commands"
+      ],
+      "dependencies": [
+        "sql-store",
+        "unified-pipeline",
+        "agency-service",
+        "external-channel-adapters"
+      ],
+      "dataHandled": [
+        "scheduler-state",
+        "operator-input",
+        "telemetry"
+      ],
+      "security": [
+        "Scheduled behavior must not own agent business logic and must not silently expand agency/autonomy."
+      ],
+      "observability": [
+        "Job leases, execution history, missed jobs, notification results, logs."
+      ],
+      "relatedFlows": [
+        "scheduler-execution",
+        "dashboard-control"
+      ],
+      "relatedDecisions": [
+        "scheduler-uses-pipeline",
+        "authority-config-central-policy"
+      ],
+      "knownRisks": [
+        "missed-scheduled-output",
+        "connector-business-logic-drift"
+      ],
+      "verification": [
+        "Scheduler unit/integration tests",
+        "Cron lifecycle audit",
+        "Scheduled behavior soaks"
+      ]
+    },
+    {
+      "id": "agency-service",
+      "type": "service",
+      "name": "Autonomy Orchestrator",
+      "summary": "Runtime-owned service for useful-work discovery, policy disposition, confirmation rules, audit records, and autonomous execution constraints.",
+      "responsibilities": [
+        "Evaluate candidate actions.",
+        "Apply agency/autonomy levels.",
+        "Enforce confirmation and audit.",
+        "Respect scopes, action classes, quiet hours, concurrency, notification policy, and token budgets."
+      ],
+      "owner": "internal/agency, internal/agencyexec, internal/agencystate",
+      "sourcePaths": [
+        "internal/agency/",
+        "internal/agencyexec/",
+        "internal/agencystate/",
+        "ARCHITECTURE_RULES.md"
+      ],
+      "runtime": "Daemon service",
+      "interfaces": [
+        "agency service",
+        "agency executor",
+        "agency config controls"
+      ],
+      "dependencies": [
+        "sql-store",
+        "unified-pipeline",
+        "scheduler",
+        "config-keystore"
+      ],
+      "dataHandled": [
+        "runtime-config",
+        "operator-input",
+        "scheduler-state",
+        "telemetry"
+      ],
+      "security": [
+        "Authority-bearing changes require explicit operator confirmation and audit evidence."
+      ],
+      "observability": [
+        "Agency audit records, policy disposition, execution outcome, notification state."
+      ],
+      "relatedFlows": [
+        "agency-execution",
+        "dashboard-control",
+        "scheduler-execution"
+      ],
+      "relatedDecisions": [
+        "authority-config-central-policy",
+        "agency-cloud-budget-control"
+      ],
+      "knownRisks": [
+        "authority-escalation",
+        "provider-credit-exhaustion",
+        "hallucinated-memory-context"
+      ],
+      "verification": [
+        "Agency policy tests",
+        "Agency/autonomy behavior soaks",
+        "Manual authority-control audit"
+      ]
+    },
+    {
+      "id": "config-keystore",
+      "type": "service",
+      "name": "Configuration and keystore",
+      "summary": "Configuration loading, defaults, profiles, provider keys, encrypted keystore, and authority-bearing settings.",
+      "responsibilities": [
+        "Load and validate config.",
+        "Preserve provider config during upgrades.",
+        "Store secrets.",
+        "Mediate high-risk config mutations.",
+        "Hot-reload config file changes at runtime: poll, validate, apply across registered component reloaders with batch rollback on failure, and emit config lifecycle events."
+      ],
+      "owner": "src/core/config.go, src/configstate, cmd/configcmd",
+      "sourcePaths": [
+        "src/core/config.go",
+        "src/core/config_watcher.go",
+        "src/configstate/",
+        "cmd/configcmd/",
+        "cmd/admin/",
+        "internal/daemon/config_reload.go"
+      ],
+      "runtime": "platform service and local files",
+      "interfaces": [
+        "flowforge.toml",
+        "providers.toml",
+        "keystore commands",
+        "websocket config controls"
+      ],
+      "dependencies": [
+        "sql-store"
+      ],
+      "dataHandled": [
+        "runtime-config",
+        "secrets"
+      ],
+      "security": [
+        "Secrets must not be returned in cleartext through UI snapshots or logs."
+      ],
+      "observability": [
+        "Validation output, upgrade logs, config repair output.",
+        "Config lifecycle events (file_detected / applied / validation_failed / rolled_back) logged and bridged to the dashboard event bus with a slim payload (no config snapshots)."
+      ],
+      "relatedFlows": [
+        "dashboard-control",
+        "first-party-local-control",
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "authority-config-central-policy",
+        "external-api-is-not-internal-bus"
+      ],
+      "knownRisks": [
+        "authority-escalation",
+        "secrets-exposure",
+        "stale-service-environment"
+      ],
+      "verification": [
+        "Config tests",
+        "Keystore tests",
+        "Manual settings UI audit"
+      ]
+    },
+    {
+      "id": "skill-plugin-system",
+      "type": "service",
+      "name": "Plugin Marketplace",
+      "summary": "Skill inventory, skill composition, plugin registry, catalog install, activation, usage tracking, and plugin execution metadata.",
+      "responsibilities": [
+        "Load skills.",
+        "Track enabled/usage state.",
+        "Install catalog items.",
+        "Expose shared skill/plugin state to CLI and dashboard."
+      ],
+      "owner": "internal/skillstate, internal/plugin, internal/pluginstate, internal/db skills repositories",
+      "sourcePaths": [
+        "internal/skillstate/",
+        "internal/plugin/",
+        "internal/pluginstate/",
+        "internal/db/skills_repo.go"
+      ],
+      "runtime": "platform service backed by filesystem and embedded SQL store",
+      "interfaces": [
+        "skill repositories",
+        "plugin registry",
+        "websocket skill/plugin controls",
+        "CLI skills/plugins commands"
+      ],
+      "dependencies": [
+        "sql-store",
+        "config-keystore"
+      ],
+      "dataHandled": [
+        "public-metadata",
+        "runtime-config",
+        "telemetry",
+        "tool-artifacts"
+      ],
+      "security": [
+        "Plugin installs must validate manifests and avoid executing untrusted catalog assumptions."
+      ],
+      "observability": [
+        "Skill usage, last-used fields, catalog errors, install results."
+      ],
+      "relatedFlows": [
+        "skill-plugin-lifecycle",
+        "dashboard-control",
+        "interactive-turn"
+      ],
+      "relatedDecisions": [
+        "dashboard-webchannels-not-rest",
+        "connector-factory-boundary"
+      ],
+      "knownRisks": [
+        "catalog-integrity",
+        "stale-dashboard-state"
+      ],
+      "verification": [
+        "Skill/plugin state tests",
+        "Manual skills UI audit",
+        "Catalog install regression"
+      ]
+    },
+    {
+      "id": "mcp-system",
+      "type": "service",
+      "name": "Tool Connector Hub",
+      "summary": "Model Context Protocol server configuration, client management, gateway, resources, tools, and diagnostics.",
+      "responsibilities": [
+        "Manage MCP servers.",
+        "Expose MCP tools/resources to the agent runtime.",
+        "Fetch MCP catalog metadata through runtime-owned services.",
+        "Refresh and test tool catalogs."
+      ],
+      "owner": "internal/mcp and internal/mcpstate",
+      "sourcePaths": [
+        "internal/mcp/",
+        "internal/mcpstate/",
+        "internal/proc/"
+      ],
+      "runtime": "platform service with subprocess/network integrations",
+      "interfaces": [
+        "MCP stdio/SSE/gateway",
+        "websocket MCP controls",
+        "CLI mcp commands"
+      ],
+      "dependencies": [
+        "config-keystore",
+        "sql-store",
+        "unified-pipeline",
+        "supervised-process-seam"
+      ],
+      "dataHandled": [
+        "runtime-config",
+        "secrets",
+        "tool-artifacts",
+        "telemetry"
+      ],
+      "security": [
+        "MCP subprocesses and remote servers require strict configuration and diagnostic boundaries.",
+        "MCP stdio children are confined on Linux via proc.Options.Sandbox (workspace = flowforge data dir, operator allow-list); confinement degrades to a logged warn-UNCONFINED on Apply failure or non-Linux platforms."
+      ],
+      "observability": [
+        "MCP server test results, tool refresh state, gateway diagnostics."
+      ],
+      "relatedFlows": [
+        "tool-execution",
+        "dashboard-control",
+        "interactive-turn"
+      ],
+      "relatedDecisions": [
+        "centralized-pipeline",
+        "supervised-process-confinement"
+      ],
+      "knownRisks": [
+        "tool-surface-drift",
+        "secrets-exposure"
+      ],
+      "verification": [
+        "MCP tests",
+        "Manual MCP UI audit"
+      ]
+    },
+    {
+      "id": "media-services",
+      "type": "service",
+      "name": "Document and Media Services",
+      "summary": "Runtime-owned STT/TTS, media device inventory/selection, camera capture, transport-media normalization, response-media egress, and canonical multimodal content handling.",
+      "responsibilities": [
+        "Discover microphones, audio outputs, cameras, and capture sources.",
+        "Persist selected media devices.",
+        "Capture selected microphone audio for local voice drills.",
+        "Capture media with consent.",
+        "Normalize Web, Chat Connector, and other transport media into canonical message parts before pipeline execution.",
+        "Normalize channel-native compressed audio such as Ogg/Opus before STT backends receive it.",
+        "Transcribe speech.",
+        "Prepare optional response audio after the canonical assistant response exists.",
+        "Synthesize audio through the cross-platform Piper baseline or explicitly selected fallback backends.",
+        "Capture macOS real-camera still frames through imagesnap when ffmpeg AVFoundation is unsuitable.",
+        "Create canonical multimodal message parts.",
+        "Route vision-capable content through the pipeline."
+      ],
+      "owner": "internal/voice, internal/camera, internal/mediaingress, cmd/media",
+      "sourcePaths": [
+        "internal/voice/",
+        "internal/camera/",
+        "internal/mediaingress/",
+        "cmd/media/"
+      ],
+      "runtime": "platform service plus local/external media tools",
+      "interfaces": [
+        "voice commands",
+        "camera commands",
+        "media device inventory",
+        "STT/TTS backend interfaces",
+        "camera capture service"
+      ],
+      "dependencies": [
+        "unified-pipeline",
+        "llm-service",
+        "config-keystore"
+      ],
+      "dataHandled": [
+        "media-capture",
+        "operator-input",
+        "telemetry",
+        "runtime-config"
+      ],
+      "security": [
+        "Media capture requires permission, provenance, and retention state."
+      ],
+      "observability": [
+        "Selected media devices, STT/TTS latency, camera consent state, media-processing latency, typed failures."
+      ],
+      "relatedFlows": [
+        "media-turn",
+        "model-inference",
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "canonical-multimodal-parts",
+        "voice-camera-runtime-services"
+      ],
+      "knownRisks": [
+        "media-privacy",
+        "local-model-contention"
+      ],
+      "verification": [
+        "Voice/camera tests",
+        "Manual audible conversation drill",
+        "Manual camera-grounded vision drill"
+      ]
+    },
+    {
+      "id": "mail-service",
+      "type": "service",
+      "name": "Email Integration Service",
+      "summary": "inbound mail, inbound mail, outbound mail, and local bridge-compatible mail integration surface.",
+      "responsibilities": [
+        "Connect to configured mailboxes.",
+        "Receive via inbound mail/inbound mail.",
+        "Read recent mailbox messages read-only on demand (ListRecent, BODY.PEEK, date-scoped, bounded bodies) for agent inbox summarization, distinct from inbound channel polling and never marking mail seen.",
+        "Send via outbound mail.",
+        "Parse mail safely.",
+        "Support Proton Bridge through standard local inbound mail/outbound mail configuration."
+      ],
+      "owner": "internal/mail",
+      "sourcePaths": [
+        "internal/mail/"
+      ],
+      "runtime": "platform service with network/local bridge endpoints",
+      "interfaces": [
+        "inbound mail",
+        "inbound mail",
+        "outbound mail"
+      ],
+      "dependencies": [
+        "config-keystore",
+        "sql-store"
+      ],
+      "dataHandled": [
+        "mail-content",
+        "secrets",
+        "telemetry"
+      ],
+      "security": [
+        "Mail credentials and content are critical data and require explicit configuration and redaction."
+      ],
+      "observability": [
+        "Mail smoke results, typed connection/auth/send failures."
+      ],
+      "relatedFlows": [
+        "mail-operations",
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "mail-standard-protocols"
+      ],
+      "knownRisks": [
+        "secrets-exposure",
+        "external-integration-drift"
+      ],
+      "verification": [
+        "Mail service tests",
+        "Live inbound mail/inbound mail/outbound mail smoke"
+      ]
+    },
+    {
+      "id": "wallet-service",
+      "type": "service",
+      "name": "Billing and Credits Service",
+      "summary": "Billing account and payment-adjacent local service surface for balances, addresses, metered-billing-related state, and service-task lifecycle evidence.",
+      "responsibilities": [
+        "Expose billing account status.",
+        "Preserve financial safety boundaries.",
+        "Avoid unconfirmed spend actions.",
+        "Own service-task status transitions and payment/failure evidence persistence.",
+        "Gate and record autonomous metered-billing micropayments (treasury policy + spend ledger), and support self-custody key import."
+      ],
+      "owner": "internal/billing account and src/billingstate",
+      "sourcePaths": [
+        "internal/billing account/",
+        "src/billingstate/",
+        "internal/db/metered_billing_payments_repo.go",
+        "cmd/billing account/"
+      ],
+      "runtime": "the platform library/service",
+      "interfaces": [
+        "billing account commands",
+        "billing account dashboard state",
+        "websocket service-task controls"
+      ],
+      "dependencies": [
+        "sql-store",
+        "config-keystore"
+      ],
+      "dataHandled": [
+        "wallet-data",
+        "secrets",
+        "telemetry"
+      ],
+      "security": [
+        "Financial actions require strong confirmation and audit boundaries."
+      ],
+      "observability": [
+        "Billing account state snapshots and typed errors."
+      ],
+      "relatedFlows": [
+        "dashboard-control",
+        "first-party-local-control"
+      ],
+      "relatedDecisions": [
+        "authority-config-central-policy",
+        "activate-autonomous-metered-billing-payments"
+      ],
+      "knownRisks": [
+        "authority-escalation",
+        "secrets-exposure"
+      ],
+      "verification": [
+        "Billing account tests",
+        "Manual billing account UI audit"
+      ]
+    },
+    {
+      "id": "observability-system",
+      "type": "service",
+      "name": "Observability and diagnostics",
+      "summary": "Pipeline traces, request logs, model selection logs, diagnostics, flight recorder, latency breakdowns, and report-card evidence.",
+      "responsibilities": [
+        "Record traces and diagnostics.",
+        "Expose scorecards and logs.",
+        "Support RCA and user-visible failure synthesis.",
+        "Provide release-gate evidence."
+      ],
+      "owner": "internal/tracestate, internal/api/routes, src/engine trace/diagnostics",
+      "sourcePaths": [
+        "internal/tracestate/",
+        "src/engine/trace.go",
+        "internal/api/routes/traces.go",
+        "internal/api/logbuffer.go",
+        "src/core/logging.go"
+      ],
+      "runtime": "platform service backed by embedded SQL store/log buffers",
+      "interfaces": [
+        "observability dashboard topics",
+        "trace repositories",
+        "logs",
+        "scorecards"
+      ],
+      "dependencies": [
+        "sql-store",
+        "unified-pipeline",
+        "llm-service"
+      ],
+      "dataHandled": [
+        "telemetry",
+        "operator-input",
+        "runtime-config"
+      ],
+      "security": [
+        "Telemetry must be useful without exposing secrets or private content unnecessarily."
+      ],
+      "observability": [
+        "This component is the observability owner."
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "model-inference",
+        "release-validation",
+        "first-party-state-sync"
+      ],
+      "relatedDecisions": [
+        "benchmark-scorecards",
+        "user-visible-failure-rca",
+        "contextual-logging-correlation"
+      ],
+      "knownRisks": [
+        "silent-turn-failure",
+        "misleading-health-state"
+      ],
+      "verification": [
+        "Trace tests",
+        "Observability UI audit",
+        "Soak scorecards"
+      ]
+    },
+    {
+      "id": "knowledge-base-service",
+      "type": "service",
+      "name": "Knowledge Base Service",
+      "summary": "Source-backed retrieval service that makes the agent expert on platform setup, interfaces, integrations, troubleshooting, and release behavior without storing derivable docs as durable memory.",
+      "responsibilities": [
+        "Read canonical product docs and source-derived inventories.",
+        "Build rebuildable indexes with source provenance.",
+        "Answer FlowForge product questions through the pipeline with citations.",
+        "Surface missing or stale documentation instead of hallucinating behavior."
+      ],
+      "owner": "internal/productknowledge and docs/wiki",
+      "sourcePaths": [
+        "internal/productknowledge/",
+        "docs/product-knowledge/manifest.json",
+        "docs/plans/v1.1.0-flowforge-expert-knowledge.md",
+        "docs/wiki/",
+        "docs/configuration.md",
+        "cmd/"
+      ],
+      "runtime": "platform service plus generated/rebuildable index",
+      "interfaces": [
+        "source manifest",
+        "read-only retrieval API",
+        "pipeline knowledge lookup"
+      ],
+      "dependencies": [
+        "unified-pipeline",
+        "sql-store"
+      ],
+      "dataHandled": [
+        "public-metadata",
+        "runtime-config",
+        "telemetry"
+      ],
+      "security": [
+        "Must not infer live access, credentials, or provider health without runtime evidence."
+      ],
+      "observability": [
+        "Knowledge source coverage, index freshness, missing-source diagnostics."
+      ],
+      "relatedFlows": [
+        "knowledge-base-retrieval",
+        "interactive-turn",
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "source-backed-knowledge-base"
+      ],
+      "knownRisks": [
+        "stale-knowledge-base",
+        "hallucinated-memory-context"
+      ],
+      "verification": [
+        "Product-knowledge manifest validation",
+        "Wiki completeness gate",
+        "FlowForge product Q&A drills"
+      ]
+    },
+    {
+      "id": "test-release-harness",
+      "type": "module",
+      "name": "Test and Release Harness",
+      "summary": "Release gates, behavior soaks, model benchmarks, lint/race/test execution, manual drill evidence, and release collateral synchronization.",
+      "responsibilities": [
+        "Run isolated tests.",
+        "Produce quantitative and qualitative scorecards.",
+        "Validate architecture rules.",
+        "Record manual release evidence."
+      ],
+      "owner": "scripts, docs/testing, internal/modelbench, test packages",
+      "sourcePaths": [
+        "scripts/",
+        "docs/testing/",
+        "internal/modelbench/",
+        "internal/llm/exercise.ts",
+        "docs/releases/"
+      ],
+      "runtime": "the platform tests, scripts, manual drills",
+      "interfaces": [
+        "the unit-test suite",
+        "the linter",
+        "behavior soak runner",
+        "models exercise",
+        "manual release drill"
+      ],
+      "dependencies": [
+        "sql-store",
+        "unified-pipeline",
+        "llm-service",
+        "local-model-provider",
+        "external-model-providers"
+      ],
+      "dataHandled": [
+        "telemetry",
+        "operator-input",
+        "runtime-config",
+        "media-capture",
+        "mail-content"
+      ],
+      "security": [
+        "Must never run tests against production state."
+      ],
+      "observability": [
+        "Scorecards, logs, evidence files, release notes."
+      ],
+      "relatedFlows": [
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "isolated-test-state",
+        "benchmark-scorecards"
+      ],
+      "knownRisks": [
+        "production-state-corruption",
+        "model-difference-pollution",
+        "local-model-contention"
+      ],
+      "verification": [
+        "Full release gate suite",
+        "Manual evidence rows",
+        "Architecture audit"
+      ]
+    },
+    {
+      "id": "pipeline-ingress",
+      "type": "module",
+      "name": "Engine Ingress and Session Resolver",
+      "summary": "Normalizes turn input, resolves session scope, persists the user message, and preserves channel context before any model or tool behavior runs.",
+      "responsibilities": [
+        "Accept canonical pipeline input from first-party and connector surfaces.",
+        "Resolve or create session state.",
+        "Persist the user turn before downstream execution."
+      ],
+      "owner": "src/engine",
+      "sourcePaths": [
+        "src/engine/pipeline.go",
+        "src/engine/pipeline_run_stages.go",
+        "internal/session/"
+      ],
+      "runtime": "the platform module",
+      "interfaces": [
+        "engine.RunWorkflow",
+        "Session"
+      ],
+      "dependencies": [
+        "sql-store",
+        "unified-pipeline"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "telemetry"
+      ],
+      "security": [
+        "Session scope and cross-channel consent must be resolved centrally."
+      ],
+      "observability": [
+        "Turn identifiers, session identifiers, channel attribution."
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "media-turn"
+      ],
+      "relatedDecisions": [
+        "centralized-pipeline"
+      ],
+      "knownRisks": [
+        "silent-turn-failure",
+        "parallel-truth-source"
+      ],
+      "verification": [
+        "Pipeline unit tests",
+        "Behavioral soaks"
+      ]
+    },
+    {
+      "id": "turn-policy-engine",
+      "type": "module",
+      "name": "Run Policy and Trigger Engine",
+      "summary": "Classifies the current turn, derives action class and envelope policy, and carries policy-only prior context for short corrections.",
+      "responsibilities": [
+        "Classify fresh external information, artifact, inspection, social, media, and correction turns.",
+        "Select turn envelope profile.",
+        "Keep deterministic routing/classification outside the model."
+      ],
+      "owner": "src/engine",
+      "sourcePaths": [
+        "src/engine/perception.go",
+        "src/engine/turn_policy.go",
+        "src/engine/turn_policy_context.go"
+      ],
+      "runtime": "the platform module",
+      "interfaces": [
+        "BuildPerception",
+        "DeriveTurnEnvelopePolicyWithPerception",
+        "EffectiveTurnPolicyContent"
+      ],
+      "dependencies": [
+        "unified-pipeline"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "telemetry"
+      ],
+      "security": [
+        "Policy context is used for obligations, not as fabricated user text."
+      ],
+      "observability": [
+        "Task synthesis events, selected profile, planned action."
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "model-inference"
+      ],
+      "relatedDecisions": [
+        "centralized-pipeline"
+      ],
+      "knownRisks": [
+        "hallucinated-memory-context",
+        "silent-turn-failure"
+      ],
+      "verification": [
+        "Turn policy tests",
+        "Behavioral correction soaks"
+      ]
+    },
+    {
+      "id": "context-builder",
+      "type": "module",
+      "name": "Execution Context Builder",
+      "summary": "Builds the model-facing prompt, memory context, selected tool surface, firmware, and profile-specific instructions.",
+      "responsibilities": [
+        "Assemble bounded context.",
+        "Select and describe tools.",
+        "Avoid irrelevant context inflation.",
+        "Preserve trust boundaries."
+      ],
+      "owner": "internal/daemon and src/engine",
+      "sourcePaths": [
+        "internal/daemon/daemon_adapters.go",
+        "src/engine/pipeline_run_stages.go"
+      ],
+      "runtime": "the platform module",
+      "interfaces": [
+        "context builder",
+        "tool selection"
+      ],
+      "dependencies": [
+        "memory-system",
+        "skill-plugin-system",
+        "mcp-system",
+        "knowledge-base-service"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "memory-records",
+        "tool-artifacts",
+        "telemetry"
+      ],
+      "security": [
+        "Trust boundaries and prompt profiles must not be bypassed by connectors."
+      ],
+      "observability": [
+        "Prompt length, selected tool count, tool token savings, memory presence."
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "knowledge-base-retrieval"
+      ],
+      "relatedDecisions": [
+        "centralized-pipeline",
+        "source-backed-knowledge-base"
+      ],
+      "knownRisks": [
+        "hallucinated-memory-context",
+        "tool-surface-drift"
+      ],
+      "verification": [
+        "Context builder tests",
+        "Prompt telemetry checks"
+      ]
+    },
+    {
+      "id": "tool-evidence-engine",
+      "type": "module",
+      "name": "Tool Execution and Evidence Engine",
+      "summary": "Executes selected tools through shared services and records typed evidence for guards, verifiers, and user-visible claims.",
+      "responsibilities": [
+        "Run eligible tools.",
+        "Preserve tool outputs and metadata.",
+        "Attach artifact, read, inspection, and media proofs."
+      ],
+      "owner": "src/engine and internal/agent/tools",
+      "sourcePaths": [
+        "src/engine/tool_result_evidence.go",
+        "internal/agent/tools/"
+      ],
+      "runtime": "the platform module",
+      "interfaces": [
+        "ToolResultEntry",
+        "ArtifactProof",
+        "ArtifactReadProof",
+        "InspectionProof"
+      ],
+      "dependencies": [
+        "mcp-system",
+        "skill-plugin-system",
+        "sql-store"
+      ],
+      "dataHandled": [
+        "tool-artifacts",
+        "operator-input",
+        "telemetry"
+      ],
+      "security": [
+        "Action-bearing claims require action-specific evidence or a concrete blocker."
+      ],
+      "observability": [
+        "Tool call count, tool names, typed proof metadata."
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "tool-execution"
+      ],
+      "relatedDecisions": [
+        "centralized-pipeline"
+      ],
+      "knownRisks": [
+        "silent-turn-failure",
+        "tool-call-history-poisoning"
+      ],
+      "verification": [
+        "Tool evidence tests",
+        "Artifact truth soaks"
+      ]
+    },
+    {
+      "id": "guard-verifier-stage",
+      "type": "module",
+      "name": "Validation and Verification Stage",
+      "summary": "Applies deterministic guard checks, verifier retries, proof obligations, and framework-originated fail-closed messages before the response is delivered.",
+      "responsibilities": [
+        "Reject raw tool-call leakage.",
+        "Reject internal execution-state leakage.",
+        "Require web-read, artifact, inspection, and media evidence where applicable.",
+        "Emit clear framework errors when no model-safe answer is available."
+      ],
+      "owner": "src/engine",
+      "sourcePaths": [
+        "src/engine/guards_behavioral.go",
+        "src/engine/guards_truthfulness.go",
+        "src/engine/verifier.go",
+        "src/engine/post_success_retry_policy.go"
+      ],
+      "runtime": "the platform module",
+      "interfaces": [
+        "GuardChain",
+        "Verifier",
+        "post-success retry policy"
+      ],
+      "dependencies": [
+        "tool-evidence-engine",
+        "llm-service",
+        "observability-system"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "tool-artifacts",
+        "telemetry"
+      ],
+      "security": [
+        "Blocked framework messages must not impersonate the agent or use first person."
+      ],
+      "observability": [
+        "Guard violations, verifier outcomes, retry counts, blocked reasons."
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "model-inference"
+      ],
+      "relatedDecisions": [
+        "user-visible-failure-rca"
+      ],
+      "knownRisks": [
+        "silent-turn-failure",
+        "tool-call-history-poisoning"
+      ],
+      "verification": [
+        "Guard tests",
+        "Verifier tests",
+        "Behavioral soaks"
+      ]
+    },
+    {
+      "id": "post-turn-stage",
+      "type": "module",
+      "name": "Post-Run Persistence and Telemetry Stage",
+      "summary": "Persists final assistant output, turn diagnostics, traces, memory ingest, and dashboard notifications after finalization.",
+      "responsibilities": [
+        "Persist final content and diagnostics.",
+        "Run post-turn memory ingest.",
+        "Emit status events.",
+        "Drain background workers safely."
+      ],
+      "owner": "src/engine",
+      "sourcePaths": [
+        "src/engine/post_turn.go",
+        "src/engine/trace.go",
+        "src/core/bgwork.go"
+      ],
+      "runtime": "the platform module",
+      "interfaces": [
+        "post-turn ingest",
+        "trace recorder",
+        "dashboard notifications"
+      ],
+      "dependencies": [
+        "sql-store",
+        "memory-system",
+        "observability-system"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "memory-records",
+        "telemetry"
+      ],
+      "security": [
+        "Post-turn work must not rewrite failed turns into unsupported success claims."
+      ],
+      "observability": [
+        "Pipeline completion logs, memory ingest warnings, trace persistence."
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "memory-lifecycle"
+      ],
+      "relatedDecisions": [
+        "centralized-pipeline"
+      ],
+      "knownRisks": [
+        "database-corruption",
+        "misleading-health-state"
+      ],
+      "verification": [
+        "Post-turn tests",
+        "Trace UI audit"
+      ]
+    },
+    {
+      "id": "ws-topic-producers",
+      "type": "module",
+      "name": "Websocket topic producers",
+      "summary": "Build dashboard state snapshots and incremental events from shared runtime repositories and services.",
+      "responsibilities": [
+        "Publish sessions, memory, skills, agents, scheduler, observability, settings, and billing account state.",
+        "Avoid REST polling as an internal state bus."
+      ],
+      "owner": "internal/api",
+      "sourcePaths": [
+        "internal/api/ws_topics.go",
+        "internal/api/ws_topic_*.go"
+      ],
+      "runtime": "the platform module",
+      "interfaces": [
+        "/ws topic snapshots",
+        "/ws topic events"
+      ],
+      "dependencies": [
+        "sql-store",
+        "observability-system",
+        "config-keystore"
+      ],
+      "dataHandled": [
+        "telemetry",
+        "runtime-config",
+        "memory-records",
+        "scheduler-state",
+        "public-metadata"
+      ],
+      "security": [
+        "Topic snapshots must redact secrets and avoid authority-bearing mutations."
+      ],
+      "observability": [
+        "Topic refresh state and dead-letter replay events."
+      ],
+      "relatedFlows": [
+        "dashboard-control",
+        "first-party-state-sync"
+      ],
+      "relatedDecisions": [
+        "dashboard-webchannels-not-rest"
+      ],
+      "knownRisks": [
+        "stale-dashboard-state"
+      ],
+      "verification": [
+        "Websocket topic tests",
+        "Manual Web UI audit"
+      ]
+    },
+    {
+      "id": "ws-control-dispatcher",
+      "type": "module",
+      "name": "Websocket control dispatcher",
+      "summary": "Routes typed dashboard control commands to central services and returns acknowledgements or typed errors.",
+      "responsibilities": [
+        "Decode control commands.",
+        "Delegate to shared services.",
+        "Return typed success/error results.",
+        "Avoid dashboard-owned business logic."
+      ],
+      "owner": "internal/api",
+      "sourcePaths": [
+        "internal/api/ws.go",
+        "internal/api/ws_control_test.go"
+      ],
+      "runtime": "the platform module",
+      "interfaces": [
+        "/ws control commands"
+      ],
+      "dependencies": [
+        "config-keystore",
+        "skill-plugin-system",
+        "mcp-system",
+        "scheduler",
+        "media-services"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "runtime-config",
+        "secrets",
+        "telemetry"
+      ],
+      "security": [
+        "Dangerous controls require explicit confirmation and audit through central policy."
+      ],
+      "observability": [
+        "Control acknowledgements, typed errors, refresh events."
+      ],
+      "relatedFlows": [
+        "dashboard-control"
+      ],
+      "relatedDecisions": [
+        "dashboard-webchannels-not-rest",
+        "authority-config-central-policy"
+      ],
+      "knownRisks": [
+        "authority-escalation",
+        "api-loopback-drift"
+      ],
+      "verification": [
+        "Websocket control tests",
+        "Dashboard no-REST tests"
+      ]
+    },
+    {
+      "id": "agency-policy-engine",
+      "type": "module",
+      "name": "Autonomy Policy Engine",
+      "summary": "Applies finite agency and autonomy levels, token budgets, scopes, quiet hours, action classes, confirmation rules, and safety blocks.",
+      "responsibilities": [
+        "Evaluate proposed work against agency level.",
+        "Evaluate confirmation requirements against autonomy level.",
+        "Enforce cloud token budgets.",
+        "Produce auditable dispositions."
+      ],
+      "owner": "internal/agency",
+      "sourcePaths": [
+        "internal/agency/",
+        "internal/agencystate/",
+        "ARCHITECTURE_RULES.md"
+      ],
+      "runtime": "the platform module",
+      "interfaces": [
+        "agency policy",
+        "autonomy disposition",
+        "budget checks"
+      ],
+      "dependencies": [
+        "config-keystore",
+        "sql-store"
+      ],
+      "dataHandled": [
+        "runtime-config",
+        "operator-input",
+        "telemetry"
+      ],
+      "security": [
+        "Never-ask modes are allowed only after explicit warned operator choice; hard safety blocks still apply."
+      ],
+      "observability": [
+        "Policy disposition, confirmation state, budget state."
+      ],
+      "relatedFlows": [
+        "agency-execution",
+        "scheduler-execution"
+      ],
+      "relatedDecisions": [
+        "authority-config-central-policy",
+        "agency-cloud-budget-control"
+      ],
+      "knownRisks": [
+        "authority-escalation",
+        "provider-credit-exhaustion"
+      ],
+      "verification": [
+        "Agency policy tests",
+        "Agency/autonomy behavior soaks"
+      ]
+    },
+    {
+      "id": "agency-executor-component",
+      "type": "module",
+      "name": "Autonomy Executor",
+      "summary": "Executes approved proactive work through the same central pipeline path used by user-initiated turns.",
+      "responsibilities": [
+        "Claim approved candidate work.",
+        "Run central pipeline execution.",
+        "Record outcome and notification state."
+      ],
+      "owner": "internal/agencyexec",
+      "sourcePaths": [
+        "internal/agencyexec/",
+        "src/engine/"
+      ],
+      "runtime": "the platform worker module",
+      "interfaces": [
+        "agency executor",
+        "engine.RunWorkflow"
+      ],
+      "dependencies": [
+        "agency-policy-engine",
+        "unified-pipeline",
+        "scheduler",
+        "observability-system"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "scheduler-state",
+        "telemetry"
+      ],
+      "security": [
+        "Scheduler-triggered agency must not execute scheduler-owned business logic."
+      ],
+      "observability": [
+        "Execution outcome, notification outcome, audit records."
+      ],
+      "relatedFlows": [
+        "agency-execution",
+        "scheduler-execution"
+      ],
+      "relatedDecisions": [
+        "centralized-pipeline",
+        "authority-config-central-policy"
+      ],
+      "knownRisks": [
+        "silent-turn-failure",
+        "authority-escalation"
+      ],
+      "verification": [
+        "Agency executor tests",
+        "Scheduler agency soaks"
+      ]
+    },
+    {
+      "id": "agency-audit-log",
+      "type": "data-store",
+      "name": "Autonomy Audit Records",
+      "summary": "Durable evidence for candidate action, policy disposition, confirmation, execution result, and operator notification.",
+      "responsibilities": [
+        "Persist agency decisions.",
+        "Preserve release-gate and user-review evidence.",
+        "Support dashboard and CLI audit views."
+      ],
+      "owner": "internal/agencystate and internal/db",
+      "sourcePaths": [
+        "internal/agencystate/",
+        "internal/db/"
+      ],
+      "runtime": "embedded SQL store-backed repository",
+      "interfaces": [
+        "agency audit repository"
+      ],
+      "dependencies": [
+        "sql-store"
+      ],
+      "dataHandled": [
+        "runtime-config",
+        "operator-input",
+        "telemetry"
+      ],
+      "security": [
+        "Audit records must be immutable enough to explain authority-bearing actions."
+      ],
+      "observability": [
+        "Candidate/action/outcome history."
+      ],
+      "relatedFlows": [
+        "agency-execution"
+      ],
+      "relatedDecisions": [
+        "authority-config-central-policy"
+      ],
+      "knownRisks": [
+        "authority-escalation"
+      ],
+      "verification": [
+        "Agency audit tests",
+        "Manual agency behavior drill"
+      ]
+    },
+    {
+      "id": "media-device-inventory",
+      "type": "module",
+      "name": "Document Source Inventory",
+      "summary": "Discovers and persists microphone, speaker, camera, and capture-device selections for voice and vision features.",
+      "responsibilities": [
+        "List available media devices.",
+        "Persist selected device IDs.",
+        "Surface device-unavailable failures clearly."
+      ],
+      "owner": "internal/voice and internal/camera",
+      "sourcePaths": [
+        "internal/voice/",
+        "internal/camera/",
+        "cmd/media/"
+      ],
+      "runtime": "the platform module plus platform media tools",
+      "interfaces": [
+        "media device CLI",
+        "runtime config"
+      ],
+      "dependencies": [
+        "config-keystore",
+        "media-services"
+      ],
+      "dataHandled": [
+        "runtime-config",
+        "media-capture",
+        "telemetry"
+      ],
+      "security": [
+        "Media use requires consent and clear provenance."
+      ],
+      "observability": [
+        "Selected device, unavailable device errors."
+      ],
+      "relatedFlows": [
+        "media-turn"
+      ],
+      "relatedDecisions": [
+        "voice-camera-runtime-services"
+      ],
+      "knownRisks": [
+        "media-privacy"
+      ],
+      "verification": [
+        "Media device inventory tests",
+        "Manual media drill"
+      ]
+    },
+    {
+      "id": "stt-service",
+      "type": "module",
+      "name": "Document Ingestion Service",
+      "summary": "Transcribes captured or channel-native audio into canonical text before the unified pipeline handles the turn.",
+      "responsibilities": [
+        "Normalize input audio when needed.",
+        "Run selected STT backend such as whisper.cpp.",
+        "Persist transcript provenance and typed failures."
+      ],
+      "owner": "internal/voice",
+      "sourcePaths": [
+        "internal/voice/",
+        "cmd/media/"
+      ],
+      "runtime": "the platform module plus STT executable",
+      "interfaces": [
+        "STT backend interface",
+        "voice converse"
+      ],
+      "dependencies": [
+        "media-services",
+        "config-keystore"
+      ],
+      "dataHandled": [
+        "media-capture",
+        "operator-input",
+        "telemetry"
+      ],
+      "security": [
+        "Audio processing must preserve user consent and retention decisions."
+      ],
+      "observability": [
+        "STT latency, backend, transcript confidence/failure."
+      ],
+      "relatedFlows": [
+        "media-turn"
+      ],
+      "relatedDecisions": [
+        "voice-camera-runtime-services"
+      ],
+      "knownRisks": [
+        "media-privacy",
+        "local-model-contention"
+      ],
+      "verification": [
+        "STT tests",
+        "Manual voice input proof"
+      ]
+    },
+    {
+      "id": "tts-service",
+      "type": "module",
+      "name": "Document Rendering Service",
+      "summary": "Synthesizes the finalized assistant answer through the selected voice backend after the canonical pipeline response exists.",
+      "responsibilities": [
+        "Select configured Piper voice model.",
+        "Synthesize audio.",
+        "Play or return audio through the active surface.",
+        "Avoid leaking markdown escape artifacts into speech."
+      ],
+      "owner": "internal/voice",
+      "sourcePaths": [
+        "internal/voice/",
+        "cmd/media/"
+      ],
+      "runtime": "the platform module plus Piper executable",
+      "interfaces": [
+        "TTS backend interface",
+        "voice synthesize",
+        "voice converse"
+      ],
+      "dependencies": [
+        "media-services",
+        "config-keystore"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "media-capture",
+        "telemetry"
+      ],
+      "security": [
+        "TTS is output formatting and must not own agent behavior."
+      ],
+      "observability": [
+        "TTS latency, backend, voice model, playback result."
+      ],
+      "relatedFlows": [
+        "media-turn"
+      ],
+      "relatedDecisions": [
+        "voice-camera-runtime-services"
+      ],
+      "knownRisks": [
+        "media-privacy"
+      ],
+      "verification": [
+        "TTS tests",
+        "Manual audible response proof"
+      ]
+    },
+    {
+      "id": "camera-capture-service",
+      "type": "module",
+      "name": "Attachment Capture Service",
+      "summary": "Captures consented still frames or video-derived frames from selected camera devices for canonical multimodal processing.",
+      "responsibilities": [
+        "Check consent.",
+        "Capture a selected frame.",
+        "Record device/provenance/retention metadata.",
+        "Return typed unavailable/denied failures."
+      ],
+      "owner": "internal/camera",
+      "sourcePaths": [
+        "internal/camera/",
+        "cmd/media/"
+      ],
+      "runtime": "the platform module plus platform camera tool",
+      "interfaces": [
+        "camera capture",
+        "camera describe"
+      ],
+      "dependencies": [
+        "media-device-inventory",
+        "config-keystore"
+      ],
+      "dataHandled": [
+        "media-capture",
+        "telemetry",
+        "runtime-config"
+      ],
+      "security": [
+        "Camera access requires explicit consent and retention policy."
+      ],
+      "observability": [
+        "Capture provider, device, dimensions, size, latency."
+      ],
+      "relatedFlows": [
+        "media-turn"
+      ],
+      "relatedDecisions": [
+        "canonical-multimodal-parts",
+        "voice-camera-runtime-services"
+      ],
+      "knownRisks": [
+        "media-privacy"
+      ],
+      "verification": [
+        "Camera tests",
+        "Manual camera-grounded proof"
+      ]
+    },
+    {
+      "id": "vision-preprocessor",
+      "type": "module",
+      "name": "Document Preprocessor",
+      "summary": "Converts canonical image evidence into model-usable visual observations when the final route lacks direct image support.",
+      "responsibilities": [
+        "Interpret image evidence with a vision-capable route/service.",
+        "Memoize repeated media interpretation within a turn.",
+        "Pass grounded visual summary into the canonical pipeline."
+      ],
+      "owner": "internal/mediaingress and src/engine",
+      "sourcePaths": [
+        "internal/mediaingress/",
+        "src/engine/"
+      ],
+      "runtime": "the platform module with LLM service dependency",
+      "interfaces": [
+        "canonical media evidence",
+        "vision route"
+      ],
+      "dependencies": [
+        "llm-service",
+        "media-services",
+        "unified-pipeline"
+      ],
+      "dataHandled": [
+        "media-capture",
+        "operator-input",
+        "telemetry"
+      ],
+      "security": [
+        "Visual claims must be grounded in captured media evidence, not generic model capability claims."
+      ],
+      "observability": [
+        "Vision model route, preprocessing latency, memoization hits."
+      ],
+      "relatedFlows": [
+        "media-turn",
+        "model-inference"
+      ],
+      "relatedDecisions": [
+        "canonical-multimodal-parts"
+      ],
+      "knownRisks": [
+        "media-privacy",
+        "model-difference-pollution"
+      ],
+      "verification": [
+        "Vision preprocessing tests",
+        "Chat Connector/Web image drills"
+      ]
+    },
+    {
+      "id": "llm-route-selector",
+      "type": "module",
+      "name": "Automation Route Selector",
+      "summary": "Chooses an LLM route using configured preferences, provider state, capability needs, benchmark data, and runtime constraints.",
+      "responsibilities": [
+        "Select primary/fallback model.",
+        "Respect provider circuit state.",
+        "Prefer funded/capable routes.",
+        "Record final model/provider."
+      ],
+      "owner": "internal/llm",
+      "sourcePaths": [
+        "internal/llm/router.go",
+        "internal/llm/service.go"
+      ],
+      "runtime": "the platform module",
+      "interfaces": [
+        "model routing",
+        "provider registry"
+      ],
+      "dependencies": [
+        "config-keystore",
+        "external-model-providers",
+        "local-model-provider"
+      ],
+      "dataHandled": [
+        "runtime-config",
+        "telemetry"
+      ],
+      "security": [
+        "Do not silently route sensitive data to unintended providers."
+      ],
+      "observability": [
+        "Model selection events, final_model, final_provider."
+      ],
+      "relatedFlows": [
+        "model-inference"
+      ],
+      "relatedDecisions": [
+        "model-boundary-sanitizes-history"
+      ],
+      "knownRisks": [
+        "provider-credit-exhaustion",
+        "model-difference-pollution"
+      ],
+      "verification": [
+        "Router tests",
+        "the cloud provider diagnostic soak"
+      ]
+    },
+    {
+      "id": "llm-request-sanitizer",
+      "type": "module",
+      "name": "Automation Request Sanitizer",
+      "summary": "Normalizes provider-bound messages and downgrades malformed historical tool-call spans before requests leave the FlowForge boundary.",
+      "responsibilities": [
+        "Strip or downgrade orphaned tool calls.",
+        "Normalize provider-specific message requirements.",
+        "Avoid poisoning fallback requests."
+      ],
+      "owner": "internal/llm",
+      "sourcePaths": [
+        "internal/llm/message_sanitize.go",
+        "internal/llm/service.go"
+      ],
+      "runtime": "the platform module",
+      "interfaces": [
+        "provider request builder"
+      ],
+      "dependencies": [
+        "llm-service"
+      ],
+      "dataHandled": [
+        "operator-input",
+        "tool-artifacts",
+        "telemetry"
+      ],
+      "security": [
+        "Malformed assistant.tool_calls history must never be sent to any model/provider."
+      ],
+      "observability": [
+        "Sanitization counters, provider request diagnostics."
+      ],
+      "relatedFlows": [
+        "model-inference"
+      ],
+      "relatedDecisions": [
+        "model-boundary-sanitizes-history"
+      ],
+      "knownRisks": [
+        "tool-call-history-poisoning"
+      ],
+      "verification": [
+        "LLM sanitizer tests",
+        "Fallback request tests"
+      ]
+    },
+    {
+      "id": "llm-provider-circuit",
+      "type": "module",
+      "name": "Provider Circuit and Fallback",
+      "summary": "Tracks provider failures, credit/auth/rate-limit states, cooldowns, and fallback eligibility across model attempts.",
+      "responsibilities": [
+        "Record provider failures.",
+        "Avoid repeatedly selecting unhealthy providers.",
+        "Expose bad circuit state to diagnostics.",
+        "Distinguish retries from normal multi-attempt routing."
+      ],
+      "owner": "internal/llm",
+      "sourcePaths": [
+        "internal/llm/service.go",
+        "internal/llm/circuit.go"
+      ],
+      "runtime": "the platform module",
+      "interfaces": [
+        "provider fallback",
+        "circuit breaker"
+      ],
+      "dependencies": [
+        "external-model-providers",
+        "local-model-provider",
+        "observability-system"
+      ],
+      "dataHandled": [
+        "telemetry",
+        "runtime-config"
+      ],
+      "security": [
+        "Provider health must not be reported as healthy when unconfigured, unauthorized, or credit-exhausted."
+      ],
+      "observability": [
+        "Circuit state, provider error class, attempt state."
+      ],
+      "relatedFlows": [
+        "model-inference",
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "user-visible-failure-rca"
+      ],
+      "knownRisks": [
+        "provider-credit-exhaustion",
+        "misleading-health-state"
+      ],
+      "verification": [
+        "Circuit tests",
+        "Provider health UI audit"
+      ]
+    },
+    {
+      "id": "scorecard-reporter",
+      "type": "module",
+      "name": "Benchmark and soak scorecard reporter",
+      "summary": "Formats benchmark and behavior-soak results with quantitative scores, letter grades, route attribution, latency breakdowns, and qualitative notes.",
+      "responsibilities": [
+        "Render aligned CLI output.",
+        "Apply grade thresholds and colors.",
+        "Separate LLM and framework latency.",
+        "Copy final release scorecard into release notes."
+      ],
+      "owner": "scripts and internal/modelbench",
+      "sourcePaths": [
+        "scripts/run-agent-behavior-soak.py",
+        "internal/modelbench/",
+        "internal/llm/exercise.ts"
+      ],
+      "runtime": "Python/the platform reporting modules",
+      "interfaces": [
+        "behavior soak scorecard",
+        "models exercise output"
+      ],
+      "dependencies": [
+        "test-release-harness",
+        "observability-system",
+        "llm-service"
+      ],
+      "dataHandled": [
+        "telemetry",
+        "operator-input"
+      ],
+      "security": [
+        "Report model differences and resource contention so framework conclusions are not polluted."
+      ],
+      "observability": [
+        "Scores, grades, model route, latency, failures."
+      ],
+      "relatedFlows": [
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "benchmark-scorecards"
+      ],
+      "knownRisks": [
+        "model-difference-pollution",
+        "local-model-contention"
+      ],
+      "verification": [
+        "Scorecard tests",
+        "Release gate evidence review"
+      ]
+    },
+    {
+      "id": "hydrated-test-clone",
+      "type": "data-store",
+      "name": "Hydrated test clone",
+      "summary": "Reusable non-production clone of the operator's FlowForge environment used for realistic tests without poisoning production state.",
+      "responsibilities": [
+        "Provide production-like configuration/content for tests.",
+        "Be reset from a known-good archive when dirty.",
+        "Never mutate production state."
+      ],
+      "owner": "docs/testing and release harness",
+      "sourcePaths": [
+        "docs/testing/v1.1.0-manual-release-drill.md",
+        "scripts/"
+      ],
+      "runtime": "Filesystem and embedded SQL store clone",
+      "interfaces": [
+        "isolated FLOWFORGE_HOME",
+        "FLOWFORGE_PROFILE"
+      ],
+      "dependencies": [
+        "sql-store",
+        "test-release-harness"
+      ],
+      "dataHandled": [
+        "runtime-config",
+        "memory-records",
+        "secrets",
+        "telemetry"
+      ],
+      "security": [
+        "The clone is derived from production but must be isolated and restorable."
+      ],
+      "observability": [
+        "Clone health checks, quick_check, restore evidence."
+      ],
+      "relatedFlows": [
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "isolated-test-state"
+      ],
+      "knownRisks": [
+        "production-state-corruption"
+      ],
+      "verification": [
+        "Clone health drill",
+        "Release validation evidence"
+      ]
+    },
+    {
+      "id": "os-service-manager",
+      "type": "external-service",
+      "name": "OS service managers",
+      "summary": "launchd, systemd, Windows SCM, and process managers used to install, start, stop, and repair the FlowForge daemon.",
+      "responsibilities": [
+        "Run the daemon as a service.",
+        "Hold or release updater sidecars.",
+        "Provide platform-specific lifecycle behavior."
+      ],
+      "owner": "Operating system",
+      "sourcePaths": [
+        "internal/daemon/control.go",
+        "src/update/",
+        "cmd/admin/daemon.go"
+      ],
+      "runtime": "Operating system service layer",
+      "interfaces": [
+        "launchctl",
+        "systemd",
+        "Windows service control",
+        "PID files"
+      ],
+      "dependencies": [],
+      "dataHandled": [
+        "runtime-config",
+        "telemetry"
+      ],
+      "security": [
+        "Service user, HOME, PATH, and permissions affect runtime behavior and update repair."
+      ],
+      "observability": [
+        "Daemon stop/start logs, update repair output, stale sidecar reports."
+      ],
+      "relatedFlows": [
+        "release-validation"
+      ],
+      "relatedDecisions": [
+        "service-install-preserves-runtime-context"
+      ],
+      "knownRisks": [
+        "stale-service-environment",
+        "windows-stale-sidecar"
+      ],
+      "verification": [
+        "Daemon install/start/stop tests",
+        "Windows stale-sidecar manual drill"
+      ]
+    },
+    {
+      "id": "cli-command-router",
+      "type": "module",
+      "name": "CLI command router",
+      "summary": "Maps operator CLI commands to application services without using internal REST loopback.",
+      "responsibilities": [
+        "Maps operator CLI commands to application services without using internal REST loopback."
+      ],
+      "sourcePaths": [
+        "cmd/",
+        "cmd/root.go"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "cmd",
+      "runtime": "the platform CLI module"
+    },
+    {
+      "id": "cli-service-adapters",
+      "type": "module",
+      "name": "CLI service adapters",
+      "summary": "Invoke runtime services directly from the local process boundary.",
+      "responsibilities": [
+        "Invoke runtime services directly from the local process boundary."
+      ],
+      "sourcePaths": [
+        "cmd/"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "cmd",
+      "runtime": "the platform CLI module"
+    },
+    {
+      "id": "tui-session-runtime",
+      "type": "module",
+      "name": "TUI session runtime",
+      "summary": "Runs local terminal session selection, message send, streaming, reconnect, and terminal failure presentation.",
+      "responsibilities": [
+        "Runs local terminal session selection, message send, streaming, reconnect, and terminal failure presentation."
+      ],
+      "sourcePaths": [
+        "internal/tui/",
+        "cmd/tui"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "internal/tui",
+      "runtime": "the platform TUI module"
+    },
+    {
+      "id": "tui-renderer",
+      "type": "module",
+      "name": "TUI renderer",
+      "summary": "Renders terminal chat state, reconnect state, streaming messages, and user-visible framework failures.",
+      "responsibilities": [
+        "Renders terminal chat state, reconnect state, streaming messages, and user-visible framework failures."
+      ],
+      "sourcePaths": [
+        "internal/tui/"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "internal/tui",
+      "runtime": "the platform TUI module"
+    },
+    {
+      "id": "daemon-subsystem-manager",
+      "type": "module",
+      "name": "Daemon subsystem manager",
+      "summary": "Starts, stops, and coordinates runtime subsystems owned by the daemon process.",
+      "responsibilities": [
+        "Starts, stops, and coordinates runtime subsystems owned by the daemon process."
+      ],
+      "sourcePaths": [
+        "internal/daemon/daemon_subsystems.go"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "internal/daemon",
+      "runtime": "the platform daemon module"
+    },
+    {
+      "id": "daemon-service-control",
+      "type": "module",
+      "name": "Daemon service control",
+      "summary": "Installs, starts, stops, and validates platform service lifecycle without losing runtime context.",
+      "responsibilities": [
+        "Installs, starts, stops, and validates platform service lifecycle without losing runtime context.",
+        "Emits daemon status before and after each control action as themed controlled output (not logs), so the operator sees the prior state, the resulting state, and any no-op reason."
+      ],
+      "sourcePaths": [
+        "internal/daemon/control.go",
+        "cmd/admin/servicecontrol.go",
+        "cmd/admin/daemon.go",
+        "cmd/admin/service.go"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [
+        "cli-design-language"
+      ],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "internal/daemon",
+      "runtime": "the platform daemon module"
+    },
+    {
+      "id": "daemon-background-workers",
+      "type": "module",
+      "name": "Daemon background workers",
+      "summary": "Runs background maintenance workers and drains them during shutdown.",
+      "responsibilities": [
+        "Runs background maintenance workers and drains them during shutdown."
+      ],
+      "sourcePaths": [
+        "src/core/bgwork.go"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "internal/daemon",
+      "runtime": "the platform daemon module"
+    },
+    {
+      "id": "config-loader",
+      "type": "module",
+      "name": "Runtime config loader",
+      "summary": "Loads runtime configuration, profile state, provider order, and feature settings from the configured root.",
+      "responsibilities": [
+        "Loads runtime configuration, profile state, provider order, and feature settings from the configured root."
+      ],
+      "sourcePaths": [
+        "internal/config/",
+        "cmd/config"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "internal/config and internal/keystore",
+      "runtime": "the platform configuration module"
+    },
+    {
+      "id": "secret-store",
+      "type": "module",
+      "name": "Encrypted keystore adapter",
+      "summary": "Stores and retrieves provider and integration secrets through the encrypted local keystore.",
+      "responsibilities": [
+        "Stores and retrieves provider and integration secrets through the encrypted local keystore."
+      ],
+      "sourcePaths": [
+        "internal/keystore/",
+        "cmd/keystore"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "internal/config and internal/keystore",
+      "runtime": "the platform configuration module"
+    },
+    {
+      "id": "dashboard-spa-state",
+      "type": "module",
+      "name": "Dashboard SPA state model",
+      "summary": "Maintains browser-local presentation state derived from websocket topic snapshots and events.",
+      "responsibilities": [
+        "Maintains browser-local presentation state derived from websocket topic snapshots and events."
+      ],
+      "sourcePaths": [
+        "web/dashboard_spa.html"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "web/dashboard_spa.html",
+      "runtime": "Browser JavaScript module"
+    },
+    {
+      "id": "dashboard-ws-client",
+      "type": "module",
+      "name": "Dashboard websocket client",
+      "summary": "Subscribes to runtime topics and sends approved control commands over the websocket seam.",
+      "responsibilities": [
+        "Subscribes to runtime topics and sends approved control commands over the websocket seam."
+      ],
+      "sourcePaths": [
+        "web/dashboard_spa.html",
+        "internal/api/ws.go"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "web/dashboard_spa.html",
+      "runtime": "Browser JavaScript module"
+    },
+    {
+      "id": "cron-dispatcher",
+      "type": "module",
+      "name": "Cron dispatcher",
+      "summary": "Evaluates due cron jobs and submits work through runtime-owned execution paths.",
+      "responsibilities": [
+        "Evaluates due cron jobs and submits work through runtime-owned execution paths."
+      ],
+      "sourcePaths": [
+        "internal/schedule/"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "internal/schedule",
+      "runtime": "the platform scheduler module"
+    },
+    {
+      "id": "heartbeat-runner",
+      "type": "module",
+      "name": "Heartbeat runner",
+      "summary": "Runs heartbeat maintenance and distributed tasks without owning agent business behavior.",
+      "responsibilities": [
+        "Runs heartbeat maintenance and distributed tasks without owning agent business behavior."
+      ],
+      "sourcePaths": [
+        "internal/schedule/heartbeat.go"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "internal/schedule",
+      "runtime": "the platform scheduler module"
+    },
+    {
+      "id": "self-healing-subsystem",
+      "type": "module",
+      "name": "Self-Healing Maintenance Subsystem",
+      "summary": "Framework-native, deterministic maintenance/repair plane: per-domain repairers aggregated into one risk-tiered report, run on the maintenance heartbeat and on-demand.",
+      "responsibilities": [
+        "Define the per-domain repairer contract (Name, Tier, Repair) and the unified SelfHealingReport.",
+        "Enforce the risk-tiered safety model centrally: low-risk DATABASE auto-applies; sensitive CONFIG (and future domains) are propose-only until operator-confirmed.",
+        "Wrap the consolidated database-repair pass (maintenance + hygiene + dead-letter summary + integrity recheck) as the auto-apply DATABASE domain.",
+        "Wrap the prompt-first config heal as the propose-only CONFIG domain.",
+        "Run with SYSTEM authority by construction (framework code; no subagent delegation, no peer-trust gate); fail loud per domain and continue the pass."
+      ],
+      "owner": "internal/self-healing",
+      "sourcePaths": [
+        "internal/self-healing/shell.go",
+        "internal/self-healing/domains.go",
+        "internal/self-healing/runner.go",
+        "internal/self-healing/repair.go",
+        "src/core/config_repair.go"
+      ],
+      "runtime": "the platform framework subsystem (daemon-resident and CLI-invoked)",
+      "interfaces": [
+        "RunSelfHealing(ctx, deps, opts) -> SelfHealingReport",
+        "DomainRepairer contract",
+        "self-healing CLI (--repair, config-repair)",
+        "maintenance heartbeat",
+        "agent self-repair tool"
+      ],
+      "dependencies": [
+        "sql-store",
+        "config-keystore"
+      ],
+      "dataHandled": [
+        "scheduler-state",
+        "operator-input",
+        "telemetry"
+      ],
+      "security": [
+        "Sensitive domains (config and future workspace/plugins/skills/security) are never auto-applied; they propose and write only after explicit operator confirmation.",
+        "Runs with SYSTEM authority by construction; it is framework code and is decoupled from the peer-trust authority gate."
+      ],
+      "observability": [
+        "Unified report distinguishes auto-applied vs proposed actions; each action records what was done/proposed and how to reverse it (Rule 14)."
+      ],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [
+        "internal/self-healing shell tests (tier safety, propose-vs-apply, single-domain filter, database-domain behavior preservation)"
+      ]
+    },
+    {
+      "id": "api-public-routes",
+      "type": "module",
+      "name": "Public API route adapters",
+      "summary": "Serve external integration API routes and avoid first-party internal loopback behavior.",
+      "responsibilities": [
+        "Serve external integration API routes and avoid first-party internal loopback behavior."
+      ],
+      "sourcePaths": [
+        "internal/api/"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "internal/api",
+      "runtime": "the platform HTTP/WebSocket module"
+    },
+    {
+      "id": "api-ws-upgrader",
+      "type": "module",
+      "name": "Websocket upgrader",
+      "summary": "Upgrades dashboard clients to the websocket topic/control seam.",
+      "responsibilities": [
+        "Upgrades dashboard clients to the websocket topic/control seam."
+      ],
+      "sourcePaths": [
+        "internal/api/ws.go"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "internal/api",
+      "runtime": "the platform HTTP/WebSocket module"
+    },
+    {
+      "id": "trace-recorder",
+      "type": "module",
+      "name": "Pipeline trace recorder",
+      "summary": "Persists pipeline stages, turn diagnostics, model route details, and operator-visible RCA telemetry.",
+      "responsibilities": [
+        "Persists pipeline stages, turn diagnostics, model route details, and operator-visible RCA telemetry."
+      ],
+      "sourcePaths": [
+        "internal/observability/",
+        "src/engine/"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "internal/observability",
+      "runtime": "the platform observability module"
+    },
+    {
+      "id": "metrics-reporter",
+      "type": "module",
+      "name": "Runtime metrics reporter",
+      "summary": "Reports provider capacity, cost, latency, request logs, and benchmark/soak observability summaries.",
+      "responsibilities": [
+        "Reports provider capacity, cost, latency, request logs, and benchmark/soak observability summaries."
+      ],
+      "sourcePaths": [
+        "internal/observability/",
+        "internal/llm/"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": [],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [],
+      "interfaces": [],
+      "owner": "internal/observability",
+      "runtime": "the platform observability module"
+    },
+    {
+      "id": "supervised-process-seam",
+      "type": "service",
+      "name": "Supervised process seam",
+      "summary": "Single lifecycle owner for flowforge-spawned child processes (MCP stdio servers, Carbonyl browser, embedder sidecar): merged-env spawn, bounded stderr capture, context-bound kill/reap, deterministic Close, restart/health Supervisor, and the Sandbox confinement hook.",
+      "responsibilities": [
+        "Spawn and reap supervised child processes with bounded stderr diagnostics.",
+        "Bind child lifetime to the caller's context and kill the process group on cancel.",
+        "Apply the configured Sandbox hook to every child before start.",
+        "Restart and health-gate the embedder sidecar via Supervisor."
+      ],
+      "owner": "internal/proc",
+      "sourcePaths": [
+        "internal/proc/process.go",
+        "internal/proc/supervisor.go"
+      ],
+      "runtime": "Daemon process",
+      "interfaces": [
+        "proc.Start",
+        "proc.Options.Sandbox hook",
+        "proc.Supervisor"
+      ],
+      "dependencies": [
+        "security-sandbox"
+      ],
+      "dataHandled": [
+        "telemetry"
+      ],
+      "security": [
+        "Every supervised child is confined through proc.Options.Sandbox (security.Applier); a nil hook (sandboxing disabled) leaves the child unconfined by operator choice.",
+        "Process-group kill reaps grandchildren (e.g. chromium renderers) so confined subtrees do not orphan."
+      ],
+      "observability": [
+        "Bounded stderr ring and exit status via Process.Diagnostic; Supervisor state transitions for the embedder sidecar."
+      ],
+      "relatedFlows": [
+        "tool-execution",
+        "model-inference"
+      ],
+      "relatedDecisions": [
+        "supervised-process-confinement"
+      ],
+      "knownRisks": [
+        "authority-escalation"
+      ],
+      "verification": [
+        "proc package tests",
+        "Embedder sidecar supervisor tests"
+      ]
+    },
+    {
+      "id": "security-sandbox",
+      "type": "service",
+      "name": "Security sandbox",
+      "summary": "OS-level process confinement: Linux Landlock filesystem enforcement applied to supervised children via a re-exec shim, with graceful warn-UNCONFINED degradation on unsupported kernels and non-Linux platforms.",
+      "responsibilities": [
+        "Apply Landlock path-access restrictions on Linux through a re-exec shim that confines itself then execs the real target.",
+        "Map operator sandbox config onto the writable workspace (flowforge data dir) and allow-list.",
+        "Adapt confinement to the proc.Options.Sandbox hook and degrade loudly to UNCONFINED on failure."
+      ],
+      "owner": "internal/security",
+      "sourcePaths": [
+        "internal/security/sandbox.go",
+        "internal/security/sandbox_linux.go",
+        "src/core/config_sandbox.go"
+      ],
+      "runtime": "In-process Linux LSM (no-op on other platforms)",
+      "interfaces": [
+        "security.NewSandbox",
+        "security.Applier",
+        "security.HandleLandlockReexec",
+        "core.Config.SandboxApplier"
+      ],
+      "dependencies": [
+        "config-keystore"
+      ],
+      "dataHandled": [
+        "runtime-config"
+      ],
+      "security": [
+        "Landlock makes the whole filesystem read+execute and grants write only to /tmp, the flowforge data dir, and the operator allow-list.",
+        "Confinement is fail-open: an Apply error or unsupported kernel logs a warning and the child runs UNCONFINED rather than being dropped.",
+        "The re-exec shim must run as the first statement of cmd.Execute so a confined child execs its target instead of re-running flowforge."
+      ],
+      "observability": [
+        "Landlock ABI detection and re-exec configuration logged at debug; warn-UNCONFINED on degradation."
+      ],
+      "relatedFlows": [
+        "tool-execution"
+      ],
+      "relatedDecisions": [
+        "supervised-process-confinement"
+      ],
+      "knownRisks": [
+        "authority-escalation"
+      ],
+      "verification": [
+        "internal/security Landlock tests (Linux >= 5.13)",
+        "core SandboxConfig/SandboxApplier mapping tests"
+      ]
+    }
+  ]
+}

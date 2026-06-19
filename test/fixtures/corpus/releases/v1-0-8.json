@@ -1,0 +1,460 @@
+{
+  "id": "v1-0-8",
+  "version": "1.0.8",
+  "name": "FlowForge 1.0.8",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "FlowForge 1.0.8 release tracked from release notes and changelog.",
+  "targetDate": "2026-05-04",
+  "releasedAt": "2026-05-04T12:00:00.000Z",
+  "lastUpdated": "2026-05-04T12:00:00.000Z",
+  "updateSource": "docs/releases/v1.0.8-release-notes.md, CHANGELOG.md",
+  "scope": {
+    "required": [
+      {
+        "id": "r-1-0-8-final-release-behavioral-soak-scorecard-command-0",
+        "title": "Command",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Command: SOAK_SERVER_MODE=clone python3 scripts/run-agent-behavior-soak.py",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Release Behavioral Soak Scorecard section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "final-release-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-final-release-behavioral-soak-scorecard-result-1",
+        "title": "Result",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Result: 33/33 scenarios passed, 0 failed",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Release Behavioral Soak Scorecard section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "final-release-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-final-release-behavioral-soak-scorecard-run-timestamp-2",
+        "title": "Run timestamp",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Run timestamp: 2026-05-06T17:19:17Z",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Release Behavioral Soak Scorecard section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "final-release-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-final-release-behavioral-soak-scorecard-report-path-3",
+        "title": "Report path",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Report path: /tmp/artifact",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Release Behavioral Soak Scorecard section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "final-release-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-final-release-behavioral-soak-scorecard-state-snapshot-4",
+        "title": "State snapshot",
+        "kind": "test",
+        "status": "complete",
+        "summary": "State snapshot: /tmp/artifact",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Release Behavioral Soak Scorecard section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "final-release-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-committed-release-items-area-0",
+        "title": "Area",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Commitment",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Committed Release Items section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "committed-release-items",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-committed-release-items-benchmark-rca-truth-1",
+        "title": "Benchmark/RCA truth",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Separate model efficacy from benchmark validity incidents, persist canonical turn identity before execution, keep model-only latency in scorecards, and preserve row-level RCA classification.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Committed Release Items section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "committed-release-items",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-committed-release-items-benchmark-scoring-2",
+        "title": "Benchmark scoring",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Tailor scoring to prompt intent, support rescoring persisted artifacts, and raise coding benchmarks toward compile/run/input-output evidence instead of prose theater.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Committed Release Items section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "committed-release-items",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-committed-release-items-guard-reflection-behavior-3",
+        "title": "Guard/reflection behavior",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Keep useful imperfect answers instead of collapsing them into empty or canned final output; align internal loop documentation around Retrieve, Think, Execute, Observe, Reflect, Remember.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Committed Release Items section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "committed-release-items",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-committed-release-items-agent-behavioral-contracts-4",
+        "title": "Agent behavioral contracts",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Actively evaluate the ABC paper, \"Agent Behavioral Contracts: Formal Specification and Runtime Enforcement for Reliable Autonomous AI Agents\" ([a reference paper](https://reference.example.com)), as a possible replacement or upgrade path ",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Committed Release Items section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "committed-release-items",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-rlm-derived-context-items-large-repositories-vaults-memory",
+        "title": "large repositories, vaults, memory stores, trace sets, benchmark artifacts,",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "large repositories, vaults, memory stores, trace sets, benchmark artifacts,",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the RLM-Derived Context Items section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "rlm-derived-context-items",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-rlm-derived-context-items-code-search-project-inventory-re",
+        "title": "code/search/project-inventory/read tools are the initial environment",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "code/search/project-inventory/read tools are the initial environment",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the RLM-Derived Context Items section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "rlm-derived-context-items",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-rlm-derived-context-items-context-decomposition-must-be-de",
+        "title": "context decomposition must be density-aware and structure-aware",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "context decomposition must be density-aware and structure-aware: files,",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the RLM-Derived Context Items section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "rlm-derived-context-items",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-rlm-derived-context-items-working-memory-remains-active-co",
+        "title": "working memory remains active continuity context; long-term memory remains a",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "working memory remains active continuity context; long-term memory remains a",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the RLM-Derived Context Items section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "rlm-derived-context-items",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-rlm-derived-context-items-any-rlm-inspired-change-that-con",
+        "title": "any RLM-inspired change that converts long-term memory back into forced",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "any RLM-inspired change that converts long-term memory back into forced",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the RLM-Derived Context Items section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "rlm-derived-context-items",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-agent-behavior-corrections-trailing-system-overlay-0",
+        "title": "Trailing system overlay",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Trailing system overlay: TOTOF and continuation briefs are built with",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Agent Behavior Corrections section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "agent-behavior-corrections",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-agent-behavior-corrections-continue-execution-handling-1",
+        "title": "CONTINUE_EXECUTION handling",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "CONTINUE_EXECUTION handling: Sentinel detection is line-anchored (the",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Agent Behavior Corrections section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "agent-behavior-corrections",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-8-agent-behavior-corrections-continuation-scaffold-leakage-2",
+        "title": "Continuation scaffold leakage",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Continuation scaffold leakage: execution-only labels such as",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Agent Behavior Corrections section of the 1.0.8 release notes.",
+        "decisionSource": "docs/releases/v1.0.8-release-notes.md",
+        "workstreamId": "agent-behavior-corrections",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.8-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "final-release-behavioral-soak-scorecard",
+      "name": "Final Release Behavioral Soak Scorecard",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Final Release Behavioral Soak Scorecard scope shipped in FlowForge 1.0.8.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-8-final-release-behavioral-soak-scorecard-command-0",
+        "r-1-0-8-final-release-behavioral-soak-scorecard-result-1",
+        "r-1-0-8-final-release-behavioral-soak-scorecard-run-timestamp-2",
+        "r-1-0-8-final-release-behavioral-soak-scorecard-report-path-3",
+        "r-1-0-8-final-release-behavioral-soak-scorecard-state-snapshot-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.8-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "committed-release-items",
+      "name": "Committed Release Items",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Committed Release Items scope shipped in FlowForge 1.0.8.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-8-committed-release-items-area-0",
+        "r-1-0-8-committed-release-items-benchmark-rca-truth-1",
+        "r-1-0-8-committed-release-items-benchmark-scoring-2",
+        "r-1-0-8-committed-release-items-guard-reflection-behavior-3",
+        "r-1-0-8-committed-release-items-agent-behavioral-contracts-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.8-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "rlm-derived-context-items",
+      "name": "Rlm Derived Context Items",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Rlm Derived Context Items scope shipped in FlowForge 1.0.8.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-8-rlm-derived-context-items-large-repositories-vaults-memory",
+        "r-1-0-8-rlm-derived-context-items-code-search-project-inventory-re",
+        "r-1-0-8-rlm-derived-context-items-context-decomposition-must-be-de",
+        "r-1-0-8-rlm-derived-context-items-working-memory-remains-active-co",
+        "r-1-0-8-rlm-derived-context-items-any-rlm-inspired-change-that-con"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.8-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "agent-behavior-corrections",
+      "name": "Agent Behavior Corrections",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Agent Behavior Corrections scope shipped in FlowForge 1.0.8.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-8-agent-behavior-corrections-trailing-system-overlay-0",
+        "r-1-0-8-agent-behavior-corrections-continue-execution-handling-1",
+        "r-1-0-8-agent-behavior-corrections-continuation-scaffold-leakage-2"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.8-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-shipped",
+      "label": "1.0.8 shipped",
+      "status": "complete",
+      "date": "2026-05-04",
+      "order": 1,
+      "itemIds": [
+        "r-1-0-8-final-release-behavioral-soak-scorecard-command-0",
+        "r-1-0-8-final-release-behavioral-soak-scorecard-result-1",
+        "r-1-0-8-final-release-behavioral-soak-scorecard-run-timestamp-2",
+        "r-1-0-8-final-release-behavioral-soak-scorecard-report-path-3",
+        "r-1-0-8-final-release-behavioral-soak-scorecard-state-snapshot-4",
+        "r-1-0-8-committed-release-items-area-0",
+        "r-1-0-8-committed-release-items-benchmark-rca-truth-1",
+        "r-1-0-8-committed-release-items-benchmark-scoring-2",
+        "r-1-0-8-committed-release-items-guard-reflection-behavior-3",
+        "r-1-0-8-committed-release-items-agent-behavioral-contracts-4",
+        "r-1-0-8-rlm-derived-context-items-large-repositories-vaults-memory",
+        "r-1-0-8-rlm-derived-context-items-code-search-project-inventory-re",
+        "r-1-0-8-rlm-derived-context-items-context-decomposition-must-be-de",
+        "r-1-0-8-rlm-derived-context-items-working-memory-remains-active-co",
+        "r-1-0-8-rlm-derived-context-items-any-rlm-inspired-change-that-con",
+        "r-1-0-8-agent-behavior-corrections-trailing-system-overlay-0",
+        "r-1-0-8-agent-behavior-corrections-continue-execution-handling-1",
+        "r-1-0-8-agent-behavior-corrections-continuation-scaffold-leakage-2"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-notes",
+      "label": "1.0.8 release notes",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "docs/releases/v1.0.8-release-notes.md"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog entry",
+      "kind": "document",
+      "status": "complete",
+      "href": "CHANGELOG.md"
+    },
+    {
+      "id": "code-audit",
+      "label": "Release code audit",
+      "kind": "document",
+      "status": "complete",
+      "href": "docs/testing/v1.0.8-release-code-audit.md"
+    }
+  ]
+}

@@ -1,0 +1,577 @@
+{
+  "risks": [
+    {
+      "id": "api-loopback-drift",
+      "title": "First-party surfaces regress to REST loopback",
+      "category": "technical",
+      "severity": "critical",
+      "status": "mitigating",
+      "summary": "Web UI, TUI, CLI, scheduler, or daemon-local flows could call /api/** internally and bypass the intended service/control seams.",
+      "mitigations": [
+        "Dashboard no-REST static tests.",
+        "CLI/TUI no-loopback tests.",
+        "Architecture rules explicitly ban API-as-internal-bus behavior."
+      ],
+      "relatedNodes": [
+        "web-dashboard",
+        "api-server",
+        "cli",
+        "tui"
+      ],
+      "relatedFlows": [
+        "dashboard-control",
+        "first-party-local-control",
+        "external-api-request"
+      ]
+    },
+    {
+      "id": "auth-and-tls-gap",
+      "title": "External API lacks mature auth/TLS basis for internal mutation trust",
+      "category": "security",
+      "severity": "high",
+      "status": "open",
+      "summary": "Localhost assumptions or API-key-like headers are not enough to make API mutation paths safe for internal first-party control.",
+      "mitigations": [
+        "Keep /api/** external-only.",
+        "Use websocket/control and local services for first-party flows.",
+        "Reconsider only after real auth and SSL/TLS support."
+      ],
+      "relatedNodes": [
+        "api-server",
+        "external-api-client"
+      ],
+      "relatedFlows": [
+        "external-api-request",
+        "dashboard-control"
+      ]
+    },
+    {
+      "id": "connector-business-logic-drift",
+      "title": "Business logic leaks into connectors",
+      "category": "technical",
+      "severity": "critical",
+      "status": "mitigating",
+      "summary": "Connector-local policy, routing, guard, session, model, scheduler, or tool logic creates parity drift and duplicated execution paths.",
+      "mitigations": [
+        "Connector-factory rule.",
+        "Architecture tests/audits.",
+        "Move shared behavior behind pipeline or connector-agnostic service seams."
+      ],
+      "relatedNodes": [
+        "external-channel-adapters",
+        "api-server",
+        "unified-pipeline"
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "scheduler-execution",
+        "tool-execution"
+      ]
+    },
+    {
+      "id": "silent-turn-failure",
+      "title": "Turn fails after thinking with no user-visible explanation",
+      "category": "operational",
+      "severity": "critical",
+      "status": "mitigating",
+      "summary": "Provider failures, retries, guard exhaustion, or deadline failures can end a turn without a useful operator-facing message.",
+      "mitigations": [
+        "Stage liveness telemetry.",
+        "Terminal failure rendering.",
+        "RCA synthesis from diagnostics.",
+        "Behavioral soaks for execution liveness."
+      ],
+      "relatedNodes": [
+        "unified-pipeline",
+        "observability-system",
+        "llm-service",
+        "operator"
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "model-inference",
+        "release-validation"
+      ]
+    },
+    {
+      "id": "tool-call-history-poisoning",
+      "title": "Malformed historical tool-call spans poison fallback requests",
+      "category": "technical",
+      "severity": "high",
+      "status": "mitigating",
+      "summary": "Assistant messages with unpaired tool_calls can cause provider 400s and cascade across retries/fallbacks.",
+      "mitigations": [
+        "Sanitize malformed tool-call history at LLM request boundary.",
+        "Test all providers with malformed history cases.",
+        "Keep final model route separate from failed attempts."
+      ],
+      "relatedNodes": [
+        "llm-service",
+        "unified-pipeline"
+      ],
+      "relatedFlows": [
+        "model-inference",
+        "interactive-turn"
+      ]
+    },
+    {
+      "id": "provider-credit-exhaustion",
+      "title": "Cloud provider funding or quota exhaustion",
+      "category": "operational",
+      "severity": "high",
+      "status": "open",
+      "summary": "Cloud model routes can fail due to exhausted credits, quota, auth, or provider outages.",
+      "mitigations": [
+        "Provider-specific typed failure classification.",
+        "Fallback routes.",
+        "Agency cloud token budget controls.",
+        "User-visible RCA and remediation suggestions."
+      ],
+      "relatedNodes": [
+        "external-model-providers",
+        "llm-service",
+        "agency-service"
+      ],
+      "relatedFlows": [
+        "model-inference",
+        "agency-execution",
+        "release-validation"
+      ]
+    },
+    {
+      "id": "local-model-contention",
+      "title": "Local model resource contention distorts quality and latency",
+      "category": "operational",
+      "severity": "medium",
+      "status": "mitigating",
+      "summary": "CPU/GPU/disk contention can increase timeouts and materially lower benchmark or soak quality for local models.",
+      "mitigations": [
+        "Resource contention warning and prompt.",
+        "Host resource telemetry.",
+        "Separate model latency from framework latency.",
+        "Skip same-provider models after local framework unreachable failures."
+      ],
+      "relatedNodes": [
+        "local-model-provider",
+        "llm-service",
+        "test-release-harness",
+        "media-services"
+      ],
+      "relatedFlows": [
+        "model-inference",
+        "media-turn",
+        "release-validation"
+      ]
+    },
+    {
+      "id": "production-state-corruption",
+      "title": "Development tests corrupt production local state",
+      "category": "data",
+      "severity": "critical",
+      "status": "mitigating",
+      "summary": "Running tests, soaks, or manual drills against the same database as the production agent can corrupt or poison live user state.",
+      "mitigations": [
+        "Use isolated test homes and testutil.TempStore.",
+        "Never touch production ~/.flowforge-dev during development validation.",
+        "Add release-gate evidence of isolated config root."
+      ],
+      "relatedNodes": [
+        "sql-store",
+        "test-release-harness",
+        "daemon-runtime",
+        "operator"
+      ],
+      "relatedFlows": [
+        "release-validation",
+        "memory-lifecycle"
+      ]
+    },
+    {
+      "id": "database-corruption",
+      "title": "embedded SQL store/FTS corruption blocks runtime subsystems",
+      "category": "data",
+      "severity": "high",
+      "status": "open",
+      "summary": "Memory FTS or other embedded SQL store corruption can break heartbeat, curation, memory, or startup work.",
+      "mitigations": [
+        "quick_check and repair paths.",
+        "Backups as built-in maintenance.",
+        "Do not share production DB with tests.",
+        "SelfHealing repair workflows."
+      ],
+      "relatedNodes": [
+        "sql-store",
+        "memory-system"
+      ],
+      "relatedFlows": [
+        "memory-lifecycle",
+        "release-validation"
+      ]
+    },
+    {
+      "id": "parallel-truth-source",
+      "title": "Local commands construct fake state instead of talking to the live daemon authority",
+      "category": "technical",
+      "severity": "high",
+      "status": "mitigating",
+      "summary": "CLI/TUI code could construct a separate runtime and report fake success for daemon-live state such as in-memory circuit breakers.",
+      "mitigations": [
+        "Local/direct rule scoped to local durable state.",
+        "Daemon-live-only state requires non-REST daemon-control seam.",
+        "Commands fail loudly until the seam exists."
+      ],
+      "relatedNodes": [
+        "cli",
+        "tui",
+        "daemon-runtime",
+        "sql-store"
+      ],
+      "relatedFlows": [
+        "first-party-local-control"
+      ]
+    },
+    {
+      "id": "authority-escalation",
+      "title": "Agency/autonomy settings increase unattended authority without confirmation",
+      "category": "security",
+      "severity": "critical",
+      "status": "mitigating",
+      "summary": "A UI, API, CLI, or rogue process could raise agency/autonomy, scopes, action classes, concurrency, cadence, notifications, or cloud budgets without clear operator consent.",
+      "mitigations": [
+        "Central config/policy service.",
+        "Explicit confirmation phrase.",
+        "Audit records.",
+        "No ordinary API mutation path for authority-bearing changes."
+      ],
+      "relatedNodes": [
+        "agency-service",
+        "config-keystore",
+        "websocket-control-plane",
+        "wallet-service"
+      ],
+      "relatedFlows": [
+        "agency-execution",
+        "dashboard-control",
+        "first-party-local-control"
+      ]
+    },
+    {
+      "id": "stale-dashboard-state",
+      "title": "Dashboard renders stale, empty, or non-functional UI state",
+      "category": "technical",
+      "severity": "high",
+      "status": "mitigating",
+      "summary": "Topic refreshes, disconnected websocket state, missing snapshots, or partial controls can produce empty pages, broken clicks, or misleading fields.",
+      "mitigations": [
+        "Line-by-line dashboard review.",
+        "Topic snapshot tests.",
+        "Manual full UI audit.",
+        "Clear disconnected/disabled-control copy."
+      ],
+      "relatedNodes": [
+        "web-dashboard",
+        "websocket-control-plane",
+        "skill-plugin-system"
+      ],
+      "relatedFlows": [
+        "dashboard-control",
+        "first-party-state-sync",
+        "skill-plugin-lifecycle"
+      ]
+    },
+    {
+      "id": "misleading-health-state",
+      "title": "Observability labels report healthy state for unavailable providers",
+      "category": "operational",
+      "severity": "medium",
+      "status": "open",
+      "summary": "Provider status such as healthy/hot/headroom can be misleading when providers are unconfigured, inaccessible, or token exhausted.",
+      "mitigations": [
+        "Provider state tooltips.",
+        "Explicit unavailable/unconfigured/exhausted states.",
+        "Source health labels from provider evidence, not absence of errors."
+      ],
+      "relatedNodes": [
+        "observability-system",
+        "api-server",
+        "web-dashboard"
+      ],
+      "relatedFlows": [
+        "first-party-state-sync",
+        "model-inference"
+      ]
+    },
+    {
+      "id": "missed-scheduled-output",
+      "title": "Scheduled cron jobs execute late or fail to notify",
+      "category": "operational",
+      "severity": "high",
+      "status": "open",
+      "summary": "Cron jobs can be configured and enabled but fail to run, fail to record execution, or fail to notify the operator.",
+      "mitigations": [
+        "Cron lifecycle audit.",
+        "Execution history and manual run controls.",
+        "Notification delivery evidence.",
+        "Scheduler soaks."
+      ],
+      "relatedNodes": [
+        "scheduler",
+        "external-channel-adapters",
+        "observability-system"
+      ],
+      "relatedFlows": [
+        "scheduler-execution"
+      ]
+    },
+    {
+      "id": "hallucinated-memory-context",
+      "title": "Agent injects or drifts to unrelated topics from memory/context",
+      "category": "technical",
+      "severity": "high",
+      "status": "mitigating",
+      "summary": "Long turns or memory-heavy requests can drift into unrelated topics, fabricate capability constraints, or lose destination continuity.",
+      "mitigations": [
+        "Continuity soaks.",
+        "Destination persistence.",
+        "Memory intake and topic guard tests.",
+        "Qualitative score gates."
+      ],
+      "relatedNodes": [
+        "memory-system",
+        "agency-service",
+        "unified-pipeline"
+      ],
+      "relatedFlows": [
+        "interactive-turn",
+        "memory-lifecycle",
+        "agency-execution"
+      ]
+    },
+    {
+      "id": "secrets-exposure",
+      "title": "Secrets leak through UI, logs, telemetry, or integration errors",
+      "category": "security",
+      "severity": "critical",
+      "status": "open",
+      "summary": "Provider keys, mail credentials, channel tokens, and billing account-adjacent secrets may be exposed if snapshots or logs are not redacted.",
+      "mitigations": [
+        "Keystore redaction.",
+        "No secret echo in snapshots.",
+        "Structured logging review.",
+        "Manual settings/integrations audit."
+      ],
+      "relatedNodes": [
+        "config-keystore",
+        "mail-service",
+        "wallet-service",
+        "mcp-system"
+      ],
+      "relatedFlows": [
+        "dashboard-control",
+        "mail-operations",
+        "first-party-local-control"
+      ]
+    },
+    {
+      "id": "catalog-integrity",
+      "title": "Skill/plugin catalog entries are incomplete or invalid",
+      "category": "technical",
+      "severity": "medium",
+      "status": "mitigating",
+      "summary": "Catalog install can fail when source packages lack required manifests or metadata. Official hosted entries now publish explicit source metadata; live install smoke remains required after site deployment.",
+      "mitigations": [
+        "Manifest validation.",
+        "Concrete catalog errors.",
+        "Catalog smoke tests.",
+        "Do not report successful refresh when zero useful entries are available without explanation.",
+        "Official catalog entries publish source_url and source_subdir."
+      ],
+      "relatedNodes": [
+        "skill-plugin-system",
+        "web-dashboard"
+      ],
+      "relatedFlows": [
+        "skill-plugin-lifecycle"
+      ]
+    },
+    {
+      "id": "tool-surface-drift",
+      "title": "Tool/MCP surfaces drift from pipeline availability and proof rules",
+      "category": "technical",
+      "severity": "medium",
+      "status": "open",
+      "summary": "Tools may appear available, unavailable, or executed differently depending on surface if not centralized.",
+      "mitigations": [
+        "Central tool availability through pipeline/service seams.",
+        "MCP refresh/test controls.",
+        "Tool proof and guard tests."
+      ],
+      "relatedNodes": [
+        "mcp-system",
+        "unified-pipeline"
+      ],
+      "relatedFlows": [
+        "tool-execution",
+        "interactive-turn"
+      ]
+    },
+    {
+      "id": "media-privacy",
+      "title": "Voice or camera capture violates consent or retention expectations",
+      "category": "security",
+      "severity": "critical",
+      "status": "planned",
+      "summary": "Audio, transcripts, images, and camera frames are highly sensitive and can be captured, retained, or routed unexpectedly.",
+      "mitigations": [
+        "Explicit permission state.",
+        "Named media device inventory and selection.",
+        "Canonical media provenance and retention fields.",
+        "Typed denied/unavailable paths.",
+        "Manual consent drills."
+      ],
+      "relatedNodes": [
+        "media-services",
+        "unified-pipeline"
+      ],
+      "relatedFlows": [
+        "media-turn"
+      ]
+    },
+    {
+      "id": "external-integration-drift",
+      "title": "External integration assumptions differ from real user setups",
+      "category": "operational",
+      "severity": "medium",
+      "status": "open",
+      "summary": "Mail, provider, channel, and local bridge configurations vary across users and operating systems.",
+      "mitigations": [
+        "Protocol-level support first.",
+        "User-friendly wiki setup guides.",
+        "Live manual smoke against representative configurations."
+      ],
+      "relatedNodes": [
+        "mail-service",
+        "external-channel-adapters"
+      ],
+      "relatedFlows": [
+        "mail-operations",
+        "release-validation"
+      ]
+    },
+    {
+      "id": "model-difference-pollution",
+      "title": "Framework soaks are polluted by incidental model changes",
+      "category": "technical",
+      "severity": "high",
+      "status": "mitigating",
+      "summary": "Changing model routes during behavior soaks can make it unclear whether failures belong to the framework or the model.",
+      "mitigations": [
+        "Run local framework soaks against intentional local routes.",
+        "Repeat against the cloud provider for provider compatibility only after local success.",
+        "Record model route in scorecards."
+      ],
+      "relatedNodes": [
+        "test-release-harness",
+        "llm-service",
+        "local-model-provider",
+        "external-model-providers"
+      ],
+      "relatedFlows": [
+        "release-validation",
+        "model-inference"
+      ]
+    },
+    {
+      "id": "windows-stale-sidecar",
+      "title": "Windows updater sidecar remains locked after upgrade",
+      "category": "operational",
+      "severity": "medium",
+      "status": "mitigating",
+      "summary": "Windows can block removal of old updater sidecars while the daemon or another process holds the executable.",
+      "mitigations": [
+        "Shared update/self-healing repair path.",
+        "Stop daemon and rerun upgrade as preferred next step.",
+        "Elevated PowerShell fallback only when rerun cannot remove it."
+      ],
+      "relatedNodes": [
+        "os-service-manager",
+        "daemon-runtime"
+      ],
+      "relatedFlows": [
+        "release-validation"
+      ]
+    },
+    {
+      "id": "stale-knowledge-base",
+      "title": "Agent product expertise is based on stale or incomplete docs",
+      "category": "operational",
+      "severity": "high",
+      "status": "planned",
+      "summary": "If source docs or wiki pages lag behind user-facing behavior, the agent can confidently explain obsolete setup paths, missing controls, or wrong troubleshooting steps.",
+      "mitigations": [
+        "Wiki completeness release gate.",
+        "Source manifest validation.",
+        "Source-hash index freshness checks.",
+        "Visible surface to documentation coverage checks.",
+        "Answers cite sources and expose missing-doc gaps."
+      ],
+      "relatedNodes": [
+        "knowledge-base-service",
+        "unified-pipeline",
+        "web-dashboard",
+        "cli",
+        "tui"
+      ],
+      "relatedFlows": [
+        "knowledge-base-retrieval",
+        "release-validation"
+      ]
+    },
+    {
+      "id": "stale-service-environment",
+      "title": "Installed daemon starts with wrong config, HOME, PATH, or service user",
+      "category": "operational",
+      "severity": "high",
+      "status": "mitigating",
+      "summary": "The service manager may start FlowForge with a different environment than the one the operator validated.",
+      "mitigations": [
+        "ServiceInstallConfig captures config path, FLOWFORGE_* env, PATH, and HOME.",
+        "Daemon install/start manual drills.",
+        "Clear platform-specific errors."
+      ],
+      "relatedNodes": [
+        "daemon-runtime",
+        "os-service-manager",
+        "config-keystore"
+      ],
+      "relatedFlows": [
+        "release-validation"
+      ]
+    },
+    {
+      "id": "embedder-quality-foundational",
+      "title": "Behavioral correction quality depends on a local embedder — now defaulted, probed, and release-gated locally, with a hard build floor still pending",
+      "category": "operational",
+      "severity": "high",
+      "status": "mitigating",
+      "summary": "The semantic correction layer's accuracy rides on the embedding client. Selection is now local-first: the bundled local embedder (embed-model via Embedded Runtime) is preferred over cloud providers, the daemon probes its reachability at boot, hard-warns when it falls back, and reports the honest tier (CLI /status, REST/websocket agent_status, dashboard System Health); `flowforge models provision-embedder` pulls the model on demand and `flowforge models embedder-check` is a non-zero-exit release gate. Two silent-degradation bugs were found and fixed: an /api/embed response-parser bug that left the semantic tier returning empty vectors, and a provider-merge bug where embedding fields were not backfilled so struct-serialized settings configs shadowed the embedding endpoint and resolved to the n-gram floor. The second was caught only by running `flowforge models embedder-check` / `status` against a real instance (both now report semantic); the offline and daemon soaks missed it because they bypassed config resolution / passed on lexical guards. A working embedder is still not enforced as a hard build floor (CI has no local Embedded Runtime), so a host without Embedded Runtime can still run behavioral correction on the n-gram floor — but it is now loud (boot warn + degraded tier on every surface + a local release gate) rather than silent.",
+      "mitigations": [
+        "Done: local-first selection makes the bundled local embedder (embed-model via Embedded Runtime) the default over cloud providers; the daemon probes reachability at boot and falls back to the n-gram floor honestly, and `flowforge models provision-embedder` (CLI) or the pinned Settings → Embedding panel (via the `models.provision-embedder` WebSocket control — the dashboard runtime-blocks direct internal /api/ fetches) pulls the model on demand and hot-swaps the live embedder without a restart. The embedder is a single shared self-rebinding client (EmbeddingClient.Rebind swaps the provider in place via atomic.Pointer), so one reprovision activates the tier across every consumer — memory ingestion/retrieval, the pipeline behavioral guards, and plugin/tool routes; a prior gap re-pointed only the memory holders and left the guards (the actual correction embedder) on the stale n-gram client while /status reported semantic.",
+        "Done: the active embedder tier (semantic vs ngram-fallback) is surfaced in CLI /status, the REST/websocket agent_status, and the dashboard System Health card.",
+        "Done: a build-tag-gated A/B soak (src/engine/embedder_soak_test.go) measures guard paraphrase recall over a held-out corpus (semantic 0.90 vs n-gram 0.03 after tuning) and recommends per-category thresholds; it surfaced and verified the fix for the /api/embed parser bug. FALSE_COMPLETION and FINANCIAL_ACTION_CLAIM thresholds were tuned to 0.675; re-validating on a larger corpus remains worthwhile.",
+        "Done (local): `flowforge models embedder-check` is a non-zero-exit release gate (release-prep skill gate 10) and the daemon hard-warns at boot on the n-gram floor. A hard CI/build-fail floor is intentionally deferred since CI has no local embedder.",
+        "Partial (slice 6): CAPABILITY_DENIAL and FINANCIAL_ACTION_CLAIM semantic centroids are now wired into their guards (all 5 categories live, each bounded by tool-truth). Deleting the magic-string lexical fallbacks is deferred until a hard embedder floor exists, since a no-Embedded Runtime host still degrades the semantic path to the n-gram floor.",
+        "Planned: include the active embedder tier in benchmark run metadata.",
+        "Planned: expunge the lexical guard fallbacks once a hard embedder floor is guaranteed.",
+        "Done: central grounding for behavioral guards (2026-05-29, found by the manual-agent-exercise). The guards fail-closed the agent on normal requests because each used a coarse ground-truth proxy: absolute cosine conflated benign smalltalk with a financial claim ('Hello there, friend!' scored 0.707 > 0.675), and 'any tool ran' was treated as 'the denied capability exists'. Fixed centrally: (a) guard semantic scores are now a baseline margin (cos to category centroid minus a neutral centroid); (b) one central, domain-agnostic completion-assertion signal gates the financial and false-completion guards so refusals/explanations/questions are not mistaken for claims; (c) capability-denial is grounded on a successful tool of the matching capability class (introspection no longer proves an action capability). Verified live end-to-end.",
+        "Planned (follow-up phase): the over-firing class spans multiple guards (financial, execution/capability-denial, task_deferral observed). Per-guard grounding gates are holding for v1.1.0 but are whack-a-mole; the systemic end-state is ONE central grounding judge (given response + tool results + tool surface, is any claim/denial contradicted by reality?), likely a small local model call gated behind a cheap pre-filter. Tracked as its own phase; escalate from gates to the judge if more guards surface."
+      ],
+      "relatedNodes": [
+        "guard-verifier-stage",
+        "llm-service",
+        "external-model-providers"
+      ],
+      "relatedFlows": []
+    }
+  ]
+}

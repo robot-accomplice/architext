@@ -1,0 +1,468 @@
+{
+  "id": "v1-0-4",
+  "version": "1.0.4",
+  "name": "FlowForge 1.0.4",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Comprehensive hardening release: security-first fixes (Store.DB() removed, billing account passphrase keystore-only, delivery queue recovery), pipeline refactored from 874-line monolith to 16 named stage methods, two new apps (Eastern/Western Philosophy), two new plugins (Codex CLI, Web Research), dashboard settings overhaul (16 hand-crafted sections, struct-driven s",
+  "targetDate": "2026-04-14",
+  "releasedAt": "2026-04-14T12:00:00.000Z",
+  "lastUpdated": "2026-04-14T12:00:00.000Z",
+  "updateSource": "docs/releases/v1.0.4-release-notes.md, CHANGELOG.md",
+  "scope": {
+    "required": [
+      {
+        "id": "r-1-0-4-phase-1-security-p0-store-db-removed-0",
+        "title": "Store.DB() removed",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Raw *sql.DB accessor deleted — all callers migrated to Store.ExecContext/QueryContext/QueryRowContext. Architecture test prevents re-addition.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 1 — Security (P0) section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-1-security-p0",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-1-security-p0-wallet-keystore-only-1",
+        "title": "Billing account keystore-only",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Phase 1 — Security (P0)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 1 — Security (P0) section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-1-security-p0",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-1-security-p0-delivery-queue-recovery-2",
+        "title": "Delivery queue recovery",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "recoverStrandedDeliveries() runs at startup — resets in_flight → pending with 30s retry delay.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 1 — Security (P0) section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-1-security-p0",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-1-security-p0-oauth-context-leak-3",
+        "title": "OAuth context leak",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "server.Shutdown(context.Background()) → server.Shutdown(ctx) with goroutine monitoring ctx cancellation.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 1 — Security (P0) section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-1-security-p0",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-2-pipeline-refactor-p1-stage-extraction-0",
+        "title": "Stage extraction",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Run() reduced from ~874 to ~370 lines. 16 named stage methods via pipelineContext struct.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 2 — Pipeline Refactor (P1) section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-2-pipeline-refactor-p1",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-2-pipeline-refactor-p1-trace-annotations-1",
+        "title": "Trace annotations",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "All 8 pipeline trace annotations wired (was 2/8).",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 2 — Pipeline Refactor (P1) section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-2-pipeline-refactor-p1",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-2-pipeline-refactor-p1-agentskills-2",
+        "title": "agentSkills",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Populated from SkillMatcher.ListEnabled() — was empty []string{}.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 2 — Pipeline Refactor (P1) section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-2-pipeline-refactor-p1",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-3-infrastructure-p1-token-estimation-0",
+        "title": "Token estimation",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "EstimateTokens() with UTF-8 aware per-script heuristics. Replaced all len/4 call sites.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 3 — Infrastructure (P1) section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-3-infrastructure-p1",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-3-infrastructure-p1-model-capabilities-1",
+        "title": "Model capabilities",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "modelSupportsTools() uses Embedded Runtime /api/show capabilities discovery with config allowlist/blocklist override.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 3 — Infrastructure (P1) section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-3-infrastructure-p1",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-3-infrastructure-p1-per-model-timeouts-2",
+        "title": "Per-model timeouts",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "models.timeouts map in config. Resolved per-model before inference, fallback to global.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 3 — Infrastructure (P1) section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-3-infrastructure-p1",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-3-infrastructure-p1-context-budgets-3",
+        "title": "Context budgets",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "ContextBudget.L0–.L3 fields wired. Hardcoded budget percentages replaced with config-driven values.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 3 — Infrastructure (P1) section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-3-infrastructure-p1",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-4-dashboard-themes-theme-install-uninstall-0",
+        "title": "Theme install/uninstall",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Action buttons on every catalog card. Install → POST to backend → swap to uninstall. Uninstall → warn if active → switch to default → remove.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 4 — Dashboard & Themes section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-4-dashboard-themes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-4-dashboard-themes-plugin-install-fix-1",
+        "title": "Plugin install fix",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Traced endpoint mismatch — wired click handler to correct /api/skills/catalog/install endpoint.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 4 — Dashboard & Themes section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-4-dashboard-themes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-4-dashboard-themes-theme-texture-preview-2",
+        "title": "Theme texture preview",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Card IS the preview — uses theme colors, fonts, textures as card background. Site-hosted images.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 4 — Dashboard & Themes section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-4-dashboard-themes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-4-dashboard-themes-ide-plugin-3",
+        "title": "Provider B model plugin",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Codex CLI plugin in catalog with working install flow.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 4 — Dashboard & Themes section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-4-dashboard-themes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-4-dashboard-themes-settings-overhaul-4",
+        "title": "Settings overhaul",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "16 hand-crafted sections in fixed order. Schema endpoint (303 fields). Inline validation. Danger warnings. Advanced settings hidden by default. Tooltips via event delegation.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 4 — Dashboard & Themes section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-4-dashboard-themes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-5-new-capabilities-eastern-philosophy-app-0",
+        "title": "Eastern Philosophy app",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "flowforge-apps/eastern-philosophy/ — contemplative personality, 8 skills, 2 subagents (zen-master, yoga-philosopher).",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 5 — New Capabilities section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-5-new-capabilities",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-4-phase-5-new-capabilities-western-philosophy-app-1",
+        "title": "Western Philosophy app",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "flowforge-apps/western-philosophy/ — analytical voice, 8 skills, 2 subagents (existentialist, stoic-sage).",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 5 — New Capabilities section of the 1.0.4 release notes.",
+        "decisionSource": "docs/releases/v1.0.4-release-notes.md",
+        "workstreamId": "phase-5-new-capabilities",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.4-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "phase-1-security-p0",
+      "name": "Phase 1 Security P0",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Phase 1 Security P0 scope shipped in FlowForge 1.0.4.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-4-phase-1-security-p0-store-db-removed-0",
+        "r-1-0-4-phase-1-security-p0-wallet-keystore-only-1",
+        "r-1-0-4-phase-1-security-p0-delivery-queue-recovery-2",
+        "r-1-0-4-phase-1-security-p0-oauth-context-leak-3"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.4-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "phase-2-pipeline-refactor-p1",
+      "name": "Phase 2 Pipeline Refactor P1",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Phase 2 Pipeline Refactor P1 scope shipped in FlowForge 1.0.4.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-4-phase-2-pipeline-refactor-p1-stage-extraction-0",
+        "r-1-0-4-phase-2-pipeline-refactor-p1-trace-annotations-1",
+        "r-1-0-4-phase-2-pipeline-refactor-p1-agentskills-2"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.4-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "phase-3-infrastructure-p1",
+      "name": "Phase 3 Infrastructure P1",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Phase 3 Infrastructure P1 scope shipped in FlowForge 1.0.4.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-4-phase-3-infrastructure-p1-token-estimation-0",
+        "r-1-0-4-phase-3-infrastructure-p1-model-capabilities-1",
+        "r-1-0-4-phase-3-infrastructure-p1-per-model-timeouts-2",
+        "r-1-0-4-phase-3-infrastructure-p1-context-budgets-3"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.4-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "phase-4-dashboard-themes",
+      "name": "Phase 4 Dashboard Themes",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Phase 4 Dashboard Themes scope shipped in FlowForge 1.0.4.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-4-phase-4-dashboard-themes-theme-install-uninstall-0",
+        "r-1-0-4-phase-4-dashboard-themes-plugin-install-fix-1",
+        "r-1-0-4-phase-4-dashboard-themes-theme-texture-preview-2",
+        "r-1-0-4-phase-4-dashboard-themes-ide-plugin-3",
+        "r-1-0-4-phase-4-dashboard-themes-settings-overhaul-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.4-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "phase-5-new-capabilities",
+      "name": "Phase 5 New Capabilities",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Phase 5 New Capabilities scope shipped in FlowForge 1.0.4.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-4-phase-5-new-capabilities-eastern-philosophy-app-0",
+        "r-1-0-4-phase-5-new-capabilities-western-philosophy-app-1"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.4-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-shipped",
+      "label": "1.0.4 shipped",
+      "status": "complete",
+      "date": "2026-04-14",
+      "order": 1,
+      "itemIds": [
+        "r-1-0-4-phase-1-security-p0-store-db-removed-0",
+        "r-1-0-4-phase-1-security-p0-wallet-keystore-only-1",
+        "r-1-0-4-phase-1-security-p0-delivery-queue-recovery-2",
+        "r-1-0-4-phase-1-security-p0-oauth-context-leak-3",
+        "r-1-0-4-phase-2-pipeline-refactor-p1-stage-extraction-0",
+        "r-1-0-4-phase-2-pipeline-refactor-p1-trace-annotations-1",
+        "r-1-0-4-phase-2-pipeline-refactor-p1-agentskills-2",
+        "r-1-0-4-phase-3-infrastructure-p1-token-estimation-0",
+        "r-1-0-4-phase-3-infrastructure-p1-model-capabilities-1",
+        "r-1-0-4-phase-3-infrastructure-p1-per-model-timeouts-2",
+        "r-1-0-4-phase-3-infrastructure-p1-context-budgets-3",
+        "r-1-0-4-phase-4-dashboard-themes-theme-install-uninstall-0",
+        "r-1-0-4-phase-4-dashboard-themes-plugin-install-fix-1",
+        "r-1-0-4-phase-4-dashboard-themes-theme-texture-preview-2",
+        "r-1-0-4-phase-4-dashboard-themes-ide-plugin-3",
+        "r-1-0-4-phase-4-dashboard-themes-settings-overhaul-4",
+        "r-1-0-4-phase-5-new-capabilities-eastern-philosophy-app-0",
+        "r-1-0-4-phase-5-new-capabilities-western-philosophy-app-1"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-notes",
+      "label": "1.0.4 release notes",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "docs/releases/v1.0.4-release-notes.md"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog entry",
+      "kind": "document",
+      "status": "complete",
+      "href": "CHANGELOG.md"
+    }
+  ]
+}

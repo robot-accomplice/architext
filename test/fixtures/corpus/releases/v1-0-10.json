@@ -1,0 +1,453 @@
+{
+  "id": "v1-0-10",
+  "version": "1.0.10",
+  "name": "FlowForge 1.0.10",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "`v1.0.10` is a patch hotfix for the post-`v1.0.9` installation, scheduler, provider, database-safety, and behavioral-truth issues found during live operator use.",
+  "targetDate": "2026-05-07",
+  "releasedAt": "2026-05-07T12:00:00.000Z",
+  "lastUpdated": "2026-05-07T12:00:00.000Z",
+  "updateSource": "docs/releases/v1.0.10-release-notes.md, CHANGELOG.md",
+  "scope": {
+    "required": [
+      {
+        "id": "r-1-0-10-purpose-previous-release-0",
+        "title": "Previous release",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Previous release: v1.0.9",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Purpose section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "purpose",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-purpose-hotfix-release-1",
+        "title": "Hotfix release",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Hotfix release: v1.0.10",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Purpose section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "purpose",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-purpose-source-commit-2",
+        "title": "Source commit",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Source commit: pending until the release commit is created and tagged.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Purpose section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "purpose",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-hotfix-scope-macos-daemon-lifecycle-now-defaults-to-a-per",
+        "title": "macOS daemon lifecycle now defaults to a per-user LaunchAgent at",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "macOS daemon lifecycle now defaults to a per-user LaunchAgent at",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-hotfix-scope-daemon-start-no-longer-routes-through-the-le",
+        "title": "daemon start no longer routes through the legacy LaunchDaemon status path on",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "daemon start no longer routes through the legacy LaunchDaemon status path on",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-hotfix-scope-legacy-system-launchdaemon-remnants-now-prod",
+        "title": "Legacy system LaunchDaemon remnants now produce an actionable diagnostic",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Legacy system LaunchDaemon remnants now produce an actionable diagnostic",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-hotfix-scope-behavior-soaks-default-to-isolated-managed-m",
+        "title": "Behavior soaks default to isolated managed mode and refuse accidental live",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Behavior soaks default to isolated managed mode and refuse accidental live",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-hotfix-scope-soaks-seed-scheduler-fixtures-only-into-the-",
+        "title": "Soaks seed scheduler fixtures only into the disposable isolated database and",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Soaks seed scheduler fixtures only into the disposable isolated database and",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-final-behavioral-soak-scorecard-command-0",
+        "title": "Command",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Command: SOAK_SERVER_MODE=fresh SOAK_ASSUME_QUIESCED=1 SOAK_REPORT_PATH=/tmp/artifact python3 scripts/run-agent-behavior-soak.py",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Behavioral Soak Scorecard section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "final-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-final-behavioral-soak-scorecard-result-1",
+        "title": "Result",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Result: 34/34 scenarios passed, 0 failed",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Behavioral Soak Scorecard section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "final-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-final-behavioral-soak-scorecard-run-timestamp-2",
+        "title": "Run timestamp",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Run timestamp: 2026-05-07T09:55:02Z",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Behavioral Soak Scorecard section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "final-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-final-behavioral-soak-scorecard-report-path-3",
+        "title": "Report path",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Report path: /tmp/artifact",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Behavioral Soak Scorecard section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "final-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-final-behavioral-soak-scorecard-state-snapshot-4",
+        "title": "State snapshot",
+        "kind": "test",
+        "status": "complete",
+        "summary": "State snapshot: /tmp/artifact",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Behavioral Soak Scorecard section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "final-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-release-gate-full-isolated-behavior-soak-suite-passes-wit",
+        "title": "Full isolated behavior-soak suite passes with no release-gate failures",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Full isolated behavior-soak suite passes with no release-gate failures.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Release Gate section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "release-gate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-release-gate-no-qualitative-scorecard-family-receives-a-f",
+        "title": "No qualitative scorecard family receives a failing grade",
+        "kind": "test",
+        "status": "complete",
+        "summary": "No qualitative scorecard family receives a failing grade.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Release Gate section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "release-gate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-release-gate-unit-tests-vet-lint-and-soak-harness-syntax-",
+        "title": "Unit tests, vet, lint, and soak harness syntax checks are green",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Unit tests, vet, lint, and soak harness syntax checks are green.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Release Gate section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "release-gate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-release-gate-flowforge-upgrade-all-from-1-3",
+        "title": "flowforge upgrade all from 1",
+        "kind": "test",
+        "status": "complete",
+        "summary": "flowforge upgrade all from 1.0.9 installs 1.0.10.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Release Gate section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "release-gate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-10-release-gate-flowforge-version-reports-1-4",
+        "title": "flowforge version reports 1",
+        "kind": "test",
+        "status": "complete",
+        "summary": "flowforge version reports 1.0.10 after upgrade.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Release Gate section of the 1.0.10 release notes.",
+        "decisionSource": "docs/releases/v1.0.10-release-notes.md",
+        "workstreamId": "release-gate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.10-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "purpose",
+      "name": "Purpose",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Purpose scope shipped in FlowForge 1.0.10.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-10-purpose-previous-release-0",
+        "r-1-0-10-purpose-hotfix-release-1",
+        "r-1-0-10-purpose-source-commit-2"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.10-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "hotfix-scope",
+      "name": "Hotfix Scope",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Hotfix Scope scope shipped in FlowForge 1.0.10.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-10-hotfix-scope-macos-daemon-lifecycle-now-defaults-to-a-per",
+        "r-1-0-10-hotfix-scope-daemon-start-no-longer-routes-through-the-le",
+        "r-1-0-10-hotfix-scope-legacy-system-launchdaemon-remnants-now-prod",
+        "r-1-0-10-hotfix-scope-behavior-soaks-default-to-isolated-managed-m",
+        "r-1-0-10-hotfix-scope-soaks-seed-scheduler-fixtures-only-into-the-"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.10-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "final-behavioral-soak-scorecard",
+      "name": "Final Behavioral Soak Scorecard",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Final Behavioral Soak Scorecard scope shipped in FlowForge 1.0.10.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-10-final-behavioral-soak-scorecard-command-0",
+        "r-1-0-10-final-behavioral-soak-scorecard-result-1",
+        "r-1-0-10-final-behavioral-soak-scorecard-run-timestamp-2",
+        "r-1-0-10-final-behavioral-soak-scorecard-report-path-3",
+        "r-1-0-10-final-behavioral-soak-scorecard-state-snapshot-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.10-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "release-gate",
+      "name": "Release Gate",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Release Gate scope shipped in FlowForge 1.0.10.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-10-release-gate-full-isolated-behavior-soak-suite-passes-wit",
+        "r-1-0-10-release-gate-no-qualitative-scorecard-family-receives-a-f",
+        "r-1-0-10-release-gate-unit-tests-vet-lint-and-soak-harness-syntax-",
+        "r-1-0-10-release-gate-flowforge-upgrade-all-from-1-3",
+        "r-1-0-10-release-gate-flowforge-version-reports-1-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.10-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-shipped",
+      "label": "1.0.10 shipped",
+      "status": "complete",
+      "date": "2026-05-07",
+      "order": 1,
+      "itemIds": [
+        "r-1-0-10-purpose-previous-release-0",
+        "r-1-0-10-purpose-hotfix-release-1",
+        "r-1-0-10-purpose-source-commit-2",
+        "r-1-0-10-hotfix-scope-macos-daemon-lifecycle-now-defaults-to-a-per",
+        "r-1-0-10-hotfix-scope-daemon-start-no-longer-routes-through-the-le",
+        "r-1-0-10-hotfix-scope-legacy-system-launchdaemon-remnants-now-prod",
+        "r-1-0-10-hotfix-scope-behavior-soaks-default-to-isolated-managed-m",
+        "r-1-0-10-hotfix-scope-soaks-seed-scheduler-fixtures-only-into-the-",
+        "r-1-0-10-final-behavioral-soak-scorecard-command-0",
+        "r-1-0-10-final-behavioral-soak-scorecard-result-1",
+        "r-1-0-10-final-behavioral-soak-scorecard-run-timestamp-2",
+        "r-1-0-10-final-behavioral-soak-scorecard-report-path-3",
+        "r-1-0-10-final-behavioral-soak-scorecard-state-snapshot-4",
+        "r-1-0-10-release-gate-full-isolated-behavior-soak-suite-passes-wit",
+        "r-1-0-10-release-gate-no-qualitative-scorecard-family-receives-a-f",
+        "r-1-0-10-release-gate-unit-tests-vet-lint-and-soak-harness-syntax-",
+        "r-1-0-10-release-gate-flowforge-upgrade-all-from-1-3",
+        "r-1-0-10-release-gate-flowforge-version-reports-1-4"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-notes",
+      "label": "1.0.10 release notes",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "docs/releases/v1.0.10-release-notes.md"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog entry",
+      "kind": "document",
+      "status": "complete",
+      "href": "CHANGELOG.md"
+    }
+  ]
+}

@@ -1,0 +1,1210 @@
+{
+  "items": [
+    {
+      "id": "yield-multi-protocol-chain-support",
+      "title": "Implement additional yield protocols and chains (Billing Plan B, Region East, Region West)",
+      "summary": "The yield subsystem (internal/billing account/billing_plan.ts) implements ONLY Billing Plan V3 on Base: the IPlan supply/withdraw selectors and pool/credit units/credit token wiring are billing-plan-specific, and there is no chain abstraction. The config previously OFFERED yield.protocol {billing-plan,compound} and yield.chain {base,Region East,Region West} in the settings UI (configstate knownEnums) with no validator, so an operator could set compound/Region East/Region West and get non-functional config that silently no-ops. As of the coherency-audit follow-up, knownEnums and the new core validator (core.ValidYieldProtocols/ValidYieldChains, validateYield) are narrowed to the implemented set {billing-plan}/{base}, and unimplemented values are validate-rejected with a clear message (Rule 16: do not offer config that does nothing). This item tracks ACTUALLY implementing the additional protocols/chains: add the protocol adapter abstraction (Billing Plan B supply/withdraw calldata), a chain registry (RPC + token addresses for Region East/Region West), and widen the single-source sets so the UI offers them once they function.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "low",
+      "section": "Billing account & treasury",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "internal/billing account/billing_plan.ts (Billing Plan V3 / Base only; hardcoded billingPlan/billingPlan)",
+        "src/core/config_enums.ts (ValidYieldProtocols/ValidYieldChains scoped to billing-plan/base)",
+        "src/core/config_validation_billing.ts (validateYield rejects unimplemented values)",
+        "src/configstate/schema.ts (knownEnums yield.protocol/yield.chain narrowed to single source)"
+      ]
+    },
+    {
+      "id": "contradiction-detection-soak-calibration",
+      "title": "Calibrate the contradiction-detection cosine threshold under the pinned, prefixed embedder",
+      "summary": "SHIPPED v1.2.0 (status reconciled 2026-06-17). phaseContradictionDetection (internal/agent/memory/consolidation_phases.go) supersedes a semantic memory when cosine similarity > 0.7 AND subject overlap > 0.5. That 0.7 cutoff predates the embed-model-task-v1 prefix scheme + embedded-runtime 0.30.6 runtime pin and has no dedicated soak anchoring it to that baseline (the comparison is internally consistent — both sides embed with TaskClustering — but the absolute cutoff is unanchored). Add a contradiction-detection soak that observes the cosine distribution of true contradictions vs complementary entries under the pinned, prefixed embedder, and re-derive the threshold with a documented gap, the same way PendingActionAffirmationFloor is calibrated. Surfaced by the embedder-foundation code review (2026-06-06).",
+      "kind": "test",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Embedder foundation",
+      "dateAdded": "2026-06-07T00:00:00.000Z",
+      "evidence": [
+        "internal/agent/memory/consolidation_phases.go (phaseContradictionDetection, sim > 0.7)",
+        "docs/architext/data/decisions.json#embedding-task-prefix-foundation"
+      ]
+    },
+    {
+      "id": "explicit-cancellation-speech-act-detection",
+      "title": "Detect explicit cancellation/redirection as a displacement speech act in the pending-action guard",
+      "summary": "PendingActionTopicDiverges (src/engine/pending_action_divergence.go) decides whether a follow-up displaces a pending action using topic similarity only: it displaces on confident cross-domain shifts but, by deliberate documented design, treats SAME-domain redirects as safe false-negatives (it biases toward protecting continuations). The adversarial harness (ADV-TOPIC-SWITCH) confirmed the boundary: 'forget the flight, find me a hotel in Paris instead' is read as continuation because flight/hotel/Paris cluster as travel. The safe failure mode is over-persistence (the pending action is re-surfaced for confirmation, never auto-executed), so this is an enhancement, not a regression. Add an explicit-cancellation speech-act signal (an inverse of affirmationExemplars: 'forget that', 'never mind', 'cancel that', 'scrap it') that forces displacement even within a domain, calibrated against the pinned embed-model-task-v1 / embedded-runtime 0.30.6 embedder with a documented margin gap like PendingActionAffirmationFloor. Deferred from v1.1.0: changing a freshly-recalibrated safety-critical guard mid-release is high-risk and the current behavior is safe (over-persistence), so it is sequenced after the v1.1.0 embedder calibration ships.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Embedder foundation",
+      "dateAdded": "2026-06-07T00:00:00.000Z",
+      "evidence": [
+        "src/engine/pending_action_divergence.go (PendingActionTopicDiverges; documented same-domain safe false-negative)",
+        "testdata/adversarial/issues/topic-switch-divergence.json (ADV-TOPIC-SWITCH; cross-domain gate only)"
+      ]
+    },
+    {
+      "id": "voice-phone-channel-voice-vendor",
+      "title": "Voice phone channel via Voice Vendor RealtimeAgents",
+      "summary": "Add a telephony channel adapter so a user can call their FlowForge agent over the phone and converse in natural voice. Bridge inbound/outbound phone audio to the centralized agent pipeline using Voice Vendor RealtimeAgents (low-latency TTS + Scribe STT) with MCP/tool-call passthrough, mirroring the existing text channel adapters (e.g. Chat Connector). Inspired by Voice Vendor' \"Call Your Hermes Agent over the phone using RealtimeAgents\" demo.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Channels",
+      "dateAdded": "2026-06-06T00:00:00.000Z",
+      "evidence": [
+        "https://reference.example.com VendorDevs/status/2062561944385519801"
+      ]
+    },
+    {
+      "id": "raise-weak-model-floor-honest-blocker-guard",
+      "title": "Raise the weak-model floor: convert no-evidence/no-blocker tool turns into honest blockers",
+      "summary": "SHIPPED v1.2.0 (status reconciled 2026-06-17). After the local tool-choice fix (commit f7533bd7, reject_required_tool_choice for local Provider A-compat providers), tool_choice=required is correctly downgraded to auto for local models and the framework no longer hard-fails the turn. A capable model (cloud-provider) still calls the tool under auto; a weak model (local-model-b) sometimes does NOT — it confabulates a result without calling the tool (e.g. 'the link appears invalid… cannot open if not from Provider C' with tool_call_count=0) or emits a progress preface that trails off without delivering ('to proceed with reviewing my memories…'), the silent-death-after-preface pattern. These are model-strength-dependent behaviors, not framework defects, and they set the floor: the local-model-b behavioral soak is 36/38 vs cloud-provider 38/38, with the 2-scenario gap exactly these two failure modes (fresh_external_route_link_status_only, proactive_action_liveness). Raise the floor with a deterministic post-model guard: when a turn was tool-required (RequiredActionEvidence / ForceToolCall) but produced neither successful tool evidence nor a clean capability blocker — i.e. an unsupported web/action claim or a progress preface with no completion — convert the answer into an honest blocker ('I could not complete this without running the tool') instead of delivering the confabulation. This makes weak models fail HONESTLY rather than fabricate, lifting the floor toward the ceiling without forcing tool calls a local model cannot emit. Deferred from the v1.1.0 soak-green work: it is a deliberate new guard with strong-model false-positive risk (cloud-provider passes these today and must keep passing), so it needs its own design + calibration pass and adversarial coverage, sequenced after v1.1.0 ships rather than bolted on under the release gate.",
+      "kind": "feature",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Behavioral robustness",
+      "dateAdded": "2026-06-10T00:00:00.000Z",
+      "evidence": [
+        "local-model-b floor behavioral soak 2026-06-10: 36/38 (post fix), failures fresh_external_route_link_status_only + proactive_action_liveness, both final_model populated / tool_call_count=0 (model declined to call under auto + confabulated/rambled)",
+        "cloud-provider-v4-flash full behavioral soak: 38/38 (ceiling) — same code, strong model calls the tool under auto",
+        "commit f7533bd7 (local tool-choice fix that exposed the floor)",
+        "scripts/run-agent-behavior-soak.py check_fresh_external_info_tool_evidence + check_proactive_action_liveness (the floor checks)"
+      ]
+    },
+    {
+      "id": "full-codebase-triple-lens-audit",
+      "title": "Open the next release with a full triple-lens code audit (architectural mandates + clean-code + clean-architecture)",
+      "summary": "SHIPPED v1.2.0 (status reconciled 2026-06-17). Operator-directed (2026-06-10): the comprehensive code audit is parked as a dedicated post-v1.1.0 activity and becomes the FIRST work item of the next release cycle, before any feature scope. The 2026-06-10 partial audit (run mid-release, then deliberately parked) established the baseline: macro-architecture healthy — the Clean-Architecture dependency rule holds and all nine critical mandates (pipeline owns behavior, connectors parse/call/format only, single money seam, authenticated/deduped ingress, no off-pipeline inference, ...) verified compliant with only two LOW documentation nits (the ws.go handleTurnAnalyzeControl entry missing from the off-pipeline exemption registry; a misleading 'APPROVED OFF-PIPELINE' comment on the pipeline-invoked nicknameAdapter). It also surfaced and FIXED two real hot-path bugs (1946890a: billing account nonce-gap liveness on failed broadcast; non-transactional session cascade delete) and removed the last TODO-token false positive (9dc3e29c). The full audit still owed: complete /code-audit protocol over ALL dimensions (documentation accuracy audit, test-coverage quality audit, idempotency sweep beyond ingress/cron/billing account, resource-efficiency, ad-hoc-implementation detection) over the whole tree rather than the hot paths; a full-branch /code-review (CodeRabbit CLI was not installed — decide install + auth, noting diffs are sent to an external API, or substitute the in-repo review agents); and closure of the two LOW exemption-registry doc nits. Remediation of already-known structural findings is tracked separately in split-oversized-daemon-files and decompose-behavioral-core-god-files — this item is the AUDIT itself, which feeds the next release's scope the way the 2026-06-10 partial fed v1.1.0's final fixes. Deferred (not dropped) because mid-release-stabilization is the wrong time for a tree-wide sweep: findings would either churn the frozen release or pile up as unactioned debt; opening the next cycle with it means findings land where they can be scheduled.",
+      "kind": "architecture",
+      "status": "complete",
+      "priority": "high",
+      "section": "Architecture debt",
+      "dateAdded": "2026-06-10T00:00:00.000Z",
+      "evidence": [
+        "2026-06-10 partial triple-lens audit: mandate-compliance PASS (2 LOW doc nits), structural findings roadmapped, hot-path bug sweep -> fixes 1946890a + 9dc3e29c",
+        "ARCHITECTURE_RULES.md + docs/architext/data/rules.json + clean-code/clean-architecture skills (the three lenses)",
+        "internal/api/architecture_fitness_test.go (the mandates' executable enforcement, to extend with audit findings)"
+      ]
+    },
+    {
+      "id": "decompose-behavioral-core-god-files",
+      "title": "Decompose god files/functions in the behavioral core (loop.go, ws.go, oversized boot/inference/fallback functions) and introduce a loop store interface",
+      "summary": "SHIPPED v1.2.0 (status reconciled 2026-06-17). The 2026-06-10 triple-lens code audit confirmed the MACRO-architecture is healthy — the Clean-Architecture dependency rule holds (src/core imports nothing outward; src/engine never imports channel/api/daemon in production; mandates enforced by architecture_fitness_test.go), and only documentation-level mandate nits were found. The debt is micro-structural: god files and god functions. Headline targets: (1) internal/agent/loop.go (3283 lines) tangles 5+ responsibilities in one file — the ReAct state machine, a self-contained text-fallback tool-call JSON parser (parseTextFallbackToolCall/balancedJSONObjectCandidates, pure, no *Loop receiver), the deterministic result-synthesis family (~12 synthesize*/latestSuccessful* helpers, mostly pure), tool policy/approval/duplicate-suppression, and tool-arg normalization; split into loop_toolcall_parse.go / loop_synthesis.go / loop_toolpolicy.go / loop_normalize.go with zero behavior change, targeting a <=~600-line state machine. (2) Three oversized AND infra-coupled functions that are effectively untestable in isolation: daemon.New (~704 lines, 12-step boot — extract per-step bootX methods), Pipeline.runStandardInferenceWithTrace (~626 lines, pipeline_stages.go), Service.completeWithFallback (~470 lines, llm/service.go). (3) internal/api/ws.go (1776 lines) is a god router — 44 handle*Control funcs for 7+ unrelated subsystems; split by subsystem (ws_control_skills.go, _themes.go, _mcp.go, _channels.go) leaving ws.go as connection lifecycle + dispatch only. (4) LoopDeps injects concrete *db.Store and *memory.Manager (loop.go:258) instead of narrow interfaces, capping testability of act/reflect paths — introduce a SessionStore/TraceStore interface mirroring the existing ToolCallRecorder pattern. There are 78 non-test files over the ~500-line cap total; the remainder (guards_truthfulness.go 1768, guards_behavioral.go 1714, exercise.ts 1902, models.go 2696, etc.) are cohesive single-purpose files (not god objects) and split mechanically one-file-per-guard-family/sub-view. Deferred from v1.1.0 deliberately: these are large mechanical refactors of the hottest behavioral-core paths (ReAct loop, inference, provider fallback) during release stabilization, where regression risk outweighs the structural benefit and there is no behavioral defect — sequence after v1.1.0 ships, highest-value-first (loop.go split, then the three infra-coupled functions, then the loop store interface, then ws.go).",
+      "kind": "architecture",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Architecture debt",
+      "dateAdded": "2026-06-10T00:00:00.000Z",
+      "evidence": [
+        "internal/agent/loop.go (3283 lines, 5+ tangled responsibilities)",
+        "internal/api/ws.go (1776 lines, 44 handle*Control across 7+ subsystems)",
+        "daemon.New ~704 lines / runStandardInferenceWithTrace ~626 / completeWithFallback ~470 (oversized + infra-coupled)",
+        "LoopDeps concrete *db.Store + *memory.Manager (loop.go:258) — testability gap",
+        "2026-06-10 triple-lens code-audit (clean-architecture + clean-code + ARCHITECTURE_RULES.md); 78 non-test files >500-line cap"
+      ]
+    },
+    {
+      "id": "bundled-embedder-sidecar",
+      "title": "Bundle a embed-model embedder as a managed llama.cpp sidecar (remove the Embedded Runtime dependency)",
+      "kind": "architecture",
+      "status": "complete",
+      "priority": "high",
+      "section": "Embedder foundation",
+      "dateAdded": "2026-06-10T00:00:00.000Z",
+      "summary": "SHIPPED v1.2.0 (status reconciled 2026-06-17). Replace the external-Embedded Runtime embedder dependency with a flowforge-owned, per-platform llama.cpp embedding sidecar (the same engine Embedded Runtime runs underneath) serving embed-model on a local endpoint. The daemon launches/supervises it via the existing sidecar lifecycle; llm.EmbeddingClient points at it through the existing HTTP seam unchanged. The GGUF is fetched on first run via the provision-embedder UX from the release CDN, pinned by content hash; sidecar version + model hash fold into embedding_version. Motivation: we do not own the embedder runtime today, and that has broken calibration twice (2026-06-06 RCA: embedded-runtime 0.24->0.30 silently shifted vectors and broke the prefix-less floor; 2026-06-10: host auto-update 0.30.6->0.30.7 tripped the release pin gate mid-freeze-break, requiring full re-verification of every calibrated floor). Owning the runtime eliminates the auto-update-breaks-calibration failure class, gives offline installs a zero-dependency embedder, and keeps the main the platform binary CGO_ENABLED=0 static (all native code isolated in the sidecar). Workstreams: (1) Sidecar build matrix: build/sign/notarize llama.cpp embedding server per platform (macOS Metal + notarization, linux CPU/CUDA, Windows). (2) Daemon lifecycle: launch/supervise/health-check the sidecar; embedder-check gate validates sidecar version + model hash instead of an external Embedded Runtime version. (3) Pinned first-run model fetch: GGUF from release CDN, content-hash verified, provision-embedder UX reused. (4) Vector-space validation (the cost center): prove the sidecar reproduces the Embedded Runtime-served embed-model vector space byte-for-byte (same tokenizer + embed-model-task-v1 prefix scheme), else re-derive embedding_version, version-gate re-embed of stored vectors, and recalibrate every guard floor via the existing soak harness (intent, turn classifier, pending-action divergence, financial gate). (5) Decommission: retire the external-Embedded Runtime runtime pin (expected_embedder_runtime) in favor of the bundled-sidecar fingerprint. Decision context: Successor to the embedder-foundation work (E1-E11). Explicitly NOT in v1.1.0 scope — post-release, given the freeze-break protocol and the recalibration risk. Options considered: in-process CGo (rejected: breaks static build, per-platform CGo toolchain, notarization pain), auto-installed pinned Embedded Runtime (rejected: still fighting an external auto-updater — the root cause), cloud embedder default (rejected: breaks offline/privacy/zero-per-call-cost on the high-volume classification path).",
+      "evidence": [
+        "internal/llm/embedder_runtime.go (2026-06-06 RCA: runtime update silently shifted embed-model output)",
+        "src/core/config_defaults.go (ExpectedEmbedderRuntime pin, re-pinned 0.30.6->0.30.7 on 2026-06-10 after host auto-update tripped the gate)",
+        "cmd/models/embedder_check.go (release gate that caught the 0.30.7 drift mid-freeze-break)",
+        "scripts/run-embedder-soak.sh (calibration soak harness reused for the vector-space validation workstream)"
+      ]
+    },
+    {
+      "id": "agent-self-repair-tool",
+      "title": "Agent-invocable self-healing self-repair at user direction",
+      "kind": "feature",
+      "status": "complete",
+      "priority": "high",
+      "section": "Behavioral robustness",
+      "dateAdded": "2026-06-11T12:55:00Z",
+      "summary": "SHIPPED v1.2.0 (status reconciled 2026-06-17). Expose `self-healing --repair` hygiene as an agent tool so the operator can say 'run the self-healing on yourself' and Duncan executes RunHygiene through the existing internal/db shared seam (the same path `self-healing --repair` and the daemon maintenance endpoint already use — no connector-local logic). TWO co-equal requirements (operator directive 2026-06-11: 'the output is as important as the ability to do it at all'): (1) EXECUTION — user-directed only, operator-authority gated, never agency/autonomy-initiated (self-mutation of memory/state is a not-recommended-tier action); agency audit record written per invocation. (2) REPORTING — the user-facing answer is a SYNTHESIZED repair report, not an acknowledgement and not a raw JSON dump: per-repair-class counts with plain-language meaning (quarantined volatile memories, staled rows, deduped, pruned, integrity findings), notable items called out by name (e.g. a junk unresolved-question driving agency churn), and an explicit honest 'nothing needed repair' when clean. Every number in the prose must trace to the structured tool result — execution-truth grounding treats a count mismatch or an unevidenced 'repaired' claim as a guard rejection, and a raw report dump as the final answer is the R-BPS-10 echo failure class and is rejected the same way. Acceptance evidence: adversarial cases for (a) fabricated/mismatched counts, (b) raw-dump final, (c) silently omitted repair class, plus a live drill on an isolated instance seeded with known-dirty state. Kept OUT of the v1.1.1 ASAP hotfix: new agent capability surface needs this authority + reporting design and behavioral evidence — feature scope; mixing it into the hotfix would reset the ceremony gates. Repair class #3 (2026-06-11): working_memory junk unresolved_question entries and their derivative assumption/turn_summary accretions (the 'unresolved: hello' agency-churn driver) — no current product surface can resolve or delete working-memory entries (self-healing --repair does not cover the table; memory CLI is list-only; consolidation provably leaves them), so the self-repair tool must own this class. UPDATE (v1.1.1): repair classes #1-3 now ship inside RunHygiene and run daily via the maintenance heartbeat on every install, so the tool's value narrows to ON-DEMAND user-directed repair with the first-class report — the reporting requirement is unchanged and the daily-tick report format should be designed together with it.",
+      "evidence": [
+        "internal/db/hygiene.go RunHygiene (shared seam; daemon maintenance endpoint + self-healing --repair both call it)",
+        "cmd/admin/self-healing.go (CLI surface: 'Agent install diagnostics and repair')",
+        "recorded incident 2026-06-11: production agency loop churning on junk unresolved item; operator-side self-healing run was the remediation path"
+      ]
+    },
+    {
+      "id": "cron-job-creation-validation",
+      "title": "Validate cron jobs at creation: reject delivery-less briefings, normalize agent_id, forbid noop briefing payloads",
+      "summary": "SHIPPED v1.2.0 (status reconciled 2026-06-17). Recorded in production state.db: the two briefing jobs (daily_security_briefing, news_threat_monitor) carry delivery_mode='none' and payload action 'noop', so even once the revived scheduler runs them they produce output that is never pushed to any channel — the operator's missing-reports complaint. health-check-hourly carries agent_id 'default' (not 'duncan') and a null next_run_at. Per no-surgery, the existing malformed rows are NOT hand-edited; the systemic fix is creation-time validation in the cron-job write path that rejects a job whose payload generates user-facing output with delivery_mode='none' (or warns and defaults a delivery channel), forbids a 'noop' action on a briefing job, and normalizes/validates agent_id against the registered agents. Existing malformed rows are then corrected through the normal config/job-edit path, not embedded-sql-store. Separated from the scheduler-revival write-path fix (cron-scheduler-null-interval-starvation) because it is input validation, not the starvation defect.",
+      "kind": "bug-fix",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Scheduler reliability",
+      "dateAdded": "2026-06-11T00:00:00.000Z",
+      "evidence": [
+        "production state.db cron_jobs: daily_security_briefing + news_threat_monitor delivery_mode='none', payload action 'noop'; health-check-hourly agent_id='default', next_run_at NULL",
+        "internal/schedule/worker.go cron executor enqueues outcome for delivery only when delivery_mode != none (enqueueCronOutcomeForDelivery)",
+        "internal/db/cron_repo.go (cron-job write path — validation seam)"
+      ]
+    },
+    {
+      "id": "agency-blocked-proposal-notification",
+      "title": "Surface agency proposals that are repeatedly blocked, so a silently-failing subsystem becomes visible",
+      "summary": "SHIPPED v1.2.0 (status reconciled 2026-06-17). Recorded 2026-06-09: queue_scheduler_job catch-up proposals for the starved cron jobs were blocked every ~5 minutes with 'candidate action class is not allowed' and never surfaced to the operator despite notification_policy=every_action — the one signal that could have exposed the dead scheduler was silently suppressed. The systemic gap: a blocked agency proposal that recurs is a standing condition the operator should see, not noise to drop. Fix shape: when the same proposal (by candidate identity/scope/action_class) is blocked N consecutive evaluation cycles, emit one operator notification (deduped, not per-tick) describing the standing block and why. Deferred behind cron-scheduler-null-interval-starvation (which removes the specific recorded trigger) and the DB-contention audit; the general observability gap remains real for any future silently-blocked agency intent.",
+      "kind": "feature",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Behavioral robustness",
+      "dateAdded": "2026-06-11T00:00:00.000Z",
+      "evidence": [
+        "production state.db agency_decisions 2026-06-09: queue_scheduler_job disposition=blocked every ~5 min, no operator notification despite notification_policy=every_action",
+        "internal/daemon/daemon_subsystems.go publishAgencyOutcome (notification seam; parked path already notifies once, blocked path does not)",
+        "implemented 2026-06-15: internal/daemon/agency_standing_block.go (in-memory consecutive-block streak tracker keyed by candidate/scope/action_class, threshold=3 cycles, deduped once per episode); internal/daemon/daemon_subsystems.go surfaceStandingBlocks wires it into runAgencyEvaluation and emits one agency.outcome standing_block notification via the existing publishAgencyOutcome seam; tests in internal/daemon/agency_standing_block_test.go"
+      ]
+    },
+    {
+      "id": "service-stop-respawn-keepalive",
+      "title": "Make 'flowforge service stop' actually stay stopped under launchd KeepAlive",
+      "summary": "SHIPPED v1.2.0 (status reconciled 2026-06-17). Confirmed from recorded state 2026-06-11: the launchd agent plist (~/Library/LaunchAgents/flowforge.plist) sets KeepAlive=true (unconditional), and 'service stop' (stopByPID in internal/daemon/control.go) only sends SIGTERM and removes the pid file — it never tells launchd to stop managing the job. So launchd sees the clean exit and immediately respawns the daemon (observed: stop SIGTERM'd pid 29716 at 21:36:00, launchd respawned pid 31028 within seconds). An operator-initiated stop should stay stopped. Fix options: (a) plist KeepAlive={ SuccessfulExit=false } so a clean operator SIGTERM (exit 0) does not respawn while crashes still auto-restart — the most elegant, one knob in the install/plist generator; or (b) 'service stop' launchctl bootout/disable the agent and 'service start' bootstrap/enable it. Either way add a test asserting the daemon stays down after 'service stop'. Surfaced while deploying v1.1.2 (swap-then-restart works around it, but the operator flagged the underlying behavior). Out of scope for the v1.1.2 three-item batch; it is service-management/install behavior with its own test surface.",
+      "kind": "bug-fix",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Scheduler reliability",
+      "dateAdded": "2026-06-11T00:00:00.000Z",
+      "evidence": [
+        "~/Library/LaunchAgents/flowforge.plist: KeepAlive=true, RunAtLoad=false",
+        "internal/daemon/control.go stopByPID (SIGTERM + RemovePIDFile only; no launchctl bootout); cmd/admin/service.go stop path",
+        "recorded 2026-06-11 21:36: service stop SIGTERM'd pid 29716, launchd respawned pid 31028 within seconds"
+      ]
+    },
+    {
+      "id": "ci-main-push-tree-reuse-gate",
+      "title": "Skip the redundant main-push CI matrix when the pushed tree already has green CI",
+      "summary": "SHIPPED v1.2.0 (status reconciled 2026-06-17). Follow-up to the release-preflight tree-reuse fix (shipped): the release workflow now reuses green CI evidence keyed on the commit git-tree instead of the commit SHA, so the tag no longer re-runs the full race on a develop->main promotion merge commit. The remaining redundancy is the CI workflow's own push-to-main run: after the develop->main PR merges, the merge commit (identical tree to the already-green develop tip) triggers ci.yml on the main push, and the heavy matrix runs again because the skip guard excludes only develop->main PRs, not the subsequent main push. Fix shape: a cheap ci-gate job computes whether HEAD's tree already has a green ci.yml push run (reusing scripts/ci-reuse-match.sh) and the heavy jobs gate on its output. Deferred from the tree-reuse PR for two reasons: (1) it benefits runner-minutes, not release latency — the operator-felt 20-minute release-time race is already removed by the preflight fix; (2) it requires solving an honest-evidence subtlety — a main-push run that SKIPS its matrix records as a 'success' run with skipped jobs, so the candidate filter (in both the gate and the release preflight) must count only runs whose heavy jobs genuinely ran, or the reused ci_url would cite a run that tested nothing. That filter plus restructuring all 8 heavy-job gates is its own verified change, riskier than the release-side fix and not worth bundling.",
+      "kind": "chore",
+      "status": "complete",
+      "priority": "low",
+      "section": "Release reliability",
+      "dateAdded": "2026-06-12T00:00:00.000Z",
+      "evidence": [
+        ".github/workflows/ci.yml: push trigger [develop, main]; heavy-job skip guard 'if: github.event_name != pull_request || base_ref != main || head_ref != develop' excludes only develop->main PRs, so a main push runs the full matrix",
+        ".github/workflows/release.yml ci_reuse step now matches on .commit.tree.sha via scripts/ci-reuse-match.sh (the release-side half of this work, shipped)",
+        "v1.1.2 release run 27388817289: ~20m Pre-release Validation re-ran the unit-test suite -race on a tree already green on develop"
+      ]
+    },
+    {
+      "id": "split-oversized-updatecmd-file",
+      "title": "Split cmd/updatecmd/update.go by responsibility (500-line cap)",
+      "summary": "SHIPPED v1.2.0 (status reconciled 2026-06-17). cmd/updatecmd/update.go is ~1975 lines, far over the ~500-line repo cap (the go-package-conventions hook flags it on every edit). It mixes several responsibilities that split cleanly: release resolution/version comparison (checkForUpdate, fetchReleaseFromURL, fetchReleaseByTag, resolveTargetRelease, compareVersions), binary download/replace (performUpdate, replaceRunningBinary, retry), pack/voice/product-knowledge updates, install cleanup/repair, and the CLI framework command wiring. Pre-existing debt (the file was already ~1887 lines before the prerelease-ordering and specific-version work); not split inline to keep those changes surgical. Split into focused files (e.g. update_release.go, update_binary.go, update_packs.go, update_cmd.go) with no behavior change, guarded by the existing update package tests.",
+      "kind": "chore",
+      "status": "complete",
+      "priority": "low",
+      "section": "Structural debt",
+      "dateAdded": "2026-06-12T00:00:00.000Z",
+      "evidence": [
+        "cmd/updatecmd/update.go ~1975 lines vs ~500 cap; go-package-conventions hook flags it repeatedly",
+        "distinct responsibilities already separable: release resolution, binary replace, pack/voice updates, install cleanup, the CLI framework wiring"
+      ]
+    },
+    {
+      "id": "injection-output-cap-fail-loud",
+      "title": "Make oversized injection-output handling fail loud, not silently drop",
+      "summary": "SHIPPED v1.1.5 (status reconciled 2026-06-17). The injection-detector DoS fix caps ScanOutput input at maxInjectionScanBytes (256KB) and returns a maximal ThreatScore for oversized output, treating it as a threat. Security review (2026-06-12) noted the output-path consequence: a large but LEGITIMATE LLM/tool output above the cap (e.g. a 300KB code-generation response, or a big http_fetch/file tool result) is now scored as blocked, and the blocked-output callers (internal/agent/loop.go ~2058 replaces result.Output; internal/agent/hmac_boundary.go ~89 SanitizeModelOutput returns \"\") can deliver an empty/placeholder result with no explanation — a silent failure that violates the fail-loud rule. The block-on-threat caller behavior is pre-existing (any blocked output is dropped), but the size cap makes it reachable on non-malicious large output. Fix shape: either (a) use a higher/separate cap for the output path (tool/model output is bounded by max-tokens / LimitReader and is lower DoS risk than raw inbound input), and/or (b) make blocked/oversized output surface a distinct, user-visible event/error ('output withheld: oversized/flagged') instead of a silent empty string. Keep the inbound CheckInput/Sanitize cap (that is the real DoS surface the fuzzer found).",
+      "kind": "bug-fix",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Behavioral robustness",
+      "dateAdded": "2026-06-12T00:00:00.000Z",
+      "evidence": [
+        "internal/agent/injection.go ScanOutput: oversized input -> ThreatScore(1.0)",
+        "internal/agent/hmac_boundary.go SanitizeModelOutput returns \"\" on blocked output; internal/agent/loop.go ~2058 replaces result.Output on IsBlocked",
+        "go-security-reviewer 2026-06-12: classified as production-quality fail-loud issue, roadmap not blocker"
+      ]
+    },
+    {
+      "id": "promotion-control-tolerate-in-progress-develop-ci",
+      "title": "Promotion Control gate should tolerate an in-progress develop CI run instead of hard-failing",
+      "summary": "SHIPPED v1.2.0 (status reconciled 2026-06-17). The ci.yml promotion-control job (develop->main PR gate) requires a COMPLETED + successful develop push CI run for the exact promotion head SHA, and hard-fails with 'No completed successful develop push CI run exists' otherwise. Hit during the v1.1.3 promotion (2026-06-12): the develop->main PR was opened immediately after the artifacts merged to develop, so the develop push CI for that SHA was still in_progress (it ran 19:25->19:49) when promotion-control ran at 19:25 — the gate failed even though the run later went green and was reused by the release preflight. The documented procedure (wait for develop CI green before opening the promotion PR) avoids it, but the gate punishes a benign ordering with a red PR that needs a manual re-run. Fix shape: when a develop push CI run for the head SHA exists but is in_progress/queued, the gate should WAIT for it (poll to completion) or report pending and re-evaluate, rather than treating 'not yet completed' as 'missing evidence'. Distinguish 'no run exists' (real failure) from 'run exists, not finished' (wait).",
+      "kind": "chore",
+      "status": "complete",
+      "priority": "low",
+      "section": "Release reliability",
+      "dateAdded": "2026-06-12T00:00:00.000Z",
+      "evidence": [
+        ".github/workflows/ci.yml promotion-control: 'No completed successful develop push CI run exists for ${PROMOTION_HEAD_SHA}'",
+        "v1.1.3 PR #105: Promotion Control failed at 19:25 while develop push CI for 653a0139 ran 19:25->19:49; passed on re-run; release preflight then reused that run by tree"
+      ]
+    },
+    {
+      "id": "guard-retry-count-accuracy-for-judge-mediated-retries",
+      "title": "Count grounding-judge-mediated guard retries in guard_retry_count",
+      "summary": "SHIPPED v1.2.0 (status reconciled 2026-06-17). RCA turn 696abbc9 had inference_attempts=6 but guard_retry_count=0: the task_deferral retries were driven by the grounding-judge-mediated loop (model_attempt -> grounding_judge_consulted -> retry), which did not flip guardRun.GuardRetried, so the guard_retry_count summary counter (incremented at pipeline_stages.go only when guardRetried) stayed 0. Because primary_diagnosis is derived from the retry counters when otherwise unset, the 0 cascaded into an empty diagnosis. The empty-diagnosis symptom is now fixed independently (the honest-blocker escape valve sets primary_diagnosis=guard_exhaustion_blocked on the blocked path), but the underlying counter is still inaccurate: judge-mediated guard retries should increment guard_retry_count so the counter reflects reality for RCA. Fix shape: have the guard->judge->retry loop record each upheld-and-retried guard rejection into guard_retry_count (distinct from, or in addition to, the GuardRetried flag), so a turn that retried N times on a guard shows guard_retry_count=N. Low risk (instrumentation only), but needs care to not double-count across the two retry mechanisms.",
+      "kind": "chore",
+      "status": "complete",
+      "priority": "low",
+      "section": "Behavioral robustness",
+      "dateAdded": "2026-06-13T00:00:00.000Z",
+      "evidence": [
+        "production state.db turn 696abbc9: inference_attempts=6, guard_retry_count=0, verifier_retry_count=0; 3 grounding_judge_consulted events (task_deferral upheld)",
+        "src/engine/pipeline_stages.go guard_retry_count increment gated on guardRetried; src/engine/turn_diagnostics_db.go primary_diagnosis derived from retry counters",
+        "memory project_task_deferral_exhaustion_rca"
+      ]
+    },
+    {
+      "id": "post-v1-2-0-wholesale-benchmark-rerun",
+      "title": "Re-run the full model benchmark suite against the shipped v1.2.0 build",
+      "summary": "v1.2.0 moved the behavioral surface materially: the weak-model-floor honest-blocker guard, guard-retry-count instrumentation, the grounding-judge/verifier retry paths, and the force-delivery cron write seam all change how a given model scores on the behavioral and routing benchmarks. The per-model baselines that select the preferred local model and drive in-session routing predate those changes, so they are now stale and must be re-measured wholesale. Deferred to post-release (not done mid-ceremony) on purpose: benchmarks must be taken against the final tagged, release-built binary, and running them before the tag would only have to be redone after it. Scope: every installed model on the full benchmark suite, re-deriving the preferred-local-model selection (benchmark-determined top scorer, not a fixed model). The in-cycle local-model-b weak-model-floor calibration is a single slice of this, not a substitute.",
+      "kind": "test",
+      "status": "planned",
+      "priority": "high",
+      "section": "Model routing & benchmarks",
+      "dateAdded": "2026-06-15T00:00:00.000Z",
+      "evidence": [
+        "CHANGELOG.md ([1.2.0] behavioral surface: weak-model-floor guard, force-delivery cron, guard_retry_count)",
+        "per-model benchmark baselines drive preferred-local-model selection (flowforge models suggest)",
+        "src/engine/guards_weak_model_floor.go"
+      ],
+      "targetReleaseId": "v1-3-0"
+    },
+    {
+      "id": "embedded-llamacpp-local-llm-host",
+      "title": "Promote the bundled llama.cpp sidecar from embeddings-only to a first-class local LLM host",
+      "summary": "v1.2.0 ships a supervised, health-validated llama.cpp sidecar (proc.Supervisor + ValidateSidecarEmbeddings + honest-degrade rebind) but restricts it to embed-model embeddings. The same provisioning foundation — release-pinned llama-server (b9632) + bundled libs, SHA-pinned GGUF, DYLD/LD_LIBRARY_PATH wiring, sidecar lifecycle, and the fail-loud bind guard — is ready to serve real local LLM generation: provision a chat-capable GGUF, expose the sidecar's Provider A-compatible chat endpoint as a first-class local provider in the router (a genuine self-contained local route that needs no Embedded Runtime), and extend the supervisor health/validation for generation. DEFERRED: gated on v1.2.0 shipping AND production-proving the embedder sidecar in the field first — do not widen the surface until the narrow embeddings use is proven (risk/sequencing). Note: a new capability is a minor release, not a patch, despite the casual 'patch' framing.",
+      "kind": "feature",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Embedder foundation",
+      "dateAdded": "2026-06-16T00:00:00Z",
+      "evidence": [
+        "internal/daemon/embedder_sidecar.go (proc.Supervisor, llamaServerArgs, OnHealthy bind, honest-degrade rebind)",
+        "internal/llm/embedder_sidecar.go (SidecarProvider, ValidateSidecarEmbeddings, BundledEmbedModel)",
+        ".github/workflows/release.yml (LLAMA_TAG=b9632 packaged llama-server + libs)",
+        "scripts/run-agent-behavior-soak.py (assert_bundled_sidecar_bound fail-loud sidecar guard)"
+      ],
+      "targetReleaseId": "v1-3-0"
+    },
+    {
+      "id": "codebase-knowledge-graph-tree-sitter",
+      "title": "Code knowledge graph for structural codebase navigation (evaluate adopting an open-source library)",
+      "summary": "Investigate a persistent, tree-sitter-parsed knowledge graph of the agent's working codebase — symbols, call chains, blast-radius/impact, imports, API contracts (HTTP/gRPC/GraphQL/Kafka) — queried structurally instead of grep/read, cutting token + tool-call cost on large repos. The team flagged a reference paper 'Codebase-Memory' and, as the corresponding project, code-host.example.com/repo — which is a strong ADOPT candidate, not just prior art: an open-source library is written in the platform (matching flowforge), ships an MCP server with 100+ tools (symbol lookup, call chains, blast radius, cross-repo resolution), supports 257 languages, indexes the Linux kernel (1.6M nodes) in ~3 min, claims up to 50x fewer tokens, embeds GloVe-50d semantic search, and is Apache-2.0. Because flowforge is already an MCP CLIENT, the low-effort path is to wire an open-source library as an MCP server and expose its code-graph tools to coding turns; a deeper path reuses its the platform graph engine or lands its symbol/edge extraction into flowforge's existing knowledge-graph tier (internal/agent/memory/retrieval_tiers_graph.go: path-between-entities + impact chains over embedded SQL store) and could auto-populate Architext at code level. Scope a build-vs-adopt spike: evaluate an open-source library-as-MCP-server first (licensing, footprint, daemon/security fit with the sidecar-supervisor model), then decide whether to adopt, wrap, or build native.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Knowledge graphs",
+      "dateAdded": "2026-06-16T00:00:00Z",
+      "evidence": [
+        "code-host.example.com/repo (the platform, tree-sitter, MCP server 100+ tools, 257 langs, Apache-2.0 — adopt candidate)",
+        "a reference paper — Codebase-Memory: Tree-Sitter knowledge graphs for LLM code exploration via MCP",
+        "internal/agent/memory/retrieval_tiers_graph.go (existing knowledge-graph tier — deeper-integration insertion point)",
+        "internal/mcp (flowforge is already an MCP client — an open-source library-as-MCP-server is the low-effort path)"
+      ]
+    },
+    {
+      "id": "knowledge-graph-substrate",
+      "title": "Knowledge-graph projection: a relationship index over authoritative sources",
+      "summary": "Framing for the knowledge-graph initiative: the graph is a PROJECTION / INDEXING SUBSTRATE, NOT a single source of truth. The authoritative content stays where it lives — code files, agent-accessible file systems, the agent's notes/vault, the memory tables — and the graph is a derived layer that CAPTURES THE RELATIONSHIPS among them (symbols/calls, file references, [[wikilinks]], fact edges) in a form that is user-navigable and performant. It is durable (persisted, not rebuilt per query) AND mutable/flexible (re-projects as sources change; relationships can be added/edited and reconciled), and it provides a much RICHER INTERACTION INTERFACE than flat search/grep — traversal, path-between, impact/blast-radius, neighborhood expansion. Implementation: per-domain extractors emit relationship edges into the shared graph tier (knowledge_facts + the traversal in internal/agent/memory/retrieval_tiers_graph.go); because the graph is a projection, it can be regenerated from sources for integrity while still persisting edits, so 'durable' and 'regenerable' are not in tension. This resolves the earlier source-of-truth question: sources are canonical, the graph indexes and surfaces them.",
+      "kind": "architecture",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Knowledge graphs",
+      "dateAdded": "2026-06-16T00:00:00Z",
+      "evidence": [
+        "internal/agent/memory/retrieval_tiers_graph.go (path-between-entities, impact chains, expansion — shared traversal)",
+        "internal/db/schema_ddl.go (knowledge_facts: subject/relation/object/confidence over embedded SQL store — the substrate)"
+      ]
+    },
+    {
+      "id": "filesystem-knowledge-graph",
+      "title": "Knowledge graph over agent-accessible file systems",
+      "summary": "Extract a knowledge graph from the files the agent can reach — directory structure, file types, cross-file references (imports, links, includes), and document-level entities — into the shared substrate, so the agent answers 'where/what/related' structurally instead of repeated globbing and reads. MUST respect the sandbox trust boundary: index only allowed/workspace paths (internal/security AllowedPaths + WorkspaceDir; the Landlock confinement), never the whole disk, and re-index incrementally on change. Distinct from the code graph (which is symbol/call-level via tree-sitter) — this is the broader file/content layer for mixed repos and document trees.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Knowledge graphs",
+      "dateAdded": "2026-06-16T00:00:00Z",
+      "evidence": [
+        "internal/security/sandbox_linux.go (AllowedPaths/WorkspaceDir — the boundary a filesystem indexer must honor)",
+        "internal/agent/memory/retrieval_tiers_graph.go (target substrate for file/reference edges)"
+      ]
+    },
+    {
+      "id": "obsidian-vault-knowledge-graph",
+      "title": "Agent-owned Obsidian vault as the knowledge graph (in the .flowforge workspace)",
+      "summary": "The agent's knowledge graph IS a dedicated, AGENT-OWNED Obsidian vault living in the .flowforge agent workspace (cfg.Agent.Workspace) — not the user's vault. Notes = nodes, [[wikilinks]] = edges, tags + frontmatter = typed metadata; flowforge persists its extracted/learned facts as markdown via the existing obsidian_write tool. Because it is agent-owned and separate, there is no risk of clobbering the user's notes, and the graph becomes a portable, human-inspectable, git-versionable artifact: point Obsidian at the workspace vault to browse the agent's knowledge in the native graph view, and (optionally) hand-edit it back. RESOLVED FRAMING (see knowledge-graph-substrate): the markdown notes + their [[wikilinks]] are the authoritative content; the embedded SQL store graph tier is a PROJECTION/INDEX over them for fast, rich traversal, and Obsidian's native graph view is the human-navigable surface of that projection. The agent-owned vault is thus the durable, mutable, human-editable content store, and the graph index is regenerable from it — no source-of-truth conflict. PATTERNS from the community reference (Provider B model Code + Obsidian guide, operator-provided 2026-06-16): (1) 'Write once, surface everywhere' / proactive vault — metadata added ONCE in frontmatter makes a note auto-surface in many places via QUERIES, never manual links; this directly corroborates our projection framing (the queries over frontmatter ARE the projection/index, see knowledge-graph-substrate). (2) Three layers Capture -> Process -> Surface, with the warning that vaults built with only Capture become a 'graveyard' — the SURFACE layer (queryable dashboards/hubs/graph view) is the differentiator, so our dashboard knowledge-graph browse panel + saved queries are required scope, not a nicety. (3) Adopt a standard frontmatter schema for typed metadata: type, date, project, status, tags — the agent writes notes with correct frontmatter automatically so queries 'just work' (this is the typed-edge/typed-node metadata layer). (4) Two-tier note format for cheap AI scanning: a short scannable 'Quick Reference' header (topics/outcome) read first at low token cost, with the full content below for drill-down — maps onto our memory retrieval tiers. The reference's CPR session-memory skills (/compress, /preserve, /resume, with auto-archive when the memory file grows too large) overlap flowforge's EXISTING memory/session system rather than the graph, and are noted there, not adopted wholesale.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Knowledge graphs",
+      "dateAdded": "2026-06-16T00:00:00Z",
+      "evidence": [
+        "internal/agent/obsidian.go (existing vault indexer — reuse for the agent-owned vault)",
+        "obsidian_write tool (existing note create/update surface — the authoring path)",
+        "cfg.Agent.Workspace / ~/.flowforge-dev workspace (agent-owned location for the vault)",
+        "internal/agent/memory/retrieval_tiers_graph.go + knowledge_facts (substrate the vault projects/syncs with)",
+        "internal/api ws topics + dashboard viewer (surface to add a knowledge-graph browse panel/topic)",
+        "REFERENCE (operator-provided 2026-06-16): https://reference.example.com — Provider B model Code + Obsidian guide; techniques distilled into the summary (proactive vault / write-once-surface-everywhere via frontmatter queries; Capture->Process->Surface with the 'graveyard' warning; standard frontmatter schema type/date/project/status/tags; two-tier Quick-Reference note format). CPR memory skills also at https://code-host.example.com/repo (overlap flowforge's existing memory/session system, not the graph)"
+      ]
+    },
+    {
+      "id": "verifier-evidence-recovery-totof-collapse",
+      "title": "Deliver gathered tool evidence on verifier coverage failure (TOTOF-collapse blinds the recovery)",
+      "summary": "NEXT PATCH RELEASE. Recorded-state RCA (ADV-VAULT-EVIDENCE-DELIVERY, soak 2026-06-16): on an ambiguous-but-inspectable request (e.g. 'inspect my vault' when several vault dirs exist) the agent inspects (list_directory) and answers with the candidates, but the verifier subgoal_coverage scores it 1/2 and retries; the evidence-recovery (recoveredOutcomeForVerifierFailure -> filesystemInspectionOutcomeFromEvidence -> currentTurnToolResults) reads role==tool messages from session.Messages() but finds NONE, because the agent loop's TOTOF reflection model (internal/session/reflection_artifact.go + internal/agent/context.go) COLLAPSES the raw tool messages into a canonical artifact (AuthoritativeObservedResult + ToolOutcomes) before the verifier runs, leaving the session [user, assistant]. So ~6% of the time a genuinely-good grounded answer ('here are your 3 vaults, which one?') is discarded into a canned 'After N attempts, we couldn't get an answer.' Proven via the verifier_evidence_recovery_declined diagnostic (already shipped, commit ed8e6d16): declined=[(0,0,0,['user','assistant'])]. FIX (central-architecture): preserve the turn's STRUCTURED tool evidence across the TOTOF reflection collapse — a session-stored turn-tool-outcome record populated before collapse, read by currentTurnToolResults/filesystemInspectionOutcomeFromEvidence when session.Messages() has no role==tool. Touches the Session type, the collapse seam, and the recovery; needs full behavioral-soak validation. NOTE: a too-broad first attempt (removing subgoal_coverage from verifierRetryRemainsBlockingAfterProgress) was reverted because it broke the forgot-a-part retry nudge and the evidence-recovery tests — the retry-decision layer cannot distinguish forgot-a-part from genuine ambiguity; the fix must be at the evidence-recovery layer. Failure mode is honest (canned non-answer, not a fabrication) and pre-existing (not v1.2.0/embedder-introduced), so it does not block the v1.2.0 tag.",
+      "kind": "bug-fix",
+      "status": "complete",
+      "priority": "high",
+      "section": "Behavioral robustness",
+      "dateAdded": "2026-06-16T00:00:00Z",
+      "evidence": [
+        "src/engine/post_success_retry_policy_recovery.go (filesystemInspectionOutcomeFromEvidence, currentTurnToolResults)",
+        "internal/session/reflection_artifact.go (TOTOF collapse: AuthoritativeObservedResult/ToolOutcomes)",
+        "src/engine/pipeline_stages_inference_verifier.go (verifier_evidence_recovery_declined diagnostic, committed ed8e6d16)"
+      ],
+      "targetReleaseId": "v1-3-0"
+    },
+    {
+      "id": "real-coding-benchmark-execution-grounded",
+      "title": "Build the long-planned real coding benchmark (execution-grounded coding capability)",
+      "summary": "TARGET v1.2.1. We have repeatedly planned but never executed a 'real' coding benchmark: an execution-grounded suite that measures actual coding capability on real coding tasks (write/modify code -> compile -> run tests -> verifiable pass/fail), as opposed to the behavioral soaks (which exercise agent guards/behavior) and the per-model behavioral/routing baselines (which do not measure coding ability at all). FlowForge routes coding-heavy work to models but has no coding-capability signal feeding that choice, so the benchmark-determined preferred model is currently blind to coding skill. Sequenced immediately AFTER the post-v1.2.0 wholesale benchmark rerun so coding scores land on the refreshed, release-built baselines rather than stale ones. Grading model: evaluate model-produced code the way a professor grades an assignment. Hand the model a coding assignment, then score it on objective, machine-checkable axes: (1) does it COMPILE/build? (2) given a RANDOMIZED set of inputs, does it produce the CORRECT outputs (property/fuzz-style oracles over many generated inputs, not a handful of fixed cases the model could overfit)? (3) is it FORMATTED correctly and does it pass LINT / static-analysis checks? Non-negotiable: every axis is decided by RUNNING the toolchain (compiler, generated-input test oracle, formatter/linter), never from model self-report or an LLM-judge proxy. Report BOTH a quantitative AND a qualitative assessment (standing operator preference): quantitative = the machine-checkable scores (compile rate, correctness rate under randomized inputs, format/lint pass rate) composed into a numeric grade; qualitative = a structured read of code QUALITY beyond pass/fail (readability, idiomatic style, algorithmic soundness/approach, maintainability). The qualitative layer is the ONE place rubric/model judgment is appropriate, and it is strictly additive narrative: it never overrides, gates, or substitutes for the quantitative machine-run results. Scope to settle at planning, not now: (a) task corpus (curated in-repo tasks with hermetic oracles vs an external SWE-bench-style set), (b) whether it scores the MODEL in isolation or flowforge end-to-end through the real agent loop + tools, (c) languages covered, (d) how the coding score composes with behavioral/routing scores in preferred-model selection. Reason it has slipped and is being scheduled now rather than deferred again (Rule 16): it kept losing priority to behavioral-correctness work each cycle; with v1.2.0 closing that surface and a benchmark refresh already happening post-ship, v1.2.1 is the natural slot to finally execute it.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "high",
+      "section": "Model routing & benchmarks",
+      "dateAdded": "2026-06-16T00:00:00Z",
+      "evidence": [
+        "post-v1-2-0-wholesale-benchmark-rerun (this coding benchmark sequences after the wholesale rerun, onto refreshed baselines)",
+        "preferred-local-model selection is benchmark-determined but has no coding-capability dimension (flowforge models suggest / baseline)",
+        "long-standing plan, repeatedly deprioritized behind behavioral-correctness work, not previously executed (operator note 2026-06-16)"
+      ],
+      "targetReleaseId": "v1-3-0"
+    },
+    {
+      "id": "realtime-av-ingestion",
+      "title": "Realtime video/audio ingestion into the agent",
+      "summary": "Give the agent the ability to ingest realtime AUDIO and VIDEO streams as live input (not just file uploads or pre-recorded transcripts): a streaming ingestion path that feeds live A/V into the pipeline so the agent can perceive and respond in near-real-time. Operator preference 2026-06-16: prefer OPEN-SOURCE, low-or-no-cost components for capture/transport/codec/transcription rather than a paid managed vendor. This is the PREREQUISITE for the voice phone channel (v120-deferred-voice-phone): a phone call is just one consumer of realtime A/V ingestion, so the general substrate lands first (operator sequencing decision: A/V ingestion BEFORE the phone channel). Must route through the pipeline, not be bolted onto a single channel (channel-only multimodal was previously flagged as architectural drift). Scope to settle at planning: transport (WebRTC vs raw RTP/WebSocket), codecs, where transcription/vision runs (local sidecar vs cloud), stream backpressure and the behavioral-SLA implications of a live stream, and how partial/streaming perception composes with the turn-based pipeline.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Channels",
+      "dateAdded": "2026-06-16T00:00:00Z",
+      "evidence": [
+        "v120-deferred-voice-phone (downstream consumer; the voice phone channel is gated on this landing first)",
+        "channel-only multimodal previously flagged as architectural drift — realtime A/V ingestion must route through the pipeline, not be channel-bound",
+        "operator sequencing (A/V ingestion before voice phone) + open-source / low-no-cost preference, 2026-06-16"
+      ]
+    },
+    {
+      "id": "multi-user-rbac-operator-delegated-roles",
+      "title": "Operator-delegated human roles: map RBAC to real-world roles + ship packaged turnkey roles",
+      "summary": "The primary user/operator is not necessarily the only human who interacts with the agent. There IS already a substantial ACCESS CONTROL layer to build on (do not re-invent it), surfaced in the UI under Settings -> Access Control as an AUTHORITY MATRIX + SECURITY POLICY. Model (src/core/security_claim.go): four ordered AUTHORITY LEVELS External(0) < Peer(1) < SelfGenerated(2) < Creator(3), each granted a set of capability TIERS — Safe (conversation/summarization/web_search), Caution (read_file/write_file/delegation), Dangerous (run_script/shell), Forbidden (never). Matrix: External=Safe only; Peer=Safe+Caution; SelfGenerated & Creator=Safe+Caution+Dangerous; nobody gets Forbidden. A request's level is a SecurityClaim composed as effective = min(max(positive grants), min(negative ceilings)): grants OR across layers (channel allowlist -> AllowlistAuthority, trusted_sender_ids -> TrustedAuthority, API/WS -> APIAuthority, A2A -> Peer, anonymous -> External floor), ceilings AND across layers (the threat scanner flagging input Caution applies ThreatCautionCeiling, default External, must be below Creator). Default-deny is already the posture (deny_on_empty_allowlist: channels with no allowlist reject all). The GAP this feature fills: those four levels are GENERIC TRUST TIERS with a FIXED capability matrix — they are NOT the named REAL-WORLD ROLE a person occupies relative to the Operator, and there are no packaged role bundles. So today you cannot express 'this sender is my Administrative Assistant, scope them to exactly that.' The feature is a ROLE layer over the existing claim/authority engine: named roles map to (authority level + a tailored capability scope), shipped as presets the Operator assigns. GUIDING PRINCIPLE (operator 2026-06-16): treat the agent as a PROTECTED RESOURCE, like an email account — access is DEFAULT-DENY and granted deliberately by the Operator, never open. Every grant carries a real sense of PURPOSE and SCOPE (least privilege): a role gets a bounded capability set for an explicit reason tied to its relationship with the Operator, not blanket access. The email analogy is exact — you delegate inbox/calendar access to an assistant for a specific purpose at a specific scope; you do not hand over the password. Build a per-requester identity -> ROLE -> permission-scope layer that maps the project's existing RBAC-ish primitives onto REAL-WORLD roles a person occupies in relation to the Operator (e.g. Technical Support, Administrative Assistant, Teammate), granting each the level of interaction appropriate to that relationship (a bounded subset of what the Operator can do). The agent gates its tool/action surface by the REQUESTING HUMAN's role, not just by its own autonomy. Build ON existing primitives, do not duplicate them: the EXISTING Access Control model (security.*_authority claim/authority levels + channel allowlists + trusted_sender_ids, see capability_security_model.md) ALREADY keys authority to the sender — extend it from the coarse None/Peer/Operator/Creator ladder to named real-world ROLES with bounded scopes, rather than building a parallel system. Separately, the agency/autonomy levels (internal/agency, core.AgencyLevel*) govern the AGENT's own autonomy and the plugin permission policy (internal/plugin) gates WHAT may run; a role's scope must COMPOSE with both (role caps the human's reach; agency caps the agent's). PACKAGED TURNKEY ROLES: ship a set of pre-built role definitions (Technical Support, Administrative Assistant, Teammate, ...) with sensible default permission scopes so the Operator can assign them out of the box and then customize. NAMING CAUTION: 'delegation' is already used in the codebase for agent->subagent delegation (config delegation_*); this human-role feature must use distinct vocabulary (e.g. roles/principals/grants) to avoid overloading it. Scope to settle at planning: per-channel identity/authentication of non-operator senders (how do we trust 'this sender is Jane, the admin assistant?'), the role->scope schema, how role scopes COMPOSE with agency/autonomy levels and especially the money/financial gates (a support role must not be able to authorize spend), an audit trail of who-did-what (Rule 14), and grant revocation.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Access control & roles",
+      "dateAdded": "2026-06-16T00:00:00Z",
+      "evidence": [
+        "internal/agency (AgencyLevel/AutonomyLevel — governs the AGENT's autonomy, NOT per-human; the layer this builds above)",
+        "internal/plugin permission policy (gates WHAT capability may run, not WHO is asking)",
+        "src/core/security_claim.go — authoritative model: AuthorityLevel External<Peer<SelfGenerated<Creator, SecurityClaim composition effective=min(max(grants),min(ceilings)), ResolveChannelClaim/ResolveAPIClaim/ResolveA2AClaim, ThreatCautionCeiling",
+        "UI: Settings -> Access Control (Authority Matrix: levels x Safe/Caution/Dangerous/Forbidden tiers; Security Policy: deny_on_empty_allowlist, allowlist/trusted/api authority, threat scanner ceiling)",
+        "docs/design/capability_security_model.md (capability-based, trust-based authorization + audit); channel allowlists + security.trusted_sender_ids feed the grants",
+        "POSSIBLE DEFECT to verify: src/configstate/schema.ts lists security.*_authority valid values as {None,Peer,Operator,Creator} but the real AuthorityLevel enum is {External,Peer,SelfGenerated,Creator} — config-validation enum may be drifted/stale",
+        "config delegation_* is agent->subagent delegation (naming-collision caution: do not overload 'delegation' for human roles)",
+        "operator request 2026-06-16: real-world role mapping (Technical Support / Administrative Assistant / Teammate) + packaged turnkey roles for operator assignment"
+      ]
+    },
+    {
+      "id": "provider-funding-state-apis",
+      "title": "Proactive provider funding-state via balance/credit APIs (wherever a provider offers one)",
+      "summary": "Funding state is currently learned REACTIVELY: a failed call / 402 / credit-exhausted response trips the circuit breaker, which deprioritizes the provider and routes to fallbacks (the funding-aware routing + CreditRecheckInterval recovery in internal/llm/circuit.go + service_funding.go). Two gaps: (1) it only learns a provider is broke AFTER spending a wasted call, and (2) external tooling (the soak harness, an operator pre-flight) cannot determine funding at all because the API key lives in the encrypted keystore. Integrate, WHERE A PROVIDER OFFERS ONE, the provider's balance/credit/usage endpoint to determine funding PROACTIVELY and populate runtime_settings.provider_funding_state without a failed call — e.g. the cloud provider user/balance, OpenRouter /api/v1/auth/key + credits/rate-limit, Provider A usage/billing, Moonshot balance (verify each at design time). Then: pre-skip a known-empty provider in routing before spending a call; surface balance/headroom in `flowforge circuit status` and provider health; and expose a check so an operator (or the soak harness) can confirm a provider is topped up before a long run. 'Wherever possible' is the operative scope: where no balance API exists (e.g. Provider B has no public balance endpoint), fall back to the existing reactive breaker detection. Operator directive 2026-06-16, prompted by being unable to pre-verify cloud-provider funding before a soak.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Model routing & benchmarks",
+      "dateAdded": "2026-06-16T00:00:00Z",
+      "evidence": [
+        "internal/llm/circuit.go + internal/llm/service_funding.go (existing REACTIVE funding-aware routing + recovery this complements, not replaces)",
+        "runtime_settings.provider_funding_state (durable funding state to populate proactively instead of only on a tripped call)",
+        "candidate provider APIs to verify at design time: the cloud provider user/balance, OpenRouter /api/v1/auth/key + credits, Provider A usage/billing, Moonshot balance; Provider B has none -> reactive fallback",
+        "operator directive 2026-06-16: integrate provider funding-state APIs wherever offered; reactive breaker remains the fallback where none exists"
+      ]
+    },
+    {
+      "id": "models-management-page",
+      "title": "Dedicated Models page: local execution framework + its missing UI + ModelHub model access (with model config decomposed out of monolithic Settings)",
+      "summary": "PRODUCT-VISION ITEM (operator framing 2026-06-17). This is one cohesive effort, not a bolt-on dialog: stand up a DEDICATED MODELS PAGE focused strictly on model management, and in doing so deliver the user base THREE capabilities they do not have by default — (1) access to the highest-performing local model execution framework (the bundled llama.cpp host, embedded-llamacpp-local-llm-host); (2) the management UI that framework is otherwise missing (model list, active/default selection, per-model config, load/unload, health/perf, install/remove — llama.cpp ships no such GUI). POSITIONING: because llama.cpp's native management surface is CLI flags, manual GGUF fetching, and hand-managed server processes, a guided page (compat-gated discovery, one-click install, supervised lifecycle, health/perf surfaced) plausibly makes managing llama.cpp easier and more intuitive through FlowForge than running it standalone — FlowForge as the best way to RUN llama.cpp, not merely a consumer of it; (3) access to the largest collection of local models available, via ModelHub. STRUCTURAL CHANGE this forces: model-related configuration must move OUT of the monolithic Settings page into this focused Models page — Settings stops being a grab-bag for model config, and model management gets a first-class home. Because we are introducing a whole new surface, a deliberate UI/UX REDESIGN is in scope (information architecture for Settings-vs-Models split, the model-management page layout, and the discover→compat-check→download→install→activate flow), not just wiring. The ModelHub integration within this page: (a) search the ModelHub Hub API filtered to GGUF artifacts (library/quant filter), (b) SYSTEM-COMPATIBILITY detection — gate/sort candidates by detected RAM/VRAM, CPU arch, and quantization so a user only installs models their hardware can actually run rather than downloading one that OOMs at load, (c) download with progress surfaced over the existing dashboard WS topics (download-progress events), (d) SHA-pin each installed model the way BundledEmbedModel is pinned so an install is verifiable/reproducible and tamper-evident, (e) hand the installed GGUF to the host via the existing proc.SupervisedProcess serving path, (f) a parallel BYO-GGUF-URL install path for models not on the Hub (consistent with the BYO/self-custody stance elsewhere). HARD CONSTRAINT (operator 2026-06-17): the embedded llama.cpp host is ADDITIVE — support for EXTERNAL / non-embedded local frameworks (a user's own llama.cpp server, Embedded Runtime, any externally-managed local endpoint) must NOT be removed. The Models page manages BOTH the embedded host AND externally-configured local backends as first-class peers; the Settings→Models config decomposition must carry the existing external-endpoint configuration over intact, not drop it in favor of the bundled host. Build order inside the effort: Settings→Models config decomposition + page scaffold and IA redesign first, then the local-host management UI, then the ModelHub discover/download/install flow on top. Depends on embedded-llamacpp-local-llm-host landing first (the host is what serves a downloaded generation model); the embedder sidecar plumbing (supervisor, SHA-pin, WS progress) is the reusable substrate. Settings UI is struct-driven (derives from the Config struct, not TOML) — the model-config move must preserve that invariant, relocating the surface without forking it. STALE-CARD FIX folded in (operator-reported 2026-06-17): the live Settings 'Behavioral Correction - Embedding' card still shows Embedded Runtime framing ('embedded-runtime / embed-model', 'Pulls the model via Embedded Runtime') and NO sidecar running/health state, even though EffectiveEmbeddingEngine resolves to the bundled sidecar (the live engine) and the backend already exposes embedding_engine + Daemon.EmbedderSidecarState(). Rework the card as part of this overhaul: show the effective engine + live sidecar supervisor state, drop the Embedded Runtime copy.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Embedder foundation",
+      "dateAdded": "2026-06-17T00:00:00Z",
+      "evidence": [
+        "embedded-llamacpp-local-llm-host (dependency: the local execution framework this page manages and feeds models to; embeddings-only sidecar ships v1.2.0)",
+        "proc.Supervisor / proc.SupervisedProcess + BundledEmbedModel SHA-pin (reusable substrate: supervised serving + verifiable pinned-artifact install pattern)",
+        "internal/api ws topics + dashboard SPA Settings page (surface to decompose: move model config out of monolithic Settings into a focused Models page; download-progress WS events)",
+        "Settings UI is struct-driven from the Config struct (relocate model config without forking the struct-derived surface)",
+        "BYO/self-custody stance (parallel BYO-GGUF-URL install path for models not on the HF Hub)",
+        "operator product vision 2026-06-17: dedicated Models page delivering three default-absent capabilities — local execution framework + its missing UI + ModelHub model access — with a UI/UX redesign baked in",
+        "operator constraint 2026-06-17: embedded host is additive — do NOT remove support for external/non-embedded local frameworks (external llama.cpp, Embedded Runtime, etc.); the page manages embedded and external local backends as first-class peers"
+      ],
+      "targetReleaseId": "v1-3-0"
+    },
+    {
+      "id": "per-turn-retry-cost-ceiling",
+      "title": "Per-turn retry-cost ceiling: bound token spend of guard/verifier/react retry cycles and fail-closed on breach (Rule 7)",
+      "summary": "Operator cost directive 2026-06-17 (the cloud provider usage: ~$9 single-day spike on 6/16, June $25.90, 48.1M tokens / 5,289 cloud-provider-v4-pro requests): fruitless retry cycles burn tokens at an alarming rate. A single turn can COMPOUND retry layers — model-attempt fallbacks (routing), react tool loops, guard retries (liveRetryPolicy.MaxRetries=2), and verifier retries — each a fresh provider call. When a turn loops without making progress (same violation repeating, no new evidence), it can multiply paid model calls before reaching natural exhaustion. Today the caps are per-LAYER counts (MaxRetries, react-turn cap), not a per-TURN COST budget across all layers, so the worst-case spend is unbounded in tokens even when bounded in attempts. Add a per-turn token/cost CEILING that, once the turn's accumulated provider spend crosses a threshold, STOPS retrying and fail-closes to an honest blocker (preserving the best content gathered so far), rather than continuing to spend. This is Rule 7 made enforceable: 'token budgets are not advisory — surface the breach, do not silently overrun.' Substrate already exists: inference_costs records per-attempt token/cost, turn_diagnostics aggregates per-turn (RCA Rule 14), and the guard-exhaustion machinery (guardExhaustionMustFailClosed, blockedOutcomeForGuardExhaustion, decideGuardRetryAfterProgress) already has a fail-closed honest-blocker path to reuse — the ceiling becomes one more exhaustion trigger. Report BOTH quantitative (per-turn token/cost spent, retries triggered, ceiling-breach count) and qualitative (which retry layer dominates spend) per the standing measurement preference. Correctness link: a behavioral defect that yields a bad answer triggers verifier retries downstream, so fixing correctness defects (e.g. the durable-history-drop confabulation) directly cuts fruitless-retry burn — cost and correctness are the same lever. Pairs with preemptive-shaping (a guard firing/retrying means shaping already failed) and the provider-funding-state work (pre-skip empty providers before spending a call). Scope to settle at planning: the ceiling value (fixed vs config vs per-model), whether it is a hard stop or a soft warn-then-stop, how it composes with the existing per-layer caps, and how the operator surfaces/overrides it.",
+      "kind": "feature",
+      "status": "complete",
+      "priority": "high",
+      "section": "Behavioral robustness",
+      "dateAdded": "2026-06-17T00:00:00Z",
+      "evidence": [
+        "src/engine guard/verifier retry machinery (liveRetryPolicy.MaxRetries, decideGuardRetryAfterProgress, runVerifierPass) — per-layer attempt caps, no per-turn cost budget across layers",
+        "inference_costs table (per-attempt token/cost) + turn_diagnostics aggregation (Rule 14 substrate the ceiling reads to know spend mid-turn)",
+        "guardExhaustionMustFailClosed / blockedOutcomeForGuardExhaustion (existing fail-closed honest-blocker path the ceiling reuses as a new exhaustion trigger)",
+        "AGENT_GUIDELINES.md Rule 7: token budgets are not advisory — surface the breach, do not silently overrun",
+        "operator cost directive 2026-06-17: $7/day the cloud provider is high; fruitless retry cycles burn tokens at an alarming rate; correctness fixes reduce retry burn (same lever)"
+      ],
+      "targetReleaseId": "v1-3-0"
+    },
+    {
+      "id": "answer-fidelity-audit-v121",
+      "title": "v1.2.1 comprehensive answer-fidelity audit: the framework must never discard, corrupt, or degrade a correct model answer",
+      "summary": "STATUS 2026-06-17: the static-sweep audit (6 dimensions) and its ~20 fixes across 6 systemic roots (persistence seam, recovery substance-gate, raw-tool-output filter, compression fact-preservation, swap/finalize instrumentation, #35) were EXECUTED IN v1.2.0 — pulled in BEFORE the tag because the operator reclassified this from a future-audit concern to an IDENTIFIED BEHAVIORAL DEFECT (behavioral-correctness-paramount: a known defect class is a now-item that outranks release ceremony; you do not ship with it live even when the surface soak is green). The v1.2.1 REMAINDER scoped here is the permanent regression guard the static fixes still lack: the ADVERSARIAL 'correct-answer-survival' soak harness (the inverse of normal soaks — feed conditions where the model produces a CORRECT answer that a guard/recovery/finalize might wrongly degrade, assert it survives) plus any low-priority leftovers (e.g. uniform direct-stage content_head instrumentation). Original framing follows. Operator directive 2026-06-17 ('plan a comprehensive audit for this sort of crap'). The v1.2.0 promote loop surfaced not three one-off bugs but a CLASS: the framework discarding, corrupting, or degrading a CORRECT model answer somewhere between generation and delivery. Instances proven this cycle, each with recorded-state RCA: (1) long_mixed durable-history drop — a correct direct-stage reply was returned to the client but NEVER persisted to session_messages (the direct-stage finalize bypassed the persist seam), so a later turn confabulated off the hole; (2) geopolitical mode B — the model returned empty at reflect and the empty-response fallback (synthesizeFromToolResults) DUMPED raw Playwright/browser tool noise (`### Ran Playwright code … [ref=e2]`) verbatim as the answer; (3) geopolitical mode A — the model produced a correct 3285-char sitrep, the execution_truth web-read grounding guard FALSE-POSITIVED (its markers were raw-XML/URL tokens a synthesis paraphrases away), and the recovery OVERWROTE the good answer with a degenerate `From <url>: <url>` projection. Two roots unify them: (a) MANY independent 'what ships to the user' selectors with inconsistent rules (loop finalizeContent + max-turns/idle/deadline terminal returns + reflect commit + pipeline projections/recoveries/finalize + direct-stage outcomes + guard-exhaustion fallbacks + stream finalize), and (b) RAW TOOL OUTPUT corrupting downstream logic (browser snapshots, RSS XML, transport status, accessibility [ref=eN] refs, bare URLs) — the compression-corruption family. This is the operator's preemptive-shaping thesis in the flesh: a guard/recovery firing WRONGLY is worse than not firing — it destroys correct output AND (per the cost lens) bills paid retries to do it. AUDIT DIMENSIONS: (1) TERMINAL-CONTENT SELECTORS — statically enumerate EVERY path that decides what ships, and assert each: persists to durable history, rejects degenerate/raw-tool-noise content (via the shared agenttools.ToolOutputLacksReadableContent detector), never silently discards a correct model answer, and is Rule-14 instrumented (the reflection_finalized / loop_terminal_selection pattern). (2) OVERRIDE/RECOVERY PATHS — every guard, projection, and recovery that can REPLACE the model's answer; audit each for false-positive risk (brittle marker/pattern presence checks firing on correct syntheses) and for 'recovery worse than original' (a fail-closed/projection answer that degrades a good one). (3) RAW-TOOL-OUTPUT LEAKAGE — every synthesis/projection/recovery seam centralizes noise-filtering; no raw browser/XML/transport/accessibility/URL content reaches the user as an answer (folds in the pending [ref=eN] leak item). (4) PERSISTENCE SEAMS — every reply path provably writes to durable history (long_mixed class), with no silent-swallow on contention. (5) COMPRESSION/CONTEXT-REDUCTION SEAMS — every lossy step (TOTOF collapse, prompt-compression, context checkpoints, CompactBeforeArchive, topic summaries, memory consolidation) ships WITH a fact-preservation proof. (6) RULE-14 COMPLETENESS — every content-decision point records what it selected/transformed/discarded so the next occurrence is auto-legible. METHODOLOGY: static enumeration (grep/AST sweep of selectors/recoveries/projections/synthesis/persistence sites) + an ADVERSARIAL 'correct-answer-survival' soak that probes the INVERSE of normal soaks — feed the agent conditions where it produces a CORRECT answer that a guard/recovery/finalize might wrongly degrade (raw-XML sources, browser-snapshot-only evidence, paraphrasing syntheses, back-to-back same-session turns) and assert the good answer SURVIVES — plus a fact-preservation test per compression seam. DELIVERABLE: a severity-ranked findings report feeding v1.2.1 scope, in the spirit of the cycle-opening triple-lens audit but targeted at answer fidelity. The Rule-14 reflect/terminal instrumentation already deployed in v1.2.0 is the substrate this audit reads.",
+      "kind": "test",
+      "status": "planned",
+      "priority": "critical",
+      "section": "Behavioral robustness",
+      "dateAdded": "2026-06-17T00:00:00Z",
+      "evidence": [
+        "v1.2.0 RCAs (recorded-state): long_mixed durable-history drop (direct-stage persist bypass), geopolitical mode B (empty-reflect raw-tool-noise dump), geopolitical mode A (execution_truth grounding false-positive + degenerate recovery overwrite)",
+        "terminal-content selectors to enumerate: internal/agent loop finalizeContent + max-turns/idle/deadline returns + reflect commit; src/engine projections (projectCountOnly/replyOnlyLiteral/inspectionListing), recoveries (webReadOutcomeFromEvidence, recoveredOutcomeForGuardExhaustion), finalize paths, direct-stage outcomes, FinalizeStream",
+        "shared noise detector agenttools.ToolOutputLacksReadableContent (centralize at every synthesis/projection/recovery seam)",
+        "Rule-14 instrumentation deployed in v1.2.0 (reflection_finalized, loop_terminal_selection) is the substrate; audit extends coverage to every content-decision point",
+        "compression seams to fact-preservation-test: TOTOF collapse (reflection_artifact.go), prompt-compression, context checkpoints, session_governor CompactBeforeArchive, topic summaries, memory consolidation — see feedback_compression_is_correctness_critical",
+        "folds in pending browser accessibility-snapshot [ref=eN] leak item (same raw-tool-output-leakage root)",
+        "operator directive 2026-06-17: plan a comprehensive audit for this class for v1.2.1; aligns with preemptive-shaping thesis (a guard firing wrongly destroys correct output) and the cost lens (wrong recoveries bill paid retries)",
+        "operator 2026-06-17: CRITICAL priority — release-push-eligible, carried in the v1.2.1 release push rather than deferred/delayed (the class actively ships wrong answers to users)"
+      ],
+      "targetReleaseId": "v1-3-0"
+    },
+    {
+      "id": "investigate-graph-rag-associative-memory-retrieval",
+      "title": "Investigate GraphRAG (hippocampal-indexing knowledge-graph + PageRank associative retrieval) for the memory system",
+      "summary": "INVESTIGATION (operator-provided reference 2026-06-17: https://reference.example.com). GraphRAG / GraphRAG-2 is a neurobiologically-inspired long-term-memory framework for LLMs, modeled on the hippocampal-indexing theory of human memory: an LLM extracts a lightweight KNOWLEDGE GRAPH from passages, and at retrieval time the system runs GRAPH TRAVERSAL (Personalized PageRank in the original GraphRAG, seeded by the query's entities) to perform ASSOCIATIVE, MULTI-HOP, cross-document retrieval in a SINGLE step — surfacing related information even when terminology does not match, linking CONCEPTS rather than keywords. How it differs: vs standard vector RAG (embedding/keyword match with heavy upfront index + storage overhead) it trades the vector index for a graph and claims lower indexing overhead + the ability to ingest streaming/live data without index rebuilds; vs iterative multi-hop RAG (several LLM retrieve-read round-trips) it resolves the multi-hop association in one graph step. Reported benefits: associative concept-linking, multi-hop QA, model-agnostic (any LLM). WHY THIS IS WORTH OUR TIME: flowforge ALREADY has the substrate this technique needs — a hippocampus surface (internal/db hippocampus), knowledge_facts + internal/agent/memory/retrieval_tiers_graph.go, semantic_memory, memory consolidation (consolidation_phases.go), and a pinned/measured embedder foundation — so the question is concrete: does a GraphRAG-style KG+PPR associative retrieval beat our current tiered retrieval on MULTI-HOP recall, and at what cost (LLM triple-extraction per ingested passage, a graph store, PPR compute, and the contradiction/consolidation interactions)? Investigation scope: (1) read the method (GraphRAG + GraphRAG-2 papers/repo, not just the blog) and map it onto our existing knowledge_facts graph + retrieval tiers; (2) decide BUILD (adopt the framework) vs BORROW (run Personalized PageRank over the knowledge_facts graph we already build, seeded by query entities, as an additional retrieval tier) vs PASS; (3) a small multi-hop-recall benchmark comparing current retrieval vs a PPR-over-knowledge_facts prototype on representative associative queries. DELIVERABLE: a reviewed comparison + the benchmark with BOTH a quantitative score (multi-hop recall/precision, ingest + retrieval cost) AND a qualitative read (retrieval quality, failure modes, fit with consolidation/contradiction-detection), and a build/borrow/pass recommendation — per the standing quantitative-AND-qualitative preference. Pairs with the embedder-foundation work (retrieval quality depends on the embedder) and the agent-owned knowledge-graph/Obsidian vault item (shared graph substrate).",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Knowledge graphs",
+      "dateAdded": "2026-06-17T00:00:00Z",
+      "evidence": [
+        "operator-provided reference 2026-06-17: https://reference.example.com (GraphRAG/GraphRAG-2: hippocampal-indexing KG + Personalized PageRank associative multi-hop retrieval; model-agnostic; trades vector index for a graph)",
+        "existing memory substrate to map onto / borrow into: internal/db hippocampus, knowledge_facts, internal/agent/memory/retrieval_tiers_graph.go, semantic_memory, consolidation_phases.go (contradiction detection + consolidation)",
+        "embedder-foundation dependency: retrieval quality is embedder-bound (see project_embedder_foundation) — benchmark on the pinned embedder",
+        "BORROW candidate: run Personalized PageRank over the knowledge_facts graph we ALREADY build, seeded by query entities, as an additional associative retrieval tier — before committing to adopting the whole framework",
+        "deliverable per standing preference: multi-hop-recall benchmark with quantitative score AND qualitative read + a build/borrow/pass recommendation"
+      ]
+    },
+    {
+      "id": "soak-gate-on-resolution-not-severity-tier",
+      "title": "Release gates on RESOLUTION of every behavioral soak failure, not on the severity tier — attribution_only is not a license to ship",
+      "summary": "Operator directive 2026-06-17. The behavior-soak severity tiers (release_gate / attribution_only / stress_only) currently double as a GATING policy: only release_gate F's block the tag; attribution_only/stress_only F's are recorded but waved through. That is a defect-hiding anti-pattern, proven this cycle: geopolitical_sitrep was attribution_only and was repeatedly called 'doesn't gate', then turned out to be a DETERMINISTIC framework defect (the loop discarding a correct answer + the grounding guard false-positiving). The tier PRE-ATTRIBUTES a failure to 'not cleanly attributable' BEFORE any RCA — the exact Rule 17 anti-pattern (an unfalsifiable variance story) baked into the taxonomy. CHANGE THE POLICY: the release gates on RESOLUTION of EVERY behavioral failure regardless of tier — (a) every F, any tier, must be diagnosed to a recorded-state conclusion before release; (b) RCA proves a DEFECT -> fix it (gates); (c) RCA proves a GENUINE EXTERNALITY -> it must be EVIDENCED (captured bytes show e.g. the live source was empty, not 'probably flaky') and cleared by a STABILITY CRITERION (green on re-run / N-of-M), documented, never a standing exemption. The tier KEEPS its real job — PRIORITY and diagnosis routing, and choosing the stability bar for genuinely stochastic (live-web / high model_sensitivity) scenarios — but it no longer grants permission to ship a failure. Implementation in scripts/run-agent-behavior-soak.py + the release gate: replace 'only release_gate F gates' with 'any F gates until resolved'; add a per-scenario stability/re-run policy for scenarios flagged stochastic, with the externality evidence required to clear them; surface unresolved F's (any tier) as a hard release blocker. This is the methodology pair to behavioral-correctness-paramount and Rule 17 — see feedback_no_severity_tier_excuses.",
+      "kind": "test",
+      "status": "complete",
+      "priority": "high",
+      "section": "Behavioral robustness",
+      "dateAdded": "2026-06-17T00:00:00Z",
+      "evidence": [
+        "scripts/run-agent-behavior-soak.py severity tiers (release_gate / attribution_only / stress_only) + the release gate that only blocks on release_gate F's",
+        "proof the tier hid a real defect: geopolitical_sitrep (attribution_only) was a deterministic framework defect (answer-fidelity class), not variance",
+        "Rule 17 / feedback_diagnose_from_recorded_state: never attribute a failure to variance/external without recorded-state evidence — the tier does this by default",
+        "stability criterion (green on re-run / N-of-M) for genuinely stochastic scenarios replaces label-based exemption; externality must be evidenced (captured bytes), not assumed",
+        "operator directive 2026-06-17: 'why should I undervalue attribution_only … perhaps we should be gating on attribution' — see feedback_no_severity_tier_excuses"
+      ],
+      "targetReleaseId": "v1-3-0"
+    },
+    {
+      "id": "intelligent-parallel-compaction-engine",
+      "title": "Intelligent parallel compaction engine: sift chaff from wheat OFF the critical path, routing the wheat to long-term persistence AND runtime context reduction",
+      "summary": "ARCHITECTURE (operator vision 2026-06-17). Today's compaction is the wrong mechanism: the compact() ladder (internal/agent/context_extract.go) runs SYNCHRONOUSLY on the turn's critical path and decides signal-vs-noise with crude heuristic scoring (salient-sentence / topic-extract / skeleton, scoring digits as a bonus). It is structurally incapable of doing this well and proved it twice in the v1.2.0 audit cycle: it DROPPED a load-bearing count under budget pressure (the long_mixed / continuity confabulation class), and the audit's hard-keep fix then OVER-corrected — preserving whole tool messages verbatim at the skeleton stage bloated the context and evicted OTHER recall content (the continuity_benchmark_threshold_recall regression). Replace it with an INTELLIGENT, METHODICAL compaction engine that runs IN PARALLEL to the user/agent/model pipeline (async, off the critical path — like the existing post-turn ingest and memory consolidation), sifts the textual CHAFF (filler, redundant prose, social niceties, transport/tool noise) from the WHEAT (salient facts, decisions, entities, quantitative values, IDs, open questions, the user's actual obligations), and routes the wheat to TWO destinations from one extraction: (1) LONG-TERM PERSISTENCE — durable memory (knowledge_facts / semantic_memory / the agent knowledge graph; pairs with investigate-graph-rag-associative-memory-retrieval and consolidation_phases.go), and (2) RUNTIME OVERHEAD REDUCTION — a compact, fact-preserving context representation the live turn consumes, so the model sees wheat, not chaff. KEY PROPERTIES: 'intelligent' = a CHEAP model pass and/or structured extraction (not the scoring ladder) that GUARANTEES the load-bearing content survives — the IsLoadBearingToken / fact-preservation floor from the answer-fidelity audit is a HARD invariant the intelligent layer may never violate (it can drop chaff freely, never a fact). 'Parallel' = a background worker that produces a compacted ARTIFACT future turns reuse (amortized: compact once, reuse across turns) so compaction adds ZERO turn latency, its model-cost is amortized, and because it SHRINKS the live context it REDUCES per-turn token cost — it pays for itself (the cost lens, per-turn-retry-cost-ceiling). THE UNIFICATION: runtime context compaction and long-term memory consolidation are the SAME 'extract wheat from chaff' operation with different destinations — this engine is the single seam; it extends/absorbs consolidation_phases.go rather than duplicating it, and composes with (does not re-implement) the TOTOF reflection collapse. Motivated by the v1.2.0 compaction regression; the immediate v1.2.0 fix (hard-keep facts in the existing ladder without the bloat) is a STOPGAP — this is the real mechanism. MINIMUM-VIABLE FIRST INCREMENT (operator 2026-06-17): on EVERY turn, reduce the USER REQUEST and the MODEL RESPONSE to their most pertinent elements — proactive per-turn distillation, applied uniformly rather than only reactively under budget pressure, so the working context stays lean from the start and the crude under-pressure ladder rarely fires. Critical constraints on the minimum increment: the DURABLE record (session_messages, what the user actually saw) stays FULL — only the context representation carried into FUTURE turns is distilled; the user-request reduction must preserve the actual obligation AND any exact-literal requirement (reply-only-literal contracts, injection-resistance where the exact bytes matter) — never paraphrase away a literal the turn depends on; and the same fact-preservation floor applies to both (the model response's distilled form must keep the facts/decisions a later turn will recall — the continuity class). This increment alone delivers most of the runtime-overhead-reduction benefit and is the natural place to start. THIRD LAYER — the DREAM MECHANISM (operator 2026-06-17). 'Dream mechanism' is the project's name for the PERIODIC IDLE-TIME memory-hygiene job (the off-path ConsolidationPipeline, internal/agent/memory/consolidation_phases.go, which already runs hygiene phases like phaseWithinTierDedup). Its importance is chiefly for the PERSISTENCE layer: when the compacted content tokenizes into 'facts', we do NOT want to redundantly STORE a fact that is really a restatement/instance of an EXISTING LEARNING — that recurrence should REINFORCE the existing learning (strengthen its confidence/recency/weight, or merge), not pile up as a duplicate memory. This is associative REINFORCEMENT, richer than exact dedup: repeated exposure strengthens the memory (and supersession applies — a later fact obsoletes an earlier one, per the prefer-latest-value rule). The reduction is LOSSLESS IN RELEVANT CONTENT — it preserves every relevant fact/learning (the wheat) and may drop only redundant/irrelevant STORAGE; 'lossless' is scoped to relevance, not bytes. The two passes are a two-speed, biologically-faithful consolidation: a FAST per-turn distillation (lossy-but-fact-preserving — drops chaff) feeding the SLOW dream pass (lossless-in-relevant-content — reinforces existing learnings instead of re-storing, dedups, supersedes, never drops a relevant fact). This cleanly separates the two reduction kinds so the aggressive (lossy) one is fact-floored and the hygiene (relevance-lossless) one can be trusted to never lose a learning. It extends the dream/consolidation pipeline with a 'reinforce-don't-redundantly-store' phase over the compacted content rather than a new subsystem. Scope to settle at planning: the extraction model (cheap local vs the turn model), the artifact schema (facts/decisions/entities/open-issues), staleness handling (a turn arriving before compaction completes uses the last artifact, verbatim history otherwise — never a half-built compaction), how it composes with TOTOF + consolidation without duplicating, and the fact-preservation floor as a non-negotiable invariant validated by the compression fact-preservation tests.",
+      "kind": "architecture",
+      "status": "planned",
+      "priority": "high",
+      "section": "Knowledge graphs",
+      "dateAdded": "2026-06-17T00:00:00Z",
+      "evidence": [
+        "internal/agent/context_extract.go (the synchronous heuristic compact() ladder being replaced) + context_request.go selectHistory (budget-driven eviction)",
+        "v1.2.0 compaction regressions that motivate the redesign: dropped count (long_mixed/continuity confabulation) AND the over-correction bloat (continuity_benchmark_threshold_recall) — the ladder is the wrong tool",
+        "internal/agent/memory/consolidation_phases.go (existing OFF-PATH memory consolidation this engine extends/absorbs — the persistence destination already runs in parallel)",
+        "fact-preservation floor (IsLoadBearingToken + the compression fact-preservation test tables) is the HARD invariant the intelligent layer may not violate",
+        "pairs with investigate-graph-rag-associative-memory-retrieval (KG extraction from passages is the persistence side of the same operation) and TOTOF reflection (compose, do not duplicate)",
+        "cost lens (per-turn-retry-cost-ceiling): parallel + amortized + context-shrinking means it adds zero turn latency and pays for itself by reducing per-turn tokens",
+        "operator vision 2026-06-17: intelligent + methodical compaction running in parallel to the pipeline, extracting wheat from textual chaff for either long-term persistence or runtime overhead reduction",
+        "the DREAM MECHANISM = the project's name for the periodic idle-time memory-hygiene job (the off-path ConsolidationPipeline, internal/agent/memory/consolidation_phases.go, already runs phaseWithinTierDedup); its value is chiefly the PERSISTENCE layer — don't redundantly store a tokenized 'fact' that is really an instance of an existing learning; REINFORCE the existing learning (strengthen/merge) instead of duplicating it (associative reinforcement, richer than exact dedup; supersession per prefer-latest-value)",
+        "two-speed consolidation: fast per-turn distillation (lossy, fact-floored) feeds the slow dream pass (LOSSLESS IN RELEVANT CONTENT — preserves every learning, drops only redundant/irrelevant storage; 'lossless' scoped to relevance, not bytes) — separates the two reduction kinds so each has the right safety bar"
+      ],
+      "targetReleaseId": "v1-3-0"
+    },
+    {
+      "id": "shape-complete-introspection-summary",
+      "title": "Shape complete introspection summaries — the model should reliably cover all aspects of its subagent functionality, not a subset",
+      "summary": "Operator-aligned shaping item 2026-06-17 (don't excuse model variance — shape it, per feedback_no_severity_tier_excuses + the preemptive-shaping thesis). RCA (v1.2.0 release-gate soak, recorded state): introspection_discovery ('use your introspection tool to discover your current subagent functionality and summarize it') intermittently produced a summary covering only 1 of 3 expected aspects (check_introspection_summary: '1/3 evidence markers'), then passed 3/3 on re-run with fuller summaries. This is MODEL VARIANCE in summary completeness, NOT a framework defect (the model produced a substantive answer; nothing degraded it; verifier_retry_suppressed) — so it cleared the release gate via the stability criterion. But the standing thesis is to SHAPE the model to produce a complete summary at generation time rather than rely on it varying into completeness: the introspection-summary surface should structure the model toward covering each aspect the introspection tool returns (creation/management, status, roles, etc.) — e.g. a structured introspection result the model is shaped to enumerate, or a completeness hint in the summary instruction, so coverage is reliable rather than a coin-flip. attribution_only / low gating impact, but in scope because variance is a shaping opportunity, not an excuse. Scope: confirm the introspection tool returns all aspects (so it is a SUMMARY-completeness issue, not a tool-data issue), then shape the summary toward full coverage; validate the completeness across repeated runs.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "low",
+      "section": "Behavioral robustness",
+      "dateAdded": "2026-06-17T00:00:00Z",
+      "evidence": [
+        "RCA (recorded state): introspection_discovery produced 1/3 evidence markers once, 3/3 on re-run — model summary-completeness variance, not a framework defect (substantive answer, no swap, verifier_retry_suppressed)",
+        "the introspection tool surface + the summary instruction (shape toward enumerating each returned aspect rather than a subset)",
+        "preemptive-shaping thesis (feedback_preemptive_shaping_over_guards) + don't-excuse-variance (feedback_no_severity_tier_excuses): a variance failure is a shaping opportunity"
+      ]
+    },
+    {
+      "id": "release-soak-orchestration-harness",
+      "title": "Collective release-soak orchestration harness — one command runs, serializes, routes, gates, and scorecards the whole behavioral suite",
+      "summary": "Operator observation 2026-06-17: the 6 release soak runners (run-agent-behavior-soak.py, run-adversarial-soak.py, run-memory-grounding-soak.py, run-prompt-compression-soak.py, run-embedder-soak.sh, run-soak-fuzz.sh) can be run INDIVIDUALLY, which is great, but there is no COLLECTIVE harness to run them as one suite — so the full release gate is currently hand-choreographed by the release driver each cycle (this v1.2.0 ceremony is the live proof: all six were sequenced by hand, each with bespoke per-runner env, serialized on the shared :8080, and pass counts hand-aggregated into the precondition-10 scorecard). Build a single orchestrator (e.g. scripts/run-release-soak-suite.sh + a `just release-soak` recipe) that encodes, in CODE rather than as tribal knowledge in release-procedure.md, the whole suite: (1) RUN ORDER + SERIALIZATION — runners share the managed server port, so the harness sequences them (or parameterizes ports) and never runs two managed servers at once; (2) PER-RUNNER ROUTE POLICY — behavior-battery + adversarial + memory-grounding + prompt-compression on the cloud provider release route (SOAK_ALLOW_NONLOCAL_MODEL=1 + cloud-provider/cloud-provider-v4-pro), the embedder soak against the real bundled sidecar, weak-model-floor calibration on local-model-b, fuzz model-independent — currently documented prose, should be the harness's own table; (3) GATE-ON-RESOLUTION — the suite fails if ANY release_gate scenario fails and surfaces attribution_only/stress_only findings DISTINCTLY without auto-passing on the label (feedback_no_severity_tier_excuses); (4) ONE AGGREGATE SCORECARD — emit the single release scorecard the release notes / Release Truth / soak-suite-audit consume, so it is a build output, not hand-copied (feedback_quantitative_and_qualitative: keep machine pass counts and qualitative grades distinct); (5) PROVENANCE — stamp git commit + dirty state and refuse-or-loudly-flag a dirty tree for release evidence (the v1.2.0 ceremony had to re-run the battery on a clean commit precisely because the prior 38/38 ran git_dirty:True); (6) PRODUCTION SAFETY — never target :8080 / ~/.flowforge-dev, always a ~/.flowforge-dev clone/fresh (feedback_protect_production_instance); (7) COST AWARENESS — reuse CI/soak evidence on tree-identical commits and scope re-runs to what actually changed (per-turn-retry-cost-ceiling + feedback_release_notes_artifact_and_ci_reuse). Net: the release ceremony invokes one gated command instead of orchestrating six by hand, and the scorecard artifact is generated rather than transcribed.",
+      "kind": "feature",
+      "status": "complete",
+      "priority": "high",
+      "section": "Release engineering",
+      "dateAdded": "2026-06-17T00:00:00Z",
+      "evidence": [
+        "no collective orchestrator exists today: justfile has only `soak-fuzz` (fuzz runner alone) and `ci-test` (which chains soak-fuzz, not the behavioral suite); the 6 release runners are invoked one-by-one with bespoke env",
+        "the per-runner model-route policy (the cloud provider for 4, real embedder + local-model-b floor, model-independent fuzz) lives as prose in docs/testing/release-procedure.md - encode it in the harness so it cannot drift from the docs",
+        "precondition-10 scorecard is currently hand-copied from one runner's JSON into the release notes; the harness should aggregate all runners into one scorecard artifact",
+        "v1.2.0 ceremony evidence: the 38/38 battery first ran git_dirty:True and had to be re-run on a clean commit - provenance stamping + a dirty-tree guard would have caught it automatically",
+        "gate-on-resolution + tier distinctness (feedback_no_severity_tier_excuses); production-safety rails (feedback_protect_production_instance); cost reuse (feedback_release_notes_artifact_and_ci_reuse)"
+      ],
+      "targetReleaseId": "v1-3-0"
+    },
+    {
+      "id": "full-codebase-triple-lens-audit-v130",
+      "title": "Cycle-opening v1.3.0 triple-lens code audit (architectural mandates + clean-code + clean-architecture)",
+      "summary": "SHIPPED v1.3.0 cycle-opening triple-lens audit (architectural mandates + clean-architecture + clean-code), 3 parallel lens agents 2026-06-17. Findings in docs/plans/v1.3.0-audit-findings.md; remediation batch R promoted as the v130-audit-remediation workstream. Architecture broadly well-honored; 2 CRITICAL + architecture/clean-code findings captured.",
+      "kind": "architecture",
+      "status": "complete",
+      "priority": "high",
+      "section": "Code quality",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-17T00:00:00.000Z",
+      "evidence": [
+        "roadmap: full-codebase-triple-lens-audit (shipped v1.2.0, complete)"
+      ]
+    },
+    {
+      "id": "model-recommendations-by-usecase",
+      "title": "Per-use-case model recommendations (up to 3 local + 3 cloud) from benchmark quant/qual/latency",
+      "summary": "Turn benchmark output into a decision instead of leaving users to interpret raw scores: up to 3 LOCAL + 3 CLOUD recommendations per use-case — coding / general-purpose assistant / chat bot — via a deterministic ranking layer over already-recorded per-(model,intent_class) aggregates (AvgQuality quantitative + qualitative grade + AvgLatencyMs), with fixed documented use-case->intent weight maps. Rule 6: code answers, no model-in-the-loop for the ranking. ADDITIVE and routing-neutral — the dynamic router keeps using these numbers per-request; this is the static human-facing projection for users who want to LOCK to a model. Honest 'up to three' via a min-evidence threshold; fail-loud on thin data. Surfaces BOTH terminal (CLI/scorecard) and the E2 Models page. Precursor to verify at build: quantitative vs qualitative must be independent signals (grade currently derived from AvgQuality) before combining, else double-counting. Operator request 2026-06-17.",
+      "kind": "feature",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Benchmarking",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-17T00:00:00.000Z",
+      "evidence": [
+        "internal/db/exercise_repo.go (per-(model,intent) AvgQuality + AvgLatencyMs + Count)",
+        "internal/modelbench/grade.go (QualitativeGradeFromFraction)",
+        "cmd/models/models_scorecard.go (per-intent latency scorecard)",
+        "internal/llm/exercise_intent.go (intent taxonomy: Coding/Conversation/Execution/ToolUse/MemoryRecall/Delegation/Introspection)"
+      ]
+    },
+    {
+      "id": "knowledge-base-pack-full-refresh",
+      "title": "Full-scale product-knowledge pack refresh (all versions, source-backed, current)",
+      "summary": "Ground-up, no-stone-unturned refresh of the product-knowledge pack (docs/product-knowledge/manifest.json + source docs): all versions included, all surfaces covered, current to v1.3.0. RATIONALE (operator 2026-06-17): the pack has been treated as an AFTERTHOUGHT until now, so there are likely SIZEABLE coverage gaps — this is proven necessary. The refresh first AUDITS current coverage against the full product surface (all versions/features/surfaces) to surface those gaps, then fills them; it is NOT a light touch-up. Distinct from the standing per-release incremental checklist update (which never closes accumulated gaps). Preserves source_backed authority (source docs are the authority; do not store derivable content).",
+      "kind": "documentation",
+      "status": "planned",
+      "priority": "high",
+      "section": "Documentation",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-17T00:00:00.000Z",
+      "evidence": [
+        "docs/product-knowledge/manifest.json (schema_version 0.1.0, release v1.2.0, authority source_backed)"
+      ]
+    },
+    {
+      "id": "local-asr-nemotron",
+      "title": "Local ASR backend: NVIDIA Nemotron-3.5-ASR (whisper.cpp-alternative STT engine)",
+      "summary": "Backlog candidate (NOT v1.3.0 scope). A new STT engine behind the EXISTING voice.STTBackend seam (current default BackendWhisperCPP = whisper.cpp), hostable via the v1.2.0 sidecar substrate (proc.SupervisedProcess + SHA-pin) like the embedder / local LLM host — a new backend implementation, not a new capability. RELAYED VENDOR CLAIMS (UNVERIFIED, treat as claims not facts per Rule 17): 0.6B params, 40+ languages, real-time streaming, CPU-only/no-GPU, 2.5x faster than the official Nemo runtime with identical results, offline-capable. Verify at pickup: license/commercial-use terms, independent benchmark vs whisper.cpp (quant AND qual), model format + runtime fit, real CPU footprint, the platform/streaming integration path. Value: improves the existing voice transcribe/converse commands immediately AND is an enabler for realtime-av-ingestion + the open-source voice-phone-channel. Operator surfaced 2026-06-17.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Channels",
+      "dateAdded": "2026-06-17T00:00:00.000Z",
+      "evidence": [
+        "cmd/media/voice.go (voice.STTBackend, BackendWhisperCPP, TranscriptionRequest)",
+        "roadmap: realtime-av-ingestion, voice-phone-channel-voice-vendor (enabled by this)"
+      ]
+    },
+    {
+      "id": "operator-channel-authority-recognition",
+      "title": "Recognize the operator's own channel as operator/creator authority (not Peer)",
+      "summary": "BUG (operator-reported 2026-06-17, counter-to-intent, hobbles the agent): over Chat Connector the agent treats its chat with the operator as PEER-level, not operator/creator. RCA from recorded state (production flowforge.toml): [security] allowlist_authority='Peer', trusted_authority='Creator', trusted_sender_ids=[] (empty), and [channels.chat-connector] allowed_chat_ids=[] — so the operator's own sender is in NEITHER trust layer and the session falls to the default Peer authority (session.Authority -> policy engine gates authority-bound tools). TrustedSenderIDs grants Creator but is unset. Two layers: (a) config gap — the operator's sender id is not trusted; (b) DESIGN gap (the counter-to-intent part) — the system requires manual trusted_sender_ids wiring and has no automatic 'the operator's own configured channel is operator-level' recognition. Systemic fix: recognize the operator's configured channel/identity as operator(or creator)-level by design (ties to multi-user-rbac-operator-delegated-roles), not a manual footgun. Behavioral-correctness now-item (paramount).",
+      "kind": "bug-fix",
+      "status": "complete",
+      "priority": "high",
+      "section": "Security",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-17T00:00:00.000Z",
+      "evidence": [
+        "internal/agent/loop_dispatch.go (Authority: session.Authority gates tools)",
+        "src/core/security_claim.go (authority layers: allowlist vs trusted_sender_ids)",
+        "src/core/config_types.go (TrustedSenderIDs grants Creator authority)",
+        "internal/channel/chat-connector.go (inbound builds SenderID/ChatID, enforces allowlist, sets no authority)",
+        "roadmap: multi-user-rbac-operator-delegated-roles (design home for operator-role recognition)"
+      ]
+    },
+    {
+      "id": "agent-tool-use-consistency-rca",
+      "title": "Confirm + close out agent tool-use inconsistency (suspected downstream of operator authority)",
+      "summary": "Answer-fidelity/false-incapacity defect (operator 2026-06-17, RCA from prod turn_diagnostic_events: 881 tool_call_blocked, all reason_code=tool_not_selected; the per-turn embedding-pruned surface excludes tools the model legitimately calls, e.g. list_directory). PARTIALLY RECONCILED by false-capability-denial-guard-suppression (commit 12b46f54): the WORST manifestation (starvation -> false permanent refusal) is fixed via the design's Expanded() widening valve on the capability-falsehood retry path + grounding denials vs the FULL surface. REMAINING (general case): a plain tool_not_selected block of a REAL registered tool (no capability-falsehood guard firing) is still hard-blocked by blockToolNotOnSurface (internal/agent/loop_act_guards.go). DESIGN-ALIGNED FIX (per the false-denial reconciliation): when the model deliberately calls a REAL registered tool (l.tools.Get!=nil) off a light+expandable envelope, signal the Expanded() widening retry rather than a bare hard block -- reusing the widenEnvelopeForCapabilityRetryFunc machinery, scoped to real-tool + light+expandable (not every spurious call). Cross-layer wiring (agent loop block -> pipeline widening retry) is the remaining work. Soak-gated (hot-path).",
+      "kind": "bug-fix",
+      "status": "in-progress",
+      "priority": "high",
+      "section": "Behavioral correctness",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-17T00:00:00.000Z",
+      "evidence": [
+        "internal/agent/policy/engine.go (Authority core.AuthorityLevel gates tools)",
+        "state.db turn_diagnostic_events (authority-denial records to pull)",
+        "roadmap: operator-channel-authority-recognition (suspected root cause)"
+      ]
+    },
+    {
+      "id": "aligned-letter-grade-rendering",
+      "title": "Letter grades: dedicated +/- channel that never shifts letter alignment",
+      "summary": "BUG/polish (operator-reported 2026-06-17): letter grades misalign because the modifier is part of the same field. The platform progress/soak renderer (cmd/models/models_comparison.go formatQualitativeGrade) RIGHT-aligns with %*s, so 'A' -> ' A' (letter col1) while 'C-' stays 'C-' (letter col0) -> letters do not line up; the Python behavioral soak (scripts/run-agent-behavior-soak.py grade render) has the same issue (the screenshot). FIX: a CENTRALIZED grade formatter (modelbench.SplitGrade/FormatGradeAligned) rendering the LETTER in a fixed column and the +/- (future +) in a dedicated adjacent channel one cell over, so letters always line up. Apply to ALL letter-grade displays: models_comparison, models_progress, models_report, media_helpers, and the Python soak. Keep the red->green grade coloring. Ties to CLI design-language consistency.",
+      "kind": "bug-fix",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Design",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-17T00:00:00.000Z",
+      "evidence": [
+        "cmd/models/models_comparison.go:217 (formatQualitativeGrade right-aligns -> letter shift)",
+        "internal/modelbench/grade.go (grade vocabulary A/A-/B/B-/C/C-/D/D-/F)",
+        "scripts/run-agent-behavior-soak.py:4354 (python soak grade render — screenshot source)"
+      ]
+    },
+    {
+      "id": "operator-authority-terminology",
+      "title": "Use 'Operator' ubiquitously for the top human authority (rename from 'Creator')",
+      "summary": "TERMINOLOGY (operator-directed 2026-06-17): 'Creator' is too biblical AND potentially inaccurate (the person who CREATES the agent may not be its OPERATOR). Use 'Operator' ubiquitously for the top human authority level. NUANCE (must trace before executing — NOT a blind find/replace): the config-grant vocabulary already lists BOTH 'Operator' AND 'Creator' as distinct strings (configstate/schema.ts allowlist/trusted/api_authority {None,Peer,Operator,Creator}), while the RUNTIME enum is External<Peer<SelfGenerated<Creator (no 'Operator', and a 'SelfGenerated' that config does not name). threat_caution_ceiling has its OWN Creator-topped vocabulary. So this is a terminology-model reconciliation: trace the full config<->enum authority mapping, rename AuthorityCreator->AuthorityOperator (enum + String 'creator'->'operator'), config defaults (trusted/api_authority 'Creator'->'Operator'), schema enums, docs/prompts/UI, with BACKWARD-COMPAT for existing flowforge.toml carrying 'Creator' (accept as alias -> Operator; migration). Reconciles the WS-AUTHORITY operator-identity work (currently grants AuthorityCreator).",
+      "kind": "chore",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Security",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-17T00:00:00.000Z",
+      "evidence": [
+        "src/core/types.go (AuthorityCreator enum + String 'creator')",
+        "src/configstate/schema.ts:54-56 (config strings already include Operator AND Creator)",
+        "src/core/config_defaults.go:204-205 (TrustedAuthority/APIAuthority 'Creator')",
+        "src/core/security_claim.go (8 files reference AuthorityCreator)"
+      ]
+    },
+    {
+      "id": "audit-rem-keystore-machine-id",
+      "title": "Keystore machine-ID: fail loud on RNG error + propagate write errors (C2, security)",
+      "summary": "AUDIT C2 (security now-item, decision-free): src/core/keystore.go createMachineID returns an all-zero machine ID on RNG failure (predictable keystore passphrase) and silently drops MkdirAll/WriteFile errors (a dropped write loses all stored secrets next run). Fail loud on RNG error; propagate write errors.",
+      "kind": "bug-fix",
+      "status": "complete",
+      "priority": "high",
+      "section": "Security",
+      "targetReleaseId": "v1-3-0",
+      "evidence": [
+        "src/core/keystore.go:170,174,176"
+      ]
+    },
+    {
+      "id": "audit-rem-wasm-fabrication",
+      "title": "WASM Execute fabricates success / subsystem unwired (C1) — wire or remove",
+      "summary": "AUDIT C1 (fail-loud/no-fabrication; DECISION NEEDED): internal/agent/wasm.go Execute discards the instantiated module and returns hardcoded 'WASM execution completed'; NewWasmRuntime has zero production callers (dead). Decide: wire to invoke the export, or remove the subsystem (explicit not-implemented interim). Also M2 dropped marshal err, L3 page-size literal.",
+      "kind": "bug-fix",
+      "status": "complete",
+      "priority": "high",
+      "section": "Security",
+      "targetReleaseId": "v1-3-0",
+      "evidence": [
+        "internal/agent/wasm.go:180-185,157,147"
+      ]
+    },
+    {
+      "id": "audit-rem-offpipeline-grounding-judge",
+      "title": "Document/marker the grounding-judge off-pipeline inference caller (A1)",
+      "summary": "AUDIT A1 (mandate): pipeline/validation_judge.ts:134 is a default-on, behavior-affecting direct llm.Complete NOT in the off-pipeline exemption registry and lacking the APPROVED OFF-PIPELINE LLM CALLER marker. Add to ARCHITECTURE.md + ARCHITECTURE_RULES.md registry + marker (defensible forgive-only adjudicator), or reconsider. Same class: re-verify turnstate's off-pipeline caller (CA1).",
+      "kind": "architecture",
+      "status": "planned",
+      "priority": "high",
+      "section": "Architecture",
+      "targetReleaseId": "v1-3-0",
+      "evidence": [
+        "src/engine/validation_judge.ts:134",
+        "ARCHITECTURE.md off-pipeline registry"
+      ]
+    },
+    {
+      "id": "audit-rem-cleancode-batch",
+      "title": "Audit clean-code remediation batch (silent errors, dup, magic literals, voice)",
+      "summary": "AUDIT decision-free clean-code batch (fix-all-findings): H2 daemon_handlers.go:167 silent SendReply error; H3 baseline-lookup Index-vs-LastIndex latent bug (exercise_baselines.go); H4-H8 duplication (inbound pollers, heartbeat loop, config/personality loaders, metascore argmax) + per-provider timeout literals (client.go:130/136/138); Finding-2 failure_presenter.go:114,123 first-person 'I'->platform 'we'; M1/M3 swallowed errors; M4-M10 dup + magic literals; L1-L5. Full list in docs/plans/v1.3.0-audit-findings.md.",
+      "kind": "chore",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Development",
+      "targetReleaseId": "v1-3-0",
+      "evidence": [
+        "docs/plans/v1.3.0-audit-findings.md"
+      ]
+    },
+    {
+      "id": "audit-rem-architecture-moves",
+      "title": "Audit architecture remediation (layer/boundary moves + dead-planner decision)",
+      "summary": "AUDIT architecture findings (operator: ALL this cycle). DONE: H1 dead-planner removed; CA3 modelstate split; A1 grounding-judge off-pipeline marker + registry + fitness test. REMAINING: CA1 turnstate orchestration->pipeline; CA2 CLI->db decoupling (11 cmd pkgs); CA4 *state presentation relocation; CA5 api/daemon god-package containment; decouple-core-from-nethttp (separate item). All large refactors.",
+      "kind": "architecture",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Architecture",
+      "targetReleaseId": "v1-3-0",
+      "evidence": [
+        "docs/plans/v1.3.0-audit-findings.md"
+      ]
+    },
+    {
+      "id": "capture-operational-logs-not-terminal",
+      "title": "Capture operational logs instead of barfing them onto the user terminal",
+      "summary": "Handled/operational logs corrupt the user terminal + progress UIs. PARTIAL DONE: downgraded the NoEscalate measured-provider-failure ERROR->Debug (service_complete.go) -- it's returned to the caller, was spamming stderr/progress. REMAINING: route operational/runtime logs to a file/sink so the terminal shows only intentional output (logging.go writes to os.Stderr ConsoleWriter); audit other handled-error ERROR/console sites.",
+      "kind": "bug-fix",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Observability",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-17T00:00:00.000Z",
+      "evidence": [
+        "internal/llm/service_complete.go:275",
+        "src/core/logging.go:42-48"
+      ]
+    },
+    {
+      "id": "decouple-core-from-nethttp",
+      "title": "Decouple src/core from net/http so db stops transitively importing it (CA3 follow-up)",
+      "summary": "AUDIT CA3 follow-up (surfaced 2026-06-17): after the modelstate split, internal/db still pulls net/http (cone=8) via src/core -- core/httpdoer.go (HTTPDoer iface), core/oauth.go (OAuth callback server + token exchange), core/theme_assets.go (http.Get textures). Hoist those into a non-core package db does not transitively need, closing db net/http cone -> 0. Part of the all-CA-this-cycle scope.",
+      "kind": "architecture",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Architecture",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-17T00:00:00.000Z",
+      "evidence": [
+        "src/core/httpdoer.go",
+        "src/core/oauth.go",
+        "src/core/theme_assets.go",
+        "go list -deps ./internal/db | grep net/http"
+      ]
+    },
+    {
+      "id": "false-capability-denial-guard-suppression",
+      "title": "False capability-denial ships: HARD guard's corrective retry suppressed + turn-policy widening valve never fires",
+      "summary": "BEHAVIORAL-CORRECTNESS (answer-fidelity / false-incapacity class; operator-reported 2026-06-18, code-confirmed RCA). SYMPTOM: on Chat Connector, 'clean up the workspace' got a FALSE refusal with a fabricated permanence/authority narrative ('blocked by tool surface restrictions ... only four tools ... peer trust ... authority policy stops me ... log into the operator console'); the very next turn exposed a 15-tool surface and the agent self-corrected ('I was wrong'). RECORDED STATE (state.db session 8faa17de, denial turn 97f03864, 2026-06-18 05:07): denial turn request_tools=4/degraded, next turn request_tools=15/ok — the 'four tools' count was literally true FOR THAT TURN; the PERMANENCE + AUTHORITY framing was fabricated. Events: seq7 tool_call_finished success (successful_tools=1); seq8 tool_call_blocked reason_code=tool_not_selected tool=list-open-tasks; seq15 guard_contract_evaluated internal_jargon severity=hard violation='semantic NARRATED_DELEGATION margin exceeded' recovery=retry; seq16 guard_retry_suppressed (reason: 'turn already made substantive execution progress and the guard finding is narrative-only', successful_tools=1); seq17 response_finalized (false denial shipped). CAUSAL CHAIN (3 defects, A+C chained): DEFECT C (upstream trigger, turn_policy.go:130 DeriveTurnEnvelopePolicyClassified) routed the short casually-phrased request to the LightweightToolSurface branch (turn_policy.go:186-196: simple/conversational/words<=24) -> 4-tool surface -> list-open-tasks blocked out-of-surface (the genuine 'first pass insufficient' trigger). The design's built-in recovery is Expanded() (turn_policy.go:212-223, AllowRetryExpansion=true) — widen the light envelope once proven insufficient. DEFECT A (PRIMARY, the ship decision; post_success_retry_policy.go + guard_retry.go + guards_truthfulness_execution.go) SUPPRESSED that corrective HARD-guard retry because successful_tools=1 and the finding was classed 'narrative-only' — conflating 'a tool ran' with 'final answer acceptable', and 'narrating internal mechanics' (style) with the narration BEING a false capability/authority verdict (correctness). So C under-provisions, the valve would fix it, A jams the valve shut -> starved surface persists -> false permanent refusal. DEFECT B (detection gap; guards_truthfulness_capability.go:22-68) the dedicated capability-denial guard matches a hardcoded lexical phrase allowlist ('i cannot execute' etc.) that the novel phrasing matched NONE of; the semantic NARRATED_DELEGATION signal DID fire and should drive capability grounding instead of the brittle list. ACCEPTANCE: (1) RED-first repro test: turn with successful_tools>=1 + HARD NARRATED_DELEGATION/capability-denial contract firing + final content denying a capability the FULL surface supports -> currently ships denial; after fix must RETRY+widen not suppress. (2) A: suppression-after-progress gated on violation CLASS — HARD contracts that are capability/authority/delegation falsehoods are NEVER suppressed by execution-progress. (3) B: capability/authority denials grounded against the ACTUAL+FULL tool surface + current trust/authority scope before finalize, driven by the semantic signal not the lexical list; a denial contradicted by the real surface is rejected/retried; a per-turn lightweight surface must NEVER be reported as a PERMANENT capability boundary (ties operator-authority-recognition/A1). (4) C: a tool_not_selected block on a tool the task needs triggers Expanded()/escalation not a narrated refusal; and/or task-vs-conversational synthesis must not down-classify a substantive multi-step request purely for being short. (5) Rule-14: record WHY retried-vs-suppressed (contract class + grounding verdict + whether envelope widened). OUT OF SCOPE (do not regress): the milder sibling — agent does real verified cleanup then says 'I paused for your call before deleting AMBIGUOUS files' — is ACCEPTABLE (verified-true self-report); the fix targets FALSE capability verdicts contradicted by the real surface, NOT honest narrated pauses. SOAK-GATED: hot-path guard/turn-policy behavioral change; land with soak validation (the gate-on-resolution discipline), sequences with the behavioral-correctness cluster (#2 tool-surface, answer-fidelity inverse-soak).",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "high",
+      "section": "Behavioral correctness",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "src/engine/post_success_retry_policy.go (Defect A suppression decision)",
+        "src/engine/guard_retry.go",
+        "src/engine/guards_truthfulness_execution.go ('guard retry suppressed after substantive execution progress')",
+        "src/engine/guards_truthfulness_capability.go:22-68 (Defect B lexical capabilityDenialPatterns)",
+        "src/engine/turn_policy.go:130,186-196,212-223 (Defect C classifier + Expanded() valve)",
+        "state.db session 8faa17de turn 97f03864 turn_diagnostic_events (2026-06-18 05:07)"
+      ]
+    },
+    {
+      "id": "self-healing-framework-native-charter",
+      "title": "SelfHealing = framework-native deterministic maintenance subsystem (NOT subagent delegation)",
+      "summary": "ARCHITECTURE (operator 2026-06-18, SUPERSEDES the 'self-healing orchestrates via subagent delegation' framing). THESIS: fundamental maintenance must be framework-native deterministic the platform, not LLM-driven/authority-gated/refusable delegation. Model: internal/db/hygiene.go RunHygiene on the maintenance heartbeat — generalize to every domain. WHY NOT DELEGATION (explicit non-goal): authority-gated (blocked at peer trust — the false-incapacity authority over-generalization), non-deterministic (can refuse/confabulate/stall), costly (inference on rule-based work), demonstrably failed (agent spawned 125 dead 'workspace-cleanup' pending tasks trying to delegate ONE cleanup it couldn't authorize). The self-healing NEVER routes fundamental upkeep through delegation. ARCH: one subsystem, deterministic per-domain repairers (pure the platform, idempotent, typed sub-report) aggregated into one MaintenanceReport (extends HygieneReport); runs on the maintenance loop AND on-demand (full/single-domain) + report/dry-run mode; runs with SYSTEM authority BY CONSTRUCTION (framework code, not a user-channel action) — DECOUPLES the self-healing from the subagent-spawn-authority defect (that fix is still needed for user-facing delegation but is NO LONGER a prerequisite for maintenance). JUDGMENT ESCALATION (bounded/rare): most maintenance is rule-based + needs no LLM; ONLY genuinely-ambiguous cases (is this file a user's working file or detritus?) may make a NARROW grounding-judge-style call that PROPOSES/quarantines only, never auto-destructive, never a subagent. SAFETY: risk-tiered defaults (low-risk DB/index may auto-apply; WORKSPACE/CONFIG/PLUGINS/SKILLS/SECURITY default report-only/propose until enabled); destructive=quarantine-first/reversible (extend mechanic_quarantine; files move-to-quarantine; DB backup-then-mutate + integrity check; single-writer/quiesced — state.db corrupted once under contention); Rule-14 what/why/reversal; report distinguishes auto-applied vs proposed. ACCEPTANCE: single framework entry point runs all enabled deterministic domain repairers -> one MaintenanceReport (DB+workspace+config+plugins+skills+security), NO dependency on subagent spawning or LLM for rule-based passes; each repairer RED-first + typed counters + quarantine/reversal + report-only default for sensitive domains; any LLM judgment is bounded/propose-only/off the rule-decidable critical path.",
+      "kind": "architecture",
+      "status": "planned",
+      "priority": "high",
+      "section": "Architecture",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "internal/db/hygiene.go (RunHygiene proof model)",
+        "internal/daemon/daemon_heartbeats.go",
+        "supersedes: agent-self-repair-tool delegation framing (v1.2.0)"
+      ]
+    },
+    {
+      "id": "self-healing-db-hygiene-coverage-gaps",
+      "title": "SelfHealing DB hygiene: 5 coverage gaps + 3 recurring sources (registry, recovery tables, pg residue, misclassified financial, garbage knowledge_facts)",
+      "summary": "DATABASE domain (the proof model; absorbs the prior coverage-gap statement). 5 gaps RunHygiene misses (origin: test/coding-exercise sessions run against prod + migration from prior Postgres 'mentat'). SEQUENCING 5->1->2,3,4. GAP 5 (DO FIRST, trust anchor): reconcileSchemaRegistry — ~21 real tables absent from the hippocampus registry (agency_decisions, turn_diagnostics*, wallet_balances, metered_billing_payments, mechanic_quarantine, lost_and_found...); cached row_count wrong (episodic_memory says 2533 vs actual 10218); register every store_snapshot table missing (mark system-owned), refresh all counts, flag neither-system-nor-agent-owned tables for gap-1. GAP 1: repairRecoveryArtifactTables — lost_and_found/_0/_1 (~4.5MB/8400 rows) match the `store_snapshot3 .recover` signature (rootpgno,pgno,nfield,id,c0..c25) from the Apr/May 2026 corruption recovery; EXPORT-to-quarantine-artifact then DROP; DDL = NEW risk class -> gate behind SIGNATURE match (not 'unregistered'), export-first, dry-run/report mode; NEVER drop legit-unregistered tables (gap-5 registers those first). GAP 2: purgeForeignIdentityResidue — 26 dead 'pg:*' identity keys from the prior Postgres (16 'pg:schema:*' describing tables that DON'T EXIST: memories, audit_findings, exploit_patterns...; one says 'check this first on session start'; a 'Test User'; stale 'pg:kv:financial_status'); HIGH/answer-fidelity (instructs the agent it has tables/data it doesn't — active hallucination source, same family as basalt-orchid); quarantine-then-delete, confirm no live reader of 'pg:*'. GAP 3: repairMisclassifiedFinancialMemories — 45 ACTIVE episodic rows classification='financial_event' with non-financial content (coding answers, capability blurbs, guard-rejection notes); detect missing financial markers, quarantine/re-tag (don't silently delete); SOURCE FIX REQUIRED: fix the memory classifier that mislabels financial_event (not just mop-up). GAP 4: repairLowQualityKnowledgeFacts — all 38 knowledge_facts are fragment triples (truncated subjects, relation almost always 'uses', chunked objects, default 0.75 confidence) from coding-exercise extraction; detect/quarantine fragment/default/dangling-source triples; SOURCE FIX REQUIRED: tighten the knowledge-fact extractor (require entity-shaped subjects / raise confidence bar). Plus 3 RECURRING SOURCES: entity-extraction validation, session-deletion referential integrity, task idempotency/lifecycle. CROSS-CUTTING: quarantine-first (extend normalizeSelfHealingQuarantineTable allowlist for new targets), typed HygieneReport counters, RED-first test per pass (seed real artifact shape, assert it removes ONLY it), idempotent + bounded + SHORT write tx (contended; corrupted once under long writes), dry-run for the DDL pass. GUARDRAIL (2026-06-18 lesson): match artifact SIGNATURES not NAMES — the basalt-orchid cleanup over-matched the persona name 'Duncan' (an operator persona) and had to be narrowed to the fixture PAYLOAD; never touch operator/agent persona memory, real unregistered tables (register never drop), or old-but-valid memory. Rule-14: each pass records what/why to hygiene_log.",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "high",
+      "section": "Observability",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "internal/db/hygiene.go:44,62",
+        "internal/db/hygiene_test.go (pass-test style)",
+        "internal/db/mechanic_quarantine.go (QuarantineRows, normalizeSelfHealingQuarantineTable)",
+        "prod state.db 2026-06-18 audit: lost_and_found*, pg:* identity keys, 45 misclassified financial_event, 38 fragment knowledge_facts"
+      ]
+    },
+    {
+      "id": "self-healing-workspace-repairer",
+      "title": "SelfHealing WORKSPACE repairer (new deterministic the platform, NOT subagent dispatch)",
+      "summary": "WORKSPACE domain (NEW framework code modeled on RunHygiene; verified no existing cron/script handles it — cron_jobs empty, no workspace-hygiene.py, maintenance path is DB-only). The agent spawned 125 dead 'workspace-cleanup' delegated tasks trying to do this — the self-healing does it deterministically instead. Detect + MOVE-TO-QUARANTINE (not delete) stray scratch files, build artifacts, abandoned test fixtures, orphaned vault notes. Default report-only/propose until an action class is enabled; ambiguous file (user working file vs detritus) may use a NARROW propose-only grounding-judge call, never auto-destructive. RED-first on a seeded fixture; typed sub-report; reversible.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "high",
+      "section": "Observability",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "operator: 125 dead workspace-cleanup pending tasks",
+        "internal/db/hygiene.go (model)"
+      ]
+    },
+    {
+      "id": "self-healing-config-repairer",
+      "title": "SelfHealing CONFIGURATION repairer (drift + foreign residue + dead refs)",
+      "summary": "CONFIGURATION domain: detect/repair config drift vs the Config struct, foreign/stale identity residue (the pg:* 'mentat' keys — overlaps DB gap-2), dead references (paths/providers/models). Reuse existing config validation. Report-only/propose default. Quarantine/reversible. RED-first + typed sub-report.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Observability",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "src/core config validation",
+        "DB gap-2 pg:* residue overlap"
+      ]
+    },
+    {
+      "id": "self-healing-plugins-skills-repairer",
+      "title": "SelfHealing PLUGINS + SKILLS repairers (validate, retire stale, reconcile registry)",
+      "summary": "PLUGINS: validate installed plugins (manifest/permissions/dead), reconcile registry vs installed (reuse existing plugin validators). SKILLS: validate skills (loadable/well-formed/non-conflicting), retire dead/stale learned skills (enforce config learning.stale_procedural_days / dead_skill thresholds), reconcile catalog vs installed (reuse existing skill validators). Report-only/propose default; reversible; RED-first + typed sub-reports.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Observability",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "existing plugin + skill validators"
+      ]
+    },
+    {
+      "id": "self-healing-security-repairer",
+      "title": "SelfHealing SECURITY repairer (report-and-propose only)",
+      "summary": "SECURITY domain: surface posture issues for repair/approval — allowlist/authority inconsistencies, protected-path drift, keystore/secret health, sandbox config. REPORT-AND-PROPOSE ONLY; never silently mutate security. RED-first + typed sub-report; the unified report flags these as proposed (needs approval).",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Security",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "internal/security; keystore; sandbox config"
+      ]
+    },
+    {
+      "id": "chat-connector-second-connector-table-codeblock",
+      "title": "Chat Connector/Second Connector formatter wraps Markdown tables in a monospace code block",
+      "summary": "SHIPPED 2026-06-18. Chat Connector MarkdownV2 has no table support, so a GFM table's | and - were escaped into an unreadable inline run (\\| Name \\| Score \\|); Second Connector renders proportional so columns misaligned. Both formatters now detect a table block (pipe row + separator row + following pipe rows) and emit it verbatim inside a ``` monospace code block (shared isTableSeparator/tableBlockEnd in internal/channel/formatter_tables.go). RED-first tests + negative inline-pipe guard.",
+      "kind": "bug-fix",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Behavioral correctness",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "internal/channel/formatter_chat_connector.go",
+        "internal/channel/formatter.go (Second Connector)",
+        "internal/channel/formatter_tables.go"
+      ]
+    },
+    {
+      "id": "flowforge-monolith-session-history-bleed",
+      "title": "Stale user line resurfaces from a monolithic multi-topic session (history/recall bleed) + assembled-prompt capture gap",
+      "summary": "BEHAVIORAL-CORRECTNESS / answer-fidelity (operator-reported 2026-06-18, partially proven from ~/.flowforge-dev read-only). SYMPTOM: a stale USER line (Dubai/EOR three-way-contract) resurfaces 'out of nowhere' in an unrelated later turn, making it look agent-injected. PROVEN: the line is a single genuine user message (session_messages 2f5b9e7c, 06:43, session 8faa17de) in a MONOLITHIC session (709 msgs, 2026-04-12..06-18, mixes real personal content with basalt-orchid test-contamination under topic-N tags). Memory-RECALL of the verbatim line is EXONERATED (absent from embeddings/working_memory/context_snapshots.retrieved_memories_json) BUT the Dubai/EOR TOPIC is an active embedded recallable memory (semantic_memory a5198a9e conf=0.8 + ~52 msg/8 episodic/3 semantic vectors) so topical recall bleed is mechanically supported. LEADING HYPOTHESIS (not byte-proven): raw conversation-HISTORY replay from the monolith pulls a stale topic segment into an unrelated turn. BLOCKER (Rule-14 gap, FIX FIRST): the assembled prompt actually sent to the model is NOT persisted anywhere (turn_diagnostics.request_messages is an int COUNT; pipeline_traces.stages_json is the best available capture). NEXT STEPS: (1) populate a bounded, contention-aware capture of the assembled messages so RED repro is possible; (2) live-repro an unrelated-topic turn in session 8faa17de and confirm vector = raw history selection vs semantic recall vs a role-attribution bug; (3) systemic fix = history-window/topic-segment scoping + session hygiene that ages-out/segments such monoliths for ALL instances (ties the self-healing DB/session-hygiene work). CONSTRAINTS: diagnose from recorded state not plausibility (Rule 17); no prod hand-edits; live repro needs the running daemon (operator host).",
+      "kind": "bug-fix",
+      "status": "in-progress",
+      "priority": "high",
+      "section": "Behavioral correctness",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "~/.flowforge-dev session 8faa17de (read-only): session_messages 2f5b9e7c; semantic_memory a5198a9e",
+        "src/engine/pipeline_stages_inference_helpers.go:58 (request_messages = count, not bytes)",
+        "src/engine/turn_diagnostics.go:25 (RequestMessages int)",
+        "relates: self-healing-db-hygiene session/topic scoping"
+      ]
+    },
+    {
+      "id": "instruction-skill-body-returned-as-response",
+      "title": "Instruction skills return raw body AS the response (skill-first), bypassing the model — answer-fidelity defect",
+      "summary": "BEHAVIORAL-CORRECTNESS / answer-fidelity (operator-reported 2026-06-18; PROVEN from code + instance, read-only). SYMPTOM: in the operator's Chat Connector conversation, a ghola CLI usage block ('Use ghola as the default CLI for URL/HTTP requests...') is emitted as the assistant reply on nearly every turn, replacing the real answer (e.g. asked to 'fetch up to date headlines on Iran', it dumped the ghola how-to instead of fetching). ROOT CAUSE (proven): skillAdapter.TryMatch (internal/daemon/daemon_adapters_execution.go:217-224) returns an Instruction skill's raw markdown Body DIRECTLY as the Outcome.Content (the assistant response), and trySkillFirst (src/engine/pipeline_stages_synthesis.go:72) runs this BEFORE inference for Operator-authority turns. So any trigger-keyword match short-circuits the model and emits the canned skill text. The installed skill ~/.flowforge-dev (enabled=1) has absurdly broad trigger keywords [ghola, url, REST, http, api, download, fetch, request, endpoint] — all common words — so it fires constantly. This DIRECTLY violates the design north-star (the framework must PRESERVE the model's cognition, never replace a correct answer with canned text) and feedback_canned_responses_panic_only. CORRECTION: an earlier session WRONGLY attributed this to a Provider B model Code environment injection by mistaking the operator's pasted EVIDENCE in Provider B model Code transcripts for a live injection; it is a FlowForge defect. FIX DIRECTION (proposed): Instruction skills must STEER the model (inject the body as guidance into the model's context) rather than be returned verbatim as the response; never short-circuit inference with a skill body. Separately, keyword activation is substring-loose and should require relevance, not bare common-word matches. RULE 17: proven from the actual source + the enabled skill file, not plausibility.",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "high",
+      "section": "Behavioral correctness",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "internal/daemon/daemon_adapters_execution.go:217-224 (Instruction skill Body returned as Outcome.Content)",
+        "src/engine/pipeline_stages_synthesis.go:72 (trySkillFirst before inference, Operator authority)",
+        "internal/agent/skills/loader.go:253 (Match by trigger keywords)",
+        "~/.flowforge-dev (enabled=1; keywords incl. fetch/url/http/api/request/download/endpoint)"
+      ]
+    },
+    {
+      "id": "integration-test-buttons-noop",
+      "title": "Integration TEST buttons do nothing — a real test should send a verifiable test message",
+      "summary": "UX/correctness (operator-reported 2026-06-18). The TEST buttons for integrations in the UI 'don't appear to do anything'. A real test must actually exercise the integration path: send a test message over the configured channel that the user is asked to respond to (round-trip proof the integration is usable), not a no-op or a shallow config check. Scope: locate the integration TEST button handlers (settings/integrations UI -> API -> channel adapter), make each send a genuine round-trip test through the real adapter and surface success/failure honestly (Rule 13/no-silent-failures).",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Behavioral correctness",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "operator 2026-06-18: integration TEST buttons are no-ops"
+      ]
+    },
+    {
+      "id": "proactive-episodic-recall",
+      "title": "Proactive episodic recall — memory surfaces relevant past events unprompted (life-lieutenant shoulder-tap)",
+      "summary": "APPROVED for v1.3.0 (operator 2026-06-18; relayed from agent persona Duncan). Today recall is REACTIVE (memory_recall on query). Ask: surface relevant past events on the agent's own initiative (e.g. 'you schedule international calls during your dinner window'; 'a contact you haven't messaged in 8 months has a birthday next week'). Fits the life-lieutenant vision + memory-as-a-brain north-star; the introspection is grounded (the layered memory episodic/semantic/working/knowledge_facts/hippocampus exists; recall is reactive-only). ARCHITECTURAL TENSION (surfaced by the dev session, must gate): proactive recall IS unsolicited injection of content into turns — the exact surface behind the two answer-fidelity defects just fixed (Symptom A monolith history-bleed; Symptom B instruction-skill body injected every turn) and the agency-churn history (125 dead delegated tasks, 23k audit rows, runaway loops from one junk question). Building proactive injection on a path just proven leaky, in a cost-sensitive runtime, is the risk. DEPENDENCY-GATED ON: (1) injection-surface defects RESOLVED + soak-proven (Symptom A scoping/session-hygiene; instruction-skill steer+semantic validated); (2) a hard RELEVANCE + TIMING gate (reuse the semantic-relevance + grounding-judge discipline — only high-signal, time-pertinent items, never noise); (3) an ANSWER-FIDELITY guard: surface as a DISCRETE shoulder-tap, never derail/replace the model's response to the user's actual turn; (4) COST bounds (runs work every turn; operator cost-sensitive); (5) frequency/dedup so it does not nag (agency-churn lesson). Evaluated on merits + safeguards, not on the 'demo of initiative' framing; grant/sequence is the operator's product call.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Behavioral robustness",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "relayed from FlowForge agent persona 'Duncan' (operator 2026-06-18)",
+        "gated on: flowforge-monolith-session-history-bleed + instruction-skill-body-returned-as-response (injection-surface resolution)",
+        "agency-churn history: internal/db/hygiene_agency.go repairAgencyChurnArtifacts",
+        "reactive recall today: memory_recall tool path",
+        "IDLE-TIME CLOSURE pitch (Duncan via operator 2026-06-18): extend to a cron/idle-time wake-up that reviews memory and surfaces unclosed loops + Obsidian vault cross-referencing (/home/user/artifact Vault). GROUNDED CORRECTION (read-only prod state.db): working_memory=4763 rows (NOT the claimed 289); 2829 are unresolved_question = the AGENCY-CHURN accretion class (the 23k-audit-row runaway repairAgencyChurnArtifacts prunes), so row-count != actionable loose-ends. episodic=10334 but carries 391 financial_event (partly misclassified) + basalt-orchid test contamination. SAFETY SPLIT (the key design contract): the VALUABLE+SAFE core = a FILTERED, ranked list of high-signal unclosed loops surfaced as a PROPOSE-only read-only deliverable for the operator; the RISKY part = idle-time AUTONOMOUS closure (cron wake->review->ACT), which re-arms the exact agency-churn mechanism and must be gated hardest. Vault WRITE/auto-edit of personal notes is propose-only too. Depends on the hygiene/relevance filtering (prune the churn pile) + the injection-surface fixes landing first, else any scan returns the flood not a clean list.",
+        "CORRECTED DESIGN (operator 2026-06-18; grounded in code): do NOT invent a propose-vs-act gate — the agency framework already governs degree-of-self-closure. Proactive recall/closure = EXTEND the existing agency MemoryProvider (internal/agency/memory_provider.go, the CandidateProvider port in service.go) to emit richer unclosed-loop / pattern / vault-cross-ref CandidateActions; a vault provider follows the same port. Execution degree is ALREADY governed by: AgencyLevel (disabled..aggressive = discovery aggressiveness), AutonomyLevel (always_ask..never_ask = ask-vs-act; default always_ask), AllowedActionClasses + IsReadOnlyActionClass (action_class.go read-only confinement), AllowedScopes (must include memory/vault), MaxCandidateAttempts (anti-churn parking). Vault writes classify as a write action-class -> gated by ask_for_writes. The propose-only first step is simply AutonomyLevel=always_ask, NOT a new mechanism. The REAL engineering work is clean, RANKED candidate generation (relevance + hygiene so the 2829-row unresolved_question churn does not swamp candidates), wired through the existing provider->policy->pipeline path."
+      ],
+      "targetReleaseId": "v1-3-0"
+    },
+    {
+      "id": "agency-autonomy-governance-hardening",
+      "title": "Agency/autonomy governance hardening — read-only confinement fails open + anti-churn budget ignores failures (+4)",
+      "summary": "BEHAVIORAL-CORRECTNESS / safety (audit 2026-06-18, code-verified). The agency/autonomy skeleton is sound (fail-closed defaults Enabled=false/AgencyLevel=disabled/AutonomyLevel=always_ask; double-gated scope; evidence-first; real authority-confirmation gate ws_control_config.go; defense-in-depth on execute disposition), but the audit found live defects that self-closure would lean on: D1 (CRITICAL) read-only confinement FAILS OPEN — filterReadOnlyToolDefs/blockMutatingToolUnderReadOnly drop a tool only when MakesExecutionProgress is true, which is false for OperationUnknown (semantics.go default), and EVERY unenumerated MCP tool (Slack send_message, GitHub create_pull_request, fs create_file, ...) is OperationUnknown -> a read-only-class agency action (summarize/diagnose) can load such a tool via request_tools and mutate external state; FIX: read-only paths must gate on !IsReadOnlyExploration (allowlist, fails closed), not MakesExecutionProgress. D2 (HIGH) anti-churn parking ignores failures — ExecutedAttemptCount counts only outcome='executed' (agency_repo.go:208) but a failing tick writes execution_failed (daemon_agency.go:210), so a deterministically-failing candidate never reaches MaxCandidateAttempts and re-executes+re-bills every cadence forever (re-arm of the v1.1.1 runaway on the failure branch); FIX: count execution_failed toward the budget (keep consistent with hygiene_agency.go:59). D3 (HIGH) candidate risk flags (RequiresWrite/ExternalEffect/Destructive/CredentialSensitive/Financial/PrivacySensitive) are dropped reconstructing the candidate from the decision (agencyCandidateFromDecision) -> executor cannot re-gate sensitive actions; persist them. D4 (MED) queue_scheduler_job can reach execute_allowed with no executor -> unbounded full-surface model turn; implement a narrow executor or don't let executor-less classes execute. D5 (MED) AllowedScopes/AllowedActionClasses accept arbitrary unvalidated strings (validateAgency) -> silent misconfig; validate membership. D6 (MED, Rule 14) decision audit omits risk basis + effective autonomy/agency level -> can't RCA an autonomous action; record them. H1 (quality) ProactiveMemory surfaces unresolved_question by raw importance with no relevance/recency floor (2829 prod rows) -> noise/nag; add relevance ranking + per-cycle cap. SEQUENCE: D1+D2 first (safety invariants self-closure leans on), then D3+H1, then D4/D5/D6. Gates the proactive-episodic-recall feature.",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "high",
+      "section": "Behavioral correctness",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "internal/agent/tools/semantics.go (OperationClassForName default=Unknown; MakesExecutionProgress false on Unknown; IsReadOnlyExploration fails-closed)",
+        "src/engine/readonly_tool_filter.go:20 + internal/agent/readonly_surface.go",
+        "internal/db/agency_repo.go:208 ExecutedAttemptCount outcome='executed' only; internal/daemon/daemon_agency.go:189-215 outcome write-backs",
+        "internal/agency/policy.go (autonomy gate); src/core/agency_types.go (decision drops flags); internal/agency/agency_candidates_repo.go:73 (no relevance floor)"
+      ]
+    },
+    {
+      "id": "proactive-recall-followups",
+      "title": "Proactive-recall follow-ups: birthday/scheduling candidate substrate + semantic ranking + vault-write",
+      "summary": "Follow-ups surfaced building proactive-episodic-recall (2026-06-18). DATA-GATED (need substrate first, not buildable without fabrication): (a) birthday-reminder candidate needs a DOB/contact-details field on relationship_memory or a contacts table; (b) scheduling-pattern candidate ('calls during dinner') needs a calendar/event substrate/integration. ENHANCEMENTS to the built providers: (c) semantic candidate ranking (RelationshipProvider/VaultProvider/MemoryProvider currently lexical/recency-ranked; thread the embedder like the skills relevance gate, soak-calibrate the threshold); (d) a vault-WRITE candidate (auto-append/cross-link a note) classified write -> ask_for_writes (the built VaultProvider is read-only surfacing only); (e) ObsidianVault re-scan-on-interval so notes added after agency-service construction surface without a config-change rebuild. All ride the hardened agency controls.",
+      "kind": "feature",
+      "status": "in-progress",
+      "priority": "low",
+      "section": "Behavioral robustness",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "relationship_memory has no DOB field; no calendar table (verified read-only)",
+        "internal/agency/relationship_provider.go + vault_provider.go (lexical ranking; read-only)",
+        "internal/agent/obsidian.go SearchNotes (lexical)",
+        "SEMANTIC RANKING DONE 2026-06-18: VaultProvider loop<->note matching now embedding-semantic (catches paraphrase, rejects incidental overlap; 0.62 calibration-noted; nil-degrades to lexical). REMAINING: vault-WRITE candidate (ask_for_writes), ObsidianVault re-scan-on-interval, vault adapter snippet enrichment; DATA-GATED (not buildable): birthday (no DOB field), scheduling-pattern (no calendar)."
+      ]
+    },
+    {
+      "id": "config-ceiling-schema-incoherency-and-repair",
+      "title": "security.threat_caution_ceiling has 3 contradictory schemas -> config-save deadlock (bricks installs); + self-heal repair",
+      "summary": "BEHAVIORAL-CORRECTNESS / security-config (operator-reported 2026-06-18 Windows install, code-verified). ThreatCautionCeiling is an AuthorityLevel (security_claim.go:107 default AuthorityExternal; names External/Peer/SelfGenerated/Operator per types.go:201). But validation is INCOHERENT across THREE schemas: core/config_validation.go validateSecurityCeiling accepts {Safe,Caution,Dangerous,External,Creator} (stale Creator not Operator; not the authority set); configstate/schema.ts knownEnums (drives the UI/API config schema) declares {low,medium,high,critical}; neither matches the AuthorityLevel type. RESULT (deadlock): the UI offers low/medium/high/critical, the operator picks 'medium', it persists, and core validation rejects it forever -> EVERY config save fails validation -> primary model can't persist, a removed model reappears, security options can't be changed (the operator's Windows install: 'TOML borked around security options such that I cannot make changes'). FIX: single-source the ceiling enum to the AuthorityLevel names {External,Peer,SelfGenerated,Operator} (+ 'Creator' backward-compat alias, matching the other authority fields) shared by BOTH core validation AND configstate so the UI stops offering invalid values; complete the Creator->Operator rename here. PLUS a config repair/migration that heals existing TOMLs with an invalid ceiling value (medium/low/high/critical/Creator) -> a valid value (External default; Creator->Operator) on load AND via the self-healing config-repairer, so installs self-heal WITHOUT hand-editing TOML (operator: 'the self-healing should detect and repair'; no production surgery). Likely the root of the model-persistence symptoms (verify those resolve once saves validate again).",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "high",
+      "section": "Behavioral correctness",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "src/core/config_validation.go:256-277 (validateSecurityCeiling {Safe,Caution,Dangerous,External,Creator})",
+        "src/configstate/schema.ts:53 (knownEnums {low,medium,high,critical})",
+        "src/core/types.go:201-215 (AuthorityLevel External/Peer/SelfGenerated/Operator); security_claim.go:107",
+        "feeds self-healing-config-repairer"
+      ]
+    },
+    {
+      "id": "logs-escape-to-user-output-tui",
+      "title": "Operational logs leak into user-facing output in multiple locations incl. the TUI",
+      "summary": "OUTPUT-HYGIENE (operator-reported 2026-06-18; recurring class). Logs are escaping into user-facing output in multiple surfaces, now including the TUI, and an unconfigured-model fallback 'barfs errors on the screen'. Extends capture-operational-logs-not-terminal (which routed daemon logs to LogDir) to the remaining leak sites: the TUI render path and any inference/model-fallback error that prints raw to the user channel. Audit all user-facing surfaces (TUI, channel replies, CLI) for raw log/error escape; route to the log sink; user sees a clean message, not a stack/err dump (Rule 13 surfaced honestly, but as a user message not a log line).",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "high",
+      "section": "Behavioral correctness",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "operator 2026-06-18: logs in TUI + unconfigured-model fallback barfs errors",
+        "relates: capture-operational-logs-not-terminal"
+      ]
+    },
+    {
+      "id": "maintenance-ws-idle-timeout",
+      "title": "SelfHealing/maintenance read over websocket fails on idle timeout",
+      "summary": "BUG (operator-reported 2026-06-18 Windows). Maintenance activities fail with 'read db maintenance response: failed to get read: failed to get read: received close frame: status = StatusNormalClosure and reason = idle timeout'. The maintenance (self-healing) operation runs longer than the websocket idle timeout (or the read isn't kept alive), so the server closes the connection mid-operation. Fix the maintenance ws read path: keepalive/ping during long maintenance, stream progress, or raise the read deadline for maintenance ops; surface partial/failed maintenance honestly (no silent).",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Behavioral correctness",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "operator 2026-06-18: 'received close frame ... idle timeout' on maintenance read"
+      ]
+    },
+    {
+      "id": "windows-model-resolution-persistence",
+      "title": "Model config won't persist / removed model reappears / fallback to unconfigured model",
+      "summary": "BUG (operator-reported 2026-06-18 Windows). (a) Can't persist changes to primary model; (b) a model removed in the UI keeps reappearing as the first model; (c) when it flounders, fallback routes to a model NOT in config which errors to screen. LIKELY DOWNSTREAM of config-ceiling-schema-incoherency-and-repair (every config save fails validation -> model changes never persist -> removed model stays -> resolution falls back oddly). VERIFY these resolve once config saves validate again; if an independent model-persistence/resolution defect remains (e.g. write path drops the model list, or fallback selects an unconfigured model), fix the persistence + resolution path so fallback only ever selects a configured model and removals stick. Ties output-hygiene (the fallback error barf).",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "high",
+      "section": "Behavioral correctness",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "operator 2026-06-18 Windows symptoms",
+        "depends on: config-ceiling-schema-incoherency-and-repair"
+      ]
+    },
+    {
+      "id": "unwired-authority-config-strings",
+      "title": "security.allowlist_authority/trusted_authority/api_authority config strings appear unwired (UI offers values nothing consumes)",
+      "summary": "CORRECTNESS/security gap (surfaced 2026-06-18 during the ceiling RCA). configstate knownEnums offers {None,Peer,Operator,Creator} for security.allowlist_authority/trusted_authority/api_authority, but there is NO core validator and NO string->AuthorityLevel converter for them; ResolveSecurityClaim uses hardcoded DefaultClaimSecurityConfig levels and ignores these config strings. So operator configuration of these authority levels is silently a NO-OP. Lower severity than the ceiling (no validator = no reject-loop brick) but a real security-config correctness gap. Likely overlaps operator-channel-authority-recognition (this session: 'config strings validated but not runtime-mapped'); reconcile/dedupe with that item. Fix: map these config strings to AuthorityLevel at ClaimSecurityConfig construction (runtime-consume them) + validate membership, or remove the UI options if intentionally unsupported (don't offer config that does nothing).",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Security",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "src/configstate/schema.ts (knownEnums allowlist/trusted/api_authority)",
+        "src/core/security_claim.go DefaultClaimSecurityConfig (hardcoded; config strings not mapped)",
+        "overlaps operator-channel-authority-recognition"
+      ]
+    },
+    {
+      "id": "embedded-runtime-toolcall-arguments-format-mismatch",
+      "title": "Embedded Runtime tool_calls arguments serialized as object but Provider A-compat endpoint wants string -> 400 breaks local tool use",
+      "summary": "BEHAVIORAL-CORRECTNESS / provider-compat (operator-reported 2026-06-18 Windows, code-verified). embeddedRuntimeAdapter.Qualifies(FormatEmbedded) (internal/llm/tool_message_normalization_providers.go:78) serializes assistant tool_calls via embeddedRuntimeAdapter (:189) -> embeddedRuntimeAdapter, emitting function.arguments as a JSON OBJECT (embedded-runtime NATIVE format). But FormatEmbedded is sent to the Provider A-COMPATIBLE endpoint (internal/llm/client_url.go:29 'FormatProviderA, FormatEmbedded, and all others use Provider A-compatible endpoint'), whose schema expects arguments as a STRING. Result: embedded-runtime returns 400 'json: cannot unmarshal object into the platform struct field .messages.tool_calls.function.arguments of type string' on any multi-turn turn that replays a prior tool_call -> breaks tool use for ALL embedded-runtime tool-calling models (local-model-b, local-model-a, etc.) through the framework. Same incoherency class as the config-ceiling triple-schema: two parts of the code disagree on a contract (the message normalizer's wire format vs the endpoint's). Surfaced exercising embedded-runtime/local-model-b DELEGATION:C1. FIX: align FormatEmbedded outbound tool_calls to the endpoint actually used — string arguments (Provider A format, like providerACompatibleToolCalls); if the embedded-runtime-native object-args path is dead (no native endpoint is used), remove it (don't keep a serializer that contradicts the endpoint). RED-first: a FormatEmbedded request replaying a prior tool_call serializes arguments as a STRING.",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "high",
+      "section": "Behavioral correctness",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "internal/llm/tool_message_normalization_providers.go:78,138,189 (embeddedRuntimeAdapter object args)",
+        "internal/llm/tool_message_normalization_providers.go:173 (providerACompatibleToolCalls string args)",
+        "internal/llm/client_url.go:29 (FormatEmbedded -> Provider A-compatible endpoint)",
+        "operator 2026-06-18: embedded-runtime 400 on local-model-b DELEGATION:C1"
+      ]
+    },
+    {
+      "id": "benchmark-approach-full-audit-through-framework",
+      "title": "Full audit of the benchmarking approach — exercise models THROUGH the framework, not bypassing it",
+      "summary": "AUDIT (operator-directed 2026-06-18, folded into v1.3.0). We've made substantial changes to how agent correctness is managed; stale/incorrect/inadequate benchmarks must not present a false image of model performance. SPECIFICALLY ensure benchmarks/model-exercise run models THROUGH the real framework pipeline (config resolution, message normalization, guards, routing) — NOT via direct/bypassing LLM calls (feedback_verify_by_running_real_app: 'test it' = the REAL app via real config resolution; direct construction misses real bugs). EVIDENCE this matters: the embedded-runtime tool_calls 400 (embedded-runtime-toolcall-arguments-format-mismatch) is a real provider-compat defect that ONLY a through-framework exercise surfaces — a direct-API benchmark would miss it and over-report local-model-b AUDIT SCOPE: enumerate every benchmark/exercise/baseline path (internal/llm/exercise_baselines.go, modelbench, the exercise/eval runners, soak harness); for each, determine whether it exercises the full framework path or bypasses it; flag stale baselines, metrics that can't fail when correctness regresses (Rule 10), and coverage gaps (e.g. multi-turn tool-use, delegation, the through-framework provider-compat surface). Ties post-v1-2-0-wholesale-benchmark-rerun + real-coding-benchmark-execution-grounded + model-recommendations-by-usecase. Produce a findings report -> remediation items.",
+      "kind": "test",
+      "status": "planned",
+      "priority": "high",
+      "section": "Benchmarking",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "operator 2026-06-18: audit benchmarking; exercise models THROUGH the framework",
+        "embedded-runtime-toolcall-arguments-format-mismatch (through-framework-only defect)",
+        "internal/llm/exercise_baselines.go; internal/modelbench"
+      ]
+    },
+    {
+      "id": "audit-detect-multiple-source-of-truth-dry",
+      "title": "Strengthen audits to catch multiple-source-of-truth / DRY violations (+ sweep for existing)",
+      "summary": "AUDIT-METHODOLOGY + SWEEP (operator 2026-06-18: the config-ceiling triple-schema was 'the worst kind of DRY violation' and 'should have been found by our audits'). The full-codebase triple-lens audit (full-codebase-triple-lens-audit-v130) missed it. The same class recurs: (1) config-ceiling-schema-incoherency (3 schemas for one field); (2) embedded-runtime-toolcall format mismatch (normalizer vs endpoint contract); (3) unwired-authority-config-strings (UI enum with no consuming validator). STRENGTHEN the audit (clean-architecture/DRY lens) to DETECT multiple-sources-of-truth for one contract: every configstate knownEnums entry must have exactly ONE core validator and they must AGREE; every provider wire-format serializer must match the endpoint it targets; flag any value set / contract defined in 2+ places that can diverge. RUN the sweep now to find existing instances across config schemas + provider formats + any duplicated enums/contracts; each finding -> a fix item. Add a coherency test pattern (like the ceiling configstate<->core test) so divergence becomes unshippable.",
+      "kind": "test",
+      "status": "planned",
+      "priority": "high",
+      "section": "Code quality",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "config-ceiling-schema-incoherency-and-repair",
+        "embedded-runtime-toolcall-arguments-format-mismatch",
+        "unwired-authority-config-strings",
+        "full-codebase-triple-lens-audit-v130 (missed this class)"
+      ]
+    },
+    {
+      "id": "config-contract-coherency-remediation",
+      "title": "Single-source the divergent config/contract enums found by the DRY audit (+ coherency tests)",
+      "summary": "Remediation of the live + latent multiple-source-of-truth findings from the DRY audit (operator: 'should have been found by our audits'). LIVE DISAGREEMENTS: C4 (HIGH) dashboard help text (api/dashboard_spa.html:8774) STILL tells operators to enter low/medium/high/critical for threat_caution_ceiling — the exact bricking vocabulary the ceiling fix eliminated; an operator following the help re-bricks. C2 (HIGH) models.policy.primary_reason_code: UI offers 6 codes, runtime acts on 3 DIFFERENT ones (profile_select.go) -> set-but-inert / valid-but-rejected. C3 (HIGH) models.policy.source: runtime writes 'persisted_policy'/'default' not in the schema -> strict UI rejects legit API responses. B3 (HIGH latent) finish/stop-reason not normalized across providers (Provider B 'max_tokens'/Provider C raw vs scorer keying on Provider A 'length') -> truncated Provider B output escapes the truncation quality penalty (cross-provider scoring bug). LATENT DUP (will drift): agency level/autonomy/notification literals re-typed in schema.ts vs core consts; session.scope_mode 3 copies (incl operator/candidates.go); models.policy.state 3 copies incl SQL CHECK; context_budget.channel_minimum schema+DDL+struct no validator; composition_policy/skill_creation_rigor/output_validation_policy enum w/ no validator; yield protocol/chain offer unimplemented values. FIX: one the platform accessor per contract referenced by knownEnums + validators + DDL + UI + help; add the 3 reusable coherency tests (schema<->validator<->typed-enum table test; DB-CHECK<->the platform-enum test; serializer<->endpoint matrix test) so divergence is unshippable. Drive help/placeholder text from the source (never hand-restate enum values).",
+      "kind": "bug-fix",
+      "status": "planned",
+      "priority": "high",
+      "section": "Code quality",
+      "targetReleaseId": "v1-3-0",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "DRY audit 2026-06-18 (read-only, code-verified)",
+        "api/dashboard_spa.html:8774 (C4 ceiling help), :8519/:8775 (authority)",
+        "internal/llm/profile_select.go (C2 reason codes), internal/llm/model_policy.go:96,108 (C3 source)",
+        "internal/llm/client_formats_unmarshal.go (B3 finish reasons)"
+      ]
+    },
+    {
+      "id": "dynamic-model-hub-model-catalog",
+      "title": "Dynamic ModelHub-sourced local model catalog (live monitoring + presented options)",
+      "summary": "Today the local chat-model catalog (internal/llm/chat_catalog.go) is a STATIC, hand-curated list of clean-license (Apache-2.0/MIT) Q4_K_M instruct GGUFs with real pinned revisions+SHA256, selected by detected RAM and offered/applied via setup + the recommend_local_model/set_local_model concierge tools. This is correct and safe but fixed: new and better models age the list, and it only spans the tiers we pre-picked. This item tracks evolving it into a DYNAMIC catalog: actively monitor ModelHub (e.g. trending/updated instruct GGUF repos), resolve real pins at discovery time via the validated HF-metadata method (lfs.oid == content SHA256, the same method that reproduces the known-good embed-model embedder pin), and present the operator a richer catalog of options the concierge can recommend from and switch to. Deferred deliberately (operator framed it as future, 2026-06-18): it adds a real curation/trust surface that needs design before build -- license vetting at scale, quant/size selection policy, quality signal (the existing modelbench could rank discovered candidates), staleness/refresh cadence, and keeping the pin-resolution tamper-evident for repos we did not hand-vet. The static catalog stays the safe floor until that design lands. Builds on: embedded-llamacpp-local-llm-host (shipped), model-recommendations-by-usecase.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "low",
+      "section": "Model routing & benchmarks",
+      "dateAdded": "2026-06-18T00:00:00.000Z",
+      "evidence": [
+        "internal/llm/chat_catalog.go (static curated catalog + SelectChatModel; the surface to make dynamic)",
+        "internal/llm/embedder_gguf.go (GGUFSpec + ProvisionGGUF SHA-verify; HF lfs.oid pin-resolution method)",
+        "internal/agent/tools/local_model_advisor.go (recommend_local_model/set_local_model would source from the dynamic catalog)",
+        "internal/modelbench (potential quality ranking of discovered candidates)"
+      ]
+    },
+    {
+      "id": "ca5-daemon-api-godpackage-containment",
+      "title": "CA5: contain daemon + api god-packages (extract runtime loops; inject api service interfaces)",
+      "summary": "Audit CA5, deferred from v1.3.0 (justified: highest blast-radius packages, structural-debt not behavioral-defect, pre-release soak-gate risk). daemon (35 files / 13.5k LOC / 49 types) and api (44 distinct internal imports) are broad god-packages but already split by responsibility with every file <=500 LOC (no monolith). daemon is NOT wiring-only: it hosts runtime business logic (agency loop daemon_agency.go, heartbeats, pollers, standing-block, tool-pruning adapter) alongside legitimate composition-root wiring (build/phases/subsystems/adapters). Work: (a) extract the daemon runtime loops (agency, heartbeats/pollers, standing-block) into dedicated packages so the daemon trends to wiring-only; (b) introduce api service interfaces (injected deps) to contain the 44-import coupling. Sequence EARLY in the next cycle with its own behavioral-soak coverage, one self-contained extraction per change (e.g. standing-block first), never as a big-bang.",
+      "kind": "architecture",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Architecture debt",
+      "dateAdded": "2026-06-19T00:00:00.000Z",
+      "evidence": [
+        "internal/daemon/daemon_agency.go (agency runtime loop, extraction candidate)",
+        "internal/daemon/daemon_heartbeats.go + pollers (runtime loops)",
+        "internal/api (44 distinct internal imports; no injected-interface seam)",
+        "audit source: docs/plans/v1.3.0-audit-findings.md CA5; assessment recorded in releases/v1-3-0.json audit-rem-architecture-moves"
+      ]
+    }
+  ]
+}

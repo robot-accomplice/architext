@@ -1,0 +1,2098 @@
+{
+  "flows": [
+    {
+      "id": "interactive-turn",
+      "name": "Interactive agent turn",
+      "status": "implemented",
+      "summary": "A user message enters through a first-party or channel surface and is normalized into the unified pipeline for session, memory, tool, model, guard, persistence, and response handling.",
+      "trigger": "Operator sends a message through CLI/TUI/Web/channel or a connector receives a user message.",
+      "actors": [
+        "operator",
+        "cli",
+        "tui",
+        "web-dashboard",
+        "external-channel-adapters"
+      ],
+      "steps": [
+        {
+          "id": "receive-message",
+          "from": "operator",
+          "to": "external-channel-adapters",
+          "action": "submit prompt",
+          "summary": "The operator submits conversational content through a configured surface or external channel.",
+          "data": [
+            "operator-input"
+          ]
+        },
+        {
+          "id": "submit-web-session-message",
+          "from": "web-dashboard",
+          "to": "websocket-control-plane",
+          "kind": "request",
+          "action": "send session message",
+          "summary": "The first-party dashboard sends session messages through the websocket control seam instead of internal REST.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "delegate-web-message",
+          "from": "websocket-control-plane",
+          "to": "unified-pipeline",
+          "kind": "request",
+          "action": "delegate web message",
+          "summary": "The websocket control plane delegates dashboard session messages to the unified pipeline without owning agent behavior.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "normalize-input",
+          "from": "external-channel-adapters",
+          "to": "unified-pipeline",
+          "kind": "request",
+          "action": "call pipeline",
+          "summary": "The connector parses transport data and delegates once to engine.RunWorkflow with channel context.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "resolve-session",
+          "from": "unified-pipeline",
+          "to": "sql-store",
+          "kind": "persistence",
+          "action": "resolve session and persist user turn",
+          "summary": "The pipeline enforces session scope, cross-channel consent, topic continuity, and durable message/turn storage.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "session-resolved",
+          "from": "sql-store",
+          "to": "unified-pipeline",
+          "kind": "return",
+          "returnOf": "resolve-session",
+          "action": "return session scope",
+          "summary": "The store returns the resolved session, persisted user message, and trace identifiers used by the rest of the turn.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "retrieve-context",
+          "from": "unified-pipeline",
+          "to": "memory-system",
+          "kind": "request",
+          "action": "retrieve context",
+          "summary": "The pipeline requests memory context and retrieval artifacts through memory services.",
+          "data": [
+            "memory-records",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "context-returned",
+          "from": "memory-system",
+          "to": "unified-pipeline",
+          "kind": "return",
+          "returnOf": "retrieve-context",
+          "action": "return relevant context",
+          "summary": "Memory services return bounded context, citations, freshness metadata, and retrieval diagnostics.",
+          "data": [
+            "memory-records",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "execute-tools",
+          "from": "unified-pipeline",
+          "to": "mcp-system",
+          "kind": "request",
+          "action": "execute eligible tools",
+          "summary": "Tool execution remains behind the pipeline so typed evidence and guard obligations are shared across entry points.",
+          "data": [
+            "tool-artifacts",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "tool-evidence-returned",
+          "from": "mcp-system",
+          "to": "unified-pipeline",
+          "kind": "return",
+          "returnOf": "execute-tools",
+          "action": "return tool evidence",
+          "summary": "Tool surfaces return typed observations, errors, and execution evidence for guard and final-answer checks.",
+          "data": [
+            "tool-artifacts",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "request-model",
+          "from": "unified-pipeline",
+          "to": "llm-service",
+          "kind": "request",
+          "action": "run inference",
+          "summary": "The pipeline delegates inference to the LLM service with sanitized message history, route policy, and trace context.",
+          "data": [
+            "operator-input",
+            "memory-records",
+            "tool-artifacts",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "model-response",
+          "from": "llm-service",
+          "to": "unified-pipeline",
+          "kind": "return",
+          "returnOf": "request-model",
+          "action": "return model output",
+          "summary": "The LLM service returns final text, tool calls, provider attribution, token usage, latency, and typed provider failures.",
+          "data": [
+            "operator-input",
+            "tool-artifacts",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "persist-response",
+          "from": "unified-pipeline",
+          "to": "sql-store",
+          "kind": "persistence",
+          "action": "persist assistant response and diagnostics",
+          "summary": "The response, guard results, post-turn ingest, trace, latency, and diagnostics are persisted.",
+          "data": [
+            "operator-input",
+            "memory-records",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "persistence-confirmed",
+          "from": "sql-store",
+          "to": "unified-pipeline",
+          "kind": "return",
+          "returnOf": "persist-response",
+          "action": "return persistence proof",
+          "summary": "The store confirms durable message, trace, and diagnostic writes before the outcome is formatted for the caller.",
+          "data": [
+            "telemetry"
+          ]
+        },
+        {
+          "id": "web-pipeline-outcome",
+          "from": "unified-pipeline",
+          "to": "websocket-control-plane",
+          "kind": "return",
+          "returnOf": "delegate-web-message",
+          "action": "return web pipeline outcome",
+          "summary": "The pipeline returns the same typed outcome to the websocket control seam for dashboard sessions.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "web-deliver-response",
+          "from": "websocket-control-plane",
+          "to": "web-dashboard",
+          "kind": "return",
+          "returnOf": "submit-web-session-message",
+          "action": "deliver web session response",
+          "summary": "The dashboard receives the final assistant response or framework-originated terminal failure through the websocket session stream.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "format-response",
+          "from": "unified-pipeline",
+          "to": "external-channel-adapters",
+          "kind": "return",
+          "returnOf": "normalize-input",
+          "action": "return pipeline outcome",
+          "summary": "The connector formats the PipelineOutcome for the original channel without changing agent behavior.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "deliver-response",
+          "from": "external-channel-adapters",
+          "to": "operator",
+          "kind": "return",
+          "returnOf": "receive-message",
+          "action": "deliver final response",
+          "summary": "The active surface delivers the final assistant response or framework-originated terminal failure to the operator.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        }
+      ],
+      "sequenceFrames": [
+        {
+          "id": "web-session-frame",
+          "type": "transaction",
+          "label": "Web session turn",
+          "stepIds": [
+            "submit-web-session-message",
+            "delegate-web-message",
+            "web-pipeline-outcome",
+            "web-deliver-response"
+          ]
+        },
+        {
+          "id": "channel-session-frame",
+          "type": "transaction",
+          "label": "Connector session turn",
+          "stepIds": [
+            "receive-message",
+            "normalize-input",
+            "format-response",
+            "deliver-response"
+          ]
+        },
+        {
+          "id": "pipeline-core-frame",
+          "type": "transaction",
+          "label": "Unified pipeline execution",
+          "stepIds": [
+            "resolve-session",
+            "session-resolved",
+            "retrieve-context",
+            "context-returned",
+            "execute-tools",
+            "tool-evidence-returned",
+            "request-model",
+            "model-response",
+            "persist-response",
+            "persistence-confirmed"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Agent-turn business behavior is owned by src/engine.",
+        "Connectors parse, call, and format only.",
+        "Session continuity and artifact proof obligations are enforced before finalization."
+      ],
+      "failureBehavior": [
+        "Pipeline errors should produce user-visible terminal failures instead of silent turn death.",
+        "Provider failures route through LLM fallback/circuit behavior where configured.",
+        "Typed proof mismatches trigger guard retries or explicit failure."
+      ],
+      "observability": [
+        "pipeline traces",
+        "turn diagnostics",
+        "structured logs",
+        "dashboard events"
+      ],
+      "verification": [
+        "Pipeline unit tests",
+        "Channel parity tests",
+        "Behavioral soak suite"
+      ],
+      "knownGaps": [
+        "Manual validation remains required for every first-party surface before v1.1.0 release."
+      ]
+    },
+    {
+      "id": "dashboard-control",
+      "name": "Dashboard websocket control",
+      "status": "partial",
+      "summary": "The browser dashboard hydrates state through websocket topics and mutates state through websocket control commands backed by shared services.",
+      "trigger": "Dashboard loads, navigates to a page, subscribes to topics, or operator activates a dashboard control.",
+      "actors": [
+        "operator",
+        "web-dashboard"
+      ],
+      "steps": [
+        {
+          "id": "subscribe-topics",
+          "from": "web-dashboard",
+          "to": "websocket-control-plane",
+          "action": "subscribe",
+          "summary": "The dashboard requests topic snapshots for the active page rather than polling REST endpoints.",
+          "data": [
+            "telemetry",
+            "runtime-config",
+            "public-metadata"
+          ]
+        },
+        {
+          "id": "build-snapshot",
+          "from": "websocket-control-plane",
+          "to": "sql-store",
+          "action": "compose state",
+          "summary": "Topic snapshot producers read shared repositories/services instead of duplicating route logic.",
+          "data": [
+            "runtime-config",
+            "memory-records",
+            "scheduler-state",
+            "telemetry",
+            "public-metadata"
+          ]
+        },
+        {
+          "id": "snapshot-returned",
+          "from": "sql-store",
+          "to": "websocket-control-plane",
+          "action": "return topic snapshot data",
+          "summary": "Repositories return bounded state for the requested dashboard topic.",
+          "data": [
+            "runtime-config",
+            "memory-records",
+            "scheduler-state",
+            "telemetry",
+            "public-metadata"
+          ]
+        },
+        {
+          "id": "publish-snapshot",
+          "from": "websocket-control-plane",
+          "to": "web-dashboard",
+          "action": "publish topic snapshot",
+          "summary": "The websocket plane publishes the topic snapshot or a typed loading/error state to the dashboard.",
+          "data": [
+            "runtime-config",
+            "memory-records",
+            "scheduler-state",
+            "telemetry",
+            "public-metadata"
+          ]
+        },
+        {
+          "id": "send-control",
+          "from": "web-dashboard",
+          "to": "websocket-control-plane",
+          "action": "send confirmed control command",
+          "summary": "Controls such as skills, plugins, roster, cron, sessions, MCP catalog/test/refresh, channels, billing account service tasks, and agency use typed websocket commands.",
+          "data": [
+            "operator-input",
+            "runtime-config",
+            "secrets",
+            "wallet-data"
+          ]
+        },
+        {
+          "id": "delegate-control",
+          "from": "websocket-control-plane",
+          "to": "config-keystore",
+          "action": "call shared service",
+          "summary": "The control plane delegates to central services for validation, persistence, and authority-bearing confirmation.",
+          "data": [
+            "runtime-config",
+            "secrets",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "control-result-returned",
+          "from": "config-keystore",
+          "to": "websocket-control-plane",
+          "action": "return typed service result",
+          "summary": "Shared services return acknowledgements or typed errors without dashboard-owned business logic.",
+          "data": [
+            "runtime-config",
+            "secrets",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "publish-result",
+          "from": "websocket-control-plane",
+          "to": "web-dashboard",
+          "action": "return ack/error and refresh events",
+          "summary": "The dashboard renders typed acknowledgements, errors, and updated topic state.",
+          "data": [
+            "telemetry",
+            "runtime-config",
+            "public-metadata"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Dashboard normal product behavior does not use same-origin FlowForge REST.",
+        "Authority-bearing mutations require explicit confirmation.",
+        "Topic snapshots use shared producers."
+      ],
+      "failureBehavior": [
+        "Disconnected websocket state must disable or clearly explain unavailable controls.",
+        "Unknown controls return typed control errors.",
+        "Dead-letter and control failure state must remain visible."
+      ],
+      "observability": [
+        "websocket control acks",
+        "topic snapshot events",
+        "dashboard toasts"
+      ],
+      "verification": [
+        "Dashboard modularity tests",
+        "Manual browser audit",
+        "No /api loopback tests"
+      ],
+      "knownGaps": [
+        "Some Web UI pages remain under active manual validation in the v1.1.0 closure plan."
+      ],
+      "sequenceFrames": []
+    },
+    {
+      "id": "first-party-local-control",
+      "name": "Local CLI/TUI control",
+      "status": "partial",
+      "summary": "Local first-party process surfaces call application internals and shared services directly instead of using REST or browser-only websocket seams.",
+      "trigger": "Operator runs a CLI command or uses the local TUI.",
+      "actors": [
+        "operator",
+        "cli",
+        "tui"
+      ],
+      "steps": [
+        {
+          "id": "invoke-local-surface",
+          "from": "operator",
+          "to": "cli",
+          "action": "invoke local command",
+          "summary": "The operator uses a local process surface that has direct access to the platform application packages and local state.",
+          "data": [
+            "operator-input",
+            "runtime-config"
+          ]
+        },
+        {
+          "id": "call-local-service",
+          "from": "cli",
+          "to": "sql-store",
+          "action": "call shared service or repository",
+          "summary": "The command uses the same service/repository seam as the daemon instead of calling FlowForge /api routes.",
+          "data": [
+            "runtime-config",
+            "telemetry",
+            "secrets"
+          ]
+        },
+        {
+          "id": "local-service-result",
+          "from": "sql-store",
+          "to": "cli",
+          "action": "return local service result",
+          "summary": "Shared services return typed results or errors to the invoking local surface.",
+          "data": [
+            "runtime-config",
+            "telemetry",
+            "secrets"
+          ]
+        },
+        {
+          "id": "run-turn-if-needed",
+          "from": "tui",
+          "to": "unified-pipeline",
+          "action": "run pipeline",
+          "summary": "Interactive local chat uses engine.RunWorkflow so behavior matches other agent-turn entry points.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "local-pipeline-outcome",
+          "from": "unified-pipeline",
+          "to": "tui",
+          "action": "return pipeline outcome",
+          "summary": "The pipeline returns final assistant content, streaming state, or framework-originated terminal failure for local rendering.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "render-local-result",
+          "from": "cli",
+          "to": "operator",
+          "action": "render result",
+          "summary": "The local surface renders coherent CLI/TUI output, terminal failures, or explicit unsupported-daemon-live-state messages.",
+          "data": [
+            "telemetry",
+            "operator-input"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Local surfaces do not loop back into /api/** for normal product behavior.",
+        "Local surfaces do not construct fake parallel state for daemon-live data.",
+        "Shared services remain the business-logic owner."
+      ],
+      "failureBehavior": [
+        "If required state only exists in a running daemon, local commands fail loudly until a non-REST daemon-control seam exists.",
+        "Authority-bearing changes require explicit confirmation."
+      ],
+      "observability": [
+        "CLI output",
+        "TUI state",
+        "local logs",
+        "command tests"
+      ],
+      "verification": [
+        "CLI/TUI no-loopback tests",
+        "Manual TUI chat drill",
+        "CLI taxonomy tests"
+      ],
+      "knownGaps": [
+        "TUI implementation is a strict v1.1.0 release gate."
+      ],
+      "sequenceFrames": []
+    },
+    {
+      "id": "external-api-request",
+      "name": "External API request",
+      "status": "implemented",
+      "summary": "External integration clients may intentionally call /api routes, which must delegate to shared producers/services rather than become internal FlowForge buses.",
+      "trigger": "An external client sends an HTTP request to /api/**.",
+      "actors": [
+        "external-api-client"
+      ],
+      "steps": [
+        {
+          "id": "send-api-request",
+          "from": "external-api-client",
+          "to": "api-server",
+          "action": "call API route",
+          "summary": "The external client intentionally uses an externally addressable route.",
+          "data": [
+            "operator-input",
+            "runtime-config",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "delegate-api-service",
+          "from": "api-server",
+          "to": "sql-store",
+          "action": "delegate to shared service or repository",
+          "summary": "The route performs transport parsing/formatting and calls the same domain owner as other surfaces.",
+          "data": [
+            "runtime-config",
+            "telemetry",
+            "memory-records",
+            "public-metadata"
+          ]
+        },
+        {
+          "id": "api-service-result",
+          "from": "sql-store",
+          "to": "api-server",
+          "action": "return service result",
+          "summary": "Shared services return typed data or errors to the API boundary for external formatting.",
+          "data": [
+            "runtime-config",
+            "telemetry",
+            "memory-records",
+            "public-metadata"
+          ]
+        },
+        {
+          "id": "return-api-response",
+          "from": "api-server",
+          "to": "external-api-client",
+          "action": "format response",
+          "summary": "The route maps typed service results/errors into HTTP responses.",
+          "data": [
+            "telemetry",
+            "public-metadata"
+          ]
+        }
+      ],
+      "guarantees": [
+        "/api/** is for external integration only, not internal UI/TUI/CLI control.",
+        "API routes must not become agent-turn execution paths unless routed through the pipeline."
+      ],
+      "failureBehavior": [
+        "Unauthorized or unsupported mutations should fail closed.",
+        "Off-pipeline exemptions must remain documented."
+      ],
+      "observability": [
+        "HTTP logs",
+        "route tests"
+      ],
+      "verification": [
+        "API route tests",
+        "Architecture rules audit"
+      ],
+      "knownGaps": [
+        "FlowForge still needs a real auth/TLS story before reconsidering internal REST mutation policy."
+      ],
+      "sequenceFrames": []
+    },
+    {
+      "id": "model-inference",
+      "name": "Model inference and routing",
+      "status": "implemented",
+      "summary": "The pipeline asks the LLM service to route, sanitize, execute, observe, and fall back across configured cloud and local model providers.",
+      "trigger": "Pipeline reaches inference or benchmark exercise invokes a model.",
+      "actors": [
+        "operator"
+      ],
+      "steps": [
+        {
+          "id": "prepare-request",
+          "from": "unified-pipeline",
+          "to": "llm-service",
+          "action": "prepare inference request",
+          "summary": "Messages, tool-call history, context, and model policy are normalized at the LLM boundary.",
+          "data": [
+            "operator-input",
+            "memory-records",
+            "tool-artifacts",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "route-cloud",
+          "from": "llm-service",
+          "to": "external-model-providers",
+          "action": "call cloud provider",
+          "summary": "Cloud route uses configured keys, provider formats, fallback, and circuit state.",
+          "data": [
+            "operator-input",
+            "secrets",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "cloud-provider-result",
+          "from": "external-model-providers",
+          "to": "llm-service",
+          "action": "return cloud provider result",
+          "summary": "Cloud providers return model output, tool calls, usage, or typed provider errors.",
+          "data": [
+            "operator-input",
+            "secrets",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "route-local",
+          "from": "llm-service",
+          "to": "local-model-provider",
+          "action": "call local provider",
+          "summary": "Local route uses operator-managed local inference servers and records host/resource-sensitive latency.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "local-provider-result",
+          "from": "local-model-provider",
+          "to": "llm-service",
+          "action": "return local provider result",
+          "summary": "Local providers return model output or typed reachability/resource failures.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "record-route",
+          "from": "llm-service",
+          "to": "observability-system",
+          "action": "record model route and latency",
+          "summary": "Final provider/model, failed attempts, framework latency, model latency, retries, and fallback are observable.",
+          "data": [
+            "telemetry"
+          ]
+        },
+        {
+          "id": "return-inference-result",
+          "from": "llm-service",
+          "to": "unified-pipeline",
+          "action": "return inference result",
+          "summary": "The LLM service returns the selected final route, content/tool calls, and provider diagnostics to the pipeline.",
+          "data": [
+            "operator-input",
+            "tool-artifacts",
+            "telemetry"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Malformed assistant.tool_calls history is sanitized at the model boundary.",
+        "Final model/provider attribution is distinct from failed attempts.",
+        "Soaks use intentional model routes so model differences do not pollute framework validation."
+      ],
+      "failureBehavior": [
+        "Provider credit exhaustion, auth failures, and local model unreachable states are classified and surfaced.",
+        "Repeated local-provider unreachable errors should skip same-provider models in benchmark exercise."
+      ],
+      "observability": [
+        "model route",
+        "provider/model fields",
+        "model latency",
+        "framework latency",
+        "fallback logs"
+      ],
+      "verification": [
+        "LLM unit tests",
+        "Model benchmark exercise",
+        "Local and the cloud provider behavior soaks"
+      ],
+      "knownGaps": [
+        "Benchmark execution correctness for generated code is planned in the v1.1.0 roadmap.",
+        "The daemon's local-first embedding-provider resolution and boot-time reachability probe against local-model-provider is a startup-phase behavior (not a per-turn inference step); it determines the embedding tier reported on all status surfaces and is documented in the daemon-runtime node observability."
+      ],
+      "sequenceFrames": []
+    },
+    {
+      "id": "memory-lifecycle",
+      "name": "Memory retrieval, ingest, and maintenance",
+      "status": "implemented",
+      "summary": "The pipeline and background services retrieve, persist, curate, index, and repair memory records in the local embedded SQL store store.",
+      "trigger": "Pipeline prepares context, completes a turn, or background memory curation runs.",
+      "actors": [
+        "operator"
+      ],
+      "steps": [
+        {
+          "id": "request-memory",
+          "from": "unified-pipeline",
+          "to": "memory-system",
+          "action": "retrieve relevant memory",
+          "summary": "The pipeline requests scoped memory context and retrieval artifacts.",
+          "data": [
+            "operator-input",
+            "memory-records"
+          ]
+        },
+        {
+          "id": "query-store",
+          "from": "memory-system",
+          "to": "sql-store",
+          "action": "query memory repositories",
+          "summary": "Memory repositories search working, episodic, semantic, FTS/vector, and relationship records.",
+          "data": [
+            "memory-records",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "memory-records-returned",
+          "from": "sql-store",
+          "to": "memory-system",
+          "action": "return memory records",
+          "summary": "The store returns scoped memory records, search metadata, freshness, and diagnostics.",
+          "data": [
+            "memory-records",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "memory-context-returned",
+          "from": "memory-system",
+          "to": "unified-pipeline",
+          "action": "return memory context",
+          "summary": "Memory services return bounded context and citations to the pipeline.",
+          "data": [
+            "memory-records",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "ingest-turn",
+          "from": "unified-pipeline",
+          "to": "memory-system",
+          "action": "post-turn ingest",
+          "summary": "Post-turn processing stores durable memory as appropriate.",
+          "data": [
+            "operator-input",
+            "memory-records",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "ingest-confirmed",
+          "from": "memory-system",
+          "to": "unified-pipeline",
+          "action": "return ingest diagnostics",
+          "summary": "Post-turn memory processing returns stored/skipped decisions and structured diagnostics.",
+          "data": [
+            "memory-records",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "curate-repair",
+          "from": "memory-system",
+          "to": "sql-store",
+          "action": "curate and repair memory",
+          "summary": "Background maintenance dedupes, indexes, prunes, and repairs memory state.",
+          "data": [
+            "memory-records",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "curation-result",
+          "from": "sql-store",
+          "to": "memory-system",
+          "action": "return curation result",
+          "summary": "The store returns maintenance counts and repair outcomes for observability.",
+          "data": [
+            "memory-records",
+            "telemetry"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Memory is scoped and does not override cross-channel consent.",
+        "Tests use isolated stores rather than production memory DBs."
+      ],
+      "failureBehavior": [
+        "Database corruption or FTS errors must fail loud and point at repair/backup paths."
+      ],
+      "observability": [
+        "memory curation logs",
+        "retrieval artifacts",
+        "memory dashboard topics"
+      ],
+      "verification": [
+        "Memory tests",
+        "FTS repair tests",
+        "Memory recall soaks"
+      ],
+      "knownGaps": [
+        "Production backup and repair automation remains an ongoing hardening area."
+      ],
+      "sequenceFrames": []
+    },
+    {
+      "id": "scheduler-execution",
+      "name": "Scheduled task execution",
+      "status": "partial",
+      "summary": "Cron and heartbeat jobs are persisted, leased, executed, reported, and routed through central services rather than owning agent business logic.",
+      "trigger": "Scheduler detects due cron/heartbeat work.",
+      "actors": [
+        "operator"
+      ],
+      "steps": [
+        {
+          "id": "load-due-jobs",
+          "from": "scheduler",
+          "to": "sql-store",
+          "action": "lease due jobs",
+          "summary": "Scheduler uses durable job state and leases to coordinate due work.",
+          "data": [
+            "scheduler-state",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "due-jobs-returned",
+          "from": "sql-store",
+          "to": "scheduler",
+          "action": "return leased jobs",
+          "summary": "The store returns leased due jobs or an empty result with lease diagnostics.",
+          "data": [
+            "scheduler-state",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "execute-job",
+          "from": "scheduler",
+          "to": "unified-pipeline",
+          "action": "run scheduled agent work",
+          "summary": "Agent behavior still executes through the pipeline or agency executor, not scheduler-local business logic.",
+          "data": [
+            "operator-input",
+            "scheduler-state",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "job-outcome-returned",
+          "from": "unified-pipeline",
+          "to": "scheduler",
+          "action": "return scheduled outcome",
+          "summary": "The pipeline returns assistant output, typed terminal failure, or execution diagnostics for the scheduled job.",
+          "data": [
+            "operator-input",
+            "scheduler-state",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "notify-result",
+          "from": "scheduler",
+          "to": "external-channel-adapters",
+          "action": "emit notification",
+          "summary": "Scheduled outputs are delivered through configured channel adapters and recorded.",
+          "data": [
+            "scheduler-state",
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "notification-result",
+          "from": "external-channel-adapters",
+          "to": "scheduler",
+          "action": "return notification result",
+          "summary": "Adapters return delivery acknowledgements or typed delivery failures.",
+          "data": [
+            "scheduler-state",
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "record-execution",
+          "from": "scheduler",
+          "to": "sql-store",
+          "action": "persist execution state",
+          "summary": "Execution result, failure, retry, and next-run state are recorded durably.",
+          "data": [
+            "scheduler-state",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "execution-state-confirmed",
+          "from": "sql-store",
+          "to": "scheduler",
+          "action": "return execution persistence proof",
+          "summary": "The store confirms next-run, retry, and execution history updates.",
+          "data": [
+            "scheduler-state",
+            "telemetry"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Scheduler does not own agent business logic.",
+        "Missed jobs and manual run behavior are observable.",
+        "Cron lifecycle has creation, persistence, pickup, execution, and notification coverage."
+      ],
+      "failureBehavior": [
+        "Missed notifications, lease failures, and due-job execution errors must surface to logs/UI/scorecards."
+      ],
+      "observability": [
+        "cron state topics",
+        "scheduler logs",
+        "dead-letter queue",
+        "execution history"
+      ],
+      "verification": [
+        "Scheduler tests",
+        "Cron lifecycle manual audit",
+        "Scheduled agency soaks"
+      ],
+      "knownGaps": [
+        "Morning cron notification failures remain a historically observed failure family."
+      ],
+      "sequenceFrames": []
+    },
+    {
+      "id": "agency-execution",
+      "name": "Agency and autonomy execution",
+      "status": "partial",
+      "summary": "The runtime discovers useful work, classifies policy, requests confirmation according to agency/autonomy levels, executes through canonical seams, and audits outcomes.",
+      "trigger": "Scheduler, operator, or agency cadence asks FlowForge to look for proactive work.",
+      "actors": [
+        "operator"
+      ],
+      "steps": [
+        {
+          "id": "discover-candidates",
+          "from": "agency-service",
+          "to": "memory-system",
+          "action": "discover work candidates",
+          "summary": "Agency inspects permitted scopes for useful work without hallucinating unavailable context.",
+          "data": [
+            "memory-records",
+            "runtime-config",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "candidate-evidence-returned",
+          "from": "memory-system",
+          "to": "agency-service",
+          "action": "return candidate evidence",
+          "summary": "Memory and state services return grounded candidate evidence or an explicit empty candidate set.",
+          "data": [
+            "memory-records",
+            "runtime-config",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "classify-policy",
+          "from": "agency-service",
+          "to": "config-keystore",
+          "action": "apply agency/autonomy policy",
+          "summary": "Policy disposition respects slider levels, action classes, scopes, budgets, quiet hours, and notification rules.",
+          "data": [
+            "runtime-config",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "policy-disposition-returned",
+          "from": "config-keystore",
+          "to": "agency-service",
+          "action": "return policy disposition",
+          "summary": "Central policy returns allow, ask, block, or defer decisions with audit details.",
+          "data": [
+            "runtime-config",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "execute-agency-task",
+          "from": "agency-service",
+          "to": "unified-pipeline",
+          "action": "execute approved work",
+          "summary": "Approved work executes through the pipeline so behavior remains connector-agnostic.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "agency-pipeline-outcome",
+          "from": "unified-pipeline",
+          "to": "agency-service",
+          "action": "return agency execution outcome",
+          "summary": "The pipeline returns execution output, terminal failure, or typed blocker for audit and notification.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "audit-agency-task",
+          "from": "agency-service",
+          "to": "sql-store",
+          "action": "persist audit record",
+          "summary": "Candidate, evidence, disposition, confirmation, outcome, and notification state are persisted.",
+          "data": [
+            "runtime-config",
+            "scheduler-state",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "agency-audit-confirmed",
+          "from": "sql-store",
+          "to": "agency-service",
+          "action": "return audit persistence proof",
+          "summary": "The store confirms the candidate decision and outcome evidence were recorded.",
+          "data": [
+            "runtime-config",
+            "scheduler-state",
+            "telemetry"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Autonomy never silently bypasses central confirmation policy.",
+        "Cloud token budget controls are part of authority-bearing agency configuration.",
+        "Agency execution uses the same pipeline as other agent work."
+      ],
+      "failureBehavior": [
+        "Unsafe or unconfirmed tasks are blocked; missing permissions produce operator-visible instructions rather than false capability denials."
+      ],
+      "observability": [
+        "agency audit records",
+        "policy disposition",
+        "operator notifications"
+      ],
+      "verification": [
+        "Agency policy tests",
+        "Autonomy slider tests",
+        "Agency behavior soaks"
+      ],
+      "knownGaps": [
+        "Full useful-work discovery and autonomous execution evidence remains release-scope work."
+      ],
+      "sequenceFrames": []
+    },
+    {
+      "id": "skill-plugin-lifecycle",
+      "name": "Skill and plugin lifecycle",
+      "status": "partial",
+      "summary": "Skills and plugins are loaded, cataloged, installed, activated, edited, deleted, and tracked through shared state rather than dashboard-only logic.",
+      "trigger": "Operator manages a skill/plugin from CLI, dashboard, or release setup.",
+      "actors": [
+        "operator",
+        "cli",
+        "web-dashboard"
+      ],
+      "steps": [
+        {
+          "id": "load-catalog",
+          "from": "skill-plugin-system",
+          "to": "sql-store",
+          "action": "load installed and catalog state",
+          "summary": "Installed skill state, registry catalog, usage, and source metadata come from shared repositories/services.",
+          "data": [
+            "public-metadata",
+            "runtime-config",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "catalog-state-returned",
+          "from": "sql-store",
+          "to": "skill-plugin-system",
+          "action": "return catalog state",
+          "summary": "The store returns installed/catalog state, usage counts, last-used data, and source metadata.",
+          "data": [
+            "public-metadata",
+            "runtime-config",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "install-item",
+          "from": "websocket-control-plane",
+          "to": "skill-plugin-system",
+          "action": "install or update item",
+          "summary": "Dashboard controls delegate to shared skill/plugin services and validate manifest/source contracts.",
+          "data": [
+            "public-metadata",
+            "tool-artifacts",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "install-result-returned",
+          "from": "skill-plugin-system",
+          "to": "websocket-control-plane",
+          "action": "return install result",
+          "summary": "The skill/plugin service returns install success or manifest/source-specific typed failure.",
+          "data": [
+            "public-metadata",
+            "tool-artifacts",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "persist-skill-state",
+          "from": "skill-plugin-system",
+          "to": "sql-store",
+          "action": "persist state and usage",
+          "summary": "Activation, usage count, last-used, and composition metadata are stored durably.",
+          "data": [
+            "public-metadata",
+            "runtime-config",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "skill-state-confirmed",
+          "from": "sql-store",
+          "to": "skill-plugin-system",
+          "action": "return state persistence proof",
+          "summary": "The store confirms skill/plugin state updates and usage evidence.",
+          "data": [
+            "public-metadata",
+            "runtime-config",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "use-skill",
+          "from": "unified-pipeline",
+          "to": "skill-plugin-system",
+          "action": "resolve skill context",
+          "summary": "The pipeline consumes skill context as part of agent-turn behavior.",
+          "data": [
+            "operator-input",
+            "public-metadata",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "skill-context-returned",
+          "from": "skill-plugin-system",
+          "to": "unified-pipeline",
+          "action": "return skill context",
+          "summary": "The skill/plugin service returns bounded skill context and usage evidence to the pipeline.",
+          "data": [
+            "operator-input",
+            "public-metadata",
+            "telemetry"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Skill/plugin management is shared across CLI and dashboard.",
+        "Catalog failures are user-visible and manifest-specific.",
+        "Usage and last-used data are not dashboard-only placeholders."
+      ],
+      "failureBehavior": [
+        "Missing plugin manifests or broken catalog entries return concrete installation errors."
+      ],
+      "observability": [
+        "skill usage",
+        "catalog install errors",
+        "dashboard topic snapshots"
+      ],
+      "verification": [
+        "Skill/plugin tests",
+        "Manual skills UI audit"
+      ],
+      "knownGaps": [
+        "Official hosted plugin entries now publish source metadata; public site deploy and live catalog install smoke remain release evidence."
+      ],
+      "sequenceFrames": []
+    },
+    {
+      "id": "tool-execution",
+      "name": "Tool and MCP execution",
+      "status": "implemented",
+      "summary": "Tool calls, MCP resources, and plugin-backed tools are resolved through shared tool surfaces and recorded as typed evidence.",
+      "trigger": "Pipeline inference selects or requires a tool call.",
+      "actors": [
+        "operator"
+      ],
+      "steps": [
+        {
+          "id": "select-tool",
+          "from": "unified-pipeline",
+          "to": "mcp-system",
+          "action": "select available tool surface",
+          "summary": "The pipeline exposes and constrains tool availability instead of connectors deciding locally.",
+          "data": [
+            "operator-input",
+            "runtime-config",
+            "public-metadata"
+          ]
+        },
+        {
+          "id": "run-tool",
+          "from": "mcp-system",
+          "to": "sql-store",
+          "action": "run tool and persist result",
+          "summary": "Tool results and typed proofs are captured for verifier and guard use.",
+          "data": [
+            "tool-artifacts",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "tool-result-returned",
+          "from": "sql-store",
+          "to": "mcp-system",
+          "action": "return persisted tool result",
+          "summary": "Tool execution returns typed observations, errors, and durable proof identifiers.",
+          "data": [
+            "tool-artifacts",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "tool-evidence-to-pipeline",
+          "from": "mcp-system",
+          "to": "unified-pipeline",
+          "action": "return tool evidence",
+          "summary": "The tool surface returns evidence to the pipeline for guard checks and final answer grounding.",
+          "data": [
+            "tool-artifacts",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "verify-tool-claim",
+          "from": "unified-pipeline",
+          "to": "observability-system",
+          "action": "verify proof versus claim",
+          "summary": "Artifact and tool claims are checked against typed evidence before finalization.",
+          "data": [
+            "tool-artifacts",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "tool-claim-verdict",
+          "from": "observability-system",
+          "to": "unified-pipeline",
+          "action": "return proof verdict",
+          "summary": "Verification returns pass, retry, or fail-closed evidence disposition to the pipeline.",
+          "data": [
+            "tool-artifacts",
+            "telemetry"
+          ]
+        }
+      ],
+      "guarantees": [
+        "No tool-call leakage as raw XML outside code blocks.",
+        "Artifact write/read claims require typed evidence.",
+        "Tool availability is inherited across connectors through the pipeline."
+      ],
+      "failureBehavior": [
+        "Missing proof produces guard retry or typed terminal failure."
+      ],
+      "observability": [
+        "tool evidence",
+        "guard reasons",
+        "trace artifacts"
+      ],
+      "verification": [
+        "Tool-use tests",
+        "Artifact truth soaks",
+        "Guard tests"
+      ],
+      "knownGaps": [
+        "Tool-call history poisoning remains a high-value regression family."
+      ],
+      "sequenceFrames": []
+    },
+    {
+      "id": "media-turn",
+      "name": "Voice, camera, and multimodal turn",
+      "status": "partial",
+      "summary": "Audio, speech, camera frames, images, and files become canonical multimodal message parts before entering the same pipeline as text turns.",
+      "trigger": "Operator uses voice conversation, camera capture, or multimodal input.",
+      "actors": [
+        "operator",
+        "cli",
+        "web-dashboard",
+        "external-channel-adapters"
+      ],
+      "steps": [
+        {
+          "id": "select-media-device",
+          "from": "operator",
+          "to": "media-services",
+          "action": "inspect and select media device",
+          "summary": "The runtime presents microphones, audio outputs, cameras, and capture sources by provider, ID, and name so the operator can choose the intended device before capture or playback.",
+          "data": [
+            "runtime-config",
+            "media-capture"
+          ]
+        },
+        {
+          "id": "capture-media",
+          "from": "operator",
+          "to": "media-services",
+          "action": "grant consent and capture media",
+          "summary": "The runtime captures audio or camera frames only with explicit permission and records provenance.",
+          "data": [
+            "media-capture"
+          ]
+        },
+        {
+          "id": "captured-media-returned",
+          "from": "media-services",
+          "to": "operator",
+          "action": "return capture state",
+          "summary": "Media services return captured media metadata, selected device evidence, or typed permission/device failure.",
+          "data": [
+            "media-capture",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "normalize-transport-media",
+          "from": "web-dashboard",
+          "to": "media-services",
+          "action": "prepare channel media",
+          "summary": "Web session controls and external channels attach transport-normalized media metadata or bytes; internal/mediaingress converts those attachments into canonical content parts and invokes runtime STT where needed. Channel-native compressed audio such as Ogg/Opus is normalized in the runtime voice service before whisper.cpp or another STT backend receives it.",
+          "data": [
+            "media-capture",
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "normalized-media-returned",
+          "from": "media-services",
+          "to": "web-dashboard",
+          "action": "return normalized media parts",
+          "summary": "Media ingress returns canonical content parts, transcripts, or typed normalization failures to the initiating surface/runtime seam.",
+          "data": [
+            "media-capture",
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "process-media",
+          "from": "media-services",
+          "to": "llm-service",
+          "action": "transcribe or route vision content",
+          "summary": "STT, TTS, and vision-capable model routing are service-owned, not connector-owned. Camera vision proof captures through internal/camera and then submits canonical camera_frame parts through the normal pipeline rather than using a direct LLM shortcut.",
+          "data": [
+            "media-capture",
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "media-processing-result",
+          "from": "llm-service",
+          "to": "media-services",
+          "action": "return transcript or vision description",
+          "summary": "The model/service boundary returns media-derived text, route attribution, latency, or typed provider/backend failures.",
+          "data": [
+            "media-capture",
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "create-message-parts",
+          "from": "media-services",
+          "to": "unified-pipeline",
+          "action": "submit canonical content parts",
+          "summary": "Media becomes canonical message parts with metadata, permission, storage reference, and retention state.",
+          "data": [
+            "media-capture",
+            "operator-input"
+          ]
+        },
+        {
+          "id": "media-turn-outcome",
+          "from": "unified-pipeline",
+          "to": "media-services",
+          "action": "return canonical assistant response",
+          "summary": "The pipeline returns final assistant content or framework-originated terminal failure before optional media egress.",
+          "data": [
+            "media-capture",
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "speak-response",
+          "from": "media-services",
+          "to": "operator",
+          "action": "synthesize and play response",
+          "summary": "After the canonical assistant response exists, shared media egress prepares optional TTS audio for capable surfaces. Surfaces transport those bytes or render explicit fallback text; they do not choose TTS policy or synthesize locally.",
+          "data": [
+            "media-capture",
+            "operator-input"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Connectors remain transport-only for media.",
+        "Transport surfaces may attach media bytes or references but do not interpret the media.",
+        "Transport surfaces do not normalize compressed audio for STT; that conversion is owned by the runtime voice service.",
+        "Transport surfaces may deliver runtime-prepared response audio but do not synthesize it.",
+        "Users can identify and select the intended media devices before capture or playback.",
+        "Full voice is not complete until bidirectional audible conversation works.",
+        "Vision is not complete until a real captured frame grounds a response or action."
+      ],
+      "failureBehavior": [
+        "Unavailable devices, denied permissions, and missing backends produce typed operator-visible failures."
+      ],
+      "observability": [
+        "Selected media devices",
+        "STT/TTS latency",
+        "camera consent state",
+        "media processing latency",
+        "retention decisions"
+      ],
+      "verification": [
+        "Voice/camera tests",
+        "Media device inventory drill",
+        "Manual audible voice drill",
+        "Manual camera vision drill"
+      ],
+      "knownGaps": [
+        "Live media UX is a strict v1.1.0 release gate."
+      ],
+      "sequenceFrames": []
+    },
+    {
+      "id": "mail-operations",
+      "name": "Mail receive and send",
+      "status": "partial",
+      "summary": "inbound mail, inbound mail, and outbound mail operations use standard mail protocols, allowing Proton Bridge to work as local inbound mail/outbound mail without special provider logic.",
+      "trigger": "Operator configures or requests mail integration.",
+      "actors": [
+        "operator"
+      ],
+      "steps": [
+        {
+          "id": "configure-mail",
+          "from": "operator",
+          "to": "config-keystore",
+          "action": "store mail settings and credentials",
+          "summary": "Mail credentials and endpoints are configured explicitly through local config/keystore paths.",
+          "data": [
+            "mail-content",
+            "secrets",
+            "runtime-config"
+          ]
+        },
+        {
+          "id": "build-mail-runtime-config",
+          "from": "config-keystore",
+          "to": "mail-service",
+          "action": "translate mail config",
+          "summary": "Daemon startup and first-party smoke commands use the same runtime-owned translation from channels.email config plus keystore credentials into mail service configuration.",
+          "data": [
+            "runtime-config",
+            "secrets",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "mail-runtime-config-ready",
+          "from": "mail-service",
+          "to": "config-keystore",
+          "action": "return mail runtime config status",
+          "summary": "The mail service returns configured, enabled, reachable, credential-proof, or typed failure state.",
+          "data": [
+            "runtime-config",
+            "secrets",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "receive-mail",
+          "from": "mail-service",
+          "to": "external-channel-adapters",
+          "action": "receive messages",
+          "summary": "Mail content is fetched via inbound mail or inbound mail and normalized for channel/runtime processing. Daemon inbound mail polling searches unread mail; release smoke can explicitly search all inbound mail messages with a subject filter to prove existing test mail without depending on read state.",
+          "data": [
+            "mail-content",
+            "secrets",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "mail-messages-returned",
+          "from": "external-channel-adapters",
+          "to": "mail-service",
+          "action": "return normalized channel messages",
+          "summary": "Adapters return normalized mail messages, skipped-message counts, and typed receive failures.",
+          "data": [
+            "mail-content",
+            "secrets",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "read-inbox-on-demand",
+          "from": "tool-evidence-engine",
+          "to": "mail-service",
+          "action": "read recent inbox (read-only)",
+          "summary": "The agent's read_inbox tool calls ListRecent to fetch recent messages (last N days, BODY.PEEK so mail is never marked seen, bounded bodies) for summarization. This is a direct read of the configured mailbox, not inbound channel intake, and does not apply the sender allowlist.",
+          "data": [
+            "mail-content",
+            "secrets",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "read-inbox-returned",
+          "from": "mail-service",
+          "to": "tool-evidence-engine",
+          "action": "return recent messages",
+          "summary": "Returns from/subject/date and bounded full bodies for the agent to summarize; verified live against a Proton Bridge.",
+          "data": [
+            "mail-content",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "send-mail",
+          "from": "mail-service",
+          "to": "operator",
+          "action": "send outbound mail output",
+          "summary": "outbound mail send operations use configured endpoints and record typed outcome/failure state.",
+          "data": [
+            "mail-content",
+            "secrets",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "mail-send-result",
+          "from": "operator",
+          "to": "mail-service",
+          "action": "return delivery observation",
+          "summary": "The operator or smoke harness records delivery evidence or the service records a typed send failure.",
+          "data": [
+            "mail-content",
+            "telemetry"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Proton Bridge support is achieved through standard local inbound mail/outbound mail configuration.",
+        "Mail sender allowlists are optional mailbox filters. Empty mail sender allowlists accept mailbox-delivered mail; populated allowlists compare normalized From email addresses instead of raw display headers.",
+        "Mail remains critical data with secret redaction and explicit setup."
+      ],
+      "failureBehavior": [
+        "Auth, connection, parse, and send failures are typed and surfaced."
+      ],
+      "observability": [
+        "mail smoke evidence",
+        "typed mail failures"
+      ],
+      "verification": [
+        "Mail tests",
+        "flowforge channels mail-smoke",
+        "Live inbound mail/inbound mail/outbound mail smoke"
+      ],
+      "knownGaps": [
+        "Live mail smoke remains a release gate."
+      ],
+      "sequenceFrames": []
+    },
+    {
+      "id": "first-party-state-sync",
+      "name": "First-party UI state synchronization",
+      "status": "partial",
+      "summary": "Dashboard pages hydrate and update from topic snapshots/events, while local CLI/TUI use local service seams for state that is available in process.",
+      "trigger": "UI page navigation, refresh, reconnect, or domain event.",
+      "actors": [
+        "operator",
+        "web-dashboard",
+        "cli",
+        "tui"
+      ],
+      "steps": [
+        {
+          "id": "hydrate-dashboard",
+          "from": "web-dashboard",
+          "to": "websocket-control-plane",
+          "action": "request topic state",
+          "summary": "Dashboard loads page-specific topic snapshots and renders loading, empty, and error states.",
+          "data": [
+            "telemetry",
+            "runtime-config",
+            "public-metadata"
+          ]
+        },
+        {
+          "id": "dashboard-topic-returned",
+          "from": "websocket-control-plane",
+          "to": "web-dashboard",
+          "action": "return topic state",
+          "summary": "The websocket control plane returns topic data, empty state, loading state, or typed errors to the dashboard.",
+          "data": [
+            "telemetry",
+            "runtime-config",
+            "public-metadata"
+          ]
+        },
+        {
+          "id": "emit-domain-event",
+          "from": "daemon-runtime",
+          "to": "websocket-control-plane",
+          "action": "publish event",
+          "summary": "Runtime changes should emit events where practical instead of forcing polling. Model-selection and model-shift events cause the dashboard to invalidate cached stats/routing snapshots and request fresh topic state before re-rendering prompt-performance views. Benchmark exercise writers publish stats.changed so exercise runs and scorecards refresh through the same stats topic path.",
+          "data": [
+            "telemetry",
+            "runtime-config",
+            "scheduler-state"
+          ]
+        },
+        {
+          "id": "event-published",
+          "from": "websocket-control-plane",
+          "to": "web-dashboard",
+          "action": "return event update",
+          "summary": "Subscribed dashboards receive domain events and can refresh the affected topic without polling REST.",
+          "data": [
+            "telemetry",
+            "runtime-config",
+            "scheduler-state"
+          ]
+        },
+        {
+          "id": "render-local-state",
+          "from": "cli",
+          "to": "operator",
+          "action": "render local state",
+          "summary": "Local surfaces render state from local services or fail loudly for daemon-live-only state.",
+          "data": [
+            "telemetry",
+            "runtime-config"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Dashboard state does not depend on direct API polling.",
+        "Snapshot-only surfaces are transitional unless data is static or manually refreshed.",
+        "Meaningless truncated IDs should be replaced by user-meaningful labels where available."
+      ],
+      "failureBehavior": [
+        "Disconnected websocket state disables controls with clear user-facing language."
+      ],
+      "observability": [
+        "topic snapshots",
+        "event stream",
+        "reconnect state"
+      ],
+      "verification": [
+        "Dashboard topic tests",
+        "Manual full UI audit"
+      ],
+      "knownGaps": [
+        "Some dashboard pages and labels remain under validation."
+      ],
+      "sequenceFrames": []
+    },
+    {
+      "id": "knowledge-base-retrieval",
+      "name": "FlowForge knowledge base retrieval",
+      "status": "partial",
+      "summary": "FlowForge can answer product setup, UI, CLI/TUI, integration, and troubleshooting questions from canonical source docs and source-derived inventories rather than copied semantic-memory facts when the agent chooses the read-only product-knowledge tool.",
+      "trigger": "A user asks how FlowForge works, how to configure a feature, where a UI control lives, why an operation failed, or what a release gate means.",
+      "actors": [
+        "operator"
+      ],
+      "steps": [
+        {
+          "id": "agent-selects-product-tool",
+          "from": "unified-pipeline",
+          "to": "knowledge-base-service",
+          "action": "invoke source-backed product tool",
+          "summary": "The pipeline exposes a read-only tool; the agent invokes it only when the whole request asks for FlowForge product facts. Greetings and ordinary conversation continue through normal inference.",
+          "data": [
+            "operator-input",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "read-source-index",
+          "from": "knowledge-base-service",
+          "to": "sql-store",
+          "action": "load rebuildable index metadata",
+          "summary": "The service uses a generated index/cache only when source hashes prove it is current; the index is disposable derived data.",
+          "data": [
+            "public-metadata",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "source-index-returned",
+          "from": "sql-store",
+          "to": "knowledge-base-service",
+          "action": "return index metadata",
+          "summary": "The store returns index freshness, source hashes, and coverage diagnostics.",
+          "data": [
+            "public-metadata",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "resolve-source-root",
+          "from": "knowledge-base-service",
+          "to": "config-keystore",
+          "action": "resolve installed source snapshot",
+          "summary": "Installed runtimes load the registry-managed product-knowledge source snapshot from the FlowForge home; development runtimes may fall back to the source checkout.",
+          "data": [
+            "runtime-config",
+            "public-metadata"
+          ]
+        },
+        {
+          "id": "source-root-returned",
+          "from": "config-keystore",
+          "to": "knowledge-base-service",
+          "action": "return source root",
+          "summary": "Configuration returns the installed source snapshot path or a typed missing/stale source state.",
+          "data": [
+            "runtime-config",
+            "public-metadata"
+          ]
+        },
+        {
+          "id": "retrieve-authority",
+          "from": "knowledge-base-service",
+          "to": "unified-pipeline",
+          "action": "return cited source facts",
+          "summary": "Retrieved context includes source path/title provenance and explicit gaps when docs are missing or stale.",
+          "data": [
+            "public-metadata",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "authority-context-received",
+          "from": "unified-pipeline",
+          "to": "knowledge-base-service",
+          "action": "acknowledge cited source facts",
+          "summary": "The pipeline receives cited facts or a source-coverage gap and uses that as bounded answer evidence.",
+          "data": [
+            "public-metadata",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "derive-cli-inventory",
+          "from": "knowledge-base-service",
+          "to": "cli",
+          "action": "derive command inventory",
+          "summary": "CLI command knowledge is generated from flowforge --help and subcommand help; weak help output is fixed at the CLI source instead of copied into knowledge data.",
+          "data": [
+            "public-metadata"
+          ]
+        },
+        {
+          "id": "cli-inventory-returned",
+          "from": "cli",
+          "to": "knowledge-base-service",
+          "action": "return derived CLI inventory",
+          "summary": "The executable help surface returns current command inventory or exposes help-quality gaps to fix at source.",
+          "data": [
+            "public-metadata",
+            "telemetry"
+          ]
+        },
+        {
+          "id": "answer-with-boundaries",
+          "from": "unified-pipeline",
+          "to": "operator",
+          "action": "explain documented behavior",
+          "summary": "The final answer distinguishes documented product behavior from live runtime configuration, access, and health state.",
+          "data": [
+            "operator-input",
+            "public-metadata"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Canonical docs and source-derived inventories remain the authority.",
+        "Generated indexes are rebuildable caches, not durable facts.",
+        "Live access claims require runtime evidence, not documentation text.",
+        "Product knowledge is not a pre-LLM shortcut and must not hijack ordinary conversation."
+      ],
+      "failureBehavior": [
+        "Missing or stale sources produce explicit knowledge-gap responses and release-gate findings."
+      ],
+      "observability": [
+        "knowledge source coverage",
+        "index freshness",
+        "missing documentation diagnostics"
+      ],
+      "verification": [
+        "Product-knowledge manifest tests",
+        "Wiki completeness audit",
+        "FlowForge product Q&A drills"
+      ],
+      "knownGaps": [
+        "Manifest validation, query-time source search, and tool wiring exist; installed-runtime documentation distribution remains under validation."
+      ],
+      "sequenceFrames": []
+    },
+    {
+      "id": "release-validation",
+      "name": "Release validation",
+      "status": "partial",
+      "summary": "Release readiness is proven through docs, architecture audit, unit/lint/race tests, smoke, soaks, benchmarks, manual drills, and release notes/site collateral.",
+      "trigger": "Release branch approaches review or ceremony readiness.",
+      "actors": [
+        "operator"
+      ],
+      "steps": [
+        {
+          "id": "run-static-gates",
+          "from": "test-release-harness",
+          "to": "sql-store",
+          "kind": "request",
+          "action": "run tests with isolated state",
+          "summary": "Unit, integration, race, lint, and architecture tests run without touching production state.",
+          "data": [
+            "telemetry",
+            "runtime-config"
+          ]
+        },
+        {
+          "id": "static-gate-results",
+          "from": "sql-store",
+          "to": "test-release-harness",
+          "kind": "return",
+          "returnOf": "run-static-gates",
+          "action": "return static gate evidence",
+          "summary": "Test execution returns pass/fail evidence, isolated state paths, and typed failures.",
+          "data": [
+            "telemetry",
+            "runtime-config"
+          ]
+        },
+        {
+          "id": "run-soaks",
+          "from": "test-release-harness",
+          "to": "unified-pipeline",
+          "kind": "request",
+          "action": "run behavioral soaks",
+          "summary": "Behavioral soaks generate quantitative and qualitative scorecards against intentional model routes.",
+          "data": [
+            "operator-input",
+            "telemetry",
+            "memory-records",
+            "tool-artifacts"
+          ]
+        },
+        {
+          "id": "soak-scorecards-returned",
+          "from": "unified-pipeline",
+          "to": "test-release-harness",
+          "kind": "return",
+          "returnOf": "run-soaks",
+          "action": "return behavior scorecards",
+          "summary": "The pipeline/harness returns scenario outcomes, scorecards, route attribution, log findings, and stress diagnostics.",
+          "data": [
+            "operator-input",
+            "telemetry",
+            "memory-records",
+            "tool-artifacts"
+          ]
+        },
+        {
+          "id": "run-manual-drills",
+          "from": "operator",
+          "to": "test-release-harness",
+          "kind": "request",
+          "action": "record manual evidence",
+          "summary": "Voice, camera, mail, Windows repair, Web UI, CLI, and TUI manual drills record commit, OS, route, config root, and evidence path.",
+          "data": [
+            "telemetry",
+            "media-capture",
+            "mail-content"
+          ]
+        },
+        {
+          "id": "run-platform-repair-drill",
+          "from": "test-release-harness",
+          "to": "os-service-manager",
+          "kind": "request",
+          "action": "run platform repair drill",
+          "summary": "Windows stale-sidecar repair and platform service-manager checks run through the release harness instead of ad hoc manual cleanup.",
+          "data": [
+            "telemetry",
+            "runtime-config"
+          ]
+        },
+        {
+          "id": "platform-repair-result",
+          "from": "os-service-manager",
+          "to": "test-release-harness",
+          "kind": "return",
+          "returnOf": "run-platform-repair-drill",
+          "action": "return platform repair evidence",
+          "summary": "The platform service boundary returns repair success, blocker, or typed manual-action evidence.",
+          "data": [
+            "telemetry",
+            "runtime-config"
+          ]
+        },
+        {
+          "id": "manual-evidence-recorded",
+          "from": "test-release-harness",
+          "to": "operator",
+          "kind": "return",
+          "returnOf": "run-manual-drills",
+          "action": "return manual drill status",
+          "summary": "The harness reports pass, blocked, or failed manual evidence with the exact evidence path.",
+          "data": [
+            "telemetry",
+            "media-capture",
+            "mail-content"
+          ]
+        },
+        {
+          "id": "publish-evidence",
+          "from": "test-release-harness",
+          "to": "observability-system",
+          "kind": "request",
+          "action": "publish report cards",
+          "summary": "Final successful behavior-soak scorecards and release evidence are copied into release notes before ceremony.",
+          "data": [
+            "telemetry",
+            "public-metadata"
+          ]
+        },
+        {
+          "id": "release-evidence-published",
+          "from": "observability-system",
+          "to": "test-release-harness",
+          "kind": "return",
+          "returnOf": "publish-evidence",
+          "action": "return collateral status",
+          "summary": "Release collateral generation returns publication status or a typed release blocker.",
+          "data": [
+            "telemetry",
+            "public-metadata"
+          ]
+        }
+      ],
+      "sequenceFrames": [
+        {
+          "id": "automated-gates-frame",
+          "type": "transaction",
+          "label": "Automated gates",
+          "stepIds": [
+            "run-static-gates",
+            "static-gate-results",
+            "run-soaks",
+            "soak-scorecards-returned"
+          ]
+        },
+        {
+          "id": "manual-gates-frame",
+          "type": "transaction",
+          "label": "Manual gates",
+          "stepIds": [
+            "run-manual-drills",
+            "run-platform-repair-drill",
+            "platform-repair-result",
+            "manual-evidence-recorded"
+          ]
+        },
+        {
+          "id": "release-collateral-frame",
+          "type": "transaction",
+          "label": "Release collateral",
+          "stepIds": [
+            "publish-evidence",
+            "release-evidence-published"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Testing never mutates production ~/.flowforge-dev",
+        "Release ceremony cannot start until strict release gates are green.",
+        "Full local and the cloud provider behavior soaks are separate evidence."
+      ],
+      "failureBehavior": [
+        "Any failed gate blocks release rather than being scoped down silently."
+      ],
+      "observability": [
+        "release notes",
+        "scorecards",
+        "manual evidence files",
+        "CI status"
+      ],
+      "verification": [
+        "Release checklist",
+        "Manual release drill",
+        "Final architecture-rules audit"
+      ],
+      "knownGaps": [
+        "v1.1.0 closure plan still has open manual and implementation gates."
+      ]
+    }
+  ]
+}
