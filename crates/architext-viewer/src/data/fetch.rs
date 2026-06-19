@@ -110,6 +110,20 @@ pub async fn fetch_repo_tree() -> Result<RepoTreePayload, FetchError> {
     get_json::<RepoTreePayload>("/api/repo-tree").await
 }
 
+/// Fetch a single repo file's syntax-highlighted contents from
+/// `/api/file?path=<relpath>`. Fetched on demand by the Repo Tree file-preview
+/// pane when a file row is clicked. The server reads + highlights the file
+/// (the viewer carries no highlighter); the response carries inline-styled
+/// HTML the pane renders directly.
+///
+/// `path` is percent-encoded into the query so paths with spaces or other
+/// reserved characters round-trip safely.
+pub async fn fetch_file(path: &str) -> Result<FilePreviewPayload, FetchError> {
+    let encoded = String::from(js_sys::encode_uri_component(path));
+    let url = format!("/api/file?path={encoded}");
+    get_json::<FilePreviewPayload>(&url).await
+}
+
 /// Fetch the running CLI version from `/api/status` (`status.cliVersion`) for the
 /// header eyebrow. Non-fatal — the version is display-only, so a failure (or an
 /// older server without the field) degrades to `None` and the eyebrow omits it.

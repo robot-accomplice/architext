@@ -1460,7 +1460,96 @@ button:focus-visible {
   padding: var(--pad);
 }
 
-/* ── Repo Tree ──────────────────────────────────────────────────────────── */
+/* ── Repo Tree ────────────────────────────────────────────────────────────
+   Two panes: the file table on the left (keeps the F16 width cap + scrolls),
+   and a file-preview pane on the right filling the freed width. The shared
+   panel rule above gives .repo-tree `position:absolute; inset:0; overflow:auto`;
+   we switch it to a flex row and hand scrolling to the individual panes. */
+.repo-tree {
+  display: flex;
+  align-items: stretch;
+  gap: var(--pad);
+  overflow: hidden;
+}
+/* Left pane: the existing header + tree body. Scrolls independently; the F16
+   cap lives on .repo-tree__body inside it, so the table stays compact while
+   this column still yields its slack to the preview pane. */
+.repo-tree__main {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 52rem;       /* mirrors the F16 body cap: on a wide center the table stops here and the preview takes the freed width; on a narrow center the two panes share 50/50 instead of the table starving the preview */
+  overflow: auto;
+}
+/* No file selected → the preview collapses and the table reclaims the full
+   width (the F16 layout). Clicking a file reveals the preview and the panes
+   share the row. */
+.repo-tree:not(.repo-tree--previewing) .repo-file-preview { display: none; }
+/* Right pane: the file preview, filling the width the F16 cap freed up. A
+   hairline border separates it from the table; it scrolls on its own. */
+.repo-file-preview {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: var(--hairline) solid var(--line);
+  background: var(--surface);
+  overflow: hidden;
+}
+.repo-file-preview__hint {
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: var(--pad);
+  margin: 0;
+}
+.repo-file-preview__hint--error { color: var(--c4-actor); }
+/* Overline header: path on the left, size · language metadata on the right. */
+.repo-file-preview__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--pad);
+  padding: var(--pad-tight) var(--pad);
+  border-bottom: var(--hairline) solid var(--line);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.repo-file-preview__path {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.repo-file-preview__meta {
+  color: var(--dim);
+  white-space: nowrap;
+}
+.repo-file-preview__notice {
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: var(--pad-tight) var(--pad);
+  border-bottom: var(--hairline) solid var(--line);
+  margin: 0;
+}
+/* The highlighted code. syntect emits an inline-styled <pre> (its own bg +
+   token colors from the bundled theme); we only own the mono font, the scroll,
+   and "no wrap" so long lines scroll horizontally instead of reflowing. */
+.repo-file-preview__code {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: var(--pad-tight) var(--pad);
+}
+.repo-file-preview__code pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--body-size);
+  white-space: pre;
+  line-height: 1.5;
+}
+
 .repo-tree__header {
   display: flex;
   align-items: center;
