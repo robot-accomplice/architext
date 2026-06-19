@@ -184,7 +184,10 @@
 
   --ink: #14181b;            /* primary text */
   --muted: #44535a;          /* secondary text / overlines */
-  --dim: #6b7a80;            /* tertiary / disabled */
+  /* Darkened one step (#6b7a80 → #5f6e74) so dim mono sub-labels (actor, module,
+     data-store, overlines) clear WCAG AA (4.5:1) for small text on the light
+     panel surfaces, where they were below comfortable contrast (~3.8–4.5:1). */
+  --dim: #5f6e74;            /* tertiary / disabled */
 
   --line: #cfd8dd;
   --line-strong: #8c9aa1;
