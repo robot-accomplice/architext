@@ -1,0 +1,1 @@
+{ "text": "# My File\n\n## Architext Project Rules\n\nProject rules are maintained in `docs/architext/data/rules.json`.\nDo not duplicate long-lived project rules across model-specific instruction files.\n\n## Other Section\n\nOther content.\n" }

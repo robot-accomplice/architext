@@ -1,0 +1,16 @@
+{
+  "schemaVersion": "1.5.0",
+  "project": { "id": "test", "name": "Test", "summary": "Test project." },
+  "generatedAt": "2026-01-01T00:00:00.000Z",
+  "defaultViewId": "main-view",
+  "files": {
+    "nodes": "nodes.json",
+    "flows": "flows.json",
+    "views": "views.json",
+    "dataClassification": "data-classification.json",
+    "decisions": "decisions.json",
+    "risks": "risks.json",
+    "glossary": "glossary.json"
+  },
+  "notes": ["Test fixture."]
+}

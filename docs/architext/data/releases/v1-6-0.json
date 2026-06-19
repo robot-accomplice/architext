@@ -1,0 +1,402 @@
+{
+  "id": "v1-6-0",
+  "version": "1.6.0",
+  "name": "Architext 1.6.0 Routing Overhaul",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Architext 1.6.0 rebuilds orthogonal edge routing around a single weighted-sum mount-cost objective, reduces and hops diagram crossings, coordinates reciprocal pairs, and derives mount spacing from the rendered arrowhead instead of magic numbers. A sanitized high-complexity corpus and a fitness ratchet lock the gains against regression. Also absorbs the audit-remediation and source/target-split work originally tracked as 1.5.1 (1.5.1 never shipped).",
+  "targetDate": "2026-06-06",
+  "lastUpdated": "2026-06-07T13:10:00.000Z",
+  "updateSource": "1.6.0 routing-overhaul release (PR #81); absorbs the unshipped 1.5.1 scope",
+  "scope": {
+    "required": [
+      {
+        "id": "weighted-sum-mount-cost",
+        "title": "Single weighted-sum mount-cost objective",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Replace the tiered mount cost with one weighted-sum objective ordered doglegs > crossings > crowding, plus relief passes for crowded surfaces, soft over-capacity tolerance, and optimizer move scoring by strict crossings.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "orthogonal-routing-engine",
+        "dependsOn": [],
+        "evidence": [
+          "viewer/src/routing/routeMountModel.js",
+          "viewer/src/routing/routeConstants.js"
+        ]
+      },
+      {
+        "id": "crossing-reduction",
+        "title": "Crossing reduction and hop rendering",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Vertex-hop collinear merge, width-aware spread with crossing-minimizing unit order, gutter-lane ordering (farthest target takes the outermost lane), and a combinatorial swap-search; adaptive hop radius so every rendered crossing carries a hop.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "orthogonal-routing-engine",
+        "dependsOn": [
+          "weighted-sum-mount-cost"
+        ],
+        "evidence": [
+          "viewer/src/routing/routeEdges.js",
+          "viewer/src/routing/routeDiagnostics.js"
+        ]
+      },
+      {
+        "id": "reciprocal-pair-routing",
+        "title": "Reciprocal-pair coordination",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Pair request and return edges as parallel bundles, straighten self-crossing pairs, build nested gutter bridges, and distribute pair mounts atomically and evenly across shared faces.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "orthogonal-routing-engine",
+        "dependsOn": [
+          "weighted-sum-mount-cost"
+        ],
+        "evidence": [
+          "viewer/src/routing/routeReciprocal.js",
+          "test/routing-mount-distribution.test.mjs"
+        ]
+      },
+      {
+        "id": "arrowhead-derived-spacing",
+        "title": "Arrowhead-derived mount spacing",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Derive the minimum legible gap and surface capacity from the rendered arrowhead (half an arrowhead, 4px) instead of two disagreeing magic numbers, so reciprocal pairs stop splitting onto remote faces when they would have fit.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "orthogonal-routing-engine",
+        "dependsOn": [
+          "weighted-sum-mount-cost"
+        ],
+        "evidence": [
+          "viewer/src/routing/routeConstants.js",
+          "viewer/src/routing/routePorts.js"
+        ]
+      },
+      {
+        "id": "routing-corpus-ratchet",
+        "title": "High-complexity corpus and fitness ratchet",
+        "kind": "test",
+        "status": "complete",
+        "summary": "A sanitized in-repo routing corpus (66 nodes, 30 views, 15 flows) plus a frozen-baseline fitness ratchet and pair-internal and lane-order crossing detectors, wired into the benchmark gate so no change can silently make a complex diagram worse.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "routing-validation-harness",
+        "dependsOn": [],
+        "evidence": [
+          "test/fixtures/routing-corpus/",
+          "test/routing-corpus-fitness.test.mjs"
+        ]
+      },
+      {
+        "id": "routing-overlay-ergonomics",
+        "title": "Planning overlay narration and viewer fixes",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Narrate routing passes in the planning overlay, persist the steps-panel collapse state, keep overlays at the canvas z-index and fit them to content bounds, and restore the TypeScript build after the overlay change.",
+        "priority": "low",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-06T19:25:00.000Z",
+        "workstreamId": "viewer-routing-ergonomics",
+        "dependsOn": [],
+        "evidence": [
+          "viewer/src/routing/usePlannedDiagram.js",
+          "viewer/src/presentation/"
+        ]
+      },
+      {
+        "id": "package-source-target-split",
+        "title": "Package source and target data split",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Move package-owned viewer source, schemas, validator, and Vite project out of docs/architext so sync cleanup cannot collide with Architext's own source tree.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-27T15:30:00.000Z",
+        "workstreamId": "source-target-boundaries",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/PACKAGE_SOURCE_TARGET_DATA_SPLIT.md",
+          "viewer",
+          "package.json",
+          "src/adapters/cli/architext-cli.mjs"
+        ]
+      },
+      {
+        "id": "remaining-audit-remediation",
+        "title": "Remaining audit remediation",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Finish the HIGH correctness/robustness audit items: byte-snapshot rollback in rules-api, full plan cache key (planInputKey), serve-state delete only on parse/ENOENT, gate auto-update under --yes, centralize routeConstants, single guarded-selection wrapper, and de-flake the serve port-reuse race (serve-lifecycle 5/5 green). The remaining App god-component decomposition is a no-behavior-change refactor, split out as a deferred item.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-27T15:30:00.000Z",
+        "workstreamId": "audit-hardening",
+        "dependsOn": [],
+        "evidence": [
+          "docs/superpowers/plans/2026-05-27-architext-audit-remediation.md",
+          "npm test",
+          "npm run verify"
+        ]
+      },
+      {
+        "id": "release-verification",
+        "title": "Release verification",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Run validation, full tests, build, routing benchmark, UAT, package dry-run, and packed CLI smoke checks before release.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-27T15:30:00.000Z",
+        "workstreamId": "release-gates",
+        "dependsOn": [
+          "package-source-target-split",
+          "remaining-audit-remediation"
+        ],
+        "evidence": [
+          "docs/architecture/RELEASE_1_5_1_SUCCESS_CRITERIA.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [
+      {
+        "id": "repo-tree-view",
+        "title": "Repository tree view",
+        "kind": "feature",
+        "status": "deferred",
+        "summary": "Top-level Repo Tree tab for source layout understanding. Reassigned to 1.6.1 Repository Intelligence and Diagram Config; not part of the routing overhaul shipped in 1.6.0.",
+        "source": "roadmap",
+        "dateAdded": "2026-05-27T16:30:00.000Z",
+        "priority": "high",
+        "dependsOn": []
+      },
+      {
+        "id": "repo-blast-radius-search",
+        "title": "Repository blast-radius search",
+        "kind": "feature",
+        "status": "deferred",
+        "summary": "Search for filenames, components, or code concepts to see where a concern reaches. Reassigned to 1.6.1 Repository Intelligence and Diagram Config.",
+        "source": "roadmap",
+        "dateAdded": "2026-05-27T16:30:00.000Z",
+        "priority": "high",
+        "dependsOn": []
+      },
+      {
+        "id": "diagram-spacing-controls",
+        "title": "Diagram spacing controls",
+        "kind": "feature",
+        "status": "deferred",
+        "summary": "Explicit controls for diagram column width and sequence-diagram row spacing. Reassigned to 1.6.1.",
+        "source": "roadmap",
+        "dateAdded": "2026-05-27T16:30:00.000Z",
+        "priority": "medium",
+        "dependsOn": []
+      },
+      {
+        "id": "persistent-architecture-element-notes",
+        "title": "Persistent architecture element notes",
+        "kind": "feature",
+        "status": "deferred",
+        "summary": "Edit or annotate architecture elements and persist the notes in Architext JSON. Reassigned to 1.6.1.",
+        "source": "roadmap",
+        "dateAdded": "2026-05-27T16:30:00.000Z",
+        "priority": "high",
+        "dependsOn": []
+      },
+      {
+        "id": "app-component-decomposition",
+        "title": "Decompose the App god-component",
+        "kind": "chore",
+        "status": "deferred",
+        "summary": "Extract App (viewer/src/main.tsx) into useArchitextModel / useDiagramViewport / useNavigation hooks. Deferred from 1.6.0 because it is a structural refactor with NO behavior change (not a correctness or release blocker), the viewer source relocated since the audit plan was written (docs/architext/src -> viewer/src) so it needs re-scoping against the new layout, and there is no automated UI harness for App so it carries manual-verification risk best taken outside a release cut. Target 1.6.1.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-07T00:00:00.000Z",
+        "priority": "low",
+        "dependsOn": []
+      },
+      {
+        "id": "crowded-face-surface-refinements",
+        "title": "Crowded-face surface-selection refinements",
+        "kind": "feature",
+        "status": "deferred",
+        "summary": "Two single-flow surface-selection niceties on faces carrying 5-6 edges, deferred because the diagrams are already clean (legible, zero crossings, zero sub-floor merges) and the fixes need distribution-pass surgery (re-spreading a crowded face so a moved pair lands >= the legibility floor from its neighbours) that carries regression risk to the 13 clean corpus flows — not worth taking inside a release cut. (1) skill-plugin-lifecycle: unify the use-skill/return pair onto unified-pipeline.south (line 7 currently mounts east); blocked by 6 edges on skill-plugin-system.west. (2) mail-operations: the config<->mail and operator<->mail pairs cross near mail-service, and the 9px approach legs (legible under the 4px standard) could spread further. Target 1.6.1.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-07T00:00:00.000Z",
+        "priority": "low",
+        "dependsOn": []
+      }
+    ],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "orthogonal-routing-engine",
+      "name": "Orthogonal Routing Engine",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Rebuild orthogonal edge routing on a single weighted-sum mount-cost objective with crossing reduction, reciprocal-pair coordination, and arrowhead-derived spacing.",
+      "progress": 100,
+      "itemIds": [
+        "weighted-sum-mount-cost",
+        "crossing-reduction",
+        "reciprocal-pair-routing",
+        "arrowhead-derived-spacing"
+      ],
+      "evidence": [
+        "viewer/src/routing/",
+        "npm run test:benchmark"
+      ]
+    },
+    {
+      "id": "routing-validation-harness",
+      "name": "Routing Validation Harness",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Lock routing quality with an in-repo high-complexity corpus and a frozen-baseline fitness ratchet in the benchmark gate.",
+      "progress": 100,
+      "itemIds": [
+        "routing-corpus-ratchet"
+      ],
+      "evidence": [
+        "test/fixtures/routing-corpus/",
+        "test/routing-corpus-fitness.test.mjs"
+      ]
+    },
+    {
+      "id": "viewer-routing-ergonomics",
+      "name": "Viewer Routing Ergonomics",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Surface routing passes in the planning overlay and tidy viewer overlay behavior without changing semantic data.",
+      "progress": 100,
+      "itemIds": [
+        "routing-overlay-ergonomics"
+      ],
+      "evidence": [
+        "viewer/src/presentation/"
+      ]
+    },
+    {
+      "id": "source-target-boundaries",
+      "name": "Source Target Boundaries",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Keep package-owned source separate from target-owned architecture data.",
+      "progress": 100,
+      "itemIds": [
+        "package-source-target-split"
+      ],
+      "evidence": [
+        "docs/architecture/PACKAGE_SOURCE_TARGET_DATA_SPLIT.md",
+        "npm pack --dry-run --json"
+      ]
+    },
+    {
+      "id": "audit-hardening",
+      "name": "Audit Hardening",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "HIGH correctness/robustness audit items closed; the App-decomposition refactor is deferred.",
+      "progress": 100,
+      "itemIds": [
+        "remaining-audit-remediation"
+      ],
+      "evidence": [
+        "docs/superpowers/plans/2026-05-27-architext-audit-remediation.md"
+      ]
+    },
+    {
+      "id": "release-gates",
+      "name": "Release Gates",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Prove the package remains buildable, shippable, and usable after the audit sweep.",
+      "progress": 100,
+      "itemIds": [
+        "release-verification"
+      ],
+      "evidence": [
+        "docs/architecture/RELEASE_1_5_1_SUCCESS_CRITERIA.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "mount-cost-unified",
+      "label": "Mount cost model unified",
+      "status": "complete",
+      "targetWindow": "1.6.0 routing overhaul",
+      "order": 1,
+      "itemIds": [
+        "weighted-sum-mount-cost"
+      ]
+    },
+    {
+      "id": "crossings-reduced",
+      "label": "Crossings reduced and hopped",
+      "status": "complete",
+      "targetWindow": "1.6.0 routing overhaul",
+      "order": 2,
+      "itemIds": [
+        "crossing-reduction",
+        "reciprocal-pair-routing"
+      ]
+    },
+    {
+      "id": "harness-landed",
+      "label": "Routing validation harness landed",
+      "status": "complete",
+      "targetWindow": "1.6.0 routing overhaul",
+      "order": 3,
+      "itemIds": [
+        "routing-corpus-ratchet",
+        "arrowhead-derived-spacing"
+      ]
+    },
+    {
+      "id": "release-verified",
+      "label": "Release verified",
+      "status": "complete",
+      "targetWindow": "1.6.0 release",
+      "order": 4,
+      "itemIds": [
+        "routing-overlay-ergonomics"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "pr-81-routing-overhaul",
+      "label": "PR #81 routing-overhaul",
+      "href": "https://github.com/robot-accomplice/architext/pull/81",
+      "kind": "release-note",
+      "status": "in-progress"
+    },
+    {
+      "id": "release-gate-green",
+      "label": "release:check green (330/330 tests, benchmarks, corpus ratchet, build, UAT, pack smoke)",
+      "href": "package.json",
+      "kind": "test",
+      "status": "complete"
+    }
+  ],
+  "releasedAt": "2026-06-07T13:10:00.000Z"
+}

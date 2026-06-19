@@ -9,8 +9,23 @@ import test from "node:test";
 
 const repoRoot = path.resolve(import.meta.dirname, "..");
 const cli = path.join(repoRoot, "tools", "architext-adopt.mjs");
-const template = path.join(repoRoot, "docs", "architext");
+const viewerTemplate = path.join(repoRoot, "viewer");
+const templateData = path.join(repoRoot, "docs", "architext", "data");
 const packageVersion = JSON.parse(readFileSync(path.join(repoRoot, "package.json"), "utf8")).version;
+const copiedTemplateEntries = [
+  "AGENTS_APPENDIX.md",
+  "LLM_ARCHITEXT.md",
+  "README.md",
+  "index.html",
+  "package-lock.json",
+  "package.json",
+  "public",
+  "schema",
+  "src",
+  "tools",
+  "tsconfig.json",
+  "vite.config.ts"
+];
 
 function run(args, cwd = repoRoot) {
   return execFileSync(process.execPath, [cli, ...args], {
@@ -39,6 +54,15 @@ function cleanup(dir) {
 
 function writeJson(file, value) {
   writeFileSync(file, `${JSON.stringify(value, null, 2)}\n`);
+}
+
+async function writeLegacyCopiedInstall(target) {
+  const legacyDir = path.join(target, "docs", "architext");
+  await mkdir(legacyDir, { recursive: true });
+  for (const entry of copiedTemplateEntries) {
+    await cp(path.join(viewerTemplate, entry), path.join(legacyDir, entry), { recursive: true });
+  }
+  await cp(templateData, path.join(legacyDir, "data"), { recursive: true });
 }
 
 test("sync installs data-only Architext into a fresh repository", () => {
@@ -83,8 +107,7 @@ test("sync caps generated starter project slugs", async () => {
 test("sync migrates copied installs without rewriting architecture data", async () => {
   const target = tempRepo();
   try {
-    await mkdir(path.join(target, "docs"), { recursive: true });
-    await cp(template, path.join(target, "docs", "architext"), { recursive: true });
+    await writeLegacyCopiedInstall(target);
     const beforeManifest = readFileSync(path.join(target, "docs", "architext", "data", "manifest.json"), "utf8");
     writeFileSync(path.join(target, "AGENTS.md"), "Intro\n\n## Architext Architecture Documentation\n\nOld copied instructions. Run cd docs/architext && npm run validate and edit docs/architext/src.\n\n## Other\n\nKeep this.\n");
 
@@ -212,12 +235,12 @@ test("doctor repairs stale Architext data schema versions", () => {
     writeJson(manifestPath, { ...manifest, schemaVersion: "0.1.0" });
 
     const dryRun = run(["doctor", target, "--dry-run"]);
-    assert.match(dryRun, /Schema: 0\.1\.0 \(expected 1\.4\.0\)/);
+    assert.match(dryRun, /Schema: 0\.1\.0 \(expected 1\.5\.0\)/);
     assert.match(dryRun, /Schema migrations: 1 pending/);
-    assert.match(dryRun, /apply breaking schema migration 0\.1\.0 -> 1\.4\.0: update manifest\.schemaVersion/);
+    assert.match(dryRun, /apply breaking schema migration 0\.1\.0 -> 1\.5\.0: update manifest\.schemaVersion/);
 
     run(["doctor", target, "--yes"]);
-    assert.equal(JSON.parse(readFileSync(manifestPath, "utf8")).schemaVersion, "1.4.0");
+    assert.equal(JSON.parse(readFileSync(manifestPath, "utf8")).schemaVersion, "1.5.0");
   } finally {
     cleanup(target);
   }
@@ -260,6 +283,11 @@ test("doctor and sync migrate model-specific instruction rules into Rules data",
     assert.match(syncDryRun, /Doctor repairs available/);
     assert.match(syncDryRun, /Would apply doctor repairs/);
     assert.match(syncDryRun, /migrate instruction rule: Prefer deterministic CLI repairs over manual JSON/);
+
+    const sync = run(["sync", target, "--yes", "--branch", "none"]);
+    assert.doesNotMatch(sync, /Doctor repairs available/);
+    assert.match(sync, /Doctor repairs: none/);
+    assert.match(readFileSync(path.join(target, ".cursorrules"), "utf8"), /docs\/architext\/data\/rules\.json/);
   } finally {
     cleanup(target);
   }
@@ -282,8 +310,13 @@ test("prompt includes Release Truth maintenance rules for agents", () => {
   assert.match(output, /Keep flow diagrams free of orphaned elements/);
   assert.match(output, /every rendered node, edge, marker, and label must be traceable/);
   assert.match(output, /Remove disconnected context, connect it with a labeled relationship, or split it into a separate view/);
+  assert.match(output, /semantic iconography over UML\/code diagrams/);
+  assert.match(output, /decision, start, stop, async, persistence, artifact, return, and process semantics with step.kind/);
+  assert.match(output, /create at least two outgoing outcome steps from the decision node/);
+  assert.match(output, /branch lines to share the decision step number/);
   assert.match(output, /For sequence diagrams, create explicit return paths/);
-  assert.match(output, /outbound plus return messages inside loops, retries, optional branches, and transaction or consistency blocks/);
+  assert.match(output, /mark returns with kind: "return" and returnOf/);
+  assert.match(output, /use sequenceFrames for loops, retries, optional branches, and transaction or consistency blocks/);
   assert.match(output, /Build C4 drilldown chains with explicit scopeNodeId metadata/);
   assert.match(output, /leave actors and external dependencies without child views/);
 });
@@ -296,6 +329,23 @@ test("prompt includes source extraction draft guidance", () => {
   assert.match(output, /reviewable draft of proposed JSON changes/);
   assert.match(output, /source paths and confidence notes/);
   assert.match(output, /Validation remains required/);
+});
+
+test("skill prints the packaged Architext skill content", () => {
+  const cwd = tempRepo();
+  try {
+    const output = run(["skill"], cwd);
+    const expected = readFileSync(path.join(repoRoot, "skills", "architext", "SKILL.md"), "utf8").trimEnd();
+
+    assert.equal(output.trimEnd(), expected);
+    assert.match(output, /^---\nname: architext/m);
+    assert.match(output, /description: Use when architecture, flows, C4 views/);
+    assert.match(output, /# Architext/);
+    assert.match(output, /Keep flows ordered and traceable/);
+    assert.match(output, /Sequence diagrams must make round trips explicit/);
+  } finally {
+    cleanup(cwd);
+  }
 });
 
 test("managed agent instructions include Release Truth source-of-truth rules", () => {
@@ -320,8 +370,13 @@ test("managed agent instructions include Release Truth source-of-truth rules", (
       assert.match(instructions, /Keep flow diagrams free of orphaned elements/);
       assert.match(instructions, /Every rendered node, edge, marker,\s+and label must be traceable/);
       assert.match(instructions, /Remove disconnected context, connect it with a labeled relationship, or split it\s+into a separate view/);
+      assert.match(instructions, /semantic iconography over UML\/code diagrams/);
+      assert.match(instructions, /decision, start,\s+stop, async, persistence, artifact, return, and process semantics with\s+`step\.kind`/);
+      assert.match(instructions, /For decision branches, set `step\.outcome`/);
+      assert.match(instructions, /branch lines should share the decision step number/);
       assert.match(instructions, /create explicit return\s+paths\s+for request\/response, command\/result, event\/acknowledgement, and\s+failure-return\s+interactions/);
-      assert.match(instructions, /transaction or consistency blocks to group outbound and\s+return messages\s+together/);
+      assert.match(instructions, /kind:\s+"return"/);
+      assert.match(instructions, /`sequenceFrames` for loops, retries, optional branches, and transaction or\s+consistency blocks/);
       assert.match(instructions, /C4 drilldown/);
       assert.match(instructions, /scopeNodeId/);
       assert.match(instructions, /Do not represent unreviewed planning proposals as current Release Truth facts/);
@@ -427,10 +482,11 @@ test("--help documents path defaults and common commands", () => {
   assert.match(output, /--open\s+Open the local viewer in the system browser/);
   assert.match(output, /--no-open\s+Do not open the system browser/);
   assert.match(output, /--host <host>\s+Serve bind host\. Defaults to 127\.0\.0\.1/);
-  assert.match(output, /--port <port>\s+Preferred serve port\. Defaults to 4317; startup advances if occupied/);
+  assert.match(output, /--port <port>\s+Preferred serve port\. Defaults to 4317; use 0 for an OS-assigned port/);
   assert.match(output, /--status\s+Show the recorded serve process/);
   assert.match(output, /--stop\s+Stop the recorded serve process/);
   assert.match(output, /\[path\] is optional and defaults to the current directory/);
+  assert.match(output, /skill\s+Print the Architext SKILL\.md content for LLM skill creation/);
   assert.match(output, /version\s+Print the Architext package version/);
   assert.match(output, /architext serve/);
   assert.match(output, /architext serve --foreground/);
@@ -441,6 +497,7 @@ test("--help documents path defaults and common commands", () => {
   assert.match(output, /architext serve --stop/);
   assert.match(output, /architext serve --host 127\.0\.0\.1 --port 4517/);
   assert.match(output, /architext sync \. --dry-run/);
+  assert.match(output, /architext skill/);
   assert.match(output, /Target repos should commit only project-owned Architext state/);
   assert.match(output, /optional AGENTS\.md, CLAUDE\.md, Cursor rule, or \.cursorrules pointers/);
   assert.match(output, /Do not copy or edit package-owned viewer, schema, tool, package, Vite,/);

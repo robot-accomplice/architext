@@ -43,7 +43,7 @@ The existing publish workflow should remain focused on npmjs and should:
 2. Keep a manual dry-run and recovery dispatch path.
 3. Derive the package version from the release tag for release-triggered runs.
 4. Checks out tag `vX.Y.Z`.
-5. Runs `npm ci` and `npm ci --prefix docs/architext`.
+5. Runs `npm ci` and `npm ci --prefix viewer`.
 6. Runs `npm run release:check`.
 7. Configures `actions/setup-node` with
    `registry-url: https://registry.npmjs.org`.

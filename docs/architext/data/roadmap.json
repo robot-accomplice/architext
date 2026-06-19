@@ -88,10 +88,10 @@
       "dateAdded": "2026-05-18T06:05:00.000Z",
       "targetReleaseId": "v1-4-0",
       "evidence": [
-        "docs/architext/src/main.tsx PDF control",
-        "docs/architext/src/styles.css print artifact styles",
+        "viewer/src/main.tsx PDF control",
+        "viewer/src/styles.css print artifact styles",
         "test/pdf-export-ui.test.mjs",
-        "npm --prefix docs/architext run build"
+        "npm --prefix viewer run build"
       ]
     },
     {
@@ -162,7 +162,7 @@
       "evidence": [
         "node --test test/view-selection.test.mjs test/fetch-architecture-data.test.mjs",
         "npm run validate",
-        "npm --prefix docs/architext run build"
+        "npm --prefix viewer run build"
       ]
     },
     {
@@ -236,8 +236,8 @@
       "targetReleaseId": "v1-4-1",
       "dateAdded": "2026-05-21T13:00:00.000Z",
       "evidence": [
-        "docs/architext/src/main.tsx RulesWorkspace action footer",
-        "docs/architext/src/styles.css rule editor action styles",
+        "viewer/src/main.tsx RulesWorkspace action footer",
+        "viewer/src/styles.css rule editor action styles",
         "npm test"
       ]
     },
@@ -292,6 +292,82 @@
         "test/serve-lifecycle.test.mjs",
         "npm test"
       ]
+    },
+    {
+      "id": "repo-tree-view",
+      "title": "Repository tree view",
+      "summary": "Add a top-level Repo Tree tab that helps users understand source layout, optionally color-coding folders tied to C4 or Flow responsibilities and leaving room for a future 3D graph projection.",
+      "kind": "feature",
+      "status": "complete",
+      "priority": "high",
+      "section": "Repository Intelligence",
+      "targetReleaseId": "v1-6-1",
+      "dateAdded": "2026-05-27T16:30:00.000Z"
+    },
+    {
+      "id": "repo-blast-radius-search",
+      "title": "Repository blast-radius search",
+      "summary": "Provide search for filenames, components, or known code concepts so users can see where a concern reaches across repository files and architecture elements.",
+      "kind": "feature",
+      "status": "complete",
+      "priority": "high",
+      "section": "Repository Intelligence",
+      "targetReleaseId": "v1-6-1",
+      "dateAdded": "2026-05-27T16:30:00.000Z"
+    },
+    {
+      "id": "diagram-spacing-controls",
+      "title": "Diagram spacing controls",
+      "summary": "Add explicit ergonomics controls for diagram column width and sequence-diagram row spacing so users can improve readability without relying only on zoom. FOLDED INTO 1.7.0 (maintainer decision 2026-06-15): not shipped as a 1.6.4 patch. WHY: the controls only surface laneWidth/rowGap overrides the planner already accepts as planInput (planKey includes laneWidth/rowGap; diagramLayout takes a layoutConfig override), so there is no engine work — and the imminent UI refactor (new design language) would immediately restyle and relocate any standalone-patch UI, making a 1.6.4 throwaway churn. Building it once, in the new design language, alongside the refactor is strictly less work. PARITY NOTE: the routing-engine byte-parity gate holds the DEFAULT layout inputs fixed (nodeWidth 136 / nodeHeight 54 / laneWidth 210 / rowGap 102, dense 240/176); these controls change inputs only on explicit user action, so they do not move the parity baseline — they land with the UI refactor, after the engine parity port, and the Rust engine honors the overrides as existing planInput. targetReleaseId intentionally unset until the v1-7-0 release exists (Release Truth ids must reference an existing release), matching go-rewrite-cli-backend.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Diagram Ergonomics",
+      "dateAdded": "2026-05-27T16:30:00.000Z",
+      "targetReleaseId": "v1-7-0"
+    },
+    {
+      "id": "persistent-architecture-element-notes",
+      "title": "Persistent architecture element notes",
+      "summary": "Allow users to edit or annotate architecture elements and persist the notes in Architext JSON, including cases where a high-risk area is intentionally mitigated by the system being documented.",
+      "kind": "feature",
+      "status": "complete",
+      "priority": "high",
+      "section": "Architecture Editing",
+      "targetReleaseId": "v1-6-1",
+      "dateAdded": "2026-05-27T16:30:00.000Z"
+    },
+    {
+      "id": "go-rewrite-cli-backend",
+      "title": "Rust rewrite — zero Node anywhere (CLI, serve, engine, AND viewer)",
+      "summary": "Reimplement the ENTIRE product in Rust with NO Node dependency surviving — runtime AND build/dev (maintainer hard mandate 2026-06-15). Backend: architext-routing engine (one Rust core → native + WASM), validation, serve HTTP layer, lifecycle commands, single signed binary. Frontend: the React/Vite viewer is REWRITTEN as a Rust → WASM UI (Leptos/Dioxus/Yew) — no JSX/Vite/npm — reusing architext-routing directly; the Stitch design language is implemented there under the design-language-fidelity-audit rule. ALL in 1.7.0 (engine port + viewer rewrite in parallel). Migration tooling (differential parity harness, ajv-vs-Rust conformance, node --test JS suite) is transitional — deleted with the JS code; any kept regression harness is reimplemented in Rust. Distribution: native installers (brew/curl/signed releases, Node-free) are the default; the npm channel is retained ONLY as an opt-in compatibility bridge (a JS launcher run under the USER's Node) for existing installs, droppable if even that touchpoint is unacceptable. Data contract + CLI surface preserved exactly (minor release); byte-parity migration gate (route-parity fingerprints) + validation conformance corpus. Full design: docs/superpowers/specs/2026-06-15-rust-backend-rewrite-design.md.",
+      "kind": "architecture",
+      "status": "planned",
+      "priority": "high",
+      "section": "Rust Rewrite",
+      "dateAdded": "2026-06-10T00:00:00.000Z",
+      "targetReleaseId": "v1-7-0"
+    },
+    {
+      "id": "design-language-consolidation",
+      "title": "Consolidate viewer modes onto the shared design language",
+      "summary": "Consolidate the viewer modes onto the shared design language in viewer/DESIGN.md. DELIVERED: (1) component-type color is now single-sourced from the --c4-* tokens in C4_COLOR (repoTreeColors.js), fixing the worker mismatch (was purple in the views vs yellow in the diagram) and adding --c4-system/--c4-queue tokens + matching .c4-node classes so diagram and views agree for every type; (2) the colored left rail is one custom property --accent across detail/notes/blast (was three names --section-accent/--card-accent/--note-accent); (3) section-label tracking converged onto var(--overline-tracking) for the drifting headers (repo-tree col header, blast section titles, diagram-config headers, kanban headers). DEFERRED (low value / high churn): rewriting each mode's existing markup to use the literal .overline / .accent-surface utility classes (the tokens already give the shared treatment without the churn) and a full chip/count-pill component unification (cosmetically consistent already); revisit only if a future mode needs them. Verified live on the corpus: worker rgb(255,210,31), section-label tracking 0.08em, all accent rails render; 392/392 tests, validate clean.",
+      "kind": "chore",
+      "status": "complete",
+      "priority": "medium",
+      "section": "Design System",
+      "dateAdded": "2026-06-10T00:00:00.000Z"
+    },
+    {
+      "id": "parallel-plan-precompute",
+      "title": "Parallelize server-side route calculation",
+      "summary": "The serve-side plan precompute farm (shipped 1.6.3-era, PR #107) computes flow x view plans sequentially in a single worker thread, so a full warmup is the sum of all plan times (~3 minutes for the routing corpus). Now that planning lives in the Node backend, fan the farm out across a worker-thread pool (cpu_count - 1, plans are independent and embarrassingly parallel) to cut warmup roughly by the pool width, prioritizing the default view x flow pairs first so the first screen a user opens is warm earliest. Generation-based invalidation already tolerates concurrent completion; the pool must preserve it. Also a direct fit for the 1.7.0 Go backend, where goroutine fan-out replaces the thread pool.",
+      "kind": "feature",
+      "status": "planned",
+      "priority": "medium",
+      "section": "Routing Performance",
+      "dateAdded": "2026-06-11T00:00:00.000Z",
+      "targetReleaseId": "v1-7-0"
     }
   ]
 }

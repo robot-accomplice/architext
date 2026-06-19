@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { planDiagram } from "../docs/architext/src/routing/planDiagram.js";
-import { relationshipLabel } from "../docs/architext/src/routing/relationshipLabels.js";
-import { pathToSvgWithHops, routeIntersectsRect } from "../docs/architext/src/routing/routeEdges.js";
+import { planDiagram } from "../viewer/src/routing/planDiagram.js";
+import { relationshipLabel } from "../viewer/src/routing/relationshipLabels.js";
+import { pathToSvgWithHops, routeIntersectsRect } from "../viewer/src/routing/routeEdges.js";
+import { diagnosePlannedRoutes } from "../viewer/src/routing/routeDiagnostics.js";
 
 const architextNodes = JSON.parse(readFileSync(new URL("../docs/architext/data/nodes.json", import.meta.url), "utf8")).nodes;
 const architextFlows = JSON.parse(readFileSync(new URL("../docs/architext/data/flows.json", import.meta.url), "utf8")).flows;
@@ -33,6 +34,7 @@ function planFixture(view, relationships, overrides = {}) {
 function assertPlanFitness(plan, relationships, options = {}) {
   assert.equal(plan.routes.size, relationships.length);
   assert.equal(plan.labelBoxes.size, relationships.length);
+  assertNoCriticalDiagnosticFindings(plan, relationships);
   for (const relationship of relationships) {
     const route = plan.routes.get(relationship.id);
     assert.ok(route, `missing route for ${relationship.id}`);
@@ -42,10 +44,26 @@ function assertPlanFitness(plan, relationships, options = {}) {
     assert.ok(route.bends <= (options.maxBends ?? 8), `${relationship.id} has too many bends: ${route.bends}`);
     assertRouteQualityCosts(route);
     assertPerpendicularContact(route, plan.nodeRects.get(relationship.from), plan.nodeRects.get(relationship.to), relationship.id);
+    assertNoEndpointNodeTraversal(route, plan, relationship);
     assertNoNodeBodyCollisions(route, plan, relationship);
     assertLabelAvoidsNodes(plan.labelBoxes.get(relationship.id), plan, relationship);
   }
-  assertNoRepeatedCrossings([...plan.routes.values()]);
+  if (options.allowRepeatedCrossings !== true) {
+    assertNoRepeatedCrossings([...plan.routes.values()]);
+  }
+}
+
+function assertNoCriticalDiagnosticFindings(plan, relationships) {
+  const criticalCodes = new Set([
+    "endpoint-off-surface",
+    "surface-over-capacity",
+    "self-overlapping-route",
+    "endpoint-node-traversal",
+    "route-warning:endpoint-node-traversal"
+  ]);
+  const diagnostics = diagnosePlannedRoutes(plan, relationships);
+  const criticalFindings = diagnostics.findings.filter((finding) => criticalCodes.has(finding.code));
+  assert.deepEqual(criticalFindings, [], `critical route diagnostics failed: ${JSON.stringify(criticalFindings)}`);
 }
 
 function assertRouteQualityCosts(route) {
@@ -54,6 +72,18 @@ function assertRouteQualityCosts(route) {
   }
   const total = Object.values(route.qualityCosts).reduce((sum, value) => sum + value, 0);
   assert.equal(Math.round(route.cost * 1000) / 1000, Math.round(total * 1000) / 1000);
+}
+
+function assertNoEndpointNodeTraversal(route, plan, relationship) {
+  for (const nodeId of [relationship.from, relationship.to]) {
+    const rect = plan.nodeRects.get(nodeId);
+    assert.ok(rect, `missing endpoint rect for ${relationship.id}:${nodeId}`);
+    assert.equal(
+      route.samples.some((point) => point.x > rect.x && point.x < rect.x + rect.width && point.y > rect.y && point.y < rect.y + rect.height),
+      false,
+      `${relationship.id} traverses endpoint node ${nodeId}`
+    );
+  }
 }
 
 function assertNoNodeBodyCollisions(route, plan, relationship) {
@@ -262,7 +292,10 @@ function flowRelationshipsForView(flow, view) {
       label: `${index + 1}. ${step.action}`,
       relationshipType: "flow",
       stepId: step.id,
-      displayIndex: index + 1
+      displayIndex: index + 1,
+      kind: step.kind,
+      returnOf: step.returnOf,
+      outcome: step.outcome
     }))
     .filter((relationship) => visibleNodeIds.has(relationship.from) && visibleNodeIds.has(relationship.to));
 }
@@ -300,7 +333,7 @@ test("fitness: complex fan-out keeps routes readable around blockers", () => {
   });
 });
 
-test("fitness: complex fan-in keeps endpoint stacks distinguishable", () => {
+test("fitness: complex fan-in protects surface capacity before route smoothness", () => {
   const view = {
     id: "complex-fan-in",
     name: "Complex Fan-In",
@@ -319,14 +352,14 @@ test("fitness: complex fan-in keeps endpoint stacks distinguishable", () => {
   }));
   const plan = planFixture(view, relationships);
 
-  assertPlanFitness(plan, relationships, { maxBends: 8 });
+  assertPlanFitness(plan, relationships, { maxBends: 8, allowRepeatedCrossings: true });
   assert.equal(new Set(relationships.map((relationship) => JSON.stringify(plan.routes.get(relationship.id).points.at(-1)))).size, relationships.length);
   assertMetricBudget("complex-fan-in", planMetrics(plan), {
     warnings: 0,
-    bends: 10,
-    repeatedCrossings: 0,
+    bends: 12,
+    repeatedCrossings: 2,
     doglegCost: 0,
-    monotonicBacktrackCost: 0,
+    monotonicBacktrackCost: 2200,
     endpointStackCost: 0,
     labelConflictCost: 0,
     labelNodeConflictCost: 0,
@@ -517,4 +550,85 @@ test("fitness: complex too-close layout reports an explicit routing warning", ()
     labelConflictCost: 0,
     labelNodeConflictCost: 0
   });
+});
+
+test("fitness: a high-endpoint-demand node keeps uniform height (no disfigured box)", () => {
+  const fanCount = 8;
+  const targetIds = Array.from({ length: fanCount }, (_, index) => `n${index + 1}`);
+  const view = {
+    id: "hub-demand",
+    type: "system-map",
+    lanes: [
+      { id: "hub-lane", name: "Hub", nodeIds: ["hub"] },
+      { id: "fan-lane", name: "Fan", nodeIds: targetIds }
+    ]
+  };
+  const relationships = targetIds.map((targetId, index) => ({
+    id: `hub-${targetId}`,
+    from: "hub",
+    to: targetId,
+    label: "calls",
+    relationshipType: "flow",
+    flowId: "demand-flow",
+    stepId: `s${index + 1}`
+  }));
+  const nodeHeight = 62;
+  const plan = planFixture(view, relationships, { nodeHeight, rowGap: 116 });
+
+  for (const [nodeId, rect] of plan.nodeRects) {
+    assert.equal(
+      rect.height,
+      nodeHeight,
+      `node ${nodeId} should keep uniform height ${nodeHeight}, got ${rect.height}`
+    );
+  }
+});
+
+test("fitness: a dense fan-in spreads across hub surfaces to stay crossing-free", () => {
+  const sourceIds = ["s1", "s2", "s3", "s4", "s5"];
+  const view = {
+    id: "fan-in-capacity",
+    type: "system-map",
+    lanes: [
+      { id: "src-lane", name: "Sources", nodeIds: sourceIds },
+      { id: "hub-lane", name: "Hub", nodeIds: ["hub"] }
+    ]
+  };
+  const relationships = sourceIds.map((sourceId, index) => ({
+    id: `${sourceId}-hub`,
+    from: sourceId,
+    to: "hub",
+    label: "feeds",
+    relationshipType: "flow",
+    flowId: "fan-in",
+    stepId: `s${index + 1}`
+  }));
+  const nodeHeight = 54;
+  const plan = planFixture(view, relationships, { nodeHeight });
+  const hubRect = plan.nodeRects.get("hub");
+
+  assert.equal(hubRect.height, nodeHeight, "hub keeps uniform height (geometry is not a routing lever)");
+  // Cramming all five facing edges onto the hub's single left surface forces crossings.
+  // The mount optimizer instead distributes them across the hub's surfaces — a clean,
+  // crossing-free fan reads better than a crowded one, even though it leaves the strictly
+  // facing side. The objective is legibility, so the crossing-free spread is the goal.
+  const segmentsOf = (route) => {
+    const segments = [];
+    for (let i = 0; i < route.points.length - 1; i += 1) {
+      segments.push({ start: route.points[i], end: route.points[i + 1] });
+    }
+    return segments;
+  };
+  const routes = [...plan.routes.values()];
+  let crossings = 0;
+  for (let i = 0; i < routes.length; i += 1) {
+    for (let j = i + 1; j < routes.length; j += 1) {
+      for (const a of segmentsOf(routes[i])) {
+        for (const b of segmentsOf(routes[j])) {
+          if (crossingPoint(a, b)) crossings += 1;
+        }
+      }
+    }
+  }
+  assert.equal(crossings, 0, `dense fan-in should be crossing-free, found ${crossings}`);
 });

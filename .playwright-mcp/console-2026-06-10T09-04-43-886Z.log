@@ -1,0 +1,11 @@
+[      96ms] Error: Minified React error #310; visit https://react.dev/errors/310 for the full message or use the non-minified dev environment for full errors and additional helpful warnings.
+    at ht (http://127.0.0.1:4173/assets/index-DOrL_uuB.js:48:49514)
+    at xo (http://127.0.0.1:4173/assets/index-DOrL_uuB.js:48:56047)
+    at Object.Sr [as useEffect] (http://127.0.0.1:4173/assets/index-DOrL_uuB.js:48:56272)
+    at je.useEffect (http://127.0.0.1:4173/assets/index-DOrL_uuB.js:17:6996)
+    at JS (http://127.0.0.1:4173/assets/index-DOrL_uuB.js:58:6525)
+    at dr (http://127.0.0.1:4173/assets/index-DOrL_uuB.js:48:48236)
+    at zr (http://127.0.0.1:4173/assets/index-DOrL_uuB.js:48:71064)
+    at Th (http://127.0.0.1:4173/assets/index-DOrL_uuB.js:48:81416)
+    at sm (http://127.0.0.1:4173/assets/index-DOrL_uuB.js:48:117237)
+    at vx (http://127.0.0.1:4173/assets/index-DOrL_uuB.js:48:116281)

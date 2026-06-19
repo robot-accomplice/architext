@@ -1,0 +1,70 @@
+import { clamp } from "./routeGeometry.js";
+import { MIN_LEGIBLE_GAP } from "./routeConstants.js";
+
+export const SIDES = ["left", "right", "top", "bottom"];
+export const PORT_STUB = 18;
+export const PORT_SPACING = 6;
+// Mounts pack no tighter than the legibility floor. Same physical contract as MIN_LEGIBLE_GAP
+// (how close two parallel lines sit and still read as two), so it derives from the one constant
+// rather than carrying a second, silently-disagreeing magic number.
+export const SURFACE_PORT_SPACING = MIN_LEGIBLE_GAP;
+
+export function anchorFor(rect, side) {
+  if (rect.sideAnchors?.[side]) return rect.sideAnchors[side];
+  if (side === "left") return { x: rect.x, y: rect.y + rect.height / 2 };
+  if (side === "right") return { x: rect.x + rect.width, y: rect.y + rect.height / 2 };
+  if (side === "top") return { x: rect.x + rect.width / 2, y: rect.y };
+  return { x: rect.x + rect.width / 2, y: rect.y + rect.height };
+}
+
+export function sideVector(side) {
+  if (side === "left") return { x: -1, y: 0 };
+  if (side === "right") return { x: 1, y: 0 };
+  if (side === "top") return { x: 0, y: -1 };
+  return { x: 0, y: 1 };
+}
+
+export function tangentVector(side) {
+  return side === "left" || side === "right"
+    ? { x: 0, y: 1 }
+    : { x: 1, y: 0 };
+}
+
+export function offsetForEndpointOrder(order) {
+  const lane = order % 7;
+  const band = Math.floor(order / 7);
+  return (lane - 3) * PORT_SPACING + band * PORT_SPACING * 7;
+}
+
+export function surfaceCapacity(rect, side) {
+  const length = side === "left" || side === "right" ? rect.height : rect.width;
+  // Endpoints spread at L/(n+1) gaps, so the most mounts that hold the minimum
+  // legible gap is floor(L / SURFACE_PORT_SPACING) - 1. Beyond this, edges spread
+  // to another surface rather than packing tighter than the gap allows.
+  return Math.max(1, Math.floor(length / SURFACE_PORT_SPACING) - 1);
+}
+
+export function portFor(rect, side, distance = PORT_STUB, rawOffset = 0) {
+  const anchor = anchorFor(rect, side);
+  const vector = sideVector(side);
+  const maxOffset = rect.fixedPorts ? 0 : (side === "left" || side === "right" ? rect.height : rect.width) / 2 - 8;
+  const offset = rect.fixedPorts ? 0 : clamp(rawOffset, -maxOffset, maxOffset);
+  const tangent = tangentVector(side);
+  const offsetAnchor = {
+    x: anchor.x + tangent.x * offset,
+    y: anchor.y + tangent.y * offset
+  };
+  return {
+    anchor: offsetAnchor,
+    port: {
+      x: offsetAnchor.x + vector.x * distance,
+      y: offsetAnchor.y + vector.y * distance
+    }
+  };
+}
+
+export function portCandidatesFor(rect, side, offsets) {
+  if (rect.fixedPorts) return [portFor(rect, side, PORT_STUB, 0)];
+  const maxOffset = (side === "left" || side === "right" ? rect.height : rect.width) / 2 - 8;
+  return [...new Set(offsets.map((offset) => Math.round(clamp(offset, -maxOffset, maxOffset))))].map((offset) => portFor(rect, side, PORT_STUB, offset));
+}

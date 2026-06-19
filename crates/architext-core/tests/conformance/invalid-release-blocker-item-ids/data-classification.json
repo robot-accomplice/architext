@@ -1,0 +1,10 @@
+{
+  "classes": [
+    {
+      "id": "data-public",
+      "name": "Public Data",
+      "sensitivity": "low",
+      "handling": "No restrictions."
+    }
+  ]
+}

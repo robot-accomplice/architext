@@ -7,6 +7,7 @@ const defaultSettleMs = 300;
 const defaultPollMs = 50;
 const defaultTimeoutMs = 10000;
 const defaultStaleMs = 120000;
+const maxDataWalkDepth = 24;
 
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -27,11 +28,12 @@ async function dataFileEntries(root) {
   const rootStat = await stat(root).catch(() => null);
   if (!rootStat?.isDirectory()) return [];
   const entries = [];
-  async function visit(directory) {
+  async function visit(directory, depth = 0) {
+    if (depth > maxDataWalkDepth) return;
     for (const dirent of await readdir(directory, { withFileTypes: true })) {
       const entryPath = path.join(directory, dirent.name);
       if (dirent.isDirectory()) {
-        await visit(entryPath);
+        await visit(entryPath, depth + 1);
         continue;
       }
       if (dirent.name.endsWith(".json") || dirent.name.endsWith(".tmp")) entries.push(entryPath);

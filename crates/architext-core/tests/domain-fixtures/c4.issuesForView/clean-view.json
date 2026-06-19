@@ -1,0 +1,14 @@
+{
+  "view": {
+    "id": "v1",
+    "type": "c4-context",
+    "name": "My System",
+    "lanes": [
+      { "id": "l1", "name": "Actors", "nodeIds": ["n1", "n2"] }
+    ]
+  },
+  "nodes": [
+    { "id": "n1", "type": "actor" },
+    { "id": "n2", "type": "service" }
+  ]
+}

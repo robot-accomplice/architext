@@ -1,0 +1,104 @@
+{
+  "existingDetail": {
+    "id": "v1-0-0",
+    "version": "1.0.0",
+    "name": "App 1.0.0",
+    "status": "implementing",
+    "posture": "on-track",
+    "summary": "proposed summary",
+    "targetWindow": "Next release",
+    "lastUpdated": "2024-01-01",
+    "updateSource": "Release Planning",
+    "scope": {
+      "required": [],
+      "planned": [],
+      "stretch": [],
+      "deferred": [
+        {
+          "id": "d1",
+          "title": "T",
+          "kind": "feature",
+          "status": "blocked",
+          "summary": "S",
+          "source": "roadmap",
+          "dateAdded": "2024-01-01",
+          "workstreamId": "ws",
+          "dependsOn": [],
+          "evidence": []
+        }
+      ],
+      "outOfScope": []
+    },
+    "workstreams": [
+      {
+        "id": "ws",
+        "name": "Core",
+        "status": "planned",
+        "posture": "on-track",
+        "summary": "",
+        "progress": 0,
+        "itemIds": [
+          "i1"
+        ],
+        "evidence": []
+      }
+    ],
+    "blockers": [],
+    "dependencies": [],
+    "milestones": [],
+    "evidence": [],
+    "targetDate": null,
+    "releasedAt": null
+  },
+  "proposedDetail": {
+    "id": "v1-0-0",
+    "version": "1.0.0",
+    "name": "App 1.0.0",
+    "status": "planned",
+    "posture": "on-track",
+    "summary": "proposed summary",
+    "targetWindow": "Next release",
+    "lastUpdated": "2024-01-01",
+    "updateSource": "Release Planning",
+    "scope": {
+      "required": [],
+      "planned": [],
+      "stretch": [],
+      "deferred": [
+        {
+          "id": "d1",
+          "title": "T",
+          "kind": "feature",
+          "status": "deferred",
+          "summary": "S",
+          "source": "roadmap",
+          "dateAdded": "2024-01-01",
+          "workstreamId": "ws",
+          "dependsOn": [],
+          "evidence": []
+        }
+      ],
+      "outOfScope": []
+    },
+    "workstreams": [
+      {
+        "id": "ws",
+        "name": "Core",
+        "status": "planned",
+        "posture": "on-track",
+        "summary": "",
+        "progress": 0,
+        "itemIds": [
+          "i1"
+        ],
+        "evidence": []
+      }
+    ],
+    "blockers": [],
+    "dependencies": [],
+    "milestones": [],
+    "evidence": [],
+    "targetDate": null,
+    "releasedAt": null
+  }
+}

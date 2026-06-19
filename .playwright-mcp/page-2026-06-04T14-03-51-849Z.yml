@@ -1,0 +1,249 @@
+- generic [ref=e5]:
+  - banner [ref=e6]:
+    - generic [ref=e7]:
+      - paragraph [ref=e8]: Architext / 1.5.0 · Schema / 1.5.0
+      - generic [ref=e9]:
+        - heading "Roboticus" [level=1] [ref=e10]
+        - paragraph [ref=e11]: Local-first autonomous agent runtime with CLI, TUI, browser dashboard, daemon, scheduler, channel adapters, memory, tool execution, model routing, and a centralized agent pipeline.
+    - tablist "Architext modes" [ref=e13]:
+      - tab "Flows" [selected] [ref=e14] [cursor=pointer]
+      - tab "Sequence" [ref=e15] [cursor=pointer]
+      - tab "C4" [ref=e16] [cursor=pointer]
+      - tab "Deployment" [ref=e17] [cursor=pointer]
+      - tab "Data/Risks" [ref=e18] [cursor=pointer]
+      - tab "Release Truth" [ref=e19] [cursor=pointer]
+      - tab "Rules" [ref=e20] [cursor=pointer]
+  - button "Collapse left navigation" [active] [ref=e246] [cursor=pointer]: ‹ Collapse
+  - button "Expand right details" [ref=e22] [cursor=pointer]: ‹ Expand
+  - complementary [ref=e23]:
+    - generic [ref=e247]:
+      - heading "Flows" [level=2] [ref=e248]
+      - searchbox "Search flows" [ref=e249]
+      - paragraph [ref=e250]: 6 of 15 flows
+    - generic [ref=e251]:
+      - generic [ref=e252]:
+        - heading "Flow Views" [level=3] [ref=e253]
+        - button "Roboticus System Map High-level map of operators, first-party surfaces, adapters, runtime services, persistence, external providers, and release validation. system-map" [ref=e254] [cursor=pointer]:
+          - strong [ref=e255]: Roboticus System Map
+          - generic [ref=e256]: High-level map of operators, first-party surfaces, adapters, runtime services, persistence, external providers, and release validation.
+          - generic [ref=e257]: system-map
+        - button "Agent Turn Flow Shows how conversational input moves from surfaces/adapters into the unified pipeline, through memory/tools/models, and back to the user. flow-explorer" [ref=e258] [cursor=pointer]:
+          - strong [ref=e259]: Agent Turn Flow
+          - generic [ref=e260]: Shows how conversational input moves from surfaces/adapters into the unified pipeline, through memory/tools/models, and back to the user.
+          - generic [ref=e261]: flow-explorer
+      - generic [ref=e262]:
+        - heading "Flows" [level=3] [ref=e263]
+        - button "Interactive agent turn A user message enters through a first-party or channel surface and is normalized into the unified pipeline for session, memory, tool, model, guard, persistence, and response handling. Implemented" [ref=e264] [cursor=pointer]:
+          - strong [ref=e265]: Interactive agent turn
+          - generic [ref=e266]: A user message enters through a first-party or channel surface and is normalized into the unified pipeline for session, memory, tool, model, guard, persistence, and response handling.
+          - generic [ref=e267]: Implemented
+        - button "Local CLI/TUI control Local first-party process surfaces call application internals and shared services directly instead of using REST or browser-only websocket seams. Partial" [ref=e268] [cursor=pointer]:
+          - strong [ref=e269]: Local CLI/TUI control
+          - generic [ref=e270]: Local first-party process surfaces call application internals and shared services directly instead of using REST or browser-only websocket seams.
+          - generic [ref=e271]: Partial
+        - button "Model inference and routing The pipeline asks the LLM service to route, sanitize, execute, observe, and fall back across configured cloud and local model providers. Implemented" [ref=e272] [cursor=pointer]:
+          - strong [ref=e273]: Model inference and routing
+          - generic [ref=e274]: The pipeline asks the LLM service to route, sanitize, execute, observe, and fall back across configured cloud and local model providers.
+          - generic [ref=e275]: Implemented
+        - button "Memory retrieval, ingest, and maintenance The pipeline and background services retrieve, persist, curate, index, and repair memory records in the local SQLite store. Implemented" [ref=e276] [cursor=pointer]:
+          - strong [ref=e277]: Memory retrieval, ingest, and maintenance
+          - generic [ref=e278]: The pipeline and background services retrieve, persist, curate, index, and repair memory records in the local SQLite store.
+          - generic [ref=e279]: Implemented
+        - button "Skill and plugin lifecycle Skills and plugins are loaded, cataloged, installed, activated, edited, deleted, and tracked through shared state rather than dashboard-only logic. Partial" [ref=e280] [cursor=pointer]:
+          - strong [ref=e281]: Skill and plugin lifecycle
+          - generic [ref=e282]: Skills and plugins are loaded, cataloged, installed, activated, edited, deleted, and tracked through shared state rather than dashboard-only logic.
+          - generic [ref=e283]: Partial
+        - button "Tool and MCP execution Tool calls, MCP resources, and plugin-backed tools are resolved through shared tool surfaces and recorded as typed evidence. Implemented" [ref=e284] [cursor=pointer]:
+          - strong [ref=e285]: Tool and MCP execution
+          - generic [ref=e286]: Tool calls, MCP resources, and plugin-backed tools are resolved through shared tool surfaces and recorded as typed evidence.
+          - generic [ref=e287]: Implemented
+  - main [ref=e25]:
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - heading "Agent Turn Flow" [level=2] [ref=e28]
+        - paragraph [ref=e29]: Shows how conversational input moves from surfaces/adapters into the unified pipeline, through memory/tools/models, and back to the user.
+      - generic "Diagram controls" [ref=e30]:
+        - generic [ref=e31]:
+          - generic [ref=e32]: Line Style
+          - combobox "Line Style" [ref=e33] [cursor=pointer]:
+            - option "Orthogonal" [selected]
+            - option "Spline"
+            - option "Straight"
+        - button "Zoom out" [ref=e34] [cursor=pointer]: "-"
+        - generic [ref=e35]: 60%
+        - button "Zoom in" [ref=e36] [cursor=pointer]: +
+        - button "Fit" [ref=e37] [cursor=pointer]
+        - button "Reset" [ref=e38] [cursor=pointer]
+        - button "Focus" [ref=e39] [cursor=pointer]
+        - button "PDF" [ref=e40] [cursor=pointer]
+      - group [ref=e41]:
+        - generic "Legend" [ref=e42] [cursor=pointer]
+    - generic [ref=e46]:
+      - group "Agent Turn Flow relationships":
+        - button "The operator submits conversational content through a configured surface or external channel." [ref=e47] [cursor=pointer]:
+          - generic [ref=e48]:
+            - generic:
+              - generic: "1"
+        - button "The first-party dashboard sends session messages through the websocket control seam instead of internal REST." [ref=e50] [cursor=pointer]:
+          - generic [ref=e51]:
+            - generic:
+              - generic: "2"
+        - button "The websocket control plane delegates dashboard session messages to the unified pipeline without owning agent behavior." [ref=e52] [cursor=pointer]:
+          - generic [ref=e53]:
+            - generic:
+              - generic: "3"
+        - button "The connector parses transport data and delegates once to pipeline.RunPipeline with channel context." [ref=e55] [cursor=pointer]:
+          - generic [ref=e56]:
+            - generic:
+              - generic: "4"
+        - button "The pipeline enforces session scope, cross-channel consent, topic continuity, and durable message/turn storage." [ref=e58] [cursor=pointer]:
+          - generic [ref=e59]:
+            - generic:
+              - generic: "5"
+        - button "The store returns the resolved session, persisted user message, and trace identifiers used by the rest of the turn." [ref=e61] [cursor=pointer]:
+          - generic [ref=e62]:
+            - generic:
+              - generic: "6"
+        - button "The pipeline requests memory context and retrieval artifacts through memory services." [ref=e64] [cursor=pointer]:
+          - generic [ref=e65]:
+            - generic:
+              - generic: "7"
+        - button "Memory services return bounded context, citations, freshness metadata, and retrieval diagnostics." [ref=e66] [cursor=pointer]:
+          - generic [ref=e67]:
+            - generic:
+              - generic: "8"
+        - button "Tool execution remains behind the pipeline so typed evidence and guard obligations are shared across entry points." [ref=e68] [cursor=pointer]:
+          - generic [ref=e69]:
+            - generic:
+              - generic: "9"
+        - button "Tool surfaces return typed observations, errors, and execution evidence for guard and final-answer checks." [ref=e71] [cursor=pointer]:
+          - generic [ref=e72]:
+            - generic:
+              - generic: "10"
+        - button "The pipeline delegates inference to the LLM service with sanitized message history, route policy, and trace context." [ref=e74] [cursor=pointer]:
+          - generic [ref=e75]:
+            - generic:
+              - generic: "11"
+        - button "The LLM service returns final text, tool calls, provider attribution, token usage, latency, and typed provider failures." [ref=e77] [cursor=pointer]:
+          - generic [ref=e78]:
+            - generic:
+              - generic: "12"
+        - button "The response, guard results, post-turn ingest, trace, latency, and diagnostics are persisted." [ref=e80] [cursor=pointer]:
+          - generic [ref=e81]:
+            - generic:
+              - generic: "13"
+        - button "The store confirms durable message, trace, and diagnostic writes before the outcome is formatted for the caller." [ref=e83] [cursor=pointer]:
+          - generic [ref=e84]:
+            - generic:
+              - generic: "14"
+        - button "The pipeline returns the same typed outcome to the websocket control seam for dashboard sessions." [ref=e86] [cursor=pointer]:
+          - generic [ref=e87]:
+            - generic:
+              - generic: "15"
+        - button "The dashboard receives the final assistant response or framework-originated terminal failure through the websocket session stream." [ref=e89] [cursor=pointer]:
+          - generic [ref=e90]:
+            - generic:
+              - generic: "16"
+        - button "The connector formats the PipelineOutcome for the original channel without changing agent behavior." [ref=e91] [cursor=pointer]:
+          - generic [ref=e92]:
+            - generic:
+              - generic: "17"
+        - button "The active surface delivers the final assistant response or framework-originated terminal failure to the operator." [ref=e94] [cursor=pointer]:
+          - generic [ref=e95]:
+            - generic:
+              - generic: "18"
+      - generic:
+        - heading "Entry" [level=3]
+      - generic:
+        - heading "Factory" [level=3]
+      - generic:
+        - heading "Context and Tools" [level=3]
+      - generic:
+        - heading "Inference and Output" [level=3]
+      - button "Actor Operator actor" [ref=e97] [cursor=pointer]:
+        - generic [ref=e98]:
+          - img "Actor" [ref=e99]
+          - strong [ref=e101]: Operator
+        - generic [ref=e102]: actor
+      - button "Client CLI client" [ref=e103] [cursor=pointer]:
+        - generic [ref=e104]:
+          - img "Client" [ref=e105]
+          - strong [ref=e107]: CLI
+        - generic [ref=e108]: client
+      - button "Client TUI client" [ref=e109] [cursor=pointer]:
+        - generic [ref=e110]:
+          - img "Client" [ref=e111]
+          - strong [ref=e113]: TUI
+        - generic [ref=e114]: client
+      - button "Client Browser dashboard client" [ref=e115] [cursor=pointer]:
+        - generic [ref=e116]:
+          - img "Client" [ref=e117]
+          - strong [ref=e119]: Browser dashboard
+        - generic [ref=e120]: client
+      - button "Service Dashboard websocket topic/control plane service" [ref=e121] [cursor=pointer]:
+        - generic [ref=e122]:
+          - img "Service" [ref=e123]
+          - strong [ref=e125]: Dashboard websocket topic/control plane
+        - generic [ref=e126]: service
+      - button "Service External channel adapters service" [ref=e127] [cursor=pointer]:
+        - generic [ref=e128]:
+          - img "Service" [ref=e129]
+          - strong [ref=e131]: External channel adapters
+        - generic [ref=e132]: service
+      - button "Service Unified Pipeline service" [ref=e133] [cursor=pointer]:
+        - generic [ref=e134]:
+          - img "Service" [ref=e135]
+          - strong [ref=e137]: Unified Pipeline
+        - generic [ref=e138]: service
+      - button "Service Memory system service" [ref=e139] [cursor=pointer]:
+        - generic [ref=e140]:
+          - img "Service" [ref=e141]
+          - strong [ref=e143]: Memory system
+        - generic [ref=e144]: service
+      - button "Service Roboticus product knowledge service service" [ref=e145] [cursor=pointer]:
+        - generic [ref=e146]:
+          - img "Service" [ref=e147]
+          - strong [ref=e149]: Roboticus product knowledge service
+        - generic [ref=e150]: service
+      - button "Service Skills and plugins service" [ref=e151] [cursor=pointer]:
+        - generic [ref=e152]:
+          - img "Service" [ref=e153]
+          - strong [ref=e155]: Skills and plugins
+        - generic [ref=e156]: service
+      - button "Service MCP system service" [ref=e157] [cursor=pointer]:
+        - generic [ref=e158]:
+          - img "Service" [ref=e159]
+          - strong [ref=e161]: MCP system
+        - generic [ref=e162]: service
+      - button "Data store SQLite store data-store" [ref=e163] [cursor=pointer]:
+        - generic [ref=e164]:
+          - img "Data store" [ref=e165]
+          - strong [ref=e167]: SQLite store
+        - generic [ref=e168]: data-store
+      - button "Service LLM service and model router service" [ref=e169] [cursor=pointer]:
+        - generic [ref=e170]:
+          - img "Service" [ref=e171]
+          - strong [ref=e173]: LLM service and model router
+        - generic [ref=e174]: service
+      - button "External service Cloud model providers external-service" [ref=e175] [cursor=pointer]:
+        - generic [ref=e176]:
+          - img "External service" [ref=e177]
+          - strong [ref=e179]: Cloud model providers
+        - generic [ref=e180]: external-service
+      - button "External service Local model frameworks external-service" [ref=e181] [cursor=pointer]:
+        - generic [ref=e182]:
+          - img "External service" [ref=e183]
+          - strong [ref=e185]: Local model frameworks
+        - generic [ref=e186]: external-service
+      - button "Service Observability and diagnostics service" [ref=e187] [cursor=pointer]:
+        - generic [ref=e188]:
+          - img "Service" [ref=e189]
+          - strong [ref=e191]: Observability and diagnostics
+        - generic [ref=e192]: service
+    - generic [ref=e194]:
+      - heading "Interactive agent turn" [level=2] [ref=e196]
+      - generic [ref=e197]:
+        - generic [ref=e198]: Implemented
+        - button "Show steps" [ref=e199] [cursor=pointer]
+  - complementary [ref=e200]:
+    - button "Details" [ref=e201] [cursor=pointer]

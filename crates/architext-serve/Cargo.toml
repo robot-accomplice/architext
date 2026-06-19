@@ -1,0 +1,31 @@
+[package]
+name = "architext-serve"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "architext-serve"
+path = "src/bin/architext-serve.rs"
+
+[dependencies]
+architext-routing = { path = "../architext-routing", features = ["native"] }
+architext-core = { path = "../architext-core" }
+axum = { version = "0.7", features = ["http1", "http2", "tokio", "macros"] }
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+futures = { version = "0.3" }
+notify = { version = "6" }
+tower = { version = "0.4" }
+tower-http = { version = "0.5", features = ["fs"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1" }
+rand = "0.8"
+url = "2"
+clap = { version = "4", features = ["derive"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["full"] }
+tempfile = "3"

@@ -24,6 +24,10 @@ import { withTargetWriteLock } from "./write-lock.mjs";
 import { createDataWatchHub } from "../http/data-watch-hub.mjs";
 import { approveReleasePlanRequest as approveReleasePlanApiRequest } from "../http/release-planning-api.mjs";
 import { updateRulesRequest as updateRulesApiRequest } from "../http/rules-api.mjs";
+import { updateNotesRequest as updateNotesApiRequest } from "../http/notes-api.mjs";
+import { diagramConfigGetPayload, writeDiagramConfig } from "../http/diagram-config-api.mjs";
+import { repoTreeApiRequest } from "../http/repo-tree-api.mjs";
+import { createPlanPrecomputeFarm } from "../http/plan-precompute.mjs";
 import { c4DrilldownIssues, c4IssuesForView, repairC4Views } from "../../domain/architecture-model/c4-quality.mjs";
 import { generatedReleaseIndex, releaseIndexGenerationChanges } from "../../domain/architecture-model/release-history.mjs";
 import { doctorRepairCategories, doctorRepairsForStatus } from "../../domain/lifecycle/doctor-repairs.mjs";
@@ -42,13 +46,16 @@ import {
 
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
 const cliEntryPath = path.join(packageRoot, "tools", "architext-adopt.mjs");
-const viewerDir = path.join(packageRoot, "docs", "architext");
+const viewerDir = path.join(packageRoot, "viewer");
 const viewerDistDir = path.join(viewerDir, "dist");
 const schemaDir = path.join(viewerDir, "schema");
 const validatorPath = path.join(viewerDir, "tools", "validate-architext.mjs");
 const appendixPath = path.join(viewerDir, "AGENTS_APPENDIX.md");
-const dataSchemaVersion = "1.4.0";
+const skillPath = path.join(packageRoot, "skills", "architext", "SKILL.md");
+const dataSchemaVersion = "1.5.0";
 const mutationTokenHeader = "x-architext-mutation-token";
+const maxRequestBodyBytes = 1024 * 1024;
+const maxDiagnosticJsonWalkDepth = 24;
 const servePortSearchLimit = 50;
 
 async function packageVersion() {
@@ -871,7 +878,7 @@ async function syncTarget(target, options, version, logger = console) {
 
   log(`Target: ${target}`);
   log(`Architext CLI: ${version}`);
-  printStatus(status, { verbose: true }, logger);
+  if (options.dryRun) printStatus(status, { verbose: true }, logger);
   if (migrating) {
     log(`Copied install detected: ${status.copiedInstallPaths.length} package-owned paths`);
   }
@@ -892,6 +899,7 @@ async function syncTarget(target, options, version, logger = console) {
     log(writePlan.operationLabel);
 
     if (!shouldWrite) {
+      if (!options.dryRun) printStatus(status, { verbose: true }, logger);
       log("No lifecycle changes needed.");
       return;
     }
@@ -970,7 +978,11 @@ async function syncTarget(target, options, version, logger = console) {
     };
 
     if (options.dryRun) await performWrites();
-    else await withTargetWriteLock(target, performWrites);
+    else {
+      await withTargetWriteLock(target, performWrites);
+      const finalStatus = await collectStatus(target, version, { runValidation: !options.skipValidate });
+      printStatus(finalStatus, { verbose: true }, logger);
+    }
   } finally {
     rl.close();
   }
@@ -998,7 +1010,8 @@ Rules:
 - Treat manifest.schemaVersion as the Architext data schema contract version, not the installed CLI/package version. Update it only when the data contract changes or when architext doctor/sync applies a schema repair.
 - Reuse stable IDs, create nodes before references, keep flows ordered, and prefer source-path-backed claims.
 - Keep flow diagrams free of orphaned elements; every rendered node, edge, marker, and label must be traceable to the selected flow, a selected supporting relationship, or an explicit context relationship shown in the projection. Remove disconnected context, connect it with a labeled relationship, or split it into a separate view.
-- For sequence diagrams, create explicit return paths and group outbound plus return messages inside loops, retries, optional branches, and transaction or consistency blocks when the flow requires them.
+- Prefer semantic iconography over UML/code diagrams or broad flowchart shape palettes for flow enrichment; mark decision, start, stop, async, persistence, artifact, return, and process semantics with step.kind when the flow needs them. For decision branches, create at least two outgoing outcome steps from the decision node, set step.outcome for each branch label, and expect those branch lines to share the decision step number.
+- For sequence diagrams, create explicit return paths; mark returns with kind: "return" and returnOf when they answer a specific outbound step, and use sequenceFrames for loops, retries, optional branches, and transaction or consistency blocks that group outbound plus return messages.
 - Keep Release Truth data current when release scope, blockers, milestones, evidence, target dates, dependencies, or posture changes.
 - Treat Release Truth as reviewed release state, not a planning scratchpad: update detail files for completed, deferred, blocked, reprioritized, or newly scoped work, then refresh the generated release index from those facts.
 - Keep Release Path labels concise; put rationale, blocker explanation, evidence, dependencies, and next actions in detail data for the selected release item.
@@ -1015,6 +1028,11 @@ Required finish:
 - Summarize covered architecture areas.
 - Summarize remaining uncertainty.
 - Report validation result.`);
+}
+
+async function printSkill() {
+  const content = await readFile(skillPath, "utf8");
+  console.log(content.trimEnd());
 }
 
 async function cleanGenerated(target, options) {
@@ -1136,7 +1154,9 @@ function isMutatingApiRequest(pathname, method) {
     "/api/doctor",
     "/api/sync-repair",
     "/api/release-plans",
-    "/api/rules"
+    "/api/rules",
+    "/api/notes",
+    "/api/config"
   ].includes(pathname);
 }
 
@@ -1155,7 +1175,7 @@ async function requestJson(request) {
   let total = 0;
   for await (const chunk of request) {
     total += chunk.length;
-    if (total > 1024 * 1024) throw new Error("Request body is too large");
+    if (total > maxRequestBodyBytes) throw new Error("Request body is too large");
     chunks.push(chunk);
   }
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
@@ -1185,6 +1205,18 @@ async function updateRulesRequest(target, payload) {
   });
 }
 
+async function updateNotesRequest(target, payload) {
+  return updateNotesApiRequest({
+    target,
+    payload,
+    dataDir,
+    readJson,
+    writeJson,
+    validateTarget,
+    withTargetWriteLock
+  });
+}
+
 async function statusApiRequest(target, version) {
   const status = await collectStatus(target, version, { runValidation: true });
   return {
@@ -1196,11 +1228,12 @@ async function statusApiRequest(target, version) {
 async function malformedJsonDiagnostic(target) {
   const root = dataDir(target);
   const files = [];
-  async function collect(dir) {
+  async function collect(dir, depth = 0) {
+    if (depth > maxDiagnosticJsonWalkDepth) return;
     const entries = await readdir(dir, { withFileTypes: true }).catch(() => []);
     for (const entry of entries) {
       const file = path.join(dir, entry.name);
-      if (entry.isDirectory()) await collect(file);
+      if (entry.isDirectory()) await collect(file, depth + 1);
       else if (entry.isFile() && entry.name.endsWith(".json")) files.push(file);
     }
   }
@@ -1242,16 +1275,17 @@ async function doctorApiRequest(target, payload, version) {
       output: "Run sync before doctor repairs."
     };
   }
-  const repairs = await withTargetWriteLock(target, async () => {
+  const { repairs, validation } = await withTargetWriteLock(target, async () => {
     const lockedStatus = await collectStatus(target, version, { runValidation: true });
     if (!lockedStatus.installed || lockedStatus.needsMigration) {
       throw new Error("Run sync before doctor repairs.");
     }
-    return lockedStatus.doctorRepairs.length
-      ? applyDoctorRepairs(target, lockedStatus, false)
+    const repairs = lockedStatus.doctorRepairs.length
+      ? await applyDoctorRepairs(target, lockedStatus, false)
       : [];
+    const validation = await validateTarget(target);
+    return { repairs, validation };
   });
-  const validation = await validateTarget(target);
   return {
     ok: validation.ok,
     mode: "apply",
@@ -1293,7 +1327,7 @@ function listenOnPort(server, host, port) {
     }
     function onListening() {
       server.off("error", onError);
-      resolve(true);
+      resolve(server.address().port);
     }
     server.once("error", onError);
     server.once("listening", onListening);
@@ -1307,26 +1341,29 @@ async function createViewerServer({ target, host, port }) {
   }
   const targetDataDir = dataDir(target);
   const mutationToken = randomBytes(32).toString("base64url");
-  const lastPort = Math.min(65535, port + servePortSearchLimit - 1);
+  const lastPort = port === 0 ? 0 : Math.min(65535, port + servePortSearchLimit - 1);
 
   for (let candidatePort = port; candidatePort <= lastPort; candidatePort += 1) {
-    const watchHub = createDataWatchHub({ target, dataDir, validateTarget });
-    const server = createServer(createViewerRequestHandler({ target, targetDataDir, watchHub, mutationToken }));
-    const listening = await listenOnPort(server, host, candidatePort);
-    if (!listening) {
+    const planFarm = createPlanPrecomputeFarm({ target, dataDirFn: dataDir });
+    const watchHub = createDataWatchHub({ target, dataDir, validateTarget, onChange: (validation) => { if (validation.ok) planFarm.refresh(); } });
+    const server = createServer(createViewerRequestHandler({ target, targetDataDir, watchHub, mutationToken, planFarm }));
+    const boundPort = await listenOnPort(server, host, candidatePort);
+    if (!boundPort) {
       server.close();
       watchHub.close();
+      planFarm.dispose();
       continue;
     }
     watchHub.start();
-    server.once("close", () => watchHub.close());
-    return { server, port: candidatePort };
+    planFarm.refresh();
+    server.once("close", () => { watchHub.close(); planFarm.dispose(); });
+    return { server, port: boundPort };
   }
 
   throw new Error(`No available loopback port found from ${port} through ${lastPort}.`);
 }
 
-export function createViewerRequestHandler({ target, targetDataDir = dataDir(target), watchHub, mutationToken = randomBytes(32).toString("base64url") }) {
+export function createViewerRequestHandler({ target, targetDataDir = dataDir(target), watchHub, mutationToken = randomBytes(32).toString("base64url"), planFarm = null }) {
   return async function viewerRequestHandler(request, response) {
     try {
       const url = new URL(request.url || "/", "http://127.0.0.1");
@@ -1345,6 +1382,60 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
 
       if (url.pathname === "/api/session" && request.method === "GET") {
         sendJson(response, 200, { mutationToken });
+        return;
+      }
+
+      if (url.pathname === "/api/config" && request.method === "GET") {
+        const payload = await diagramConfigGetPayload(target);
+        if (payload.warnings.length) {
+          console.warn(`[architext] diagram config:\n  ${payload.warnings.join("\n  ")}`);
+        }
+        // Never cache: a stale payload (e.g. from before the field spec shipped)
+        // would leave the settings panel without controls.
+        response.setHeader("Cache-Control", "no-store");
+        sendJson(response, 200, payload);
+        return;
+      }
+
+      if (url.pathname === "/api/repo-tree" && request.method === "GET") {
+        try {
+          response.setHeader("Cache-Control", "no-store");
+          sendJson(response, 200, await repoTreeApiRequest(target));
+        } catch (error) {
+          sendJson(response, 200, { files: [], source: "error", error: error.message });
+        }
+        return;
+      }
+
+      if (url.pathname.startsWith("/api/plan/") && request.method === "GET") {
+        // Precomputed plan lookup by sha256(planInputKey). Exact-match only —
+        // a miss means the browser plans locally, so a wrong plan can't be served.
+        response.setHeader("Cache-Control", "no-store");
+        const hash = url.pathname.slice("/api/plan/".length);
+        const stored = planFarm && /^[0-9a-f]{64}$/.test(hash) ? planFarm.lookup(hash) : undefined;
+        if (stored === undefined) {
+          // A miss is a normal, designed outcome (farm warming, config draft,
+          // data just changed) — not an HTTP error. The release-gate UAT
+          // rightly treats non-2xx responses as failures, which is exactly how
+          // the original 404-on-miss broke the 1.6.3 publish gate.
+          sendJson(response, 200, { miss: true });
+          return;
+        }
+        response.statusCode = 200;
+        response.setHeader("Content-Type", "application/json");
+        response.end(`{"plan":${stored}}`);
+        return;
+      }
+
+      if (url.pathname === "/api/config" && request.method === "POST") {
+        try {
+          const body = await requestJson(request);
+          const result = await writeDiagramConfig({ scope: body.scope, target, diagram: body.diagram });
+          planFarm?.refresh();
+          sendJson(response, 200, result);
+        } catch (error) {
+          sendJson(response, 200, { ok: false, mode: "config", error: error.message, reload: false });
+        }
         return;
       }
 
@@ -1385,7 +1476,7 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
           const result = await approveReleasePlanRequest(target, await requestJson(request));
           sendJson(response, 200, result);
         } catch (error) {
-          sendJson(response, 400, { error: error.message });
+          sendJson(response, 200, { ok: false, mode: "release-plans", error: error.message, reload: false });
         }
         return;
       }
@@ -1395,7 +1486,17 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
           const result = await updateRulesRequest(target, await requestJson(request));
           sendJson(response, 200, result);
         } catch (error) {
-          sendJson(response, 400, { error: error.message });
+          sendJson(response, 200, { ok: false, mode: "rules", error: error.message, reload: false });
+        }
+        return;
+      }
+
+      if (url.pathname === "/api/notes" && request.method === "POST") {
+        try {
+          const result = await updateNotesRequest(target, await requestJson(request));
+          sendJson(response, 200, result);
+        } catch (error) {
+          sendJson(response, 200, { ok: false, mode: "notes", error: error.message, reload: false });
         }
         return;
       }
@@ -1412,6 +1513,9 @@ export function createViewerRequestHandler({ target, targetDataDir = dataDir(tar
           response.end("Not found");
           return;
         }
+        // Architecture data is user-editable at runtime (rules/notes/config
+        // writes); never let the browser serve a stale copy after a save.
+        response.setHeader("Cache-Control", "no-store");
         await sendFile(response, dataFile);
         return;
       }
@@ -1448,6 +1552,7 @@ function commandHandlers(version) {
     },
     build: (target, options) => buildStatic(target, options),
     prompt: (target, options) => printPrompt(target, options.mode),
+    skill: () => printSkill(),
     clean: (target, options) => cleanGenerated(target, options),
     explain: (_target, options) => explainTopic(options.topic),
     status: async (target, options) => {
@@ -1489,7 +1594,7 @@ export async function main() {
   }
 
   const target = path.resolve(options.target || process.cwd());
-  if (options.command !== "explain") await assertTarget(target);
+  if (!["explain", "skill"].includes(options.command)) await assertTarget(target);
 
   return routeCommand({ options, target, handlers: commandHandlers(version) });
 }

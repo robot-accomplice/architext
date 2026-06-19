@@ -1,0 +1,49 @@
+{
+  "releaseIndex": {
+    "releases": []
+  },
+  "roadmapItems": [
+    {
+      "id": "feat-x",
+      "title": "Feat X",
+      "kind": "feature",
+      "summary": "X",
+      "section": "Backend",
+      "status": "planned"
+    },
+    {
+      "id": "feat-y",
+      "title": "Feat Y",
+      "kind": "feature",
+      "summary": "Y",
+      "section": "Frontend",
+      "status": "planned"
+    },
+    {
+      "id": "feat-z",
+      "title": "Feat Z",
+      "kind": "feature",
+      "summary": "Z",
+      "section": "Backend",
+      "status": "planned"
+    }
+  ],
+  "selectedRoadmapItemIds": [
+    "feat-x",
+    "feat-y",
+    "feat-z"
+  ],
+  "itemScopes": {},
+  "adHocItems": [
+    {
+      "title": "Fix",
+      "kind": "bug-fix",
+      "priority": "p1",
+      "summary": "f",
+      "section": "DevOps"
+    }
+  ],
+  "projectName": "TestApp",
+  "version": "1.0.0",
+  "now": "2024-01-01T00:00:00.000Z"
+}

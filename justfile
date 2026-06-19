@@ -1,6 +1,7 @@
 set shell := ["bash", "-uc"]
 
 package := "@robotaccomplice/architext"
+repo := "robot-accomplice/architext"
 
 default:
     @just --list
@@ -13,7 +14,7 @@ release-check:
 # Refresh README-facing screenshots and grep for common stale public-doc markers.
 release-doc-check:
     node scripts/capture-readme-screenshots.mjs
-    rg -n "semver-|currentVersion:|Release Truth|Rules|1\\.[0-9]+\\.[0-9]+" README.md docs/architext/README.md docs/architecture src || true
+    rg -n "semver-|currentVersion:|Release Truth|Rules|1\\.[0-9]+\\.[0-9]+" README.md viewer/README.md docs/architecture src || true
 
 # Show the most recent CI runs for the repository.
 ci:
@@ -26,7 +27,7 @@ ci-for commit:
 # Create a GitHub release for the current package version after CI passes.
 github-release:
     version="$(node -p 'JSON.parse(require("fs").readFileSync("package.json", "utf8")).version')"; \
-    gh release create "v${version}" --target main --title "Architext ${version}" --notes "Architext ${version} release."
+    gh release create "v${version}" --repo {{repo}} --target main --title "Architext ${version}" --notes "Architext ${version} release."
 
 # Start a fresh npm web/passkey login session. The maintainer completes auth in the browser.
 npm-passkey-login:
@@ -39,11 +40,11 @@ npm-publish:
 
 # Start a GitHub Actions trusted-publishing run for a released version.
 trusted-publish version:
-    gh workflow run publish.yml -f version={{version}} -f dry_run=false
+    gh workflow run publish.yml --repo {{repo}} -f version={{version}} -f dry_run=false
 
 # Start a GitHub Actions trusted-publishing dry run for a released version.
 trusted-publish-dry-run version:
-    gh workflow run publish.yml -f version={{version}} -f dry_run=true
+    gh workflow run publish.yml --repo {{repo}} -f version={{version}} -f dry_run=true
 
 # Verify that the current package version is publicly visible on npm.
 npm-verify:

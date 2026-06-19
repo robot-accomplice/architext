@@ -1,0 +1,296 @@
+{
+  "nodes": [
+    {
+      "id": "n39",
+      "type": "actor"
+    },
+    {
+      "id": "n08",
+      "type": "client"
+    },
+    {
+      "id": "n55",
+      "type": "client"
+    },
+    {
+      "id": "n62",
+      "type": "client"
+    },
+    {
+      "id": "n21",
+      "type": "actor"
+    },
+    {
+      "id": "n44",
+      "type": "software-system"
+    },
+    {
+      "id": "n22",
+      "type": "service"
+    },
+    {
+      "id": "n16",
+      "type": "deployment-unit"
+    },
+    {
+      "id": "n05",
+      "type": "service"
+    },
+    {
+      "id": "n63",
+      "type": "service"
+    },
+    {
+      "id": "n59",
+      "type": "service"
+    },
+    {
+      "id": "n30",
+      "type": "service"
+    },
+    {
+      "id": "n23",
+      "type": "external-service"
+    },
+    {
+      "id": "n31",
+      "type": "external-service"
+    },
+    {
+      "id": "n49",
+      "type": "data-store"
+    },
+    {
+      "id": "n36",
+      "type": "service"
+    },
+    {
+      "id": "n45",
+      "type": "worker"
+    },
+    {
+      "id": "n03",
+      "type": "service"
+    },
+    {
+      "id": "n11",
+      "type": "service"
+    },
+    {
+      "id": "n48",
+      "type": "service"
+    },
+    {
+      "id": "n33",
+      "type": "service"
+    },
+    {
+      "id": "n35",
+      "type": "service"
+    },
+    {
+      "id": "n32",
+      "type": "service"
+    },
+    {
+      "id": "n61",
+      "type": "service"
+    },
+    {
+      "id": "n38",
+      "type": "service"
+    },
+    {
+      "id": "n43",
+      "type": "service"
+    },
+    {
+      "id": "n51",
+      "type": "module"
+    },
+    {
+      "id": "n41",
+      "type": "module"
+    },
+    {
+      "id": "n58",
+      "type": "module"
+    },
+    {
+      "id": "n13",
+      "type": "module"
+    },
+    {
+      "id": "n52",
+      "type": "module"
+    },
+    {
+      "id": "n24",
+      "type": "module"
+    },
+    {
+      "id": "n42",
+      "type": "module"
+    },
+    {
+      "id": "n65",
+      "type": "module"
+    },
+    {
+      "id": "n64",
+      "type": "module"
+    },
+    {
+      "id": "n02",
+      "type": "module"
+    },
+    {
+      "id": "n01",
+      "type": "module"
+    },
+    {
+      "id": "n00",
+      "type": "data-store"
+    },
+    {
+      "id": "n34",
+      "type": "module"
+    },
+    {
+      "id": "n50",
+      "type": "module"
+    },
+    {
+      "id": "n54",
+      "type": "module"
+    },
+    {
+      "id": "n07",
+      "type": "module"
+    },
+    {
+      "id": "n60",
+      "type": "module"
+    },
+    {
+      "id": "n29",
+      "type": "module"
+    },
+    {
+      "id": "n28",
+      "type": "module"
+    },
+    {
+      "id": "n27",
+      "type": "module"
+    },
+    {
+      "id": "n46",
+      "type": "module"
+    },
+    {
+      "id": "n26",
+      "type": "data-store"
+    },
+    {
+      "id": "n40",
+      "type": "external-service"
+    },
+    {
+      "id": "n09",
+      "type": "module"
+    },
+    {
+      "id": "n10",
+      "type": "module"
+    },
+    {
+      "id": "n57",
+      "type": "module"
+    },
+    {
+      "id": "n56",
+      "type": "module"
+    },
+    {
+      "id": "n18",
+      "type": "module"
+    },
+    {
+      "id": "n17",
+      "type": "module"
+    },
+    {
+      "id": "n15",
+      "type": "module"
+    },
+    {
+      "id": "n12",
+      "type": "module"
+    },
+    {
+      "id": "n47",
+      "type": "module"
+    },
+    {
+      "id": "n19",
+      "type": "module"
+    },
+    {
+      "id": "n20",
+      "type": "module"
+    },
+    {
+      "id": "n14",
+      "type": "module"
+    },
+    {
+      "id": "n25",
+      "type": "module"
+    },
+    {
+      "id": "n04",
+      "type": "module"
+    },
+    {
+      "id": "n06",
+      "type": "module"
+    },
+    {
+      "id": "n53",
+      "type": "module"
+    },
+    {
+      "id": "n37",
+      "type": "module"
+    },
+    {
+      "id": "n90",
+      "type": "client"
+    },
+    {
+      "id": "n91",
+      "type": "service"
+    },
+    {
+      "id": "n92",
+      "type": "service"
+    },
+    {
+      "id": "n93",
+      "type": "service"
+    },
+    {
+      "id": "n94",
+      "type": "service"
+    },
+    {
+      "id": "n95",
+      "type": "queue"
+    },
+    {
+      "id": "n96",
+      "type": "data-store"
+    }
+  ]
+}

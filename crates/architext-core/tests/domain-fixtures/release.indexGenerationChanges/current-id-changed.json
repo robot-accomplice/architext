@@ -1,0 +1,54 @@
+{
+  "existingIndex": {
+    "currentReleaseId": "v1-0-0",
+    "releases": [
+      {
+        "id": "v1-0-0",
+        "version": "1.0.0",
+        "name": "App 1.0.0",
+        "status": "completed",
+        "posture": "on-track",
+        "releasedAt": "2023-12-01",
+        "lastUpdated": "2023-12-01",
+        "summary": "First release",
+        "counts": {
+          "features": 1,
+          "bugFixes": 0,
+          "workstreams": 1,
+          "blockers": 0,
+          "complete": 1,
+          "inProgress": 0,
+          "planned": 0,
+          "stretch": 0
+        },
+        "file": "v1-0-0.json"
+      }
+    ]
+  },
+  "generatedIndex": {
+    "currentReleaseId": "v1-1-0",
+    "releases": [
+      {
+        "id": "v1-0-0",
+        "version": "1.0.0",
+        "name": "App 1.0.0",
+        "status": "completed",
+        "posture": "on-track",
+        "releasedAt": "2023-12-01",
+        "lastUpdated": "2023-12-01",
+        "summary": "First release",
+        "counts": {
+          "features": 1,
+          "bugFixes": 0,
+          "workstreams": 1,
+          "blockers": 0,
+          "complete": 1,
+          "inProgress": 0,
+          "planned": 0,
+          "stretch": 0
+        },
+        "file": "v1-0-0.json"
+      }
+    ]
+  }
+}

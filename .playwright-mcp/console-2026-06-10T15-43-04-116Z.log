@@ -1,0 +1,2 @@
+[      83ms] [ERROR] Failed to load resource: the server responded with a status of 404 (Not Found) @ http://127.0.0.1:4173/api/repo-tree:0
+[   53763ms] [ERROR] Failed to load resource: net::ERR_EMPTY_RESPONSE @ http://127.0.0.1:4173/api/data-events:0

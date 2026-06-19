@@ -6,7 +6,7 @@ import {
   readRoutingStylePreference,
   writeBooleanPreference,
   writeRoutingStylePreference
-} from "../docs/architext/src/adapters/browserPreferences.js";
+} from "../viewer/src/adapters/browserPreferences.js";
 
 function memoryStorage(values = {}) {
   const store = new Map(Object.entries(values));

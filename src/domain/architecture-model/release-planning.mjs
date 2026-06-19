@@ -1,4 +1,5 @@
 import { releaseSummaryFromDetail } from "./release-history.mjs";
+import { releaseItems, releaseScopeEntries } from "./release-scopes.mjs";
 
 function slug(value) {
   return value
@@ -14,26 +15,6 @@ function releaseIdForVersion(version) {
 
 function releaseFileForId(id) {
   return `${id}.json`;
-}
-
-function allReleaseItems(releaseDetail) {
-  return [
-    ...releaseDetail.scope.required,
-    ...releaseDetail.scope.planned,
-    ...releaseDetail.scope.stretch,
-    ...releaseDetail.scope.deferred,
-    ...releaseDetail.scope.outOfScope
-  ];
-}
-
-function releaseScopeEntries(scope) {
-  return [
-    ["required", scope.required],
-    ["planned", scope.planned],
-    ["stretch", scope.stretch],
-    ["deferred", scope.deferred],
-    ["outOfScope", scope.outOfScope]
-  ];
 }
 
 export function nextMinorVersion(releaseIndex) {
@@ -149,7 +130,7 @@ function mergedWorkstream(existing, proposed) {
 
 export function mergeExistingReleasePlan(existingDetail, proposedDetail) {
   if (!existingDetail || existingDetail.id !== proposedDetail.id) return proposedDetail;
-  const existingItemsById = new Map(allReleaseItems(existingDetail).map((item) => [item.id, item]));
+  const existingItemsById = new Map(releaseItems(existingDetail).map((item) => [item.id, item]));
   const existingWorkstreamsById = new Map(existingDetail.workstreams.map((workstream) => [workstream.id, workstream]));
   const scope = Object.fromEntries(releaseScopeEntries(proposedDetail.scope).map(([key, items]) => [
     key,
@@ -226,18 +207,7 @@ function roadmapChangeForItem(item, existing, releaseDetail) {
   };
 }
 
-export function buildReleasePlan({
-  releaseIndex,
-  roadmapItems,
-  selectedRoadmapItemIds,
-  itemScopes = {},
-  adHocItems = [],
-  projectName,
-  version = nextMinorVersion(releaseIndex),
-  theme,
-  now
-}) {
-  if (!now) throw new Error("buildReleasePlan requires an explicit now timestamp.");
+function createReleasePlanContext({ roadmapItems, selectedRoadmapItemIds, releaseId }) {
   const selectedIds = new Set(selectedRoadmapItemIds);
   const roadmapIds = new Set(roadmapItems.map((item) => item.id));
   for (const selectedId of selectedIds) {
@@ -245,8 +215,7 @@ export function buildReleasePlan({
       throw new Error(`selectedRoadmapItemIds references unknown id "${selectedId}"`);
     }
   }
-  const id = releaseIdForVersion(version);
-  const usedItemIds = new Set(roadmapItems.map((item) => item.id));
+
   const workstreamIds = new Set();
   const workstreamsBySection = new Map();
   const scope = {
@@ -276,32 +245,41 @@ export function buildReleasePlan({
     return workstream;
   };
 
+  return {
+    releaseId,
+    selectedIds,
+    usedItemIds: new Set(roadmapItems.map((item) => item.id)),
+    scope,
+    workstreamForSection,
+    workstreamsBySection
+  };
+}
+
+function assignRoadmapItems({ roadmapItems, itemScopes, now, context }) {
   for (const item of roadmapItems) {
-    if (!selectedIds.has(item.id)) continue;
-    if (item.targetReleaseId && item.targetReleaseId !== id && item.status !== "deferred") {
-      throw new Error(`Roadmap item "${item.title}" is already committed to ${item.targetReleaseId}. Defer it before moving it to ${id}.`);
+    if (!context.selectedIds.has(item.id)) continue;
+    if (item.targetReleaseId && item.targetReleaseId !== context.releaseId && item.status !== "deferred") {
+      throw new Error(`Roadmap item "${item.title}" is already committed to ${item.targetReleaseId}. Defer it before moving it to ${context.releaseId}.`);
     }
-    const workstream = workstreamForSection(item.section);
+    const workstream = context.workstreamForSection(item.section);
     const releaseScope = normalizedScope(itemScopes[item.id]);
     const releaseItem = releaseItemFromRoadmap(item, workstream.id, now, releaseScope);
-    scope[releaseScope].push(releaseItem);
+    context.scope[releaseScope].push(releaseItem);
     workstream.itemIds.push(releaseItem.id);
   }
+}
 
+function assignAdHocItems({ adHocItems, now, context }) {
   for (const item of adHocItems) {
-    const workstream = workstreamForSection(item.section ?? "Ad hoc");
-    const releaseItem = releaseItemFromAdHoc(item, usedItemIds, workstream.id, now);
-    scope[normalizedScope(item.scope)].push(releaseItem);
+    const workstream = context.workstreamForSection(item.section ?? "Ad hoc");
+    const releaseItem = releaseItemFromAdHoc(item, context.usedItemIds, workstream.id, now);
+    context.scope[normalizedScope(item.scope)].push(releaseItem);
     workstream.itemIds.push(releaseItem.id);
   }
+}
 
-  const scopedItems = [
-    ...scope.required,
-    ...scope.planned,
-    ...scope.stretch,
-    ...scope.deferred,
-    ...scope.outOfScope
-  ];
+function assembleReleaseDetail({ id, version, projectName, theme, now, scope, workstreamsBySection }) {
+  const scopedItems = releaseItems({ scope });
   const title = theme ? `${projectName} ${version} ${theme}` : `${projectName} ${version}`;
   return {
     id,
@@ -331,6 +309,25 @@ export function buildReleasePlan({
   };
 }
 
+export function buildReleasePlan({
+  releaseIndex,
+  roadmapItems,
+  selectedRoadmapItemIds,
+  itemScopes = {},
+  adHocItems = [],
+  projectName,
+  version = nextMinorVersion(releaseIndex),
+  theme,
+  now
+}) {
+  if (!now) throw new Error("buildReleasePlan requires an explicit now timestamp.");
+  const id = releaseIdForVersion(version);
+  const context = createReleasePlanContext({ roadmapItems, selectedRoadmapItemIds, releaseId: id });
+  assignRoadmapItems({ roadmapItems, itemScopes, now, context });
+  assignAdHocItems({ adHocItems, now, context });
+  return assembleReleaseDetail({ id, version, projectName, theme, now, scope: context.scope, workstreamsBySection: context.workstreamsBySection });
+}
+
 export function releasePlanChanges({
   releaseIndex,
   roadmap,
@@ -342,7 +339,7 @@ export function releasePlanChanges({
   const roadmapItemsById = new Map(roadmap.items.map((item) => [item.id, item]));
   const roadmapChanges = mode === "draft"
     ? []
-    : allReleaseItems(releaseDetail)
+    : releaseItems(releaseDetail)
       .filter((item) => item.status !== "cut")
       .map((item) => roadmapChangeForItem(item, roadmapItemsById.get(item.id), releaseDetail));
 
@@ -410,7 +407,7 @@ export function approveReleasePlan({
   releases.push(releaseSummary);
 
   const roadmapItemsById = new Map(roadmap.items.map((item) => [item.id, { ...item }]));
-  for (const item of allReleaseItems(approvedDetail)) {
+  for (const item of releaseItems(approvedDetail)) {
     if (item.status === "cut") continue;
     const existing = roadmapItemsById.get(item.id);
     if (existing) {

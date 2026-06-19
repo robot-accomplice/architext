@@ -1,0 +1,91 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Architext / 1.6.0 · Schema / 1.5.0
+      - generic [ref=e7]:
+        - heading "Routing Corpus (review fixture)" [level=1] [ref=e8]
+        - paragraph [ref=e9]: Sanitized routing corpus for diagram review.
+    - generic [ref=e10]:
+      - tablist "Architext modes" [ref=e11]:
+        - tab "Flows" [selected] [ref=e12] [cursor=pointer]
+        - tab "Sequence" [ref=e13] [cursor=pointer]
+        - tab "C4" [ref=e14] [cursor=pointer]
+        - tab "Deployment" [ref=e15] [cursor=pointer]
+        - tab "Data/Risks" [ref=e16] [cursor=pointer]
+        - tab "Repo Tree" [ref=e17] [cursor=pointer]
+        - tab "Blast Radius" [ref=e18] [cursor=pointer]
+        - tab "Release Truth" [ref=e19] [cursor=pointer]
+        - tab "Rules" [ref=e20] [cursor=pointer]
+      - button "Open diagram configuration" [ref=e21] [cursor=pointer]: ⚙ Config
+  - button "Collapse left navigation" [ref=e22] [cursor=pointer]: ‹ Collapse
+  - button "Expand right details" [ref=e23] [cursor=pointer]: ‹ Expand
+  - complementary [ref=e24]:
+    - generic [ref=e25]:
+      - heading "Flows" [level=2] [ref=e26]
+      - searchbox "Search flows" [ref=e27]
+      - paragraph [ref=e28]: 6 of 16 flows
+    - generic [ref=e29]:
+      - generic [ref=e30]:
+        - heading "Flow Views" [level=3] [ref=e31]
+        - button "Roboticus System Map Corpus views view-0. system-map" [ref=e32] [cursor=pointer]:
+          - strong [ref=e33]: Roboticus System Map
+          - generic [ref=e34]: Corpus views view-0.
+          - generic [ref=e35]: system-map
+        - button "Agent Turn Flow Corpus views view-1. flow-explorer" [ref=e36] [cursor=pointer]:
+          - strong [ref=e37]: Agent Turn Flow
+          - generic [ref=e38]: Corpus views view-1.
+          - generic [ref=e39]: flow-explorer
+      - generic [ref=e40]:
+        - heading "Flows" [level=3] [ref=e41]
+        - button "Hub Fan Dense Corpus flow Hub Fan Dense. Implemented" [ref=e42] [cursor=pointer]:
+          - strong [ref=e43]: Hub Fan Dense
+          - generic [ref=e44]: Corpus flow Hub Fan Dense.
+          - generic [ref=e45]: Implemented
+        - button "Pair Chain Linear Corpus flow Pair Chain Linear. Implemented" [ref=e46] [cursor=pointer]:
+          - strong [ref=e47]: Pair Chain Linear
+          - generic [ref=e48]: Corpus flow Pair Chain Linear.
+          - generic [ref=e49]: Implemented
+        - button "Fan Coaligned Selfcross Corpus flow Fan Coaligned Selfcross. Implemented" [ref=e50] [cursor=pointer]:
+          - strong [ref=e51]: Fan Coaligned Selfcross
+          - generic [ref=e52]: Corpus flow Fan Coaligned Selfcross.
+          - generic [ref=e53]: Implemented
+        - button "Coaligned Multibundle Surfaceselect Corpus flow Coaligned Multibundle Surfaceselect. Implemented" [ref=e54] [cursor=pointer]:
+          - strong [ref=e55]: Coaligned Multibundle Surfaceselect
+          - generic [ref=e56]: Corpus flow Coaligned Multibundle Surfaceselect.
+          - generic [ref=e57]: Implemented
+        - button "Bundle Return Gutter Corpus flow Bundle Return Gutter. Implemented" [ref=e58] [cursor=pointer]:
+          - strong [ref=e59]: Bundle Return Gutter
+          - generic [ref=e60]: Corpus flow Bundle Return Gutter.
+          - generic [ref=e61]: Implemented
+        - button "Pair Chain Short Corpus flow Pair Chain Short. Implemented" [ref=e62] [cursor=pointer]:
+          - strong [ref=e63]: Pair Chain Short
+          - generic [ref=e64]: Corpus flow Pair Chain Short.
+          - generic [ref=e65]: Implemented
+  - main [ref=e66]:
+    - generic [ref=e67]:
+      - generic [ref=e68]:
+        - heading "Agent Turn Flow" [level=2] [ref=e69]
+        - paragraph [ref=e70]: Corpus views view-1.
+      - generic "Diagram controls" [ref=e71]:
+        - generic [ref=e72]:
+          - generic [ref=e73]: Line Style
+          - combobox "Line Style" [ref=e74] [cursor=pointer]:
+            - option "Orthogonal" [selected]
+            - option "Spline"
+            - option "Straight"
+        - button "Zoom out" [ref=e75] [cursor=pointer]: "-"
+        - generic [ref=e76]: 100%
+        - button "Zoom in" [ref=e77] [cursor=pointer]: +
+        - button "Fit" [ref=e78] [cursor=pointer]
+        - button "Reset" [ref=e79] [cursor=pointer]
+        - button "Focus" [ref=e80] [cursor=pointer]
+        - button "PDF" [ref=e81] [cursor=pointer]
+      - group [ref=e82]:
+        - generic "Legend" [ref=e83] [cursor=pointer]
+    - generic [ref=e89]:
+      - heading "Hub Fan Dense" [level=2] [ref=e91]
+      - generic [ref=e92]:
+        - generic [ref=e93]: Implemented
+        - button "Show steps" [ref=e94] [cursor=pointer]
+  - complementary [ref=e95]:
+    - button "Details" [ref=e96] [cursor=pointer]

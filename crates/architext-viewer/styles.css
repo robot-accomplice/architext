@@ -1,0 +1,2235 @@
+/* =============================================================================
+   Architext viewer — design tokens & primitives
+   Source of truth: viewer/DESIGN.md ("Cyber-Tactical Monolith", 1.7.0 facelift).
+
+   This is a CHROME-ONLY token system. Role color is single-sourced via --c4-*;
+   STATE (active/selected/primary) is a dedicated --accent treatment, never a
+   role hue (DESIGN.md rule 1). Hex values for role hues / surfaces are carried
+   faithfully from the live viewer (viewer/src/styles.css) so one hue holds per
+   role across every mode; the 1.7.0 refinements add the tiered-black ramp and
+   the explicit state treatment.
+
+   Fonts are VENDORED woff2 (assets/fonts/) with @font-face below — zero CDN,
+   offline-capable, no Node in the build.
+   ============================================================================= */
+
+/* ── Vendored fonts (OFL-1.1; see assets/fonts/*-OFL.txt) ───────────────────
+   Hanken Grotesk: UI / headers / body (humanist grotesque).
+   JetBrains Mono: all technical data + .overline caps. */
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("assets/fonts/hanken-grotesk-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url("assets/fonts/hanken-grotesk-500.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url("assets/fonts/hanken-grotesk-600.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Hanken Grotesk";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("assets/fonts/hanken-grotesk-700.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("assets/fonts/jetbrains-mono-400.woff2") format("woff2");
+}
+@font-face {
+  font-family: "JetBrains Mono";
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url("assets/fonts/jetbrains-mono-700.woff2") format("woff2");
+}
+
+:root {
+  color-scheme: dark;
+
+  /* ── Tiered-black surface ramp (DESIGN.md "Surfaces") ─────────────────────
+     One canvas-black (the single darkest diagram background), then background →
+     panel → popover ascending tonal layers. Hierarchy via tonal layering +
+     1px outlines, not heavy shadows. */
+  --canvas-black: #08090b;   /* THE single darkest surface — diagram canvas only */
+  --bg: #0c0e11;             /* app background */
+  --surface: #111316;        /* base surface under panels */
+  --panel: #1a1c1f;          /* panels (nav / inspector) */
+  --panel-2: #1e2023;        /* raised controls within panels */
+  --popover: #282a2d;        /* popovers / menus / topmost layer */
+
+  /* ── Text ramp (tuned for secondary-text contrast on near-black) ───────── */
+  --ink: #e2e2e6;            /* primary text */
+  --muted: #b9cacb;          /* secondary text / overlines */
+  --dim: #849495;            /* tertiary / disabled */
+
+  /* ── Hairlines ──────────────────────────────────────────────────────────
+     1px panel gaps (not wide margins) for the single-machine console feel. */
+  --line: #3b494b;
+  --line-strong: #849495;
+  --hairline: 1px;
+  /* Diagram route stroke — a clearly-visible mid-light on canvas-black, brighter
+     than --line-strong so edges read at any zoom. Not a --c4-* role hue, not the
+     accent (state). */
+  --edge: #b3c2c3;
+
+  /* ── Component-type color — SINGLE SOURCE OF TRUTH (DESIGN.md) ────────────
+     Node/component type color ALWAYS comes from these tokens. Never hardcode a
+     raw palette hue for a type. One hue per role, held across every mode. */
+  --c4-actor: #ff4db8;
+  --c4-client: #00e5ff;
+  --c4-service: #a855ff;
+  --c4-worker: #ffd21f;
+  --c4-data: #35ff4d;
+  --c4-external: #b9cacb;
+  --c4-deployment: #ff9f1a;
+  --c4-module: #35ff96;
+  --c4-system: #00e5ff;
+  --c4-queue: #ff9f1a;
+
+  /* ── Severity / criticality scale — a STATE/SEVERITY ramp, NOT role hues ───
+     DESIGN.md: criticality (rules) and severity (risks) read on their OWN
+     ordinal scale, distinct from the --c4-* component-type palette. One scale,
+     reused by rule criticality badges and risk severity rails so "critical"
+     looks the same everywhere. */
+  --sev-critical: #ff5c7a;   /* highest urgency */
+  --sev-high:     #ff9f1a;
+  --sev-medium:   #ffd21f;
+  --sev-low:      #849495;   /* lowest — fades to dim */
+
+  /* ── Sensitivity scale (data classification) — its own ordinal ramp ──────── */
+  --sens-high:   #ff5c7a;
+  --sens-medium: #ffd21f;
+  --sens-low:    #849495;
+
+  /* ── State / accent treatment (DESIGN.md rule 1) ──────────────────────────
+     STATE (active / selected / primary action) is a dedicated signal — a
+     border / ring / inner-glow on --accent — NOT a --c4-* role hue. --accent is
+     deliberately distinct from every role color above (green-leaning teal vs the
+     client cyan #00e5ff) so "active" never collides with "client/system". */
+  --accent: #19f2c4;
+  --accent-ring: rgba(25, 242, 196, 0.45);
+  --accent-glow: rgba(25, 242, 196, 0.16);
+
+  /* ── Typography ───────────────────────────────────────────────────────────
+     Hanken Grotesk (UI/headers/body) + JetBrains Mono (technical data). */
+  --font-ui: "Hanken Grotesk", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --display-size: 32px;      /* display 32/700 */
+  --headline-size: 20px;     /* headline 20/600 */
+  --body-size: 14px;         /* body pinned 14 for density */
+  --overline-size: 11px;     /* .overline caps 11/700 */
+  --overline-tracking: 0.08em;
+
+  /* ── Shape & elevation ────────────────────────────────────────────────────
+     4px UI chrome / up to 8px node cards; pills reserved for status. */
+  --card-radius: 4px;        /* UI chrome */
+  --node-card-radius: 8px;   /* diagram node cards */
+  --chip-radius: 14px;       /* pill-shaped chips */
+  --pill-radius: 999px;      /* count pills */
+  --accent-rail: 3px;        /* colored left rail on cards/rows/sections */
+  --node-topbar: 2px;        /* node-card category top-bar */
+
+  /* ── 4px baseline grid / tight padding ──────────────────────────────────── */
+  --grid: 4px;
+  --pad-tight: 8px;
+  --pad: 12px;
+
+  /* ── Fixed-fluid console grid widths (DESIGN.md "Layout") ───────────────── */
+  --nav-w: 280px;
+  --inspector-w: 320px;
+  /* Collapsed rails: thin enough to give the canvas room, wide enough for the
+     expand affordance. */
+  --nav-collapsed: 44px;
+  --inspector-collapsed: 44px;
+
+  font-family: var(--font-ui);
+  font-size: var(--body-size);
+}
+
+/* ── Primitives (real classes shared by every mode) ───────────────────────── */
+
+/* Overline: the ONE section-label / eyebrow treatment. */
+.overline {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--muted);
+}
+
+/* Accent rail card/row/section: 1px bordered surface + 3px --accent left rail.
+   Set --accent per instance (a --c4-* role color where it encodes type). */
+.accent-surface {
+  border: var(--hairline) solid var(--line);
+  border-left: var(--accent-rail) solid var(--accent, var(--line));
+  border-radius: var(--card-radius);
+  background: var(--panel-2);
+  padding: var(--pad);
+}
+
+/* Chip: pill-shaped, bordered, optional leading icon / type tint. */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--grid);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 2px var(--pad-tight);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--chip-radius);
+  color: var(--muted);
+  background: var(--panel-2);
+}
+
+/* Count pill: fully-round status/count indicator. */
+.pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  font-weight: 700;
+  border-radius: var(--pill-radius);
+  color: var(--ink);
+  background: var(--popover);
+}
+
+/* State treatment (rule 1): --accent ring + inner glow, never a role hue. */
+.is-active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring), inset 0 0 12px var(--accent-glow);
+  color: var(--ink);
+}
+
+/* ── Reset / base ─────────────────────────────────────────────────────────── */
+* { box-sizing: border-box; }
+
+html, body { height: 100%; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+button {
+  font: inherit;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  cursor: pointer;
+}
+button:hover,
+button:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+
+/* ── App shell: fixed-fluid console grid (DESIGN.md "Layout") ───────────────
+   fixed ~280 left nav | FLUID center canvas | fixed ~320 right inspector,
+   joined by 1px hairline gaps (the gaps show --line through a grid gap). */
+.shell {
+  display: grid;
+  grid-template-columns: var(--nav-w) 1fr var(--inspector-w);
+  /* Row 1: the full-width header strip; row 2: the fluid console triad. */
+  grid-template-rows: auto 1fr;
+  gap: var(--hairline);
+  background: var(--line);   /* hairline gaps = the grid background bleeding through */
+  height: 100vh;
+  width: 100vw;
+}
+
+/* ── Header strip (DESIGN.md "Cyber-Tactical" topbar) ─────────────────────────
+   A thin full-width row above the triad: hairline bottom border, mono eyebrow,
+   Hanken project name, muted single-line summary, and the Config action. */
+.topbar {
+  grid-column: 1 / -1;       /* span all three triad columns */
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad);
+  background: var(--surface);
+  border-bottom: var(--hairline) solid var(--line);
+  padding: var(--pad-tight) var(--pad);
+  min-width: 0;
+  position: relative;        /* anchor for the data-invalid notice strip */
+}
+.topbar__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;              /* let the summary ellipsis kick in */
+}
+.topbar__eyebrow { margin: 0; }
+.topbar__title-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pad);
+  min-width: 0;
+}
+.topbar__project {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: var(--headline-size);
+  color: var(--ink);
+  margin: 0;
+  white-space: nowrap;
+  flex: none;
+}
+.topbar__summary {
+  color: var(--muted);
+  font-size: var(--body-size);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.topbar__actions {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+}
+/* Live-reload indicator: hairline mono pill with a status dot. Muted when the
+   SSE stream is offline; --accent (STATE signal, rule 1) when connected. */
+.topbar__live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: var(--overline-tracking);
+  text-transform: uppercase;
+  color: var(--muted);
+}
+.topbar__live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--muted);
+}
+.topbar__live--on { color: var(--accent); }
+.topbar__live--on .topbar__live-dot {
+  background: var(--accent);
+  box-shadow: 0 0 6px var(--accent-glow);
+}
+/* Data-invalid notice: a hairline strip pinned just under the topbar. A warning
+   (the last-good diagram still renders), so --sev-high, not a hard error hue. */
+.topbar__notice {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 100%;
+  z-index: 5;
+  display: flex;
+  align-items: baseline;
+  gap: var(--pad-tight);
+  padding: var(--pad-tight) var(--pad);
+  background: var(--surface);
+  border-bottom: var(--hairline) solid var(--sev-high);
+  box-shadow: inset var(--accent-rail) 0 0 0 var(--sev-high);
+  min-width: 0;
+}
+.topbar__notice-tag {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: var(--overline-tracking);
+  text-transform: uppercase;
+  color: var(--sev-high);
+}
+.topbar__notice-msg {
+  color: var(--ink);
+  font-size: var(--body-size);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+/* Config button: on-language hairline + mono, --accent only as a STATE signal
+   (hover/active) — never a role hue (rule 1). */
+.topbar__config-btn {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: var(--overline-tracking);
+  text-transform: uppercase;
+  padding: var(--pad-tight) var(--pad);
+  background: var(--panel-2);
+  color: var(--muted);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+}
+.topbar__config-btn:hover,
+.topbar__config-btn:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+
+/* ── Config drawer (read-only resolved diagram config) ───────────────────────
+   A right-side drawer over the shell + a click-away scrim. Values are read-only
+   this slice (editing is a later pass). */
+.config-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 20;
+}
+.config-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(420px, 90vw);
+  z-index: 21;
+  background: var(--panel);
+  border-left: var(--hairline) solid var(--line);
+  padding: var(--pad);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+  overflow-y: auto;
+}
+.config-drawer__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--pad-tight);
+}
+.config-drawer__title {
+  font-size: var(--headline-size);
+  font-weight: 600;
+  color: var(--ink);
+  margin: var(--grid) 0 0;
+}
+.config-drawer__note {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+  margin: 0 0 var(--pad-tight);
+}
+.config-drawer__empty { color: var(--dim); }
+.config-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+}
+.config-list__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr);
+  gap: var(--pad);
+  align-items: baseline;
+  padding: var(--pad-tight) 0;
+  border-bottom: var(--hairline) solid var(--line);
+}
+.config-list__key {
+  font-size: var(--overline-size);
+  color: var(--muted);
+  word-break: break-word;
+}
+.config-list__val {
+  font-size: var(--overline-size);
+  color: var(--ink);
+  text-align: right;
+  word-break: break-word;
+}
+
+/* ── Config EDITOR (field controls driven by the /api/config spec) ──────────── */
+.config-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+}
+.config-editor__scope {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.config-editor__scope-hint {
+  margin: 0;
+  font-size: var(--overline-size);
+  color: var(--dim);
+}
+/* Segmented control: hairline group, --accent STATE on the active segment. */
+.config-seg {
+  display: inline-flex;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  overflow: hidden;
+  width: fit-content;
+}
+.config-seg__btn {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 4px var(--pad);
+  background: var(--panel-2);
+  color: var(--muted);
+  border: none;
+  border-right: var(--hairline) solid var(--line);
+  cursor: pointer;
+}
+.config-seg__btn:last-child { border-right: none; }
+.config-seg__btn.is-active {
+  color: var(--ink);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+  border-color: var(--accent);
+}
+.config-section {
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  padding: var(--pad-tight) var(--pad) var(--pad);
+  margin: 0;
+}
+.config-section__label {
+  color: var(--muted);
+  padding: 0 var(--grid);
+}
+.config-section__fields {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+  margin-top: var(--pad-tight);
+}
+.config-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 140px);
+  gap: var(--pad);
+  align-items: center;
+}
+.config-field__label {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--dim);
+  display: flex;
+  gap: var(--grid);
+  align-items: baseline;
+}
+.config-field__unit {
+  color: var(--muted);
+  text-transform: none;
+  letter-spacing: 0;
+}
+.config-field__input {
+  font: inherit;
+  font-family: var(--font-mono);
+  width: 100%;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  padding: 4px var(--pad-tight);
+  text-align: right;
+}
+.config-field__input:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.config-field__check { justify-self: end; }
+.config-editor__warnings {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.config-editor__warning {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--sev-high);
+}
+.config-editor__error {
+  margin: 0;
+  font-size: var(--body-size);
+  color: var(--sev-critical);
+}
+.config-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pad-tight);
+  margin-top: var(--grid);
+}
+
+/* ── Panel collapse affordance (shared by nav + inspector) ────────────────── */
+/* Header row holding the panel label/wordmark and the collapse chevron. */
+.panel-collapse-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad-tight);
+}
+/* Chevron toggle: on-language hairline + mono, --accent only as a STATE signal
+   on hover/active (rule 1 — never a role hue). */
+.panel-collapse-toggle {
+  font-family: var(--font-mono);
+  font-size: var(--body-size);
+  line-height: 1;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.panel-collapse-toggle:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.panel-collapse-toggle:active {
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+/* In the collapsed rail the toggle is the only affordance — center it. */
+.panel-collapse-toggle--rail {
+  margin: 0 auto;
+}
+/* Inspector mirrors the nav: both collapse toggles hug the central canvas. The
+   nav's toggle is right-aligned (label first, toggle last → space-between pushes
+   it to the right edge); the inspector reverses the content order so the toggle
+   is FIRST and `space-between` pushes it to the left edge (= the
+   canvas↔inspector boundary), with the label trailing to the right. */
+/* Collapsed inspector rail: the expand chevron sits at the left (boundary) edge,
+   not centered, to keep the affordance hugging the canvas. */
+.panel-collapse-toggle--rail-left {
+  margin: 0 auto 0 0;
+}
+
+/* ── Left nav ───────────────────────────────────────────────────────────── */
+.left-nav {
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  padding: var(--pad);
+  gap: var(--pad);
+  overflow-y: auto;
+}
+/* Collapsed: thin rail, just the expand chevron, no horizontal scrollbar. */
+.left-nav--collapsed,
+.inspector--collapsed {
+  padding: var(--pad) 0;
+  align-items: center;
+  overflow: hidden;
+}
+
+.wordmark {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: var(--headline-size);
+  letter-spacing: 0.04em;
+  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+}
+.wordmark__rail {
+  width: var(--accent-rail);
+  height: 1em;
+  background: var(--accent);
+  border-radius: 1px;
+}
+
+.mode-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.mode-list__item {
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+  padding: var(--pad-tight) var(--pad);
+  border: var(--hairline) solid transparent;
+  border-radius: var(--card-radius);
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: var(--body-size);
+  text-align: left;
+  width: 100%;
+}
+.mode-list__item:hover {
+  color: var(--ink);
+  border-color: var(--line);
+}
+/* Active mode = state treatment (rule 1: --accent ring/glow, NOT a role hue). */
+.mode-list__item.is-active {
+  color: var(--ink);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+/* Mono label sits beside the semantic icon. */
+.mode-list__label {
+  font-family: var(--font-mono);
+  flex: 1 1 auto;
+}
+
+/* Semantic mode glyph: monochrome line icon, tints with the host state via
+   currentColor (rule 1 — state is --accent only, never a role hue). */
+.mode-icon {
+  width: 16px;
+  height: 16px;
+  flex: 0 0 auto;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* ── Collapsed-rail mode switcher ─────────────────────────────────────────── */
+/* Icon-only vertical switcher shown in the thin rail; reuses the mode list +
+   selection logic, expresses active state via --accent only. */
+.mode-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.mode-rail__item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: var(--hairline) solid transparent;
+  border-radius: var(--card-radius);
+  background: var(--panel-2);
+  color: var(--muted);
+  cursor: pointer;
+}
+.mode-rail__item:hover {
+  color: var(--ink);
+  border-color: var(--line);
+}
+.mode-rail__item.is-active {
+  color: var(--ink);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+
+/* ── Center: fluid canvas (rule 3 — never pinned w/h) ─────────────────────── */
+.canvas-panel {
+  /* Column layout: the diagram stage fills the space; the footer steps panel
+     (when shown) takes an `auto` row below it — opening it shrinks the stage and
+     the canvas re-fits. */
+  display: grid;
+  grid-template-rows: 1fr auto;
+  background: var(--canvas-black);   /* the one canvas-black */
+  overflow: hidden;
+  min-width: 0;                      /* allow the fluid track to shrink */
+  min-height: 0;
+}
+/* The stage is the absolute-positioning context for the diagram surface,
+   viewport, controls, and placard (all `inset: 0` relative to here). */
+.canvas-panel__stage {
+  position: relative;
+  overflow: hidden;
+  min-height: 0;
+}
+.canvas-panel__surface {
+  position: absolute;
+  inset: 0;
+  /* faint baseline-grid texture; purely cosmetic console feel */
+  background-image:
+    linear-gradient(var(--line) 0.5px, transparent 0.5px),
+    linear-gradient(90deg, var(--line) 0.5px, transparent 0.5px);
+  background-size: 32px 32px;
+  opacity: 0.06;
+}
+.canvas-panel__controls {
+  position: absolute;
+  top: var(--pad);
+  right: var(--pad);
+  display: flex;
+  gap: var(--grid);
+}
+.canvas-panel__controls button {
+  font-family: var(--font-mono);
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.canvas-panel__hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: var(--dim);
+}
+
+/* ── Right inspector ──────────────────────────────────────────────────────── */
+.inspector {
+  background: var(--panel);
+  padding: var(--pad);
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+  overflow-y: auto;
+}
+.inspector__section-label {
+  margin-bottom: var(--pad-tight);
+}
+.inspector__title {
+  font-weight: 600;
+  font-size: var(--body-size);
+  color: var(--ink);
+  margin: 0 0 var(--grid);
+}
+.inspector__meta {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+  margin: 0;
+}
+.inspector__card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+
+/* ── Selector region (left nav): flow + view selects ──────────────────────── */
+.selector-bar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+  margin-top: var(--pad-tight);
+  border-top: var(--hairline) solid var(--line);
+  padding-top: var(--pad);
+}
+.selector-bar__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.selector-bar__select {
+  width: 100%;
+  padding: var(--pad-tight) var(--pad);
+  background: var(--panel-2);
+  color: var(--ink);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  font-family: var(--font-ui);
+  font-size: var(--body-size);
+}
+.selector-bar__select:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.selector-bar__note {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+  margin: 0;
+}
+
+/* ── Diagram viewport (fluid; pan/zoom host) ──────────────────────────────── */
+.canvas-panel__viewport {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: grab;
+}
+.canvas-panel__viewport:active { cursor: grabbing; }
+/* DESIGN.md rule 3: fluid SVG — fills the viewport, never a fixed w/h. */
+.flow-svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* ── Diagram edges (orthogonal; the d-string is engine-verbatim) ──────────── */
+.flow-edge {
+  stroke: var(--edge);
+  stroke-width: 1.5;
+  fill: none;
+  /* Keep the stroke a constant ~1.5px in SCREEN space at any zoom so routes
+     never thin to sub-pixel and vanish when fit zooms out. */
+  vector-effect: non-scaling-stroke;
+}
+.flow-edge--async {
+  stroke-dasharray: 6 4;
+  opacity: 0.85;
+}
+.flow-edge--return {
+  stroke-dasharray: 2 3;
+  opacity: 0.7;
+}
+.flow-edge--decision {
+  stroke-dasharray: 4 3;
+  opacity: 0.8;
+}
+.flow-arrowhead {
+  fill: var(--edge);
+  stroke: var(--edge);
+  vector-effect: non-scaling-stroke;
+}
+/* Selected step → active edge: a STATE treatment (rule 1) — brighter/thicker
+   --accent stroke, never a role hue. The route `d` is untouched (parity-proven);
+   only the stroke styling changes. Wins over the kind dash by removing it. */
+.flow-edge--active {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-dasharray: none;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px var(--accent-glow));
+}
+
+/* ── Step labels (JetBrains Mono over a chrome-radius box) ────────────────── */
+.flow-label__box {
+  fill: var(--surface);
+  stroke: var(--line);
+  stroke-width: 1;
+  opacity: 0.92;
+}
+.flow-label__text {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--muted);
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+/* Flow-step number pill: a compact mono badge (the step number), mirroring the
+   steps-panel step-number idiom. Full action text lives in the steps panel. */
+.flow-label__badge {
+  fill: var(--surface);
+  stroke: var(--edge);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.flow-label__badge-num {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  fill: var(--muted);
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* ── Decision diamonds (tinted with the affiliated node's role color) ─────── */
+.flow-decision {
+  fill: var(--canvas-black);
+  stroke-width: 1.5;
+}
+
+/* ── Node cards (8px radius; 2px role top-bar; name + type chip) ──────────── */
+.flow-node { cursor: pointer; }
+.flow-node__card {
+  fill: var(--panel);
+  stroke: var(--line);
+  stroke-width: 1;
+  rx: var(--node-card-radius);
+}
+.flow-node__topbar {
+  /* height + fill set inline (the 2px --node-topbar bar in the role color). */
+  opacity: 0.95;
+}
+.flow-node__name {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 12px;
+  fill: var(--ink);
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+.flow-node__type {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+/* Upper-left type glyph: a monochrome line icon tinted to the SAME --c4-* role
+   token as the top-bar (set via `color` on the group; the path uses
+   currentColor). Reinforces the color-encodes-type mapping at the card. */
+.flow-node__icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+/* Selected = STATE treatment (rule 1): --accent ring/glow, never a role hue. */
+.flow-node--selected .flow-node__card {
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 6px var(--accent-glow));
+}
+
+/* Structural relationship pill: a small --surface/--edge hairline square sized
+   to the relationship-kind GLYPH (the word lives in the <title> + legend). The
+   pill replaces the colliding WORD labels of C4/deployment diagrams. */
+.flow-label__rel-pill {
+  fill: var(--surface);
+  stroke: var(--edge);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+  opacity: 0.95;
+}
+.flow-label__rel-glyph {
+  fill: none;
+  stroke: var(--muted);
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+/* ── Canvas placard (data-bound identity, bottom-left) ────────────────────── */
+.canvas-panel__placard {
+  position: absolute;
+  left: var(--pad);
+  bottom: var(--pad);
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+  pointer-events: none;
+  max-width: 60%;
+}
+
+/* ── Canvas legend (type/relationship key, bottom-left above the placard) ────
+   Colors encode TYPE, so the legend spells the mapping out: per present node
+   type a --c4-* swatch + the type glyph + the name, and per present
+   relationship kind its glyph + word. Collapsible; reflects only what the
+   current view renders. On-language: overline header, hairline, mono. */
+.legend {
+  position: absolute;
+  /* Lower-right corner; the identity placard owns the lower-left. */
+  right: var(--pad);
+  bottom: var(--pad);
+  width: max-content;
+  max-width: 40%;
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  backdrop-filter: blur(2px);
+}
+.legend--collapsed {
+  bottom: var(--pad);
+}
+.legend__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad);
+  width: 100%;
+  padding: var(--grid) var(--pad);
+  background: transparent;
+  border: 0;
+  border-bottom: var(--hairline) solid var(--line);
+  color: var(--muted);
+  cursor: pointer;
+}
+.legend--collapsed .legend__header {
+  border-bottom: 0;
+}
+.legend__header:hover {
+  color: var(--ink);
+  border-color: var(--accent);
+}
+.legend__toggle {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  line-height: 1;
+}
+.legend__body {
+  padding: var(--grid) var(--pad);
+}
+.legend__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.legend__row {
+  display: flex;
+  align-items: center;
+  gap: var(--grid);
+}
+.legend__swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+}
+.legend__glyph {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+/* Relationship glyphs aren't role-tinted (relationships have no --c4- hue);
+   they read in the secondary tier like the rest of the technical key. */
+.legend__glyph--rel {
+  color: var(--muted);
+}
+.legend__name {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--ink);
+}
+.legend__divider {
+  height: var(--hairline);
+  background: var(--line);
+  margin: var(--grid) 0;
+}
+.canvas-panel__title {
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: var(--headline-size);
+  color: var(--ink);
+  margin: 0;
+}
+.chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--grid);
+}
+
+/* ── Footer steps panel (diagram-owned step navigation) ──────────────────────
+   Lives at the bottom of the canvas column. Header line (flow name + summary +
+   status chip + collapse toggle) over a scrollable list of step cards. Click a
+   card → select the step → the matching diagram edge gets the --accent active
+   treatment. Surface sits above the canvas-black on the --surface tone. */
+.steps-panel {
+  background: var(--surface);
+  border-top: var(--hairline) solid var(--line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 38vh;
+}
+.steps-panel--collapsed { max-height: none; }
+.steps-panel__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--pad);
+  padding: var(--pad-tight) var(--pad);
+}
+.steps-panel__title-line {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--pad-tight) var(--pad);
+  min-width: 0;
+}
+.steps-panel__title {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: var(--body-size);
+  color: var(--ink);
+  margin: 0;
+}
+.steps-panel__summary {
+  color: var(--muted);
+  font-size: var(--overline-size);
+  margin: 0;
+  min-width: 0;
+}
+.steps-panel__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+  flex: none;
+}
+/* Collapse toggle: on-language, --accent only as a STATE signal (rule 1). */
+.steps-panel__toggle {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: var(--overline-tracking);
+  text-transform: uppercase;
+  padding: var(--grid) var(--pad-tight);
+  background: var(--panel-2);
+  color: var(--muted);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+}
+.steps-panel__toggle:hover,
+.steps-panel__toggle:focus-visible {
+  color: var(--accent);
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.steps-panel__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+  padding: 0 var(--pad) var(--pad-tight);
+  overflow-y: auto;
+  min-height: 0;
+}
+/* One step card: glyph + mono number + `from → to` route + action. Selected =
+   the shared `.is-active` --accent STATE treatment. */
+.step-card {
+  display: grid;
+  grid-template-columns: auto auto minmax(0, 1fr) minmax(0, 1.4fr);
+  align-items: baseline;
+  gap: var(--pad-tight) var(--pad);
+  text-align: left;
+  width: 100%;
+  padding: var(--pad-tight) var(--pad);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  color: var(--muted);
+}
+.step-card:hover { color: var(--ink); border-color: var(--line-strong); }
+.step-card__glyph {
+  color: var(--muted);
+  flex: none;
+}
+.step-card__num {
+  font-size: var(--overline-size);
+  color: var(--dim);
+  flex: none;
+}
+.step-card__route {
+  font-weight: 600;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.step-card__action {
+  color: var(--muted);
+  font-size: var(--overline-size);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Sequence diagram (lifelines + time-ordered messages + frames) ────────── */
+/* Same fluid-canvas contract as the flows SVG. Message lines reuse --edge +
+   non-scaling-stroke so they stay a constant ~1.5px in screen space at any
+   zoom (never thinning to sub-pixel like the flows-edge fix). */
+.sequence-lifeline {
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 2 4;
+  opacity: 0.6;
+  vector-effect: non-scaling-stroke;
+}
+.sequence-line {
+  stroke: var(--edge);
+  stroke-width: 1.5;
+  fill: none;
+  vector-effect: non-scaling-stroke;
+}
+/* Return + async + persistence get the dashed/dotted edge-kind treatment. */
+.sequence-line--return { stroke-dasharray: 2 3; opacity: 0.7; }
+.sequence-line--async { stroke-dasharray: 6 4; opacity: 0.85; }
+.sequence-line--persistence { stroke-dasharray: 1 3; opacity: 0.8; }
+.sequence-line--self { stroke-dasharray: 3 2; opacity: 0.85; }
+
+/* Selected step → active message: the sequence analogue of `.flow-edge--active`
+   — a STATE treatment (rule 1), brighter/thicker --accent stroke, never a role
+   hue. The kind dash is removed so the active arrow reads as one solid line.
+   The chip + action label lift to --accent too. */
+.sequence-message--active .sequence-line {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  stroke-dasharray: none;
+  opacity: 1;
+  filter: drop-shadow(0 0 4px var(--accent-glow));
+}
+.sequence-message--active .sequence-action { fill: var(--accent); }
+.sequence-message--active .sequence-step-chip__dot {
+  stroke: var(--accent);
+  stroke-width: 1.5;
+}
+.sequence-message--active .sequence-step-chip__num { fill: var(--accent); }
+/* Whole message row is clickable (selects the step). */
+.sequence-message { cursor: pointer; }
+
+/* Activation bars straddling lifelines. */
+.sequence-activation-bar {
+  fill: var(--surface);
+  stroke: var(--line);
+  stroke-width: 1;
+  opacity: 0.85;
+}
+
+/* Frames (alt/loop/par/opt/transaction) — a thin border + a mono label chip. */
+.sequence-frame__box {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 1;
+  stroke-dasharray: 4 3;
+  opacity: 0.6;
+}
+.sequence-frame__label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  fill: var(--accent);
+  opacity: 0.85;
+  pointer-events: none;
+}
+
+/* Step-number chip on each message midpoint (JetBrains Mono). */
+.sequence-action {
+  font-family: var(--font-ui);
+  font-size: 11px;
+  fill: var(--ink);
+  text-anchor: middle;
+  pointer-events: none;
+}
+.sequence-step-chip__dot {
+  fill: var(--canvas-black);
+  stroke: var(--edge);
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+.sequence-step-chip__num {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--muted);
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* Participant header cards — same idiom as node cards (role top-bar, name in
+   Hanken Grotesk, type chip in JetBrains Mono). Selection = --accent STATE. */
+.sequence-participant { cursor: pointer; }
+.sequence-participant__card {
+  fill: var(--panel);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.sequence-participant__topbar { opacity: 0.95; }
+.sequence-participant__name {
+  font-family: var(--font-ui);
+  font-weight: 600;
+  font-size: 11px;
+  fill: var(--ink);
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+.sequence-participant__type {
+  font-family: var(--font-mono);
+  font-size: 8px;
+  letter-spacing: 0.04em;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  pointer-events: none;
+}
+.sequence-participant--selected .sequence-participant__card {
+  stroke: var(--accent);
+  filter: drop-shadow(0 0 6px var(--accent-glow));
+}
+
+/* ── Boot screens (loading / error) ───────────────────────────────────────── */
+.boot-screen {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pad);
+  background: var(--canvas-black);
+  color: var(--muted);
+}
+.boot-screen__msg {
+  font-family: var(--font-ui);
+  color: var(--ink);
+  margin: 0;
+}
+.boot-screen__detail {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+  margin: 0;
+  word-break: break-all;
+}
+.boot-screen__error-card {
+  max-width: 480px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.boot-screen--error .accent-surface {
+  --accent: var(--c4-actor);
+}
+
+/* ── Progress indicator (data load + diagram routing) ────────────────────────
+   On-language: a 1px --accent ring (the only motion in otherwise-static
+   hairline chrome) + a mono uppercase label. Reused for the initial /data
+   fetch (boot screen) and the async plan compute (canvas overlay). It animates
+   because the work it covers is async — the main thread stays free. */
+.spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--grid);
+}
+.spinner__ring {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  /* faint full ring + a bright --accent arc that sweeps */
+  border: 1.5px solid var(--accent-glow);
+  border-top-color: var(--accent);
+  animation: spinner-rotate 0.7s linear infinite;
+}
+.spinner__label {
+  color: var(--accent);
+}
+@keyframes spinner-rotate {
+  to { transform: rotate(360deg); }
+}
+/* Centered, non-interactive overlay on the canvas stage — pointer-events:none so
+   pan/zoom stay live underneath; removed the moment the bundle is ready. */
+.canvas-panel__progress {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  padding: var(--pad-tight) var(--pad);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+}
+
+/* ── Non-diagram center surfaces (Repo Tree, Rules) ──────────────────────────
+   These render inside the canvas viewport but are scrollable lists, not pan/zoom
+   diagrams — so they fill the region, scroll their own overflow, and drop the
+   grab cursor. */
+.repo-tree,
+.rules-panel,
+.blast-panel,
+.release-panel {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  cursor: default;
+  padding: var(--pad);
+}
+
+/* ── Repo Tree ──────────────────────────────────────────────────────────── */
+.repo-tree__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad-tight);
+  margin-bottom: var(--pad);
+}
+.repo-tree__hint {
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+}
+.repo-tree__hint--error { color: var(--c4-actor); }
+.repo-dir-children--hidden { display: none; }
+.repo-tree__summary {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pad-tight);
+}
+.repo-tree__count {
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+}
+
+/* A tree row: a 3px left rail (owner color on files), then a fixed grid of
+   caret · type-icon · name · size · modified · owner — the columns the React
+   RepoTreeWorkspace shows. Size/modified are mono and right-aligned so they
+   read as a scannable metadata gutter. */
+.repo-row {
+  display: grid;
+  grid-template-columns: 12px 18px minmax(0, 1fr) 64px 56px auto;
+  align-items: center;
+  gap: var(--pad-tight);
+  height: 24px;
+  font-family: var(--font-mono);
+  font-size: var(--body-size);
+  border-left: var(--accent-rail) solid transparent;
+  color: var(--muted);
+  user-select: none;
+}
+.repo-row--dir { cursor: pointer; }
+.repo-row--owned { cursor: pointer; }
+.repo-row:hover { background: var(--panel-2); }
+/* The column header reuses the row grid but is non-interactive overline text. */
+.repo-row--colhead {
+  color: var(--dim);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid var(--line);
+  cursor: default;
+}
+.repo-row--colhead:hover { background: none; }
+.repo-row__caret {
+  color: var(--dim);
+  text-align: center;
+}
+.repo-row__icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--dim);
+}
+.repo-row__icon--folder { color: var(--muted); }
+.repo-glyph {
+  width: 14px;
+  height: 14px;
+  stroke: currentColor;
+  stroke-width: 1.6;
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.repo-row__name {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.repo-row__name--dir { color: var(--muted); font-weight: 600; }
+.repo-row__size,
+.repo-row__time {
+  font-size: var(--overline-size);
+  color: var(--dim);
+  text-align: right;
+  white-space: nowrap;
+}
+.repo-row__owner {
+  font-size: var(--overline-size);
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.repo-row__owner--muted { color: var(--dim); opacity: 0.7; }
+
+/* ── Rules ──────────────────────────────────────────────────────────────────
+   Two panes: an ordered list (with category filter) + a read-only detail. */
+.rules-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr);
+  gap: var(--pad);
+  align-items: start;
+}
+.rules-panel__section { margin-bottom: var(--pad-tight); }
+.rules-panel__filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--grid);
+  margin-bottom: var(--pad);
+}
+.rules-chip { cursor: pointer; }
+.rules-panel__cards {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+}
+.rule-card { cursor: pointer; }
+.rule-card__head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pad-tight);
+}
+.rule-card__order {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+  flex: none;
+}
+.rule-card__title {
+  font-size: var(--body-size);
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink);
+}
+.rule-card__badges { margin-top: var(--grid); }
+.rule-card__summary {
+  margin: var(--pad-tight) 0 0;
+  color: var(--muted);
+  font-size: var(--body-size);
+}
+.rule-detail__title {
+  font-size: var(--headline-size);
+  margin: var(--grid) 0 var(--pad-tight);
+}
+.rule-detail__meta {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: var(--grid) var(--pad);
+  margin: 0 0 var(--pad);
+}
+.rule-detail__meta dt {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--dim);
+}
+.rule-detail__meta dd { margin: 0; color: var(--ink); }
+.rule-detail__summary { color: var(--muted); margin: 0; }
+.rules-panel__hint { color: var(--dim); }
+.mono { font-family: var(--font-mono); }
+
+/* ── Rules editor: on-language hairline form controls ────────────────────────
+   Inputs are hairline-bordered fields on the panel surface; --accent is a STATE
+   signal only (focus ring + primary Save), never a role hue. The pane rail
+   tracks the chosen criticality (--sev-*), set inline on .rule-editor. */
+.rules-panel__section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad-tight);
+  margin-bottom: var(--pad-tight);
+}
+.rules-panel__add {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 2px var(--pad-tight);
+}
+.rule-editor { display: flex; flex-direction: column; gap: var(--pad-tight); }
+.rule-editor__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+  flex: 1 1 0;
+  min-width: 0;
+}
+.rule-editor__field--narrow { flex: 0 0 96px; }
+.rule-editor__row { display: flex; gap: var(--pad-tight); }
+.rule-editor__label {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--dim);
+}
+.rule-editor__input {
+  font: inherit;
+  width: 100%;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  padding: 4px var(--pad-tight);
+}
+.rule-editor__input:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.rule-editor__input:disabled {
+  color: var(--dim);
+  background: var(--panel);
+  cursor: not-allowed;
+}
+.rule-editor__textarea { min-height: 64px; resize: vertical; }
+.rule-editor__protection {
+  display: flex;
+  align-items: center;
+  gap: var(--pad);
+}
+.rule-editor__check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--grid);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--muted);
+  cursor: pointer;
+}
+.rule-editor__error {
+  margin: 0;
+  font-size: var(--body-size);
+  color: var(--sev-critical);
+}
+.rule-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pad-tight);
+  margin-top: var(--grid);
+}
+.rule-editor__btn {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 4px var(--pad);
+}
+/* Primary Save: --accent STATE treatment (border + ring), not a fill hue. */
+.rule-editor__btn--primary {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+  color: var(--ink);
+}
+.rule-editor__btn:disabled {
+  color: var(--dim);
+  border-color: var(--line);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* ── Notes section (in the inspector) ───────────────────────────────────────
+   Per-element annotations under the inspector card. Reuses the editor idiom:
+   tiered blacks, hairline borders, mono meta/timestamps, .overline label.
+   The note category reads on the SEVERITY ordinal ramp (its own scale, not a
+   --c4-* role hue): note=neutral, mitigation=calm-low, caveat=high, todo=medium.
+   STATE (focus ring + primary Save) is the dedicated --accent treatment. */
+.notes-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+}
+.notes-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad-tight);
+}
+.notes-add {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 2px var(--pad-tight);
+}
+.notes-empty {
+  margin: 0;
+  font-size: var(--body-size);
+  color: var(--dim);
+}
+.notes-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+}
+/* Each note: a hairline card with a 3px category rail (--note-cat, set per
+   category below). */
+.note-item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-left: var(--accent-rail) solid var(--note-cat, var(--line));
+  border-radius: var(--card-radius);
+  padding: var(--pad-tight);
+}
+/* Category → severity-ramp rail/badge color (its own ordinal, not a role hue). */
+.cat-note { --note-cat: var(--dim); }
+.cat-mitigation { --note-cat: var(--sev-low); }
+.cat-caveat { --note-cat: var(--sev-high); }
+.cat-todo { --note-cat: var(--sev-medium); }
+.note-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+}
+.note-cat {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--note-cat, var(--dim));
+}
+.note-when {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+}
+.note-actions {
+  margin-left: auto;
+  display: inline-flex;
+  gap: var(--grid);
+}
+.note-body {
+  margin: 0;
+  font-size: var(--body-size);
+  color: var(--ink);
+  white-space: pre-wrap;
+}
+.notes-error {
+  margin: 0;
+  font-size: var(--body-size);
+  color: var(--sev-critical);
+}
+/* Notes form controls: the rule-editor idiom (hairline fields on panel-2). */
+.note-editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+}
+.note-editor__select,
+.note-editor__body {
+  font: inherit;
+  width: 100%;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  padding: 4px var(--pad-tight);
+}
+.note-editor__body {
+  min-height: 64px;
+  resize: vertical;
+}
+.note-editor__select:focus-visible,
+.note-editor__body:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.note-editor__select:disabled,
+.note-editor__body:disabled {
+  color: var(--dim);
+  background: var(--panel);
+  cursor: not-allowed;
+}
+.note-editor__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pad-tight);
+}
+.notes-btn {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 4px var(--pad);
+}
+/* Primary Save: --accent STATE treatment (border + ring), not a fill hue. */
+.notes-btn--primary {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+  color: var(--ink);
+}
+.notes-btn:disabled {
+  color: var(--dim);
+  border-color: var(--line);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+/* ── Data / Risks side panel (in the inspector) ─────────────────────────────
+   Cards on their OWN ordinal scales: data class rail = sensitivity, risk rail =
+   severity (never a --c4-* role hue). */
+.data-risks-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+}
+.data-risks-panel__section { margin-top: var(--pad-tight); }
+.data-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+}
+.data-card__title {
+  font-size: var(--body-size);
+  font-weight: 600;
+  margin: 0;
+  color: var(--ink);
+}
+.data-card__summary {
+  margin: 0;
+  color: var(--muted);
+  font-size: var(--overline-size);
+}
+
+/* ── Blast Radius ────────────────────────────────────────────────────────────
+   Two panes: a filterable focus-node picker + the focused node's reach grid.
+   Node-type chips take the single-source --c4-* role color; data/risk chips
+   take their --sens-* / --sev-* scale. */
+.blast-panel {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(0, 2.4fr);
+  gap: var(--pad);
+  align-items: start;
+}
+.blast-panel__picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+  position: sticky;
+  top: 0;
+}
+.blast-search {
+  width: 100%;
+  box-sizing: border-box;
+  font-family: var(--font-mono);
+  font-size: var(--body-size);
+  padding: 6px var(--pad-tight);
+  color: var(--ink);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+}
+.blast-search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.blast-panel__nodes {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+  max-height: calc(100vh - 220px);
+  overflow: auto;
+}
+.blast-node-option {
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+  text-align: left;
+  cursor: pointer;
+  padding: var(--pad-tight) var(--pad);
+}
+.blast-node-option__name {
+  color: var(--ink);
+  font-weight: 600;
+  font-size: var(--body-size);
+}
+.blast-node-option__type { margin-left: auto; flex: none; }
+
+.blast-panel__reach {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+}
+.blast-panel__hint { color: var(--dim); }
+.blast-head__title {
+  font-size: var(--headline-size);
+  margin: var(--grid) 0;
+  color: var(--ink);
+}
+.blast-head__reach { margin: 0; color: var(--muted); font-size: var(--body-size); }
+.blast-sections {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--pad);
+  align-items: start;
+}
+.blast-section { display: flex; flex-direction: column; gap: var(--pad-tight); }
+.blast-section__title {
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+  margin: 0;
+  font-size: var(--body-size);
+  font-weight: 600;
+  color: var(--ink);
+}
+.blast-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  font-weight: 700;
+  border-radius: var(--pill-radius);
+  color: var(--accent);
+  border: var(--hairline) solid var(--accent);
+}
+.blast-chips { display: flex; flex-wrap: wrap; gap: var(--grid); }
+.blast-chip { cursor: default; }
+.blast-chip--node { cursor: pointer; }
+button.blast-chip { cursor: pointer; }
+.blast-list { margin: 0; padding-left: var(--pad); color: var(--muted); }
+.blast-list li { font-size: var(--body-size); }
+.blast-risk { list-style: none; display: flex; align-items: center; gap: var(--pad-tight); }
+.blast-risk { margin-left: calc(-1 * var(--pad)); }
+.blast-files { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 2px; }
+.blast-file {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--pad-tight);
+  font-size: var(--overline-size);
+}
+.blast-file__path { color: var(--ink); word-break: break-all; }
+.blast-file__size { color: var(--dim); flex: none; }
+
+/* ── Release Truth ───────────────────────────────────────────────────────────
+   A release picker + the selected release's header, Release Path, and
+   workstreams. Status / posture color reads on the state/severity scale (never a
+   --c4-* role hue); versions/dates are mono. */
+/* The release SELECTOR moved to the left-nav southern slot (SelectorBar); this
+   panel now holds only the selected release's detail, single column. */
+.release-panel {
+  display: block;
+}
+.release-panel__detail { display: flex; flex-direction: column; gap: var(--pad); }
+.release-panel__hint { color: var(--dim); }
+.release-panel__hint--error { color: var(--sev-critical); }
+.release-panel__section { margin: var(--pad-tight) 0 0; }
+.release-head { display: flex; flex-direction: column; gap: var(--grid); }
+.release-head__row { display: flex; align-items: baseline; gap: var(--pad-tight); }
+.release-head__title { font-size: var(--headline-size); margin: 0; color: var(--ink); }
+.release-head__summary { margin: var(--grid) 0; color: var(--muted); font-size: var(--body-size); }
+.release-progress {
+  height: 6px;
+  border-radius: var(--pill-radius);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  overflow: hidden;
+}
+.release-progress__bar { height: 100%; background: var(--accent); }
+.release-progress__label { color: var(--dim); font-size: var(--overline-size); }
+
+.release-path { display: flex; flex-direction: column; gap: var(--pad-tight); }
+.release-path-step {
+  display: grid;
+  grid-template-columns: 28px 1fr;
+  gap: var(--pad-tight);
+  align-items: start;
+}
+.release-path-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--pill-radius);
+  color: var(--accent, var(--ink));
+  border: var(--hairline) solid var(--accent, var(--line));
+  font-weight: 700;
+  font-size: var(--overline-size);
+}
+.release-path-body { display: flex; flex-direction: column; gap: var(--grid); min-width: 0; }
+.release-path-coarse {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: var(--pad-tight);
+}
+.release-path-label { color: var(--ink); font-size: var(--body-size); }
+.release-path-desc { color: var(--dim); font-size: var(--overline-size); }
+.release-path-state { flex: none; }
+.release-path-blockers {
+  color: var(--sev-critical);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+}
+.release-path-items { display: flex; flex-direction: column; gap: 2px; }
+.release-path-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--pad-tight);
+  padding: var(--grid) var(--pad-tight);
+}
+.release-path-line__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.release-path-line__main strong { color: var(--ink); font-size: var(--body-size); }
+.release-path-line__summary { color: var(--muted); font-size: var(--overline-size); }
+.release-path-line__meta { color: var(--dim); font-size: var(--overline-size); }
+
+.release-workstreams {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--pad);
+}
+.release-ws { display: flex; flex-direction: column; gap: var(--grid); }
+.release-ws__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--pad-tight); }
+.release-ws__name { color: var(--ink); font-size: var(--body-size); }
+.release-ws__progress { color: var(--dim); font-size: var(--overline-size); }
+.release-ws__summary { margin: 0; color: var(--muted); font-size: var(--overline-size); }
+
+/* ── Release Planning editor ────────────────────────────────────────────────
+   The editable counterpart to the read-only Release Truth display. This is a
+   STATE/editing surface: selection + the primary/approve actions use the
+   dedicated --accent treatment (border + ring), never a --c4-* role hue.
+   Mirrors the .rule-editor / .config-editor form idiom (tiered blacks, hairline
+   borders, mono labels). */
+.release-panel__edit-toggle {
+  align-self: flex-start;
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  padding: 4px var(--pad);
+  margin-bottom: var(--pad-tight);
+}
+.release-planning {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+}
+.release-planning__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--pad);
+}
+.release-planning__title { margin: var(--grid) 0 0; color: var(--ink); font-size: var(--headline-size); }
+.release-planning__sub { margin: var(--grid) 0 0; color: var(--muted); font-size: var(--overline-size); max-width: 52ch; }
+.release-planning__fields { display: flex; gap: var(--pad-tight); flex-wrap: wrap; }
+.release-planning__field { display: flex; flex-direction: column; gap: var(--grid); flex: 1 1 0; min-width: 140px; }
+.release-planning__label {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--dim);
+}
+.release-planning__input {
+  font: inherit;
+  width: 100%;
+  color: var(--ink);
+  background: var(--panel-2);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  padding: 4px var(--pad-tight);
+}
+.release-planning__input:focus-visible {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.release-planning__items {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+  max-height: 420px;
+  overflow-y: auto;
+}
+/* One candidate / selected row. Selected rows take the --accent STATE ring. */
+.release-planning__option {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--pad-tight);
+  padding: var(--grid) var(--pad-tight);
+  text-align: left;
+  cursor: pointer;
+}
+.release-planning__option.is-active {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+}
+.release-planning__option input[type="checkbox"] { margin-top: 3px; flex: none; }
+.release-planning__option-main { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.release-planning__option-main strong { color: var(--ink); font-size: var(--body-size); }
+.release-planning__option-main small { color: var(--dim); font-size: var(--overline-size); }
+.release-planning__option-summary { color: var(--muted); font-size: var(--overline-size); font-style: italic; }
+.release-planning__scope { flex: 0 0 140px; align-self: flex-start; }
+.release-planning__ad-hoc-footer { display: flex; flex-direction: column; gap: var(--pad-tight); }
+.release-planning__ad-hoc {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+  padding: var(--pad-tight);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  background: var(--panel);
+}
+.release-planning__ad-hoc strong {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--dim);
+}
+.release-planning__inline-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--grid);
+}
+.release-planning__form-actions { display: flex; gap: var(--pad-tight); }
+.release-planning__preview {
+  display: flex;
+  flex-direction: column;
+  gap: var(--grid);
+  padding: var(--pad-tight);
+  border: var(--hairline) solid var(--line);
+  border-left: var(--accent-rail) solid var(--accent);
+  border-radius: var(--card-radius);
+  background: var(--panel);
+}
+.release-planning__preview span { color: var(--muted); font-size: var(--overline-size); }
+.release-planning__error { margin: 0; font-size: var(--body-size); color: var(--sev-critical); }
+.release-planning__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pad-tight);
+  margin-top: var(--grid);
+}
+.release-planning__count { color: var(--dim); font-size: var(--overline-size); }
+.release-planning__message { color: var(--muted); font-size: var(--overline-size); }
+.release-planning__spacer { flex: 1 1 auto; }
+.release-planning__btn {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: 4px var(--pad);
+}
+/* Save draft = primary --accent STATE treatment. */
+.release-planning__btn--primary {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring);
+  color: var(--ink);
+}
+/* Approve = stronger --accent treatment (the irreversible roadmap write). */
+.release-planning__btn--approve {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent-ring), 0 0 0 1px var(--accent-glow);
+  color: var(--ink);
+}
+.release-planning__btn:disabled {
+  color: var(--dim);
+  border-color: var(--line);
+  box-shadow: none;
+  cursor: not-allowed;
+}

@@ -1,0 +1,1 @@
+{"plain":"hello world","quote":"say \"hi\"","backslash":"a\\b","slash":"a/b","backspace":"\b","tab":"\t","newline":"\n","formfeed":"\f","carriage":"\r","c0_soh":"\u0001","c0_us":"\u001f","unicode":"é中🎉","u2028":" ","u2029":" ","mixed":"abc\u0001\u001f end"}

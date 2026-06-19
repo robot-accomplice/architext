@@ -12,6 +12,9 @@ metadata, not trusted project data.
   `serve --background` calls do not race through check-then-spawn state.
 - Log file descriptors opened for child process stdio are closed even if spawn
   fails.
+- `--port 0` is an explicit ephemeral-port request for tests and local
+  automation. The server must record and print the actual OS-assigned port, not
+  `0`, so callers never pre-bind, close, and later reuse a guessed free port.
 
 The serve lifecycle may clean stale runtime records, but it must not use
 untrusted runtime state to fetch arbitrary URLs or spawn duplicate background
@@ -29,3 +32,5 @@ they are alive.
 - Concurrent background startup attempts for one target serialize through the
   runtime mutex.
 - A spawn failure after opening the log file closes the file descriptor.
+- Serve lifecycle tests use `--port 0` or a currently-bound blocker socket for
+  port allocation; they do not use close-then-reuse free-port probes.

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Architext"
+  short_description: "Maintain architecture maps and Release Truth"
+  default_prompt: "Use $architext to validate and update this repository architecture map."

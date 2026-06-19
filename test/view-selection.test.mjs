@@ -12,7 +12,7 @@ import {
   modeForView,
   viewBelongsToMode,
   viewTypesForMode
-} from "../docs/architext/src/presentation/viewSelection.js";
+} from "../viewer/src/presentation/viewSelection.js";
 
 const views = [
   { id: "system", type: "system-map" },

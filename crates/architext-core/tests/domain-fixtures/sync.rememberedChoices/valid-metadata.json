@@ -1,0 +1,4 @@
+{
+  "metadata": { "syncChoices": { "branch": "new", "instructionFiles": ["CLAUDE.md"], "manageGitignore": true, "manageRootScripts": false, "applyDoctorRepairs": true, "proceedWithChanges": false } },
+  "instructionFiles": ["AGENTS.md", "CLAUDE.md", ".cursorrules"]
+}

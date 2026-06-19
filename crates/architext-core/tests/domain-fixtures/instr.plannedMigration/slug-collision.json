@@ -1,0 +1,8 @@
+{
+  "files": [
+    { "path": "CLAUDE.md", "text": "- Always check tests before committing any code changes\n" }
+  ],
+  "existingRules": [
+    { "id": "always-check-tests-before-committing-any-code-ch", "summary": "Other rule", "order": 10 }
+  ]
+}

@@ -1,0 +1,9 @@
+[workspace]
+members = ["crates/architext-routing", "crates/architext-core", "crates/architext-serve", "crates/architext-cli", "crates/architext-viewer"]
+# architext-viewer is a wasm32-only Leptos CSR app; it does not build on native
+# targets. Excluding it from default-members keeps `cargo build` /
+# `cargo build --workspace` (native) green, while it stays a workspace member so
+# it shares the lockfile and `cargo build -p architext-viewer --target
+# wasm32-unknown-unknown` resolves workspace path deps.
+default-members = ["crates/architext-routing", "crates/architext-core", "crates/architext-serve", "crates/architext-cli"]
+resolver = "2"

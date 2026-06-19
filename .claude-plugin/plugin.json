@@ -1,0 +1,20 @@
+{
+  "name": "architext",
+  "version": "1.6.3",
+  "description": "Maintain machine-readable architecture documentation and Release Truth for repositories that use docs/architext/data JSON or the architext CLI.",
+  "author": {
+    "name": "Robot Accomplice",
+    "url": "https://github.com/robot-accomplice"
+  },
+  "homepage": "https://github.com/robot-accomplice/architext#readme",
+  "repository": "https://github.com/robot-accomplice/architext",
+  "license": "MIT",
+  "keywords": [
+    "architecture",
+    "c4",
+    "dataflow",
+    "documentation",
+    "llm",
+    "schema"
+  ]
+}

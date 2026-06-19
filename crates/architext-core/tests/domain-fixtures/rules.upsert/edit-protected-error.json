@@ -1,0 +1,14 @@
+{
+  "document": {
+    "rules": [
+      { "id": "r1", "title": "Protected Rule", "criticality": "high", "order": 1, "protection": { "edit": true, "delete": false } }
+    ]
+  },
+  "rule": {
+    "id": "r1",
+    "title": "Attempted Update",
+    "criticality": "high",
+    "order": 1,
+    "protection": { "edit": true, "delete": false }
+  }
+}

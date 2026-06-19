@@ -50,7 +50,10 @@ architext serve [path]
 ```
 
 The package-owned viewer loads target data from `/data/manifest.json`, then
-follows the file list in the manifest to load the remaining JSON files.
+follows the file list in the manifest to load the remaining JSON files. The
+viewer source lives under `viewer/`; target-owned architecture data stays under
+`docs/architext/data`. The package repository must not place package-owned
+source under the same path that sync treats as target-owned lifecycle state.
 
 This avoids browser lock-in. A direct `file://` page with sibling JSON files is
 not a sound baseline because browser security rules differ.
@@ -95,6 +98,10 @@ The CLI should support lifecycle commands:
   target path. The path defaults to the current directory.
 - **Prompt:** print LLM-ready instructions for initial build-out, architecture
   changes, or validation repair.
+- **Skill:** print the package-owned Architext `SKILL.md` content verbatim so
+  maintainers can paste it into any LLM chat session when creating a
+  model-specific skill, without needing to know that model's skill installation
+  mechanism.
 - **Clean:** remove generated local artifacts such as `dist/`, with an explicit
   flag required before deleting dependencies.
 - **Explain:** summarize schema files and data contracts for humans or LLMs.
@@ -178,12 +185,12 @@ Implemented boundaries:
   can share the same repair categories.
 - `src/adapters/cli/` owns argument parsing, command routing, and terminal
   presentation.
-- `docs/architext/src/adapters/` owns browser data loading and preference
+- `viewer/src/adapters/` owns browser data loading and preference
   storage.
-- `docs/architext/src/domain/` owns viewer-side architecture DTO types.
-- `docs/architext/src/presentation/` owns mode, view, and step selection
+- `viewer/src/domain/` owns viewer-side architecture DTO types.
+- `viewer/src/presentation/` owns mode, view, and step selection
   policy.
-- `docs/architext/src/routing/` now separates diagram planning state,
+- `viewer/src/routing/` now separates diagram planning state,
   geometry, ports, port-pair enumeration, corridor discovery, labels, route
   candidate construction, route strategy assembly, route indexing, route
   rendering, route scoring and warnings, route style normalization, route
@@ -194,7 +201,7 @@ Remaining architectural pressure:
 - `tools/architext-adopt.mjs` is still too responsible for lifecycle execution,
   filesystem operations, validation process orchestration, HTTP serving, and
   build commands.
-- `docs/architext/src/main.tsx` still combines many React components and detail
+- `viewer/src/main.tsx` still combines many React components and detail
   presenters in one entrypoint.
 - The routing strategy module is still internally organized by conditional
   branches for orthogonal, spline, and straight routing. Future work can split
@@ -414,6 +421,12 @@ Required interactions:
 - persisted collapse state across reloads
 - right-panel deep links to sections
 
+Navigation that can discard dirty release planning or rules editor state must
+route through one guarded selection wrapper. Individual click handlers should
+declare only the navigation they intend to perform and, when needed, the
+explicit cancel behavior such as restoring the current hash. They should not
+inline their own unsaved-editor confirmation checks.
+
 Collapse behavior should follow the pattern used in Palm Command Center: a
 small polished control lives on the controlled panel edge, the panel shrinks to
 a narrow rail instead of disappearing entirely, and the expanded/collapsed
@@ -458,6 +471,11 @@ Canvas scaling must be handled as a renderer-wide invariant. CSS transforms do
 not change scroll dimensions, so every zoomed diagram should use the same
 scaled extent wrapper around an unscaled coordinate plane. Sequence, workflow,
 deployment, and C4 canvases should not each invent localized scroll handling.
+Viewport state belongs behind a single viewer hook: collapse preferences,
+routing-style preference, debug routing, measured viewport size, and zoom/focus
+updates are presentation state shared by every diagram mode. `App` should ask
+that hook for controls and fit calculations instead of owning the low-level
+browser preference and responsive-collapse effects inline.
 
 Fit behavior should preserve readability before exhaustive visibility. On
 desktop-sized viewports, Fit should not shrink architecture diagrams below a
@@ -517,13 +535,48 @@ When a broad overview such as a system map and a narrower authored projection
 can both render the selected flow, flow selection should prefer the narrower
 authored projection so detailed sequence/flow paths do not float across an
 overview canvas.
+Flow diagram enrichment should prefer semantic iconography over a broad
+flowchart shape language. Icons annotate existing node and step meaning without
+changing routing, hit targets, or layout density. The initial icon vocabulary
+should include node-type icons plus start, stop, decision, async/queue,
+persistence/data-store, artifact, return, and process icons. Decision points
+must be explicit flow-step semantics, not inferred decoration; branch/result
+labels should use `step.outcome` so the selected path communicates what
+happened on the canvas. Decision branch lines should emanate from the node that
+makes the decision, share the decision step number, travel in distinct
+directions, and carry different `step.outcome` labels. A reader should be able
+to inspect the decision-producing surface and see its possible branches.
+Decision examples should show at least two meaningful outcomes when the model is
+documenting a branch, otherwise the decision marker is decorative. Selecting
+the decision step must highlight every branch line that shares the decision
+step number. When a decision step has explicit outgoing outcome branches, the
+decision itself should be represented on the decision-producing node and the
+visible routed lines should be the outgoing branches; do not also emphasize a
+separate incoming decision route as the branch. Outcome branch records support
+the diagram, but they must not become duplicate bottom step cards that make the
+same number mean both "decision" and a downstream action. Selecting the decision
+step must highlight every branch line plus the branch source and destination
+nodes. Branch labels must remain legible at normal zoom and must not overlap
+the decision waypoint. Branch routing should prefer distinct decision waypoint
+exit sides based on target direction so outcome lines do not stack on the same
+surface unless the layout leaves no alternative. Flow step markers must also
+avoid arrowheads and endpoint stubs so the step number never competes with the
+directional cue.
+Singleton route endpoints must anchor to the center of the selected node
+surface for orthogonal, spline, and straight line styles after route side
+selection. UML/code diagrams are out of scope until there is a separate
+derived-code diagram design with tight data-size budgets.
 Sequence diagrams do not use a separate Flow View projection; they are a
 selected-flow artifact and should title, filter, and render from that flow.
 Sequence diagrams must preserve return paths as first-class architecture, not
 as implied behavior. Request/response, command/result, event/acknowledgement,
 and failure-return legs should be paired when the source flow contains or
-requires them. Loops, retries, optional branches, and transaction/consistency
-blocks should group the outbound and return messages they govern so a reader can
+requires them. Outbound calls and inbound returns must not look identical:
+return messages should be visually distinct from outbound messages, and the
+round trip should expose an activation bar on the participant doing the work
+from the outbound call until the paired return. Loops, retries, optional
+branches, and transaction/consistency blocks should render as explicit sequence
+frames that group the outbound and return messages they govern so a reader can
 follow the complete interaction without guessing where control or data returns.
 Selected flow steps should use one shared standout selection color across the
 route line, arrowhead, route marker, and bottom step card so a stage selection

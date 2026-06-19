@@ -1,0 +1,136 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - paragraph [ref=e6]: Architext / 1.6.0 · Schema / 1.5.0
+      - generic [ref=e7]:
+        - heading "Routing Corpus (review fixture)" [level=1] [ref=e8]
+        - paragraph [ref=e9]: Sanitized routing corpus for diagram review.
+    - generic [ref=e10]:
+      - tablist "Architext modes" [ref=e11]:
+        - tab "Flows" [selected] [ref=e12] [cursor=pointer]
+        - tab "Sequence" [ref=e13] [cursor=pointer]
+        - tab "C4" [ref=e14] [cursor=pointer]
+        - tab "Deployment" [ref=e15] [cursor=pointer]
+        - tab "Data/Risks" [ref=e16] [cursor=pointer]
+        - tab "Release Truth" [ref=e17] [cursor=pointer]
+        - tab "Rules" [ref=e18] [cursor=pointer]
+      - button "Open diagram configuration" [ref=e19] [cursor=pointer]: ⚙ Config
+  - button "Collapse left navigation" [ref=e20] [cursor=pointer]: ‹ Collapse
+  - button "Collapse right details" [ref=e21] [cursor=pointer]: › Collapse
+  - complementary [ref=e22]:
+    - generic [ref=e23]:
+      - heading "Flows" [level=2] [ref=e24]
+      - searchbox "Search flows" [ref=e25]
+      - paragraph [ref=e26]: 1 of 16 flows
+    - generic [ref=e27]:
+      - generic [ref=e28]:
+        - heading "Flow Views" [level=3] [ref=e29]
+        - button "Feature Showcase flow-explorer" [ref=e30] [cursor=pointer]:
+          - strong [ref=e31]: Feature Showcase
+          - generic [ref=e32]: flow-explorer
+      - generic [ref=e33]:
+        - heading "Flows" [level=3] [ref=e34]
+        - button "Feature Showcase Implemented" [ref=e35] [cursor=pointer]:
+          - strong [ref=e36]: Feature Showcase
+          - generic [ref=e37]: Implemented
+  - main [ref=e38]:
+    - generic [ref=e39]:
+      - generic [ref=e40]:
+        - heading "Feature Showcase" [level=2] [ref=e41]
+        - paragraph
+      - generic "Diagram controls" [ref=e42]:
+        - generic [ref=e43]:
+          - generic [ref=e44]: Line Style
+          - combobox "Line Style" [ref=e45] [cursor=pointer]:
+            - option "Orthogonal" [selected]
+            - option "Spline"
+            - option "Straight"
+        - button "Zoom out" [ref=e46] [cursor=pointer]: "-"
+        - generic [ref=e47]: 100%
+        - button "Zoom in" [ref=e48] [cursor=pointer]: +
+        - button "Fit" [ref=e49] [cursor=pointer]
+        - button "Reset" [ref=e50] [cursor=pointer]
+        - button "Focus" [ref=e51] [cursor=pointer]
+        - button "PDF" [ref=e52] [cursor=pointer]
+      - group [ref=e53]:
+        - generic "Legend" [ref=e54] [cursor=pointer]
+    - generic [ref=e59]:
+      - generic [ref=e60]:
+        - generic [ref=e61]:
+          - heading "Feature Showcase" [level=2] [ref=e62]
+          - paragraph
+        - generic [ref=e63]:
+          - generic [ref=e64]: Implemented
+          - button "Hide steps" [ref=e65] [cursor=pointer]
+      - generic [ref=e66]:
+        - button "Start 1 n90 → n91" [ref=e67] [cursor=pointer]:
+          - img "Start" [ref=e69]
+          - generic [ref=e72]: "1"
+          - strong [ref=e73]: n90 → n91
+        - button "Decision 2 n91 → n92" [ref=e75] [cursor=pointer]:
+          - img "Decision" [ref=e77]
+          - generic [ref=e80]: "2"
+          - strong [ref=e81]: n91 → n92
+        - button "Queue 5 n93 → n95" [ref=e83] [cursor=pointer]:
+          - img "Queue" [ref=e85]
+          - generic [ref=e88]: "5"
+          - strong [ref=e89]: n93 → n95
+        - button "Data store 6 n95 → n96" [ref=e91] [cursor=pointer]:
+          - img "Data store" [ref=e93]
+          - generic [ref=e96]: "6"
+          - strong [ref=e97]: n95 → n96
+        - button "Artifact 7 n93 → n96" [ref=e99] [cursor=pointer]:
+          - img "Artifact" [ref=e101]
+          - generic [ref=e104]: "7"
+          - strong [ref=e105]: n93 → n96
+        - button "Stop 8 n94 → n96" [ref=e107] [cursor=pointer]:
+          - img "Stop" [ref=e109]
+          - generic [ref=e112]: "8"
+          - strong [ref=e113]: n94 → n96
+  - complementary [ref=e115]:
+    - generic [ref=e116]:
+      - generic [ref=e117]:
+        - paragraph [ref=e118]: Flow
+        - heading "Feature Showcase" [level=2] [ref=e119]
+        - paragraph
+        - navigation "Detail sections" [ref=e120]:
+          - link "Summary" [ref=e121] [cursor=pointer]:
+            - /url: "#summary"
+          - link "Runtime" [ref=e122] [cursor=pointer]:
+            - /url: "#runtime"
+          - link "Interfaces" [ref=e123] [cursor=pointer]:
+            - /url: "#interfaces"
+          - link "Data" [ref=e124] [cursor=pointer]:
+            - /url: "#data"
+          - link "Security" [ref=e125] [cursor=pointer]:
+            - /url: "#security"
+          - link "Observability" [ref=e126] [cursor=pointer]:
+            - /url: "#observability"
+          - link "Risks" [ref=e127] [cursor=pointer]:
+            - /url: "#risks"
+          - link "Decisions" [ref=e128] [cursor=pointer]:
+            - /url: "#decisions"
+          - link "Verification" [ref=e129] [cursor=pointer]:
+            - /url: "#verification"
+      - generic [ref=e130]:
+        - generic [ref=e131]: Implemented
+        - generic [ref=e132]: 8 steps
+      - generic [ref=e133]:
+        - heading "Trigger" [level=3] [ref=e134]
+        - list [ref=e135]:
+          - listitem [ref=e136]
+      - generic [ref=e137]:
+        - heading "Guarantees" [level=3] [ref=e138]
+        - paragraph [ref=e139]: None recorded.
+      - generic [ref=e140]:
+        - heading "Failure behavior" [level=3] [ref=e141]
+        - paragraph [ref=e142]: None recorded.
+      - generic [ref=e143]:
+        - heading "Observability" [level=3] [ref=e144]
+        - paragraph [ref=e145]: None recorded.
+      - generic [ref=e146]:
+        - heading "Known gaps" [level=3] [ref=e147]
+        - paragraph [ref=e148]: None recorded.
+      - generic [ref=e149]:
+        - heading "Verification" [level=3] [ref=e150]
+        - paragraph [ref=e151]: None recorded.

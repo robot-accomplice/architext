@@ -1,0 +1,31 @@
+{
+  "views": [
+    {
+      "id": "v1",
+      "type": "c4-context",
+      "name": "Dense Two Lanes One Empty",
+      "summary": "Dense.",
+      "lanes": [
+        { "id": "l1", "name": "L1", "nodeIds": ["n0","n1","n2","n3","n4","n5","n6","n7","n8","n9","n10","n11","n12","n13","n14"] },
+        { "id": "l2", "name": "L2", "nodeIds": [] }
+      ]
+    }
+  ],
+  "nodes": [
+    { "id": "n0", "type": "service", "dependencies": [] },
+    { "id": "n1", "type": "service", "dependencies": [] },
+    { "id": "n2", "type": "service", "dependencies": [] },
+    { "id": "n3", "type": "service", "dependencies": [] },
+    { "id": "n4", "type": "service", "dependencies": [] },
+    { "id": "n5", "type": "service", "dependencies": [] },
+    { "id": "n6", "type": "service", "dependencies": [] },
+    { "id": "n7", "type": "service", "dependencies": [] },
+    { "id": "n8", "type": "service", "dependencies": [] },
+    { "id": "n9", "type": "service", "dependencies": [] },
+    { "id": "n10", "type": "service", "dependencies": [] },
+    { "id": "n11", "type": "service", "dependencies": [] },
+    { "id": "n12", "type": "service", "dependencies": [] },
+    { "id": "n13", "type": "service", "dependencies": [] },
+    { "id": "n14", "type": "service", "dependencies": [] }
+  ]
+}

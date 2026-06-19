@@ -1,0 +1,156 @@
+//! Fixed-width right inspector.
+//!
+//! V2: data-bound metadata. In a diagram mode it shows the selected view's (and
+//! in flows mode, the selected flow's) metadata in `.accent-surface` cards. In a
+//! diagram-less mode it shows a short summary of that mode's data so the panel
+//! is never empty. Node-level inspection on diagram click is a V3 concern.
+use leptos::*;
+
+use crate::components::data_risks_panel::DataRisksPanel;
+use crate::components::notes_editor::NotesSection;
+use crate::diagram::role_color_var;
+use crate::state::use_app_state;
+use crate::theme::Mode;
+
+#[component]
+pub fn InspectorPanel() -> impl IntoView {
+    let state = use_app_state();
+    let collapsed = state.inspector_collapsed;
+    let toggle = move |_| collapsed.update(|c| *c = !*c);
+
+    let aside_class = move || {
+        if collapsed.get() {
+            "inspector inspector--collapsed"
+        } else {
+            "inspector"
+        }
+    };
+
+    let body = move || {
+                let data = state.data.get();
+                let mode = state.mode.get();
+
+                // A clicked diagram node takes precedence: show its details with
+                // the type chip in its single-source --c4-{type} role color.
+                if let Some(node_id) = state.selected_node.get() {
+                    if let Some(node) = data.nodes.iter().find(|n| n.id == node_id).cloned() {
+                        let role = role_color_var(&node.node_type);
+                        let note_target = node.id.clone();
+                        return view! {
+                            <div class="accent-surface inspector__card">
+                                <div class="overline">"NODE"</div>
+                                <h2 class="inspector__title">{node.name.clone()}</h2>
+                                <span class="chip" style=format!("color:{role}")>
+                                    {node.node_type.clone()}
+                                </span>
+                                {node.summary.clone().map(|s| view! {
+                                    <p class="inspector__meta">{s}</p>
+                                })}
+                                {node.owner.clone().map(|o| view! {
+                                    <p class="inspector__meta">{format!("Owner: {o}")}</p>
+                                })}
+                            </div>
+                            <NotesSection target_kind="node".to_string() target_id=note_target/>
+                        }.into_view();
+                    }
+                }
+
+                // Data/Risks: the diagram renders in the center; the inspector
+                // hosts the data-class + risk side panel (its own scales).
+                if mode == Mode::DataRisks {
+                    return view! { <DataRisksPanel/> }.into_view();
+                }
+
+                // Diagram-less / structural modes summarize their data set.
+                // Flow-projecting modes (Flows, Sequence) fall through to the
+                // view + flow metadata card below.
+                if !mode.projects_flows() {
+                    let (label, count, sample) = match mode {
+                        Mode::Rules => ("Rules", data.rules.len(),
+                            data.rules.first().map(|r| r.title.clone())),
+                        Mode::ReleaseTruth => ("Releases", data.release_index.as_ref()
+                            .map(|r| r.releases.len()).unwrap_or(0),
+                            data.release_index.as_ref()
+                                .and_then(|r| r.current_release_id.clone())),
+                        _ => ("Nodes", data.nodes.len(),
+                            data.nodes.first().map(|n| n.name.clone())),
+                    };
+                    return view! {
+                        <div class="accent-surface">
+                            <h2 class="inspector__title">{format!("{label} ({count})")}</h2>
+                            <p class="inspector__meta">
+                                {sample.map(|s| format!("e.g. {s}"))
+                                    .unwrap_or_else(|| "No items".to_string())}
+                            </p>
+                        </div>
+                    }.into_view();
+                }
+
+                // Flows mode: selected view + flow metadata.
+                let view = state.view_idx.get().and_then(|i| data.views.get(i).cloned());
+                let flow = state.flow_idx.get().and_then(|i| data.flows.get(i).cloned());
+
+                view! {
+                    {view.map(|v| {
+                        let view_id = v.id.clone();
+                        view! {
+                            <div class="accent-surface inspector__card">
+                                <div class="overline">"VIEW"</div>
+                                <h2 class="inspector__title">{v.name.clone()}</h2>
+                                <span class="chip">{v.view_type.clone()}</span>
+                                {v.summary.clone().map(|s| view! {
+                                    <p class="inspector__meta">{s}</p>
+                                })}
+                            </div>
+                            <NotesSection target_kind="view".to_string() target_id=view_id/>
+                        }
+                    })}
+                    {flow.map(|f| {
+                        let flow_id = f.id.clone();
+                        view! {
+                            <div class="accent-surface inspector__card">
+                                <div class="overline">"FLOW"</div>
+                                <h2 class="inspector__title">{f.name.clone()}</h2>
+                                {f.status.clone().map(|s| view! { <span class="chip">{s}</span> })}
+                                {f.summary.clone().map(|s| view! {
+                                    <p class="inspector__meta">{s}</p>
+                                })}
+                                {f.trigger.clone().map(|t| view! {
+                                    <p class="inspector__meta">{format!("Trigger: {t}")}</p>
+                                })}
+                            </div>
+                            <NotesSection target_kind="flow".to_string() target_id=flow_id/>
+                        }
+                    })}
+                }.into_view()
+    };
+
+    view! {
+        <aside class=aside_class>
+            <Show
+                when=move || collapsed.get()
+                fallback=move || view! {
+                    // Inspector mirrors the nav: its collapse toggle hugs the
+                    // central canvas — here the inspector's LEFT edge (the
+                    // canvas↔inspector boundary). The header reverses order so the
+                    // chevron is left-aligned and the label trails it.
+                    <div class="panel-collapse-header">
+                        <button
+                            class="panel-collapse-toggle"
+                            title="Collapse inspector"
+                            on:click=toggle
+                        >"›"</button>
+                        <div class="overline inspector__section-label">"INSPECTOR"</div>
+                    </div>
+                    {body()}
+                }
+            >
+                <button
+                    class="panel-collapse-toggle panel-collapse-toggle--rail-left"
+                    title="Expand inspector"
+                    on:click=toggle
+                >"‹"</button>
+            </Show>
+        </aside>
+    }
+}

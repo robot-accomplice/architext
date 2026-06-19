@@ -1,0 +1,828 @@
+{
+  "flows": [
+    {
+      "id": "hub-fan-dense",
+      "steps": [
+        {
+          "id": "s077",
+          "from": "n39",
+          "to": "n22"
+        },
+        {
+          "id": "s113",
+          "from": "n62",
+          "to": "n63",
+          "kind": "request"
+        },
+        {
+          "id": "s026",
+          "from": "n63",
+          "to": "n59",
+          "kind": "request"
+        },
+        {
+          "id": "s059",
+          "from": "n22",
+          "to": "n59",
+          "kind": "request"
+        },
+        {
+          "id": "s085",
+          "from": "n59",
+          "to": "n49",
+          "kind": "persistence"
+        },
+        {
+          "id": "s104",
+          "from": "n49",
+          "to": "n59",
+          "kind": "return",
+          "returnOf": "s085"
+        },
+        {
+          "id": "s088",
+          "from": "n59",
+          "to": "n36",
+          "kind": "request"
+        },
+        {
+          "id": "s018",
+          "from": "n36",
+          "to": "n59",
+          "kind": "return",
+          "returnOf": "s088"
+        },
+        {
+          "id": "s035",
+          "from": "n59",
+          "to": "n33",
+          "kind": "request"
+        },
+        {
+          "id": "s116",
+          "from": "n33",
+          "to": "n59",
+          "kind": "return",
+          "returnOf": "s035"
+        },
+        {
+          "id": "s084",
+          "from": "n59",
+          "to": "n30",
+          "kind": "request"
+        },
+        {
+          "id": "s058",
+          "from": "n30",
+          "to": "n59",
+          "kind": "return",
+          "returnOf": "s084"
+        },
+        {
+          "id": "s064",
+          "from": "n59",
+          "to": "n49",
+          "kind": "persistence"
+        },
+        {
+          "id": "s066",
+          "from": "n49",
+          "to": "n59",
+          "kind": "return",
+          "returnOf": "s064"
+        },
+        {
+          "id": "s122",
+          "from": "n59",
+          "to": "n63",
+          "kind": "return",
+          "returnOf": "s026"
+        },
+        {
+          "id": "s121",
+          "from": "n63",
+          "to": "n62",
+          "kind": "return",
+          "returnOf": "s113"
+        },
+        {
+          "id": "s037",
+          "from": "n59",
+          "to": "n22",
+          "kind": "return",
+          "returnOf": "s059"
+        },
+        {
+          "id": "s027",
+          "from": "n22",
+          "to": "n39",
+          "kind": "return",
+          "returnOf": "s077"
+        }
+      ],
+      "sequenceFrames": [
+        {
+          "id": "hfd-frame-retry",
+          "type": "retry",
+          "label": "Retry tool call",
+          "stepIds": [
+            "s088",
+            "s018"
+          ]
+        },
+        {
+          "id": "hfd-frame-optional",
+          "type": "optional",
+          "label": "If cache miss",
+          "stepIds": [
+            "s035",
+            "s116"
+          ]
+        },
+        {
+          "id": "hfd-frame-loop",
+          "type": "loop",
+          "label": "For each gate",
+          "stepIds": [
+            "s084",
+            "s058"
+          ]
+        },
+        {
+          "id": "hfd-frame-tx",
+          "type": "transaction",
+          "label": "Persist and confirm",
+          "stepIds": [
+            "s085",
+            "s104",
+            "s064",
+            "s066"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "pair-fan-compact",
+      "steps": [
+        {
+          "id": "s114",
+          "from": "n62",
+          "to": "n63"
+        },
+        {
+          "id": "s008",
+          "from": "n63",
+          "to": "n49"
+        },
+        {
+          "id": "s107",
+          "from": "n49",
+          "to": "n63"
+        },
+        {
+          "id": "s073",
+          "from": "n63",
+          "to": "n62"
+        },
+        {
+          "id": "s102",
+          "from": "n62",
+          "to": "n63"
+        },
+        {
+          "id": "s025",
+          "from": "n63",
+          "to": "n11"
+        },
+        {
+          "id": "s019",
+          "from": "n11",
+          "to": "n63"
+        },
+        {
+          "id": "s072",
+          "from": "n63",
+          "to": "n62"
+        }
+      ]
+    },
+    {
+      "id": "pair-chain-linear",
+      "steps": [
+        {
+          "id": "s043",
+          "from": "n39",
+          "to": "n08"
+        },
+        {
+          "id": "s009",
+          "from": "n08",
+          "to": "n49"
+        },
+        {
+          "id": "s049",
+          "from": "n49",
+          "to": "n08"
+        },
+        {
+          "id": "s098",
+          "from": "n55",
+          "to": "n59"
+        },
+        {
+          "id": "s047",
+          "from": "n59",
+          "to": "n55"
+        },
+        {
+          "id": "s081",
+          "from": "n08",
+          "to": "n39"
+        }
+      ]
+    },
+    {
+      "id": "pair-minimal",
+      "steps": [
+        {
+          "id": "s101",
+          "from": "n21",
+          "to": "n05"
+        },
+        {
+          "id": "s024",
+          "from": "n05",
+          "to": "n49"
+        },
+        {
+          "id": "s004",
+          "from": "n49",
+          "to": "n05"
+        },
+        {
+          "id": "s089",
+          "from": "n05",
+          "to": "n21"
+        }
+      ]
+    },
+    {
+      "id": "fan-coaligned-selfcross",
+      "steps": [
+        {
+          "id": "s069",
+          "from": "n59",
+          "to": "n30"
+        },
+        {
+          "id": "s091",
+          "from": "n30",
+          "to": "n23"
+        },
+        {
+          "id": "s016",
+          "from": "n23",
+          "to": "n30"
+        },
+        {
+          "id": "s092",
+          "from": "n30",
+          "to": "n31"
+        },
+        {
+          "id": "s048",
+          "from": "n31",
+          "to": "n30"
+        },
+        {
+          "id": "s079",
+          "from": "n30",
+          "to": "n38"
+        },
+        {
+          "id": "s090",
+          "from": "n30",
+          "to": "n59"
+        }
+      ]
+    },
+    {
+      "id": "coaligned-multibundle-surfaceselect",
+      "steps": [
+        {
+          "id": "s083",
+          "from": "n59",
+          "to": "n36"
+        },
+        {
+          "id": "s074",
+          "from": "n36",
+          "to": "n49"
+        },
+        {
+          "id": "s057",
+          "from": "n49",
+          "to": "n36"
+        },
+        {
+          "id": "s056",
+          "from": "n36",
+          "to": "n59"
+        },
+        {
+          "id": "s040",
+          "from": "n59",
+          "to": "n36"
+        },
+        {
+          "id": "s039",
+          "from": "n36",
+          "to": "n59"
+        },
+        {
+          "id": "s021",
+          "from": "n36",
+          "to": "n49"
+        },
+        {
+          "id": "s022",
+          "from": "n49",
+          "to": "n36"
+        }
+      ]
+    },
+    {
+      "id": "bundle-coaligned",
+      "steps": [
+        {
+          "id": "s046",
+          "from": "n45",
+          "to": "n49"
+        },
+        {
+          "id": "s030",
+          "from": "n49",
+          "to": "n45"
+        },
+        {
+          "id": "s034",
+          "from": "n45",
+          "to": "n59"
+        },
+        {
+          "id": "s044",
+          "from": "n59",
+          "to": "n45"
+        },
+        {
+          "id": "s063",
+          "from": "n45",
+          "to": "n22"
+        },
+        {
+          "id": "s062",
+          "from": "n22",
+          "to": "n45"
+        },
+        {
+          "id": "s078",
+          "from": "n45",
+          "to": "n49"
+        },
+        {
+          "id": "s036",
+          "from": "n49",
+          "to": "n45"
+        }
+      ]
+    },
+    {
+      "id": "fan-quad-reciprocal",
+      "steps": [
+        {
+          "id": "s029",
+          "from": "n03",
+          "to": "n36"
+        },
+        {
+          "id": "s010",
+          "from": "n36",
+          "to": "n03"
+        },
+        {
+          "id": "s014",
+          "from": "n03",
+          "to": "n11"
+        },
+        {
+          "id": "s068",
+          "from": "n11",
+          "to": "n03"
+        },
+        {
+          "id": "s033",
+          "from": "n03",
+          "to": "n59"
+        },
+        {
+          "id": "s001",
+          "from": "n59",
+          "to": "n03"
+        },
+        {
+          "id": "s005",
+          "from": "n03",
+          "to": "n49"
+        },
+        {
+          "id": "s000",
+          "from": "n49",
+          "to": "n03"
+        }
+      ]
+    },
+    {
+      "id": "bundle-return-gutter",
+      "steps": [
+        {
+          "id": "s045",
+          "from": "n48",
+          "to": "n49"
+        },
+        {
+          "id": "s013",
+          "from": "n49",
+          "to": "n48"
+        },
+        {
+          "id": "s041",
+          "from": "n63",
+          "to": "n48"
+        },
+        {
+          "id": "s042",
+          "from": "n48",
+          "to": "n63"
+        },
+        {
+          "id": "s065",
+          "from": "n48",
+          "to": "n49"
+        },
+        {
+          "id": "s106",
+          "from": "n49",
+          "to": "n48"
+        },
+        {
+          "id": "s119",
+          "from": "n59",
+          "to": "n48"
+        },
+        {
+          "id": "s105",
+          "from": "n48",
+          "to": "n59"
+        }
+      ]
+    },
+    {
+      "id": "pair-chain-short",
+      "steps": [
+        {
+          "id": "s100",
+          "from": "n59",
+          "to": "n33"
+        },
+        {
+          "id": "s097",
+          "from": "n33",
+          "to": "n49"
+        },
+        {
+          "id": "s118",
+          "from": "n49",
+          "to": "n33"
+        },
+        {
+          "id": "s117",
+          "from": "n33",
+          "to": "n59"
+        },
+        {
+          "id": "s120",
+          "from": "n59",
+          "to": "n38"
+        },
+        {
+          "id": "s115",
+          "from": "n38",
+          "to": "n59"
+        }
+      ]
+    },
+    {
+      "id": "fan-parallel-bundle",
+      "steps": [
+        {
+          "id": "s099",
+          "from": "n39",
+          "to": "n35"
+        },
+        {
+          "id": "s011",
+          "from": "n39",
+          "to": "n35"
+        },
+        {
+          "id": "s012",
+          "from": "n35",
+          "to": "n39"
+        },
+        {
+          "id": "s060",
+          "from": "n62",
+          "to": "n35"
+        },
+        {
+          "id": "s061",
+          "from": "n35",
+          "to": "n62"
+        },
+        {
+          "id": "s070",
+          "from": "n35",
+          "to": "n30"
+        },
+        {
+          "id": "s054",
+          "from": "n30",
+          "to": "n35"
+        },
+        {
+          "id": "s020",
+          "from": "n35",
+          "to": "n59"
+        },
+        {
+          "id": "s055",
+          "from": "n59",
+          "to": "n35"
+        },
+        {
+          "id": "s111",
+          "from": "n35",
+          "to": "n39"
+        }
+      ]
+    },
+    {
+      "id": "pair-fan-basic",
+      "steps": [
+        {
+          "id": "s017",
+          "from": "n39",
+          "to": "n11"
+        },
+        {
+          "id": "s007",
+          "from": "n11",
+          "to": "n32"
+        },
+        {
+          "id": "s051",
+          "from": "n32",
+          "to": "n11"
+        },
+        {
+          "id": "s076",
+          "from": "n32",
+          "to": "n22"
+        },
+        {
+          "id": "s050",
+          "from": "n22",
+          "to": "n32"
+        },
+        {
+          "id": "s103",
+          "from": "n32",
+          "to": "n39"
+        },
+        {
+          "id": "s052",
+          "from": "n39",
+          "to": "n32"
+        }
+      ]
+    },
+    {
+      "id": "pair-single-multiedge",
+      "steps": [
+        {
+          "id": "s038",
+          "from": "n62",
+          "to": "n63"
+        },
+        {
+          "id": "s023",
+          "from": "n63",
+          "to": "n62"
+        },
+        {
+          "id": "s031",
+          "from": "n16",
+          "to": "n63"
+        },
+        {
+          "id": "s032",
+          "from": "n63",
+          "to": "n62"
+        },
+        {
+          "id": "s082",
+          "from": "n08",
+          "to": "n39"
+        }
+      ]
+    },
+    {
+      "id": "bracket-intermediates",
+      "steps": [
+        {
+          "id": "s002",
+          "from": "n59",
+          "to": "n43"
+        },
+        {
+          "id": "s075",
+          "from": "n43",
+          "to": "n49"
+        },
+        {
+          "id": "s109",
+          "from": "n49",
+          "to": "n43"
+        },
+        {
+          "id": "s086",
+          "from": "n43",
+          "to": "n11"
+        },
+        {
+          "id": "s110",
+          "from": "n11",
+          "to": "n43"
+        },
+        {
+          "id": "s087",
+          "from": "n43",
+          "to": "n59"
+        },
+        {
+          "id": "s006",
+          "from": "n59",
+          "to": "n43"
+        },
+        {
+          "id": "s028",
+          "from": "n43",
+          "to": "n08"
+        },
+        {
+          "id": "s015",
+          "from": "n08",
+          "to": "n43"
+        },
+        {
+          "id": "s003",
+          "from": "n59",
+          "to": "n39"
+        }
+      ]
+    },
+    {
+      "id": "fan-max-systemmap",
+      "steps": [
+        {
+          "id": "s096",
+          "from": "n51",
+          "to": "n49",
+          "kind": "request"
+        },
+        {
+          "id": "s112",
+          "from": "n49",
+          "to": "n51",
+          "kind": "return",
+          "returnOf": "s096"
+        },
+        {
+          "id": "s095",
+          "from": "n51",
+          "to": "n59",
+          "kind": "request"
+        },
+        {
+          "id": "s108",
+          "from": "n59",
+          "to": "n51",
+          "kind": "return",
+          "returnOf": "s095"
+        },
+        {
+          "id": "s093",
+          "from": "n39",
+          "to": "n51",
+          "kind": "request"
+        },
+        {
+          "id": "s094",
+          "from": "n51",
+          "to": "n40",
+          "kind": "request"
+        },
+        {
+          "id": "s067",
+          "from": "n40",
+          "to": "n51",
+          "kind": "return",
+          "returnOf": "s094"
+        },
+        {
+          "id": "s053",
+          "from": "n51",
+          "to": "n39",
+          "kind": "return",
+          "returnOf": "s093"
+        },
+        {
+          "id": "s071",
+          "from": "n51",
+          "to": "n38",
+          "kind": "request"
+        },
+        {
+          "id": "s080",
+          "from": "n38",
+          "to": "n51",
+          "kind": "return",
+          "returnOf": "s071"
+        }
+      ]
+    },
+    {
+      "id": "feature-showcase",
+      "steps": [
+        {
+          "id": "sc-start",
+          "from": "n90",
+          "to": "n91",
+          "kind": "start"
+        },
+        {
+          "id": "sc-decide",
+          "from": "n91",
+          "to": "n92",
+          "kind": "decision"
+        },
+        {
+          "id": "sc-approved",
+          "from": "n92",
+          "to": "n93",
+          "outcome": "approved"
+        },
+        {
+          "id": "sc-rejected",
+          "from": "n92",
+          "to": "n94",
+          "outcome": "rejected"
+        },
+        {
+          "id": "sc-async",
+          "from": "n93",
+          "to": "n95",
+          "kind": "async"
+        },
+        {
+          "id": "sc-persist",
+          "from": "n95",
+          "to": "n96",
+          "kind": "persistence"
+        },
+        {
+          "id": "sc-artifact",
+          "from": "n93",
+          "to": "n96",
+          "kind": "artifact"
+        },
+        {
+          "id": "sc-stop",
+          "from": "n94",
+          "to": "n96",
+          "kind": "stop"
+        }
+      ]
+    }
+  ]
+}

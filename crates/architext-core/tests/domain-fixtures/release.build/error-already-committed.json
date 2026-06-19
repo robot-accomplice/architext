@@ -1,0 +1,30 @@
+{
+  "releaseIndex": {
+    "releases": [
+      {
+        "id": "v1-0-0",
+        "version": "1.0.0",
+        "status": "completed"
+      }
+    ]
+  },
+  "roadmapItems": [
+    {
+      "id": "c1",
+      "title": "Committed Item",
+      "kind": "feature",
+      "summary": "",
+      "section": "Core",
+      "status": "planned",
+      "targetReleaseId": "v1-1-0"
+    }
+  ],
+  "selectedRoadmapItemIds": [
+    "c1"
+  ],
+  "itemScopes": {},
+  "adHocItems": [],
+  "projectName": "TestApp",
+  "version": "1.2.0",
+  "now": "2024-01-01T00:00:00.000Z"
+}

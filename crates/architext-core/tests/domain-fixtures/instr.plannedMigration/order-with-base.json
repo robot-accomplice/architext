@@ -1,0 +1,8 @@
+{
+  "files": [
+    { "path": "CLAUDE.md", "text": "- Keep functions small and focused on single responsibility\n- Use meaningful variable names that explain the intent\n" }
+  ],
+  "existingRules": [
+    { "id": "r1", "summary": "Existing rule", "order": 50 }
+  ]
+}

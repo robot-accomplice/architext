@@ -1,0 +1,14 @@
+{
+  "views": [
+    {
+      "id": "v1",
+      "type": "c4-context",
+      "name": "Ctx",
+      "lanes": [{ "id": "l1", "name": "L1", "nodeIds": ["n1", "n1", "n2", "n2"] }]
+    }
+  ],
+  "nodes": [
+    { "id": "n1", "type": "actor" },
+    { "id": "n2", "type": "service" }
+  ]
+}

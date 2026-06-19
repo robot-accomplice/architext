@@ -5,7 +5,7 @@ import {
   orderSelectedLast,
   selectedFlowIdForSelection,
   selectedStepIdForSelection
-} from "../docs/architext/src/presentation/stepSelection.js";
+} from "../viewer/src/presentation/stepSelection.js";
 
 test("step selection is scoped to the selected flow", () => {
   const selection = { kind: "step", flowId: "flow-a", stepId: "step-2" };

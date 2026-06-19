@@ -22,13 +22,13 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            docs/architext/package-lock.json
+            viewer/package-lock.json
 
       - name: Install package dependencies
         run: npm ci
 
       - name: Install viewer workspace dependencies
-        run: npm ci --prefix docs/architext
+        run: npm ci --prefix viewer
 
       - name: Run CLI tests
         run: npm test
@@ -48,8 +48,82 @@ jobs:
       - name: Run automated UAT harness
         run: npm run test:uat
 
+      # The package now ships the Trunk-built viewer dist, so `prepack`
+      # (triggered by `npm pack` / `smoke:pack`) runs `build:viewer` = trunk.
+      # Install the Rust toolchain + trunk here so the pack steps succeed.
+      - name: Install Rust toolchain (for trunk prepack)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install trunk
+        uses: jetli/trunk-action@v0.5.0
+        with:
+          version: latest
+
       - name: Check package contents
         run: npm pack --dry-run
 
       - name: Smoke test packed global CLI
         run: npm run smoke:pack
+
+  verify-rust:
+    name: verify-rust
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy
+
+      - name: Cache cargo build
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install trunk
+        uses: jetli/trunk-action@v0.5.0
+        with:
+          version: latest
+
+      - name: Run Rust workspace tests
+        run: cargo test --workspace
+
+      # Native routing fitness + perf ratchet over the in-repo corpus. This is the
+      # Rust equivalent of test/routing-corpus-fitness.test.mjs and is the routing
+      # regression gate after the 1.7.0 JS-engine cutover. It already runs under
+      # `cargo test --workspace` above; this explicit step names the gate so a
+      # failure is attributed to "routing corpus ratchet" rather than buried in the
+      # workspace output.
+      - name: Routing corpus fitness + perf ratchet
+        run: cargo test -p architext-routing --test corpus_fitness
+
+      - name: Lint wasm viewer with clippy
+        run: cargo clippy -p architext-viewer --target wasm32-unknown-unknown -- -D warnings
+
+      - name: Build Leptos viewer with trunk
+        run: trunk build --release --config crates/architext-viewer/Trunk.toml
+
+      - name: Validate Architext data with the Rust validator
+        run: npm run validate:rust
+
+      - name: Rust serve end-to-end smoke
+        run: bash scripts/rust-serve-smoke.sh
+
+      # Routing parity: every routing-corpus flow + the real diagrams must be
+      # byte-identical between the JS engine and the Rust WASM engine. Catches
+      # any Rust-vs-JS routing divergence (e.g. the js_sign / point-collapse bug)
+      # before it can ship. Transitional — retires when the JS engine is deleted.
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Route parity gate (JS engine vs Rust WASM)
+        run: |
+          wasm-pack build crates/architext-routing --target nodejs --out-dir pkg --features wasm
+          node viewer/tools/route-diff-harness.mjs gate

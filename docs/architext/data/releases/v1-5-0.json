@@ -1,0 +1,193 @@
+{
+  "id": "v1-5-0",
+  "version": "1.5.0",
+  "name": "Architext 1.5.0 Diagram Semantics and Skill Release",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Architext 1.5.0 ships stronger flow and sequence diagram semantics, printable Architext skill content, and completed audit-hardening work on the 1.5.0 data schema line.",
+  "targetDate": "2026-05-27",
+  "lastUpdated": "2026-05-27T11:54:36.000Z",
+  "updateSource": "1.5.0 release ceremony",
+  "releasedAt": "2026-05-27T11:54:36.000Z",
+  "scope": {
+    "required": [
+      {
+        "id": "diagram-semantics",
+        "title": "Diagram semantics",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Flow diagrams separate decision points from components, render outcome-labeled branches, preserve selected branch context, improve route centering, and add line-hop support; sequence diagrams render activation bars, transaction frames, loop frames, and explicit return semantics.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-27T11:54:36.000Z",
+        "workstreamId": "diagram-viewer",
+        "dependsOn": [],
+        "evidence": [
+          "docs/architecture/RELEASE_1_5_0_SUCCESS_CRITERIA.md",
+          "docs/architecture/STEP_ROUTE_PRESENTATION_MODEL.md",
+          "docs/architecture/ROUTE_SINGLE_SIDE_CENTERING.md",
+          "test/flow-step-display-model.test.mjs",
+          "test/step-route-model.test.mjs",
+          "test/routing-fitness.test.mjs"
+        ]
+      },
+      {
+        "id": "architext-skill",
+        "title": "Architext skill",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "The package now includes a reusable Architext skill and a CLI command that prints the skill content for model-specific skill creation.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-27T11:54:36.000Z",
+        "workstreamId": "agent-instructions",
+        "dependsOn": [],
+        "evidence": [
+          "skills/architext/SKILL.md",
+          "src/adapters/cli/architext-cli.mjs",
+          "test/cli.test.mjs"
+        ]
+      },
+      {
+        "id": "audit-hardening-checkpoint",
+        "title": "Audit hardening checkpoint",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Completed audit remediation hardens serve lifecycle state reads, package update major-version behavior, rules write rollback, route planning inputs, and port handling without continuing unfinished audit scope into this release.",
+        "priority": "high",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-27T11:54:36.000Z",
+        "workstreamId": "audit-hardening",
+        "dependsOn": [],
+        "evidence": [
+          "src/adapters/cli/serve-lifecycle.mjs",
+          "src/adapters/cli/update-check.mjs",
+          "src/adapters/http/rules-api.mjs",
+          "docs/architext/src/routing/routeConstants.js",
+          "test/serve-lifecycle.test.mjs",
+          "test/package-update.test.mjs",
+          "test/rules-api.test.mjs"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [
+      {
+        "id": "remaining-superpowers-audit",
+        "title": "Remaining superpowers audit remediation",
+        "kind": "chore",
+        "status": "deferred",
+        "summary": "Finish unresolved audit remediation in the next release instead of expanding the 1.5.0 release scope.",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "dateAdded": "2026-05-27T11:54:36.000Z",
+        "workstreamId": "audit-hardening",
+        "dependsOn": []
+      }
+    ],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "diagram-viewer",
+      "name": "Diagram Viewer",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Make flow and sequence diagrams communicate control flow, returns, decisions, and routing without relying on legend interpretation.",
+      "progress": 100,
+      "itemIds": [
+        "diagram-semantics"
+      ],
+      "evidence": [
+        "test/flow-step-display-model.test.mjs",
+        "test/step-route-model.test.mjs",
+        "test/routing-fitness.test.mjs",
+        "npm run release:check"
+      ]
+    },
+    {
+      "id": "agent-instructions",
+      "name": "Agent Instructions",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Package Architext skill guidance for direct reuse by LLMs.",
+      "progress": 100,
+      "itemIds": [
+        "architext-skill"
+      ],
+      "evidence": [
+        "skills/architext/SKILL.md",
+        "test/cli.test.mjs"
+      ]
+    },
+    {
+      "id": "audit-hardening",
+      "name": "Audit Hardening",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "Ship the completed audit fixes while deferring unresolved remediation to the next release.",
+      "progress": 100,
+      "itemIds": [
+        "audit-hardening-checkpoint",
+        "remaining-superpowers-audit"
+      ],
+      "evidence": [
+        "test/serve-lifecycle.test.mjs",
+        "test/package-update.test.mjs",
+        "test/rules-api.test.mjs"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-candidate-ready",
+      "label": "Release candidate ready",
+      "status": "complete",
+      "targetWindow": "1.5.0 release",
+      "order": 1,
+      "itemIds": [
+        "diagram-semantics",
+        "architext-skill",
+        "audit-hardening-checkpoint"
+      ]
+    },
+    {
+      "id": "next-audit-release",
+      "label": "Next audit release",
+      "status": "deferred",
+      "targetWindow": "Next release",
+      "order": 2,
+      "itemIds": [
+        "remaining-superpowers-audit"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-1-5-0-success-criteria",
+      "label": "1.5.0 success criteria",
+      "href": "docs/architecture/RELEASE_1_5_0_SUCCESS_CRITERIA.md",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "release-1-5-0-check",
+      "label": "npm run release:check",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "package-version-1-5-0",
+      "label": "package.json version 1.5.0",
+      "href": "package.json",
+      "kind": "document",
+      "status": "complete"
+    }
+  ]
+}

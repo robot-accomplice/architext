@@ -14,6 +14,14 @@ const pointerBody = [
   "Do not duplicate long-lived project rules across model-specific instruction files."
 ].join("\n");
 
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function managedSectionPattern(heading, flags = "") {
+  return new RegExp(`\\n?${escapeRegExp(heading)}[\\s\\S]*?(?=\\n## |$)`, flags);
+}
+
 function stripMarkdown(value) {
   return value
     .replace(/\*\*(.*?)\*\*/g, "$1")
@@ -47,8 +55,8 @@ function slugForRule(summary, existingIds) {
 
 function withoutArchitextManagedSections(text) {
   return text
-    .replace(new RegExp(`\\n?${architextRulePointerHeading}[\\s\\S]*?(?=\\n## |$)`, "g"), "\n")
-    .replace(new RegExp(`\\n?${architextInstructionHeading}[\\s\\S]*?(?=\\n## |$)`, "g"), "\n")
+    .replace(managedSectionPattern(architextRulePointerHeading, "g"), "\n")
+    .replace(managedSectionPattern(architextInstructionHeading, "g"), "\n")
     .trim();
 }
 
@@ -122,7 +130,7 @@ export function plannedInstructionRuleMigration({ files, existingRules }) {
 export function upsertRulePointer(text) {
   const existing = text.trimEnd();
   if (existing.includes(architextRulePointerHeading)) {
-    return existing.replace(new RegExp(`${architextRulePointerHeading}[\\s\\S]*?(?=\\n## |$)`), pointerBody).trimEnd() + "\n";
+    return existing.replace(managedSectionPattern(architextRulePointerHeading), pointerBody).trimEnd() + "\n";
   }
   return `${existing}${existing ? "\n\n" : ""}${pointerBody}\n`;
 }

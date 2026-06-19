@@ -1,0 +1,54 @@
+{
+  "detail": {
+    "id": "v1-0-0",
+    "version": "1.0.0",
+    "name": "App",
+    "status": "planned",
+    "scope": {
+      "required": [
+        {
+          "id": "r1",
+          "kind": "feature",
+          "status": "complete"
+        }
+      ],
+      "planned": [
+        {
+          "id": "p1",
+          "kind": "feature",
+          "status": "planned"
+        },
+        {
+          "id": "p2",
+          "kind": "bug-fix",
+          "status": "in-progress"
+        }
+      ],
+      "stretch": [
+        {
+          "id": "s1",
+          "kind": "feature",
+          "status": "stretch"
+        }
+      ],
+      "deferred": [
+        {
+          "id": "d1",
+          "kind": "feature",
+          "status": "deferred"
+        }
+      ],
+      "outOfScope": [
+        {
+          "id": "o1",
+          "kind": "feature",
+          "status": "cut"
+        }
+      ]
+    },
+    "workstreams": [],
+    "blockers": [],
+    "dependencies": [],
+    "evidence": []
+  }
+}

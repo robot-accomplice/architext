@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { releaseKanbanColumns } from "../docs/architext/src/presentation/releaseKanban.js";
+import { releaseKanbanColumns } from "../viewer/src/presentation/releaseKanban.js";
 
 test("release kanban projects release truth items without creating a second task model", () => {
   const columns = releaseKanbanColumns({

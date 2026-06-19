@@ -1,0 +1,9 @@
+{
+  "releaseIndex": {
+    "releases": [
+      { "id": "v1-0-0", "version": "1.0.0" },
+      { "id": "v1-5-3", "version": "1.5.3" },
+      { "id": "v0-9-0", "version": "0.9.0" }
+    ]
+  }
+}

@@ -1,0 +1,209 @@
+{
+  "view": {
+    "lanes": [
+      {
+        "id": "users",
+        "nodeIds": [
+          "maintainer",
+          "llm-agent"
+        ]
+      },
+      {
+        "id": "cli",
+        "nodeIds": [
+          "architext-cli",
+          "cli-adapters",
+          "lifecycle-domain",
+          "architecture-model-domain",
+          "schema-validator"
+        ]
+      },
+      {
+        "id": "package",
+        "nodeIds": [
+          "viewer-runtime",
+          "viewer-adapters",
+          "viewer-presentation",
+          "diagram-planner",
+          "routing-engine",
+          "package-schemas",
+          "package-artifacts"
+        ]
+      },
+      {
+        "id": "target",
+        "nodeIds": [
+          "target-repository",
+          "target-data-files",
+          "static-dist"
+        ]
+      }
+    ]
+  },
+  "relationships": [
+    {
+      "id": "resolve-target",
+      "from": "maintainer",
+      "to": "architext-cli",
+      "label": "1. resolveTargetPath",
+      "relationshipType": "flow",
+      "stepId": "resolve-target",
+      "flowId": "fresh-install",
+      "kind": "start",
+      "returnOf": null,
+      "outcome": null,
+      "displayIndex": 1,
+      "preferredStartSide": null,
+      "preferredEndSide": null
+    },
+    {
+      "id": "write-starter-data",
+      "from": "architext-cli",
+      "to": "target-data-files",
+      "label": "2. writeStarterData",
+      "relationshipType": "flow",
+      "stepId": "write-starter-data",
+      "flowId": "fresh-install",
+      "kind": "persistence",
+      "returnOf": null,
+      "outcome": null,
+      "displayIndex": 2,
+      "preferredStartSide": null,
+      "preferredEndSide": null
+    },
+    {
+      "id": "write-metadata",
+      "from": "architext-cli",
+      "to": "target-repository",
+      "label": "3. writeLifecycleMetadata",
+      "relationshipType": "flow",
+      "stepId": "write-metadata",
+      "flowId": "fresh-install",
+      "kind": "artifact",
+      "returnOf": null,
+      "outcome": null,
+      "displayIndex": 3,
+      "preferredStartSide": null,
+      "preferredEndSide": null
+    },
+    {
+      "id": "validate-install",
+      "from": "architext-cli",
+      "to": "schema-validator",
+      "label": "4. validateStarterModel",
+      "relationshipType": "flow",
+      "stepId": "validate-install",
+      "flowId": "fresh-install",
+      "kind": "decision",
+      "returnOf": null,
+      "outcome": null,
+      "displayIndex": 4,
+      "preferredStartSide": null,
+      "preferredEndSide": null
+    },
+    {
+      "id": "install-valid",
+      "from": "decision:validate-install",
+      "to": "target-repository",
+      "label": "4. recordInstalledState",
+      "relationshipType": "flow",
+      "stepId": "validate-install",
+      "flowId": "fresh-install",
+      "kind": "process",
+      "returnOf": null,
+      "outcome": "valid",
+      "displayIndex": 4,
+      "preferredStartSide": "right",
+      "preferredEndSide": "left"
+    },
+    {
+      "id": "install-invalid",
+      "from": "decision:validate-install",
+      "to": "architext-cli",
+      "label": "4. stopWithValidationErrors",
+      "relationshipType": "flow",
+      "stepId": "validate-install",
+      "flowId": "fresh-install",
+      "kind": "stop",
+      "returnOf": null,
+      "outcome": "invalid",
+      "displayIndex": 4,
+      "preferredStartSide": "left",
+      "preferredEndSide": "left"
+    }
+  ],
+  "visibleNodeIds": [
+    "maintainer",
+    "llm-agent",
+    "architext-cli",
+    "cli-adapters",
+    "lifecycle-domain",
+    "architecture-model-domain",
+    "schema-validator",
+    "viewer-runtime",
+    "viewer-adapters",
+    "viewer-presentation",
+    "diagram-planner",
+    "routing-engine",
+    "package-schemas",
+    "package-artifacts",
+    "target-repository",
+    "target-data-files",
+    "static-dist"
+  ],
+  "nodeWidth": 136,
+  "nodeHeight": 54,
+  "laneWidth": 210,
+  "rowGap": 102,
+  "marginX": 180,
+  "marginY": 104,
+  "minCanvasWidth": 0,
+  "minCanvasHeight": 340,
+  "canvasExtraWidth": 132,
+  "canvasExtraHeight": 88,
+  "extraNodeRects": [
+    [
+      "decision:validate-install",
+      {
+        "x": 439,
+        "y": 588,
+        "width": 38,
+        "height": 38,
+        "fixedPorts": true,
+        "sideAnchors": {
+          "left": {
+            "x": 431.1299423149112,
+            "y": 607
+          },
+          "right": {
+            "x": 484.8700576850888,
+            "y": 607
+          },
+          "top": {
+            "x": 458,
+            "y": 580.1299423149112
+          },
+          "bottom": {
+            "x": 458,
+            "y": 633.8700576850888
+          }
+        }
+      }
+    ]
+  ],
+  "extraLaneIndexByNode": [
+    [
+      "decision:validate-install",
+      1
+    ]
+  ],
+  "extraRowIndexByNode": [
+    [
+      "decision:validate-install",
+      4
+    ]
+  ],
+  "scoreEdgeProximity": false,
+  "style": "orthogonal",
+  "diagnostics": false
+}

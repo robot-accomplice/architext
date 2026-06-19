@@ -1,0 +1,13 @@
+{
+  "view": {
+    "id": "v3",
+    "type": "c4-code",
+    "name": "Code",
+    "lanes": [
+      { "id": "l1", "name": "Actors", "nodeIds": ["n1"] }
+    ]
+  },
+  "nodes": [
+    { "id": "n1", "type": "actor" }
+  ]
+}

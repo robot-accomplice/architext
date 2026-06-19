@@ -1,0 +1,10 @@
+{
+  "schemaVersion": "1.5.0",
+  "project": "routing-corpus",
+  "notes": "Sanitized, relabeled copy of a real complex architecture (roboticus). Identifiers are neutralized; flow ids name the routing objective each case guards. Structure (lanes, step order, from/to/kind/returnOf) is preserved so routing geometry is identical to the source.",
+  "files": [
+    "nodes.json",
+    "views.json",
+    "flows.json"
+  ]
+}

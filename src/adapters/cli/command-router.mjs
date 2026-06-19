@@ -8,6 +8,7 @@ export function createCommandHandlers(dependencies) {
     validate: dependencies.validate,
     build: dependencies.build,
     prompt: dependencies.prompt,
+    skill: dependencies.skill,
     clean: dependencies.clean,
     explain: dependencies.explain,
     status: dependencies.status,

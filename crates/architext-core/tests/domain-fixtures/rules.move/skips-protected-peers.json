@@ -1,0 +1,11 @@
+{
+  "document": {
+    "rules": [
+      { "id": "a", "title": "A", "criticality": "high", "order": 1, "protection": { "edit": false, "delete": false } },
+      { "id": "p", "title": "Protected", "criticality": "high", "order": 2, "protection": { "edit": true, "delete": false } },
+      { "id": "b", "title": "B", "criticality": "high", "order": 3, "protection": { "edit": false, "delete": false } }
+    ]
+  },
+  "id": "b",
+  "direction": "up"
+}

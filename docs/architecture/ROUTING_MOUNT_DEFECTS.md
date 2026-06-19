@@ -1,0 +1,306 @@
+# Routing Mount Defects — live-UI review work order
+
+Status: **open work order** for the `routing-overhaul` branch. Produced from a maintainer
+live-viewer review on 2026-06-03, after four committed routing improvements
+(`d5b3930` NUL fix, `683ba8e` facing-correction pass, `cb18a2a` dogleg weight 3300→6000,
+`e1f66b8` shared-corner staircase). Those passed the test suite (308/311) and the mount-audit
+metrics — **but the rendered diagrams still have systemic, visible defects the metrics did not
+flag.** This document is the catalog and the fix plan; fixing happens in a later session.
+
+## RELEASE BAR & HANDOVER (2026-06-04, session 8)
+
+**Maintainer-defined release bar (this is the gate; ordering/crossing-reduction is now BONUS):**
+1. **0 avoidable doglegs** — collision-forced doglegs are acceptable.
+2. **All crossings have hops.**
+3. Ordering to avoid unnecessary crossings = bonus. (Separately wanted, not a bar: a minimum
+   segment length to fix node-hugging short stubs — 89 segments under 12px.)
+
+**Status against the bar:**
+- **Bar 1 (doglegs): effectively MET.** 0 reachable shallow jogs; the 4 doglegs are all
+  collision-forced (the direct approach to the mount passes through a node — verified for
+  product-knowledge-retrieval/cli-inventory-returned → agency-service, model-inference/prepare-request
+  → media-services, tool-execution/verify-tool-claim → mcp-system; the 4th, tool-claim-verdict, is the
+  parallel mirror of the forced verify-tool-claim).
+- **Bar 2 (hops): MET (session 9, `a84928e`).** The vertex-crossing miss is fixed by merging
+  collinear runs into maximal straight segments before hop detection (both the rendered route and
+  every other route), then rendering the hop path from the merged points. model-inference **line 6**
+  (record-route) now hops twice (over route-local at y=492 and local-provider-result at y=474) with
+  clean 6px arcs — live-DOM verified. Corpus-wide hop coverage is **236/236** (every one of 118
+  geometric crossings hopped from both sides; zero deficit vs a deficit before). The merge is a
+  geometry-identity transform here: a swept 303 routes contain **zero backtracks**, so removing a
+  point that lies on its segment cannot change the drawn line — it only restores the dropped interior
+  crossing. (The earlier adaptive-hop fix `3cebc12` only covered near-corner crossings still INTERIOR
+  to both segments; this covers the vertex case it could not.)
+
+**★ Two harness traps proven this session (validate against the rendered DOM, not these numbers):**
+1. **Phantom projections.** The viewer renders a flow only in flows-mode view TYPES
+   (system-map, flow-explorer, workflow, dataflow) via `compatibleFlowViewsForFlow`, and
+   `defaultViewForFlow` overrides system-map to the authored view when one exists — so a flow with an
+   authored (flow-explorer/dataflow) view is never shown in system-map. `risk-overlay` and
+   `release-gate-flow` (sequence) don't render flows as orthogonal routing at all. Measuring every
+   flow×view over-counts. Use `/tmp/reachable-jogs.mjs` (reachable views only): shallow jogs = 0.
+2. **Detector blind spots.** The geometry the harness reads IS faithful to the DOM (verified the
+   rendered `d` string equals planDiagram output), but the detectors missed: (a) crossings that land
+   on a route's collinear waypoint (→ missing hops, line 6); (b) near-coincident line OVERLAP
+   (skill-plugin steps 3 & 7 mount skill-plugin-system.left 1.5px apart and run on top of each other);
+   (c) avoidable jogs from wrong SURFACE SELECTION above the 36px "short" cutoff
+   (memory-lifecycle lines 7 & 8 = curate pair on wrong faces; skill-plugin line 6).
+
+**Open defects (UI-confirmed) for the next session, in bar priority:**
+- **[BAR 2] line-6 missing hops — DONE (`a84928e`).** Took the renderer/merge-collinear option
+  (low-risk, geometry-identity). Bar 2 is now met corpus-wide. The lane-order alternative
+  (record-route → outermost lane) is still a legitimate BONUS ordering win but no longer needed for
+  the bar.
+- **[legibility] skill-plugin steps 3 & 7 mount overlap** on skill-plugin-system.left — mount
+  distribution must spread same-face requests.
+- **[T3 / legibility] surface-selection jogs** — memory-lifecycle 7 & 8, skill-plugin 6 — face
+  selection (routeIntent / optimizeMountAssignments).
+
+**Validate in the live UI** (`cd viewer && ARCHITEXT_DATA_DIR=…/roboticus/docs/architext/data npm run
+dev` → :4317). Drive views via the left-nav Flow Views buttons (the list is per-flow). Screenshots
+time out on dense views — extract rendered geometry with Playwright `g.flow-edge path` `d`-attributes.
+
+Also shipped `dadae91`: the planning overlay now narrates each routing pass (onPhase →
+worker → overlay). Visibility is limited because the worker plans synchronously (fast diagrams flash
+past); making it always-visible needs an async-yield pipeline refactor (deferred).
+
+## NEXT WORK ORDER — pair-aware ORDERING pass (maintainer, 2026-06-04 live review)
+
+Distribution (T1/T2) is done. The live review then surfaced ORDERING/face defects that
+distribution does not touch. Maintainer's design for the fix:
+
+> **Ordering must be PAIR-AWARE and generate a COST VALUE for pair crossings — and, like
+> distribution, it must run as a FINAL pass.**
+
+So build a final ordering pass (sibling to `distributeMountsByPointCount`, run last) that:
+- knows reciprocal pairs (pair-aware), so a pair's two lines never cross each other;
+- scores candidate slot/lane orderings by a crossing cost (incl. pair-internal crossings);
+- picks the min-cost ordering; gutter-lane order included (farthest target → outermost lane).
+
+### Progress — pair-internal straightening landed (`e81b125`, 2026-06-04)
+
+`straightenSelfCrossingPairs` (`viewer/src/routing/routeEdges.js`) runs LAST (after the
+distribution passes, so they cannot re-jog it). For a self-crossing reciprocal pair on a
+directly-facing surface-pair it rebuilds both lines as straight parallel runs, anchoring each to
+its mount on the MORE-occupied (hub) face so the hub face's distribution is preserved and only the
+lighter face's end moves. Guarded: kept only if it strictly reduces the crossings touching the pair
+and adds no node collision or shared segment. The displayIndex-adjacency pairing is shared via
+`routeReciprocal.js`.
+
+- **Fixed (render-verified): model-inference L2/L3** — now two parallel straight verticals.
+- **Sweep: pair-internal crossings 28 → 24**, zero regressions; suite 319/322 (same 3 pre-existing
+  reds), benches 12/12.
+- **Remaining 24 break down as:** ~6 perp/detour (not facing-straightenable); several 2-run facing
+  pairs where straightening one would cross its sibling (multi-round-trip on overlapping faces); and
+  the genuinely-coordinated case below.
+- **COORDINATED CASE FINDING (the one ≥4-run facing group in the corpus): `dashboard-control`
+  web-dashboard ↔ websocket-control-plane is DIAGONAL, not aligned** — web-dashboard sits at
+  y≈410–464, websocket at y≈206–260, **no y-overlap**, so the 4 `right→left` runs cannot be straight
+  horizontal lanes; they must jog (right→up→right). This needs **parallel-jog (Z-shape) bundle
+  ordering** (route N parallel Z-runs through shared corridors without crossing) — a separate, harder
+  algorithm (the reverted `buildReciprocalGutterBridge`/staircase territory), NOT straightening. A
+  facing-group generalization of the straightening pass was prototyped and reverted (its multi-run
+  even-spread branch is unexercised because the only ≥4-run group is this diagonal one).
+
+Concrete defects it must fix (verified by geometry + render, `/tmp/mi-dump.mjs`, `/tmp/mi-render.mjs`):
+- **model-inference L2/L3 (LLM↔Cloud)** cross each other TWICE. Directly-stacked pair that
+  should be two straight parallel verticals; instead each jogs (LLM.bottom {1033,1045} vs
+  Cloud.top {1010,1022} misaligned) and they swap sides → self-crossing. (Pre-existing dogleg
+  from the session-5 catalog; pair-aware ordering + straightening should resolve.)
+- **model-inference L6 (→Observability)** runs the INNERMOST gutter (x≈1102), inside L4/L5
+  (1142/1154), so its long descent crosses their Local brackets. Farthest target ⇒ should be
+  OUTERMOST lane. (T4 gutter-lane order.)
+- **memory-lifecycle L7/L8 (memory↔SQLite curate pair)** spill to remote faces (sqlite north,
+  memory south, sqlite west) instead of bracketing onto the EAST faces like the query pair. (T3
+  crowding-driven wrong-face — face SELECTION, owned by intent/relief/optimizeMountAssignments.)
+
+**PROCESS NOTE (maintainer caught this):** the mount-audit harness only measures DISTRIBUTION
+evenness — it does NOT flag crossings, doglegs, or wrong-face. So "5/6 flows clean" meant
+distribution-clean only, and these crossing/face defects were not caught before review. Extend
+the harness to flag T3 (wrong-face) and T4 (crossings/lane-order/doglegs) and ALWAYS render +
+visually inspect each flow before claiming clean.
+
+**HARNESS EXTENDED — T4 detectors landed (2026-06-04).** Two pure detectors now live in
+`viewer/src/routing/routeDiagnostics.js` and emit diagram-level findings from
+`diagnosePlannedRoutes`, so the viewer overlay, the unit tests, and the sweep tool share ONE
+implementation:
+- `pairInternalCrossings(routes, relationships)` → `pair-internal-crossing` finding. A reciprocal
+  pair (matched by displayIndex adjacency, MIRRORING `reciprocalParallelMoves`) whose two lines
+  cross is always a defect. **Calibration matters:** the first cut paired *every* opposite-direction
+  edge between a node pair and over-counted 58→28; adjacency pairing matches the router.
+- `laneOrderViolations(plan, relationships)` → `lane-order-violation` finding. The lane is the
+  perpendicular coordinate of the route's LONGEST face-parallel run (not its outermost excursion,
+  which would grab the destination when source/target are in different columns). **Gated on an
+  actual crossing:** the pure "farthest→outermost" rank rule flagged ~75% rank-only non-crossings,
+  so a violation is reported only when the farthest-target route actually crosses a sibling outside
+  it. That ties the detector to a visible defect and self-calibrates to zero false positives.
+
+Calibrated counts against roboticus: **28 pair-internal crossings, 11 lane-order violations** (each
+a real crossing). Render-verified witness: model-inference L2/L3 self-cross and L6 (record-route)
+crossing route-local/local-provider-result. Unit tests in `test/routing-diagnostics.test.mjs` (6,
+all green). Durable sweep: `node viewer/tools/audit-route-crossings.mjs --data-dir <dir>`. Suite
+318/321 (same 3 pre-existing reds), benches 12/12. The mount-audit (distribution) is unchanged and
+still complementary; this adds the missing T4 lens. **T3 wrong-face is still not flagged** (a
+separate face-selection detector remains to build).
+
+## Progress — session 2026-06-04 (`a7d0cef`)
+
+**T1 (even distribution) and T2 (lone-mount centering) are substantially fixed** by a new
+final pass, `distributeSurfaceMountUnits` (`viewer/src/routing/routeEdges.js`), committed in
+`a7d0cef`.
+
+- **Root cause located (and it was NOT the hypothesized N/S-vs-E/W axis asymmetry):**
+  `routeReciprocalPairsParallel` pins each return edge a fixed gap from its *request* edge,
+  ignoring the return's own even slot, so a face carrying ≥2 reciprocal pairs bunches them at
+  one end. The spread code is axis-symmetric; the damage scales with pair count, so N/S faces
+  with 2 pairs (LLM south) looked worst.
+- **Fix:** a reciprocal pair = one rigid unit (parallel gap preserved); unit *centres* spread
+  with the existing `endpointSpreadOffset` fractions; a single-unit face lands at offset 0
+  (centres lone mounts). Runs LAST (after relief/optimize settle face assignment), which is why
+  it succeeds where `recenterSingletonSideEndpoints` does not — that pass runs *before* relief
+  and the optimizer drag the mount back off-centre. Guarded per face: reverts any move that
+  adds a bend, a node collision, or a shared visible segment.
+- **Verified (headless faithful fixtures + live viewer, roboticus data):**
+  model-inference LLM bottom two pairs bunched-left → even slots (33%/67%); LLM right even;
+  memory-lifecycle SQLite west/top lone mounts and right lone pair → centred.
+- **Headless sweep** (`/tmp/mount-audit.mjs`, rebuild if cleared — plans every agent-turn-flow
+  flow and flags off-centre lone units / uneven multi-unit faces): **4 of 6 flows now 0 flags**
+  (model-inference, skill-plugin, tool-mcp, local-cli). No new defects introduced.
+- **Tests:** `test/routing-mount-distribution.test.mjs` — model-inference T1 + memory-lifecycle
+  T2, both RED→GREEN. Suite 311/314 (the 3 failures pre-exist on branch HEAD), benches 12/12.
+
+**T1 facing-pair crowding — FIXED for dedicated faces (`861fc0f`).**
+`distributeFacingReciprocalSurfaces` does the coordinated both-ends move: each straight facing
+run is re-homed to an even slot by setting the same perpendicular coordinate on BOTH endpoints,
+so it spreads without kinking. It only fires when the facing surface-pair is dedicated to the
+group's runs (both faces carry nothing else). Memory-lifecycle UP↔Memory (4 runs) now even and
+straight in the live viewer; the mount-audit sweep is 5/6 flows clean. The shared
+save/bend/collision/shared-segment guard used by both distribution passes was extracted into
+`keepMountMovesUnlessWorse` + `sharedSegmentCountInvolving` (one policy, two callers).
+
+**Still open after this session:**
+- **T1 residual — MIXED hub faces.** Where straight facing runs share a surface with unrelated
+  mounts (e.g. interactive-turn's UP.right carries the Memory facing pair AND tool/session
+  edges), the facing pass intentionally skips (spreading the facing runs in isolation would
+  unbalance the rest of the face) and the per-face pass can't move the straight runs without a
+  kink. Fixing this needs a unit model that distributes ALL of a face's mounts together,
+  coordinating the facing runs' opposite ends — a larger change.
+- **T3** (crowding-driven wrong-face) and **T4** (lane-order + hops) untouched. Note the
+  memory-lifecycle T3 hints in the catalog below (line 7/8 mounting north/south vs east/west).
+
+## Governing mandate (do not skip)
+
+- **Validate every routing change by reviewing every flow diagram in the live viewer**, not by
+  the test suite / crossing counts / mount-audit alone. Metrics diverge from the rendered
+  result (proof below).
+- **Before tests can be trusted alone, build a defect harness that conclusively surfaces these
+  defects AND sanity-check it against screenshots.** The current detector is only partial.
+- The agent's inline PNG renders are **not visible to the maintainer**; the browser is the shared
+  source of truth. To get feedback, GUIDE the maintainer to the flow (sidebar → FLOWS → name) and
+  reference on-screen step numbers.
+
+Live viewer (serves the LIVE `viewer/src`, so it reflects uncommitted changes):
+
+```sh
+cd viewer && ARCHITEXT_DATA_DIR=/Users/jmachen/code/roboticus/docs/architext/data npm run dev
+# vite, port 4317 or next free; open in browser, hard-refresh after a rebuild-free src edit
+```
+
+## Metric-vs-eye gap (why metrics passed)
+
+`doglegCount` only counts segments that **reverse** the from→to direction. It misses the
+perpendicular stair-steps (`shallowJog`), same-side "bracket" bows, and uneven/​crowded mounts the
+eye reads as defects. Concrete: for `model-inference` in the `agent-turn-flow` view,
+`doglegCount = 0` for every edge, yet the maintainer immediately saw jogs on steps 2 and 3. So
+"doglegs 21→7, suite green" was measuring something narrower than diagram quality.
+
+## Root-cause synthesis (maintainer)
+
+The recurring complaint set across every reviewed flow reduces to **two primary roots with a
+causal chain**:
+
+> **R1 — inconsistent / uneven mount distribution ("for no apparent reason") → crowding →
+> R2 — weird face selection** (an edge spills onto the wrong surface *because* the correct face is
+> crowded).
+
+- **R1 is standalone and pervasive.** It appears even where face selection is correct
+  (`tool-mcp-execution` is "correct except for the weird mount point distribution"). So R1 is the
+  universal defect.
+- **Fix R1 first** (even mount spread on **all** faces — north/south as consistently as east/west,
+  and a lone mount centered). Relieving crowding should also stop most R2 wrong-surface spills.
+- **Lane-ordering + missing hops** is a separate, secondary concern (R2-adjacent / rendering).
+
+## Themes (the harness must flag all of these)
+
+| Theme | Description | Notes |
+|---|---|---|
+| **T1 Distribution** | Mounts not evenly spread along a face; **north/south especially** inconsistent vs east/west; even east/west uneven. | The primary root (R1). |
+| **T2 Lone-mount centering** | A single mount on a face is not centered. | Sub-case of T1. `recenterSingletonSideEndpoints` exists — find why it doesn't fire. |
+| **T3 Wrong face (crowding-driven)** | Same-column multi-round-trip pairs get pushed to N/S instead of being bracketed onto E/W; far-edge/perpendicular spills. | R2; expected to shrink once T1 is fixed. |
+| **T4 Lane order + hops** | Farthest-target line should sit **outermost** to avoid crossings; flat crossings need hop arcs. | Secondary. |
+
+## Per-flow catalog (maintainer eye, mostly `agent-turn-flow` view)
+
+**Model inference and routing**
+- Steps 2 & 3 (LLM ↔ Cloud): weird dogleg (caught by `shallowJog`; `doglegCount=0`). [T1/T3]
+- North/south faces of LLM don't distribute mounts like its east/west faces. [T1]
+- Line 6 (LLM → Observability): routes *inside* lines 4/5 on LLM's right face and crosses them;
+  ordering it **outermost** (it targets the farthest node) avoids the crossing — and the crossing
+  renders **flat (no hop)**. [T4]
+
+**Memory retrieval, ingest, and maintenance** (improved, but)
+- Unified Pipeline ↔ Memory system facing sides not distributed → unnecessary crowding. [T1]
+- Line 8 (SQLite → Memory) mounts Memory **south**; should be **west**. [T3]
+- Line 7 (Memory → SQLite) mounts SQLite **north**; should be **east**. [T3]
+- East faces of Memory & SQLite: uneven mount distribution. [T1]
+- Line 8's mount on SQLite's **west** is off-center though it's the only mount there. [T2]
+
+**Skill and plugin lifecycle**
+- "Same complaint set" — T1–T4 recur. Harness candidate edges (agent-turn-flow view): 1, 2
+  right→right brackets; 5 left→left bracket; 6 excess-bend. (system-map view): 3, 7, 8 excess; 4
+  shallowJog. Confirm specifics next session.
+
+**Tool & MCP execution**
+- Correct **except** for weird mount distribution. [T1 only — the isolating case.]
+
+**Local CLI/TUI control**
+- Weird mount distribution [T1]; no hops on crossings [T4]. (Earlier open Q: SQLite north-vs-west
+  mount — part of R2.)
+
+## Suspected code sites (start here next session)
+
+- Distribution / spread / centering — `viewer/src/routing/routeEdges.js`:
+  `endpointSpreadOffset` (line ~890), `spreadSharedSideEndpoints` (~955),
+  `reorderSharedSurfaceMounts` (~1295), `recenterSingletonSideEndpoints` (~1352),
+  `realignFacingEndpoints` (~926), `sideNeedsPostSelectionCentering` (~126).
+  NOTE: `sideNeedsPostSelectionCentering` and `endpointSpreadOffset` *do* handle top/bottom, so the
+  N/S-vs-E/W asymmetry is **not** there — it is in the facing-alignment / reorder / reciprocal
+  pass axis handling. Not yet located.
+- Face selection — `viewer/src/routing/routeIntent.js` (`deriveRouteIntent`,
+  `expectedRouteSides`, `semanticSurfaceOptions`); reciprocal surface choice in
+  `routeMountModel.js` (`reciprocalParallelMoves`).
+- Hops — `viewer/src/routing/routeRendering.js` (`pathToSvgWithHops`, `orthogonalCrossings`);
+  invoked from `viewer/src/main.tsx`. Crossings render flat — investigate why (hops only fire vs
+  *previously-drawn* routes).
+- Lane order by destination distance — `reorderSharedSurfaceMounts` orders by opposite-node centre
+  but does not control the bracket **depth** ordering that line-6 needs.
+
+## Harness requirement & calibration state
+
+A trustworthy harness must flag T1–T4 and be validated against screenshots before tests are
+relied on alone. Current state (partial):
+- Candidate detector: `dogleg || shallowJog || bracket(startSide===endSide) || excessBends>2`.
+- On `model-inference` it flags steps 2,3 (shallowJog) ✓ and the right→right brackets — but does
+  **not** yet distinguish a defect bracket from legitimate obstacle-avoidance, and has no
+  **distribution-evenness** or **lone-center** metric yet (T1/T2 uncovered).
+- Probes (in `/tmp`, rebuild if cleared): `mount-audit.mjs` (faithful per-flow audit),
+  `dg-scan.mjs` (doglegs), `defect-scan.mjs` (per-edge T-flags punch-list), `jog-probe.mjs`,
+  `nf-probe.mjs`, `off-probe.mjs`, `render-flow.mjs` (flow → SVG/PNG), `dogleg-sweep.mjs`.
+
+## Suggested fix order (next session)
+
+1. **T1 distribution** (the root): even spread on all faces incl. N/S; lone-mount centering (T2).
+   Re-review every flow in the UI; expect R2 wrong-surface spills to shrink.
+2. **T3 residual wrong-face** for same-column multi-round-trip pairs (bracket onto E/W).
+3. **T4 lane-ordering** (outermost = farthest target) **and hop rendering** on remaining crossings.
+4. **Build + calibrate the harness** against screenshots; only then trust tests alone.

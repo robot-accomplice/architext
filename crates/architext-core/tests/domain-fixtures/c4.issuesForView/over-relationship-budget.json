@@ -1,0 +1,26 @@
+{
+  "view": {
+    "id": "v7",
+    "type": "c4-context",
+    "name": "Dense",
+    "lanes": [
+      { "id": "l1", "name": "L1", "nodeIds": ["r0","r1","r2","r3","r4","r5","r6","r7","r8","r9","r10","r11","r12","r13"] }
+    ]
+  },
+  "nodes": [
+    { "id": "r0", "type": "service", "dependencies": ["r1","r2","r3","r4","r5","r6","r7"] },
+    { "id": "r1", "type": "service", "dependencies": ["r2"] },
+    { "id": "r2", "type": "service", "dependencies": ["r3"] },
+    { "id": "r3", "type": "service", "dependencies": ["r4"] },
+    { "id": "r4", "type": "service", "dependencies": ["r5"] },
+    { "id": "r5", "type": "service", "dependencies": ["r6"] },
+    { "id": "r6", "type": "service", "dependencies": ["r7"] },
+    { "id": "r7", "type": "service", "dependencies": ["r8"] },
+    { "id": "r8", "type": "service", "dependencies": ["r9"] },
+    { "id": "r9", "type": "service", "dependencies": ["r10"] },
+    { "id": "r10", "type": "service", "dependencies": ["r11"] },
+    { "id": "r11", "type": "service", "dependencies": ["r12"] },
+    { "id": "r12", "type": "service", "dependencies": ["r13"] },
+    { "id": "r13", "type": "service", "dependencies": [] }
+  ]
+}

@@ -3,7 +3,6 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-2ff801)](LICENSE)
 [![CI](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/%40robotaccomplice%2Farchitext?color=00dbe9)](https://www.npmjs.com/package/@robotaccomplice/architext)
-![SemVer](https://img.shields.io/badge/semver-1.4.4-fed639)
 ![Node 20+](https://img.shields.io/badge/node-%3E%3D20-00dbe9)
 ![Global CLI](https://img.shields.io/badge/global%20CLI-yes-2ff801)
 ![Target Repos](https://img.shields.io/badge/target%20repos-data--only-2ff801)
@@ -125,6 +124,10 @@ validation, release tracking, rules, and release packaging.
 ![Architext C4 view showing package and target repository boundaries](docs/assets/screenshots/architext-c4.png)
 
 ![Architext data and risks view showing migration and release risks](docs/assets/screenshots/architext-data-risks.png)
+
+![Architext Repo Tree view showing the repository's files colored by their owning architecture component, with file-type icons and size/modified metadata](docs/assets/screenshots/architext-repo-tree.png)
+
+![Architext Blast Radius view showing a focused component's reach: owned files, dependencies, dependents, flows, data, and risks](docs/assets/screenshots/architext-blast-radius.png)
 
 ![Architext Release Truth view showing release posture, path, and historical feature and bug-fix volume](docs/assets/screenshots/architext-release-truth.png)
 
@@ -322,6 +325,7 @@ architext serve [path]
 architext validate [path]
 architext build [path]
 architext prompt [path]
+architext skill
 architext clean [path]
 architext explain flows
 architext version
@@ -349,6 +353,58 @@ Use `prompt` to print LLM-ready instructions:
 architext prompt --mode initial-buildout
 architext prompt --mode architecture-change
 architext prompt --mode repair-validation
+```
+
+Use `skill` to print the package-owned Architext `SKILL.md` content directly to
+the terminal. This is intended for maintainers who want to paste the skill into
+an LLM chat session and ask that model to create its own model-specific skill
+without first learning that model's skill installation mechanism:
+
+```sh
+architext skill
+```
+
+## Claude Code Plugin
+
+Architext also ships a Claude Code plugin marketplace manifest in the
+repository root under `.claude-plugin/`. Claude Code expects marketplace
+repositories to expose `.claude-plugin/marketplace.json`; Architext's
+marketplace contains the `architext` plugin, which contributes the packaged
+Architext skill.
+
+From inside Claude Code, add the Robot Accomplice Architext repository as a
+marketplace:
+
+```text
+/plugin marketplace add robot-accomplice/architext
+```
+
+Then install the plugin from that marketplace:
+
+```text
+/plugin install architext@architext
+```
+
+Reload plugins in the current Claude Code session:
+
+```text
+/reload-plugins
+```
+
+For non-interactive setup, use the Claude Code CLI:
+
+```sh
+claude plugin marketplace add robot-accomplice/architext
+claude plugin install architext@architext
+```
+
+Use `--scope project` on those CLI commands when a repository should share the
+marketplace and plugin through `.claude/settings.json`; omit it for user-scope
+installation. Claude Code copies marketplace plugins into its local plugin
+cache, so update the marketplace when Architext releases a new plugin version:
+
+```sh
+claude plugin marketplace update architext
 ```
 
 Use `clean` to remove generated local build output. It removes

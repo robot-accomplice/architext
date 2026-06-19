@@ -1,0 +1,10 @@
+{
+  "rules": [
+    { "id": "c", "title": "C", "criticality": "low", "order": 1, "protection": { "edit": false, "delete": false } },
+    { "id": "b", "title": "B", "criticality": "high", "order": 2, "protection": { "edit": false, "delete": false } },
+    { "id": "a", "title": "A", "criticality": "high", "order": 1, "protection": { "edit": false, "delete": false } },
+    { "id": "u", "title": "U", "criticality": "unknown-crit", "order": 1, "protection": { "edit": false, "delete": false } },
+    { "id": "m", "title": "M", "criticality": "medium", "order": 1, "protection": { "edit": false, "delete": false } },
+    { "id": "x", "title": "X", "criticality": "critical", "order": 1, "protection": { "edit": false, "delete": false } }
+  ]
+}

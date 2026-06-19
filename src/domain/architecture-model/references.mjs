@@ -1,4 +1,5 @@
 import { releaseSummaryFromDetail } from "./release-history.mjs";
+import { releaseItems } from "./release-scopes.mjs";
 
 export function validateArchitectureReferences(model) {
   const errors = [];
@@ -44,13 +45,19 @@ export function validateArchitectureReferences(model) {
   }
 
   for (const flow of flows) {
+    const steps = nestedArray(flow, "steps", `flow ${flow.id}`);
+    const stepIds = new Set(steps.map((step) => step.id));
     for (const id of nestedArray(flow, "actors", `flow ${flow.id}`)) requireKnown(id, nodeIds, `flow ${flow.id}.actors`);
-    for (const step of nestedArray(flow, "steps", `flow ${flow.id}`)) {
+    for (const step of steps) {
       if (!step.from) errors.push(`flow ${flow.id} step ${step.id}.from is required`);
       else requireKnown(step.from, nodeIds, `flow ${flow.id} step ${step.id}.from`);
       if (!step.to) errors.push(`flow ${flow.id} step ${step.id}.to is required`);
       else requireKnown(step.to, nodeIds, `flow ${flow.id} step ${step.id}.to`);
+      if (step.returnOf) requireKnown(step.returnOf, stepIds, `flow ${flow.id} step ${step.id}.returnOf`);
       for (const id of nestedArray(step, "data", `flow ${flow.id} step ${step.id}`)) requireKnown(id, dataIds, `flow ${flow.id} step ${step.id}.data`);
+    }
+    for (const frame of nestedArray(flow, "sequenceFrames", `flow ${flow.id}`)) {
+      for (const id of nestedArray(frame, "stepIds", `flow ${flow.id} sequenceFrame ${frame.id}`)) requireKnown(id, stepIds, `flow ${flow.id} sequenceFrame ${frame.id}.stepIds`);
     }
   }
 
@@ -58,6 +65,18 @@ export function validateArchitectureReferences(model) {
     if (view.scopeNodeId) requireKnown(view.scopeNodeId, nodeIds, `view ${view.id}.scopeNodeId`);
     for (const lane of nestedArray(view, "lanes", `view ${view.id}`)) {
       for (const id of nestedArray(lane, "nodeIds", `view ${view.id} lane ${lane.id}`)) requireKnown(id, nodeIds, `view ${view.id} lane ${lane.id}`);
+    }
+  }
+
+  if (Array.isArray(model.notes)) {
+    const idsByKind = {
+      node: nodeIds, flow: flowIds, decision: decisionIds,
+      risk: riskIds, view: viewIds, "data-class": dataIds
+    };
+    for (const note of model.notes) {
+      const known = idsByKind[note.target?.kind];
+      if (!known) errors.push(`note ${note.id}.target.kind "${note.target?.kind}" is unknown`);
+      else requireKnown(note.target.id, known, `note ${note.id}.target (${note.target.kind})`);
     }
   }
 
@@ -72,16 +91,6 @@ export function validateArchitectureReferences(model) {
   }
 
   return errors;
-}
-
-function allReleaseItems(detail) {
-  return [
-    ...detail.scope.required,
-    ...detail.scope.planned,
-    ...detail.scope.stretch,
-    ...detail.scope.deferred,
-    ...detail.scope.outOfScope
-  ];
 }
 
 function releaseItemCanBeBlocked(status) {
@@ -121,7 +130,7 @@ export function validateReleaseReferences(releases, errors = [], options = {}) {
   }
 
   for (const detail of releases.details) {
-    const items = allReleaseItems(detail);
+    const items = releaseItems(detail);
     const itemIds = new Set(items.map((item) => item.id));
     const itemsById = new Map(items.map((item) => [item.id, item]));
     const workstreamIds = new Set(detail.workstreams.map((workstream) => workstream.id));

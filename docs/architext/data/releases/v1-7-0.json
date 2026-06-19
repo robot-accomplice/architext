@@ -1,0 +1,437 @@
+{
+  "id": "v1-7-0",
+  "version": "1.7.0",
+  "name": "Architext 1.7.0 Rust Rewrite (Zero Node)",
+  "status": "implementing",
+  "posture": "on-track",
+  "targetWindow": "After 1.6.3 (1.6.x exhausted)",
+  "lastUpdated": "2026-06-18T00:00:00.000Z",
+  "updateSource": "2026-06-16: validation parity COMPLETE — architext-core validator (schema via jsonschema + references + release + roadmap-target) verdict-identical to the JS validator; conformance gate 44/44 across per-rule fixtures.",
+  "summary": "Reimplement the entire product in Rust with NO Node dependency surviving — runtime AND build. One Rust routing core (native + WASM); validation, serve layer, and lifecycle ported; AND the React/Vite viewer rewritten as a Rust → WASM UI (Leptos/Dioxus/Yew, no JSX/Vite/npm) reusing the engine directly and implementing the Stitch design language. Native installers are the Node-free default; npm is an opt-in compatibility bridge only. Minor release: JSON data contract and CLI surface preserved exactly, proven by a byte-parity migration gate and a validation conformance corpus. Migration tooling (parity harness, ajv conformance, JS tests) is transitional and deleted with the JS code.",
+  "scope": {
+    "required": [
+      {
+        "id": "viewer-rust-wasm-rewrite",
+        "title": "Rewrite the viewer as a Rust → WASM UI (no Node build)",
+        "kind": "architecture",
+        "status": "planned",
+        "summary": "Replace React/Vite with a Rust web framework (Leptos/Dioxus/Yew) compiled to WASM: all nine modes (Flows, Sequence, C4, Deployment, Data/Risks, Repo Tree, Blast Radius, Release Truth, Rules), the diagram canvas (fluid, pan/zoom), editors, and inspectors. Reuses architext-routing directly (no JSON/WASM string boundary). No JSX, Vite, or npm anywhere in the build. The single largest piece of the zero-Node mandate; runs in parallel with the engine port.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-15T12:00:00.000Z",
+        "workstreamId": "viewer-rewrite",
+        "priority": "high",
+        "dependsOn": [
+          "routing-engine-rust-port"
+        ]
+      },
+      {
+        "id": "routing-engine-rust-port",
+        "title": "Port the routing/planning engine to a Rust crate (native + WASM)",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Translate viewer/src/routing/* into the architext-routing crate (cdylib + rlib), compiled native for serve-side precompute and to WASM for the browser worker. Internally cohesive port done as one unit; uses IndexMap/IndexSet where JS insertion order drives tiebreaks. Realizes the engine-in-scope decision that distinguishes this from the original Go-only plan.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-15T00:00:00.000Z",
+        "workstreamId": "engine-port",
+        "priority": "high",
+        "dependsOn": [],
+        "evidence": [
+          "pr-119",
+          "pr-134",
+          "pr-137"
+        ]
+      },
+      {
+        "id": "js-compat-determinism",
+        "title": "js_compat determinism primitives (V8 parity)",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Reproduce the exact JS semantics the router depends on: js_number_to_string (V8 Number::toString via ryu-js), js_round (half toward +inf), UTF-16 string sort + locale compare, and libm-backed hypot on every target so native and WASM floats are identical. The narrow surface where byte-parity lives.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-15T00:00:00.000Z",
+        "workstreamId": "engine-port",
+        "priority": "high",
+        "dependsOn": [],
+        "evidence": [
+          "pr-119"
+        ]
+      },
+      {
+        "id": "differential-parity-harness",
+        "title": "Differential fingerprint harness (JS vs Rust-WASM)",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Extend route-parity-fingerprint to run both engines over every corpus flow x view and diff sha256 fingerprints (points + d + label positions), driving the port flow-by-flow RED to GREEN. The one-time migration gate proving the Rust engine matches the outgoing JS engine byte-for-byte.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-15T00:00:00.000Z",
+        "workstreamId": "engine-port",
+        "priority": "high",
+        "dependsOn": [
+          "routing-engine-rust-port",
+          "js-compat-determinism"
+        ],
+        "evidence": [
+          "pr-137"
+        ]
+      },
+      {
+        "id": "routing-fitness-ratchet-rust",
+        "title": "Native routing fitness + perf ratchet (post-cutover regression gate)",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Before this, routing quality + work-volume were gated ONLY by the JS ratchet (test/routing-corpus-fitness.test.mjs), which imports the JS engine and dies when Phase 3 deletes it — so the cutover would have shipped 1.7.0 with zero routing-regression protection. This is the native equivalent: crates/architext-routing/tests/corpus_fitness.rs runs the same in-repo corpus (test/fixtures/routing-corpus) through the Rust plan_diagram path and freezes a Rust baseline (tests/fixtures/corpus-fitness-baseline.json). It gates the eight JS GATED_METRICS (routes, bends, crossings, pairInternalCrossings, laneOrderViolations, closeParallelRuns, sharedSegments, repeatedCrossings) and the three deterministic PERF_GATED_COUNTERS (edgesPlanned, cheapCandidateCount, gridRouteCalls). The JS Tier-2 machine-normalized wall-ratio is intentionally not ported (non-deterministic; counters are the robust CI-safe half). Surfacing the work counters required a small additive engine change: route_edges_with_stats / plan_diagram_with_stats expose a CorpusPlanStats out-param while the stats-free route_edges / plan_diagram (WASM bridge) are unchanged. Distinct from differential-parity-harness: that is the one-time JS-vs-Rust byte-parity migration gate; this is the permanent Rust-vs-frozen-baseline regression gate that survives the cutover. Baseline VALUES are committed and require maintainer sign-off.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-18T00:00:00.000Z",
+        "workstreamId": "engine-port",
+        "priority": "high",
+        "dependsOn": [
+          "routing-engine-rust-port",
+          "differential-parity-harness"
+        ],
+        "evidence": [
+          "routing-fitness-ratchet-branch"
+        ]
+      },
+      {
+        "id": "validation-conformance-port",
+        "title": "Port validation with a conformance corpus",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Port the ajv 2020-12 schema validation + custom reference checks to Rust (jsonschema crate + ported logic) in architext-core. A conformance corpus of accept/reject fixtures proves verdict parity between the outgoing ajv validator and the Rust validator, error-for-error.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-15T00:00:00.000Z",
+        "workstreamId": "validation-parity",
+        "priority": "high",
+        "dependsOn": [],
+        "evidence": [
+          "pr-139",
+          "pr-140",
+          "pr-141",
+          "pr-142",
+          "pr-143"
+        ]
+      },
+      {
+        "id": "serve-layer-port",
+        "title": "Port the serve HTTP layer",
+        "kind": "architecture",
+        "status": "planned",
+        "summary": "Reproduce the 11 /api endpoints, the mutation-token + write-lock model on the 6 mutating POSTs, the SSE /api/data-events channel, file watching, the plan precompute farm (sha256(plan_input_key), generation-based invalidation, 200-miss contract), and the embedded viewer/dist.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-15T00:00:00.000Z",
+        "workstreamId": "serve-cli-native",
+        "priority": "high",
+        "dependsOn": [
+          "routing-engine-rust-port"
+        ]
+      },
+      {
+        "id": "cli-lifecycle-port",
+        "title": "Port the CLI + lifecycle commands",
+        "kind": "architecture",
+        "status": "planned",
+        "summary": "Port validate, serve, sync, doctor, prompt, status, and migrate to a clap-based Rust binary, preserving the CLI surface exactly. Includes the lifecycle transforms (schema migrations, doctor repairs, instruction-rule migration, target layout).",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-15T00:00:00.000Z",
+        "workstreamId": "serve-cli-native",
+        "priority": "high",
+        "dependsOn": [
+          "validation-conformance-port"
+        ]
+      },
+      {
+        "id": "parallel-plan-farm",
+        "title": "Parallelize the plan precompute farm",
+        "kind": "feature",
+        "status": "planned",
+        "summary": "Fan the precompute farm across a worker pool (plans are independent), warming default view x flow pairs first; the native equivalent of the deferred parallel-plan-precompute roadmap item, mapping onto a rayon pool (and goroutine-style fan-out the Rust core makes cheap).",
+        "source": "roadmap",
+        "dateAdded": "2026-06-15T00:00:00.000Z",
+        "workstreamId": "serve-cli-native",
+        "priority": "medium",
+        "dependsOn": [
+          "serve-layer-port"
+        ]
+      },
+      {
+        "id": "native-binary-distribution",
+        "title": "Signed native binaries + CI build matrix",
+        "kind": "feature",
+        "status": "in-progress",
+        "summary": "Cross-compile and sign per-platform binaries (macOS arm64/x64, Linux x64/arm64, Windows x64); ship via Homebrew, a curl installer, and GitHub releases as the recommended path for new users. CI builds the WASM artifact + viewer/dist, embeds, and runs the parity + conformance gates before publish.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-15T00:00:00.000Z",
+        "workstreamId": "distribution",
+        "priority": "medium",
+        "dependsOn": [
+          "cli-lifecycle-port"
+        ],
+        "evidence": [
+          "Phase 1 (additive, on branch feat/dist-launcher-bridge): .github/workflows/release-binaries.yml cross-compiles architext-cli for the five targets (macos-14/aarch64, macos-15-intel/x86_64, ubuntu/x86_64-gnu, ubuntu+cross/aarch64-gnu, windows/x86_64-msvc) and builds the Trunk viewer dist, uploading each as an artifact (actionlint-clean). scripts/build-binary-packages.mjs stamps the per-platform npm package dirs (package.json with os/cpu + binary) into dist-binaries/ from built binaries; verified against a local cargo --release build.",
+          "Deferred to a later phase (not blocking Phase 1): code signing/notarization, Homebrew + curl installer, and wiring the matrix to actually publish — Phase 1 is artifacts-only by design so the launcher bridge can be validated before any release."
+        ]
+      },
+      {
+        "id": "npm-launcher-bridge",
+        "title": "npm thin-launcher upgrade bridge",
+        "kind": "feature",
+        "status": "in-progress",
+        "summary": "Keep publishing @robotaccomplice/architext as a thin launcher whose per-platform Rust binaries ship as optionalDependencies (esbuild/Biome model), so a plain npm update brings every prior npm user onto the Rust build with no manual step. The npm artifact carries no runtime JS beyond binary resolution/spawn.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-15T00:00:00.000Z",
+        "workstreamId": "distribution",
+        "priority": "high",
+        "dependsOn": [
+          "native-binary-distribution"
+        ],
+        "evidence": [
+          "Phase 1 (additive, on branch feat/dist-launcher-bridge): bin.architext (tools/architext-adopt.mjs) is now a thin resolver that computes the ${platform}-${arch} key, require.resolves @robotaccomplice/architext-<key>/architext[.exe], and execs it with stdio inherited + exit-code/signal forwarded. Resolution logic split into tools/native-binary-resolver.mjs and unit-tested (test/native-binary-launcher.test.mjs, 9 tests): platform-key, win32 .exe, unsupported-platform/not-installed → null, native-exec proof (temp shim → real target/release/architext exec, argv+exit code forwarded), and JS-fallback proof. Root package.json declares the five optionalDependencies. Full JS suite 415/415 green; cli/serve-lifecycle tests still drive the launcher via the JS fallback unchanged.",
+          "Deliberate Phase-1 transition affordance (Rule 16 justified deferral): when no native optionalDependency is installed (existing 1.6.x JS-only installs, unsupported platforms, failed optional install), the launcher falls back to the bundled Node CLI. The 'no runtime JS beyond resolution/spawn' end state — deleting the JS engine — is Phase 3, kept out of Phase 1 to preserve a working CLI for every current user during the cutover."
+        ]
+      },
+      {
+        "id": "design-language-facelift",
+        "title": "UI design-language refactor (chrome-only, audited)",
+        "kind": "feature",
+        "status": "planned",
+        "summary": "Apply the new design language (locked in viewer/DESIGN.md, explored via Stitch) to the viewer as a chrome-only refactor that does not change diagram-layout-input defaults. UX-LED: the full user experience drives decisions — beauty is subordinate to usability, workflow integrity, and functional parity. COMPLETION GATE (rule design-language-fidelity-audit): not 'done' until a post-implementation audit — in the live-rendered UI, using the design-system skills — verifies (1) UX: every task still works, is discoverable, and is no slower than before, and (2) faithfulness to viewer/DESIGN.md + coherency across ALL modes (shared tokens, typography, the nav/canvas/inspector triad, fluid canvas, ARCHITEXT wordmark, state-not-role-hue). Partial/per-screen application, or a prettier UI that degrades a workflow, does not count.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-15T00:00:00.000Z",
+        "workstreamId": "viewer-rewrite",
+        "priority": "medium",
+        "dependsOn": []
+      },
+      {
+        "id": "diagram-spacing-controls",
+        "title": "Diagram spacing controls",
+        "kind": "feature",
+        "status": "planned",
+        "summary": "In-viewer controls for column width and sequence-diagram row spacing, surfacing laneWidth/rowGap (and node size) overrides the planner already accepts as input. Folded out of the 1.6.x stream into this UI refactor; does not move the parity baseline (defaults unchanged), so it is parity-safe.",
+        "source": "roadmap",
+        "dateAdded": "2026-05-27T16:30:00.000Z",
+        "workstreamId": "viewer-rewrite",
+        "priority": "medium",
+        "dependsOn": []
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "engine-port",
+      "name": "Routing engine to Rust (native + WASM)",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Port the routing/planning engine to one Rust crate compiled native + WASM, proven byte-identical to the outgoing JS engine via the differential fingerprint harness. The highest-risk, highest-value workstream; everything else is gated behind it.",
+      "progress": 100,
+      "itemIds": [
+        "routing-engine-rust-port",
+        "js-compat-determinism",
+        "differential-parity-harness",
+        "routing-fitness-ratchet-rust"
+      ],
+      "evidence": [
+        "pr-119",
+        "pr-137"
+      ]
+    },
+    {
+      "id": "validation-parity",
+      "name": "Validation parity",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Port schema + reference validation to Rust with a conformance corpus proving verdict parity with ajv.",
+      "progress": 100,
+      "itemIds": [
+        "validation-conformance-port"
+      ],
+      "evidence": [
+        "pr-142",
+        "pr-143"
+      ]
+    },
+    {
+      "id": "serve-cli-native",
+      "name": "Native serve + CLI",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Port the serve HTTP layer and CLI/lifecycle commands to Rust, embed the viewer, and parallelize the plan farm.",
+      "progress": 0,
+      "itemIds": [
+        "serve-layer-port",
+        "cli-lifecycle-port",
+        "parallel-plan-farm"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "distribution",
+      "name": "Distribution & npm bridge",
+      "owner": "maintainer",
+      "status": "in-progress",
+      "posture": "on-track",
+      "summary": "Signed native installers as the primary path; npm thin-launcher bridge so existing installs auto-upgrade onto the Rust build.",
+      "progress": 50,
+      "itemIds": [
+        "native-binary-distribution",
+        "npm-launcher-bridge"
+      ],
+      "evidence": [
+        "Phase 1 landed (additive, on branch feat/dist-launcher-bridge, not yet merged/published): thin npm launcher + optionalDependency resolver with JS fallback, the per-platform binary-package generator, and the artifacts-only cross-compile + Trunk-dist CI matrix. Remaining for the workstream: actual cross-compiles/signing/installers and publish wiring."
+      ]
+    },
+    {
+      "id": "viewer-rewrite",
+      "name": "Viewer rewrite (Rust → WASM UI)",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Replace the React/Vite viewer with a Rust → WASM UI (Leptos/Dioxus/Yew) — no JSX, Vite, or npm — reusing architext-routing directly and implementing the locked Stitch design language. The largest workstream; required by the zero-Node mandate.",
+      "progress": 0,
+      "itemIds": [
+        "viewer-rust-wasm-rewrite",
+        "design-language-facelift",
+        "diagram-spacing-controls"
+      ],
+      "evidence": []
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "engine-parity-proven",
+      "label": "Rust engine byte-identical to JS across the corpus",
+      "status": "complete",
+      "targetWindow": "1.7.0 phase 1",
+      "order": 1,
+      "itemIds": [
+        "routing-engine-rust-port",
+        "js-compat-determinism",
+        "differential-parity-harness"
+      ],
+      "date": "2026-06-16"
+    },
+    {
+      "id": "validator-parity-proven",
+      "label": "Rust validator verdict-parity with ajv",
+      "status": "planned",
+      "targetWindow": "1.7.0 phase 2",
+      "order": 2,
+      "itemIds": [
+        "validation-conformance-port"
+      ]
+    },
+    {
+      "id": "node-free-serve",
+      "label": "Native serve + CLI with no Node runtime",
+      "status": "planned",
+      "targetWindow": "1.7.0 phase 3",
+      "order": 3,
+      "itemIds": [
+        "serve-layer-port",
+        "cli-lifecycle-port",
+        "parallel-plan-farm"
+      ]
+    },
+    {
+      "id": "shipped-as-one-binary",
+      "label": "Signed binary + npm auto-upgrade bridge",
+      "status": "planned",
+      "targetWindow": "1.7.0 phase 4",
+      "order": 4,
+      "itemIds": [
+        "native-binary-distribution",
+        "npm-launcher-bridge"
+      ]
+    },
+    {
+      "id": "facelift-audited",
+      "label": "Facelift passes the live fidelity + coherency audit (all modes)",
+      "status": "planned",
+      "targetWindow": "1.7.0 parallel",
+      "order": 5,
+      "itemIds": [
+        "design-language-facelift",
+        "diagram-spacing-controls"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "spec-rust-rewrite",
+      "label": "Design spec: Rust backend rewrite (2026-06-15)",
+      "href": "docs/superpowers/specs/2026-06-15-rust-backend-rewrite-design.md",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-119",
+      "label": "PR #119 Phase 1A foundation",
+      "href": "https://github.com/robot-accomplice/architext/pull/119",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-134",
+      "label": "PR #134 planDiagram + wire plan()",
+      "href": "https://github.com/robot-accomplice/architext/pull/134",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-137",
+      "label": "PR #137 16/16 byte-parity",
+      "href": "https://github.com/robot-accomplice/architext/pull/137",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-139",
+      "label": "PR #139 validation: architext-core + conformance gate",
+      "href": "https://github.com/robot-accomplice/architext/pull/139",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-140",
+      "label": "PR #140 validation: schema layer",
+      "href": "https://github.com/robot-accomplice/architext/pull/140",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-141",
+      "label": "PR #141 validation: reference checks",
+      "href": "https://github.com/robot-accomplice/architext/pull/141",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-142",
+      "label": "PR #142 validation: release+roadmap 7/7",
+      "href": "https://github.com/robot-accomplice/architext/pull/142",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-143",
+      "label": "PR #143 validation: per-rule corpus 44/44",
+      "href": "https://github.com/robot-accomplice/architext/pull/143",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "routing-fitness-ratchet-branch",
+      "label": "Native routing ratchet on branch feat/rust-perf-ratchet (baseline pending maintainer sign-off)",
+      "kind": "test",
+      "status": "complete"
+    }
+  ]
+}

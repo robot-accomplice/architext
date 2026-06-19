@@ -61,7 +61,7 @@ jobs:
           cache: npm
           cache-dependency-path: |
             package-lock.json
-            docs/architext/package-lock.json
+            viewer/package-lock.json
 
       - name: Confirm package version
         shell: bash
@@ -74,7 +74,20 @@ jobs:
         run: npm ci
 
       - name: Install viewer workspace dependencies
-        run: npm ci --prefix docs/architext
+        run: npm ci --prefix viewer
+
+      # The package's `prepack` builds the Trunk viewer dist (`build:viewer`),
+      # which `release:check` (npm pack / smoke:pack) and `npm publish` both
+      # trigger — so the publish runner needs the Rust toolchain + trunk too.
+      - name: Install Rust toolchain (for trunk prepack)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install trunk
+        uses: jetli/trunk-action@v0.5.0
+        with:
+          version: latest
 
       - name: Install browser dependencies
         run: npx playwright install chromium --with-deps
