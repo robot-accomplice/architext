@@ -302,17 +302,36 @@ pub fn CanvasPanel() -> impl IntoView {
         sequence_inputs.set(None);
 
         // C4 + Deployment: structural plan (node dependencies → edges), labelled
-        // by the relationship rule, no flow. NOT in the farm (flows-only) →
-        // compute in-process, synchronously, then clear the indicator.
+        // by the relationship rule, no flow. NOT in the farm (flows-only), so it
+        // is computed in-process — but ASYNC (spawn_local + a one-tick yield) so
+        // the "Routing" spinner PAINTS before the synchronous structural compute
+        // blocks the main thread. Computing it inline froze the click with no
+        // indication that anything would happen.
         match mode {
             Mode::C4 | Mode::Deployment => {
-                let bundle = view_idx.and_then(|i| data.views.get(i).cloned()).map(|view| {
-                    let structural =
-                        compute_structural_plan(&view, &data.nodes, &layout_config());
-                    (structural.plan, None, structural.edge_labels, view, data.nodes.clone())
+                let Some(view) = view_idx.and_then(|i| data.views.get(i).cloned()) else {
+                    diagram_inputs.set(None);
+                    routing.set(false);
+                    return;
+                };
+                let nodes = data.nodes.clone();
+                let layout = layout_config();
+                spawn_local(async move {
+                    // Yield a frame so the spinner renders, then compute.
+                    gloo_timers::future::TimeoutFuture::new(16).await;
+                    let structural = compute_structural_plan(&view, &nodes, &layout);
+                    // Guard against a newer selection started while we computed.
+                    if generation.get_untracked() == gen {
+                        diagram_inputs.set(Some((
+                            structural.plan,
+                            None,
+                            structural.edge_labels,
+                            view,
+                            nodes,
+                        )));
+                        routing.set(false);
+                    }
                 });
-                diagram_inputs.set(bundle);
-                routing.set(false);
                 return;
             }
             // Flows / Data-Risks render the selected flow as a routed plan; fall
@@ -624,6 +643,12 @@ pub fn CanvasPanel() -> impl IntoView {
                             Mode::Rules => view! { <RulesPanel/> }.into_view(),
                             Mode::BlastRadius => view! { <BlastRadiusPanel/> }.into_view(),
                             Mode::ReleaseTruth => view! { <ReleaseTruthPanel/> }.into_view(),
+                            // While a (re)compute is in flight the spinner overlay
+                            // conveys progress — don't flash the diagram-less "no
+                            // projection" hint for C4/Deployment, which DO have a
+                            // diagram (computed async). Show the hint only once the
+                            // compute settled and there is genuinely no diagram.
+                            _ if routing.get() => ().into_view(),
                             _ => view! {
                                 <p class="canvas-panel__hint">
                                     {move || format!(
