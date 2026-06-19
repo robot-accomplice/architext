@@ -18,6 +18,63 @@ use crate::components::node_icon::node_icon_path;
 const ICON_SIZE: f64 = 15.0;
 const ICON_PAD: f64 = 5.0;
 
+/// Name/type vertical metrics (canvas px) for centering the wrapped name block
+/// plus the type chip within the card. `NAME_LINE_H` is the line box for the
+/// 12px name; `TYPE_*` reserve room for the 9px type chip below it.
+const NAME_LINE_H: f64 = 13.0;
+const TYPE_GAP: f64 = 3.0;
+const TYPE_H: f64 = 11.0;
+/// Horizontal padding inside the card reserved from the name text, and the
+/// approximate advance width of the 12px Hanken name (proportional, ~0.58em) —
+/// good enough to greedily wrap to the card width without a DOM text measure.
+const NAME_PAD_X: f64 = 6.0;
+const NAME_CHAR_W: f64 = 12.0 * 0.58;
+/// Cap wrapped names at two lines so the block + type chip fit the default 54px
+/// card; an over-long name truncates with an ellipsis on the second line.
+const NAME_MAX_LINES: usize = 2;
+
+/// Greedily word-wrap a node name to fit `width`, capped at [`NAME_MAX_LINES`].
+/// Pure string math (no DOM measure) using [`NAME_CHAR_W`]; if the name needs
+/// more lines than the cap, the last kept line is ellipsized. Whitespace-only or
+/// single over-long words are returned as-is (one line) rather than dropped.
+fn wrap_name(name: &str, width: f64) -> Vec<String> {
+    let max_chars = (((width - 2.0 * NAME_PAD_X) / NAME_CHAR_W).floor() as usize).max(1);
+    let words: Vec<&str> = name.split_whitespace().collect();
+    if words.is_empty() {
+        return vec![name.to_string()];
+    }
+    let mut lines: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    for w in words {
+        let cand = if cur.is_empty() {
+            w.to_string()
+        } else {
+            format!("{cur} {w}")
+        };
+        if cur.is_empty() || cand.chars().count() <= max_chars {
+            cur = cand;
+        } else {
+            lines.push(std::mem::take(&mut cur));
+            cur = w.to_string();
+        }
+    }
+    if !cur.is_empty() {
+        lines.push(cur);
+    }
+    if lines.len() <= NAME_MAX_LINES {
+        return lines;
+    }
+    // Overflow: keep the first NAME_MAX_LINES, ellipsize the last kept line.
+    let mut kept: Vec<String> = lines.into_iter().take(NAME_MAX_LINES).collect();
+    if let Some(last) = kept.last_mut() {
+        while last.chars().count() > max_chars.saturating_sub(1) && !last.is_empty() {
+            last.pop();
+        }
+        *last = format!("{}…", last.trim_end());
+    }
+    kept
+}
+
 /// A node ready to render: its placed rect plus the display fields resolved
 /// from the loaded dataset (name + C4 type).
 #[derive(Clone)]
@@ -56,6 +113,13 @@ pub fn DiagramNode(
         }
     };
 
+    // Wrap the name once; the line count drives both the name tspans and the
+    // type chip's baseline (so the block + chip stay vertically centered).
+    let name_lines = wrap_name(&node.name, width);
+    let n_lines = name_lines.len() as f64;
+    let block_top = height / 2.0 - (n_lines * NAME_LINE_H + TYPE_GAP + TYPE_H) / 2.0;
+    let type_cy = block_top + n_lines * NAME_LINE_H + TYPE_GAP + TYPE_H / 2.0;
+
     view! {
         <g
             class=group_class
@@ -70,12 +134,22 @@ pub fn DiagramNode(
             <g class="flow-node__icon" transform=icon_transform style=("color", icon_color)>
                 <path d=icon_d></path>
             </g>
-            // Node name (Hanken Grotesk).
-            <text class="flow-node__name" x=width / 2.0 y=height / 2.0 - 4.0>
-                {node.name.clone()}
+            // Node name (Hanken Grotesk), word-wrapped to the card width so a
+            // long name stacks into lines instead of overflowing the card. The
+            // name block + type chip are vertically centered as a unit.
+            <text class="flow-node__name" x=width / 2.0>
+                {name_lines
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, line)| {
+                        let cy = block_top + NAME_LINE_H * (i as f64 + 0.5);
+                        view! { <tspan x=width / 2.0 y=cy>{line}</tspan> }
+                    })
+                    .collect_view()}
             </text>
-            // Type chip (JetBrains Mono), tinted with the role color.
-            <text class="flow-node__type" x=width / 2.0 y=height / 2.0 + 14.0 fill=role>
+            // Type chip (JetBrains Mono), tinted with the role color, just below
+            // the (possibly multi-line) name block.
+            <text class="flow-node__type" x=width / 2.0 y=type_cy fill=role>
                 {node.node_type.clone()}
             </text>
         </g>
@@ -100,5 +174,40 @@ pub fn DecisionDiamond(rect: Rect, #[prop(into)] role_var: String) -> impl IntoV
     );
     view! {
         <polygon class="flow-decision" points=points stroke=role_var></polygon>
+    }
+}
+
+#[cfg(test)]
+mod wrap_tests {
+    use super::wrap_name;
+
+    // Default card width is 136px → ~18 chars/line at the 12px name advance.
+    const W: f64 = 136.0;
+
+    #[test]
+    fn short_name_stays_one_line() {
+        assert_eq!(wrap_name("Architext CLI", W), vec!["Architext CLI"]);
+    }
+
+    #[test]
+    fn long_name_wraps_to_two_lines() {
+        // The overflowing case from the audit screenshot.
+        let lines = wrap_name("Architecture model domain", W);
+        assert_eq!(lines.len(), 2, "should wrap, got {lines:?}");
+        // Every line fits the card; nothing overflows horizontally.
+        assert!(lines.iter().all(|l| l.chars().count() <= 19), "{lines:?}");
+    }
+
+    #[test]
+    fn over_long_name_is_capped_and_ellipsized() {
+        let lines = wrap_name("Distributed event sourcing projection rebuild coordinator service", W);
+        assert_eq!(lines.len(), 2, "capped at two lines");
+        assert!(lines.last().unwrap().ends_with('…'), "last line ellipsized");
+    }
+
+    #[test]
+    fn empty_or_single_word_never_dropped() {
+        assert_eq!(wrap_name("", W), vec![""]);
+        assert_eq!(wrap_name("Supercalifragilistic", W).len(), 1);
     }
 }
