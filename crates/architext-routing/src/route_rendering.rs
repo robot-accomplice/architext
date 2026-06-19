@@ -4,7 +4,7 @@
 //! fingerprint harness. Every coordinate written into a `d` string goes through
 //! `js_number_to_string` to reproduce V8 template-literal formatting exactly.
 
-use crate::js_compat::js_number_to_string;
+use crate::js_compat::{js_number_to_string, js_sign};
 use crate::model::Point;
 
 // ---------------------------------------------------------------------------
@@ -190,12 +190,16 @@ fn collapse_backtracking_points(points: Vec<Point>) -> Vec<Point> {
             let previous = &collapsed[index - 1];
             let current = &collapsed[index];
             let next = &collapsed[index + 1];
+            // `js_sign` (Math.sign), NOT `f64::signum`: Math.sign(0)===0, so a
+            // zero delta (two equal consecutive points) is not a reversal. With
+            // signum (±1.0 for ±0.0) Rust over-collapsed a trailing duplicate
+            // point JS keeps — the bundle-coaligned 10-vs-1-crossing divergence.
             let horizontal_backtrack = previous.y == current.y
                 && current.y == next.y
-                && f64::signum(current.x - previous.x) == -f64::signum(next.x - current.x);
+                && js_sign(current.x - previous.x) == -js_sign(next.x - current.x);
             let vertical_backtrack = previous.x == current.x
                 && current.x == next.x
-                && f64::signum(current.y - previous.y) == -f64::signum(next.y - current.y);
+                && js_sign(current.y - previous.y) == -js_sign(next.y - current.y);
             if horizontal_backtrack || vertical_backtrack {
                 collapsed.remove(index);
                 changed = true;

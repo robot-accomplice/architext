@@ -55,6 +55,47 @@ mod round_tests {
     }
 }
 
+/// JS `Math.sign`: `0` for ±0, `NaN` for NaN, ±1 otherwise. Crucially differs
+/// from Rust `f64::signum`, which returns ±1.0 for ±0.0 — `Math.sign(0) === 0`.
+/// The route point-collapse backtrack test (`route_rendering`) relies on this:
+/// a zero delta (two equal consecutive points) must NOT read as a direction
+/// reversal, or Rust over-collapses a trailing duplicate point that JS keeps.
+pub fn js_sign(x: f64) -> f64 {
+    if x.is_nan() {
+        return f64::NAN;
+    }
+    if x > 0.0 {
+        1.0
+    } else if x < 0.0 {
+        -1.0
+    } else {
+        x // ±0.0 returned as-is, matching Math.sign(+0)=+0 / Math.sign(-0)=-0
+    }
+}
+
+#[cfg(test)]
+mod sign_tests {
+    use super::js_sign;
+
+    #[test]
+    fn matches_v8_math_sign() {
+        assert_eq!(js_sign(86.0), 1.0);
+        assert_eq!(js_sign(-86.0), -1.0);
+        // The crux: Math.sign(0) === 0, NOT 1.0 like f64::signum.
+        assert_eq!(js_sign(0.0), 0.0);
+        assert_eq!(f64::signum(0.0), 1.0); // documents the divergence being corrected
+        assert!(js_sign(f64::NAN).is_nan());
+    }
+
+    #[test]
+    fn zero_delta_is_not_a_backtrack() {
+        // prev->cur leftward (sign -1), cur->next zero delta (equal points,
+        // sign 0). `-1 == -0` is false → equal points are NOT collapsed, the
+        // JS-parity behavior. With f64::signum this would be `-1 == -1` → true.
+        assert_ne!(js_sign(-86.0), -js_sign(0.0));
+    }
+}
+
 /// V8 `Number.prototype.toString` (radix 10), as used by template interpolation
 /// in the SVG `d`-path builder. Reproduced exactly via the `ryu-js` crate.
 pub fn js_number_to_string(x: f64) -> String {
