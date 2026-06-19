@@ -13,7 +13,9 @@ mod usage;
 use std::process;
 
 fn package_version() -> &'static str {
-    env!("CARGO_PKG_VERSION")
+    // Stamped by build.rs from the repo's package.json (the product version,
+    // bumped by the release process); falls back to CARGO_PKG_VERSION there.
+    env!("ARCHITEXT_VERSION")
 }
 
 fn resolve_target(raw: &str) -> std::path::PathBuf {
