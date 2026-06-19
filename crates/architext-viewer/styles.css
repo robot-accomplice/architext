@@ -2465,6 +2465,15 @@ button.blast-chip { cursor: pointer; }
 .release-path-line--selected {
   box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-glow);
 }
+/* The status pill participates in the highlight: when its line is selected, or
+   its parent step is active (a child line is selected), the pill's border + text
+   read as emphasized rather than sitting static while the row lights up. */
+.release-path-line--selected .release-path-state,
+.release-path-step.is-active .release-path-coarse > .release-path-state {
+  background: color-mix(in srgb, currentColor 30%, transparent);
+  box-shadow: 0 0 0 1px currentColor;
+  font-weight: 600;
+}
 .release-path-line__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .release-path-line__main strong { color: var(--ink); font-size: var(--body-size); }
 .release-path-line__summary { color: var(--muted); font-size: var(--overline-size); }

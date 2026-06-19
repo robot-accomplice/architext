@@ -262,8 +262,17 @@ fn milestone_step(m: MilestoneView) -> impl IntoView {
     let blocked_by = (!m.blocked_by.is_empty()).then(|| {
         format!("Blocked by: {}", m.blocked_by.join(", "))
     });
+    // The step is "active" when the selected item lives in it, so selecting a
+    // line lights up its own pill AND its parent step's pill together.
+    let sel = use_app_state().selected_release_item;
+    let item_ids: Vec<String> = m.items.iter().map(|i| i.id.clone()).collect();
+    let is_active = move || sel.get().is_some_and(|s| item_ids.contains(&s));
     view! {
-        <article class="release-path-step accent-surface" style=format!("--accent:{rail}")>
+        <article
+            class="release-path-step accent-surface"
+            class=("is-active", is_active)
+            style=format!("--accent:{rail}")
+        >
             <div class="release-path-marker mono">{m.path_number}</div>
             <div class="release-path-body">
                 <div class="release-path-coarse">
