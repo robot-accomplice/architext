@@ -1,0 +1,468 @@
+{
+  "id": "v1-0-1",
+  "version": "1.0.1",
+  "name": "FlowForge 1.0.1",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Memory recall was fundamentally broken — asking Duncan about past topics produced confabulated responses instead of actual stored memories. Root cause was a chain of 5 compounding issues spanning the retrieval pipeline, prompt injection, memory indexing, tool surface, and LLM serialization.",
+  "targetDate": "2026-04-12",
+  "releasedAt": "2026-04-12T12:00:00.000Z",
+  "lastUpdated": "2026-04-12T12:00:00.000Z",
+  "updateSource": "docs/releases/v1.0.1-release-notes.md, CHANGELOG.md",
+  "scope": {
+    "required": [
+      {
+        "id": "r-1-0-1-changes-fulltext-match-not-used-in-episodic-retrieval-0",
+        "title": "full-text search MATCH not used in episodic retrieval",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "retrieval.go",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-changes-full-memory-dump-injected-into-context-1",
+        "title": "Full memory dump injected into context",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "daemon.go, retrieval.go",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-changes-memory-index-polluted-with-tool-output-noise-2",
+        "title": "Memory index polluted with tool output noise",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "memory_recall.go",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-changes-confidence-inflation-all-entries-at-1-0-3",
+        "title": "Confidence inflation (all entries at 1.0)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "memory_recall.go, schema.ts",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-changes-provider-a-tool-call-id-serialization-4",
+        "title": "Provider A tool_call_id serialization",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "client_formats.go",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-bug-fixes-5-fulltext-match-not-used-in-episodic-retrieval-0",
+        "title": "full-text search MATCH not used in episodic retrieval",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "retrieval.go",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Bug Fixes (5) section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "bug-fixes-5",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-bug-fixes-5-full-memory-dump-injected-into-context-1",
+        "title": "Full memory dump injected into context",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "daemon.go, retrieval.go",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Bug Fixes (5) section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "bug-fixes-5",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-bug-fixes-5-memory-index-polluted-with-tool-output-noise-2",
+        "title": "Memory index polluted with tool output noise",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "memory_recall.go",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Bug Fixes (5) section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "bug-fixes-5",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-bug-fixes-5-confidence-inflation-all-entries-at-1-0-3",
+        "title": "Confidence inflation (all entries at 1.0)",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "memory_recall.go, schema.ts",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Bug Fixes (5) section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "bug-fixes-5",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-bug-fixes-5-provider-a-tool-call-id-serialization-4",
+        "title": "Provider A tool_call_id serialization",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "client_formats.go",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Bug Fixes (5) section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "bug-fixes-5",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-new-features-3-beyond-rust-parity-search-memories-query-to",
+        "title": "search_memories(query) tool",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "memory_recall.go, daemon.go",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the New Features (3, beyond Rust parity) section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "new-features-3-beyond-rust-parity",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-new-features-3-beyond-rust-parity-query-aware-memory-index",
+        "title": "Query-aware memory index",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "memory_recall.go, daemon.go",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the New Features (3, beyond Rust parity) section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "new-features-3-beyond-rust-parity",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-new-features-3-beyond-rust-parity-confidence-normalization",
+        "title": "Confidence normalization",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "memory_recall.go, schema.ts",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the New Features (3, beyond Rust parity) section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "new-features-3-beyond-rust-parity",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-behavioral-improvements-2-change-0",
+        "title": "Change",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Files",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Behavioral Improvements (2) section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "behavioral-improvements-2",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-behavioral-improvements-2-anti-confabulation-behavioral-co",
+        "title": "Anti-confabulation behavioral contract",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "prompt.go",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Behavioral Improvements (2) section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "behavioral-improvements-2",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-behavioral-improvements-2-two-stage-injection-rust-parity-",
+        "title": "Two-stage injection (Rust parity)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "daemon.go, retrieval.go",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Behavioral Improvements (2) section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "behavioral-improvements-2",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-documentation-1-doc-0",
+        "title": "Doc",
+        "kind": "documentation",
+        "status": "complete",
+        "summary": "Description",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Documentation (1) section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "documentation-1",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-1-documentation-1-docs-memory-architecture-spec-md-1",
+        "title": "docs/memory-architecture-spec.md",
+        "kind": "documentation",
+        "status": "complete",
+        "summary": "Comprehensive spec derived from exhaustive 4-agent analysis of Rust v0.11.4",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Documentation (1) section of the 1.0.1 release notes.",
+        "decisionSource": "docs/releases/v1.0.1-release-notes.md",
+        "workstreamId": "documentation-1",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.1-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "changes",
+      "name": "Changes",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Changes scope shipped in FlowForge 1.0.1.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-1-changes-fulltext-match-not-used-in-episodic-retrieval-0",
+        "r-1-0-1-changes-full-memory-dump-injected-into-context-1",
+        "r-1-0-1-changes-memory-index-polluted-with-tool-output-noise-2",
+        "r-1-0-1-changes-confidence-inflation-all-entries-at-1-0-3",
+        "r-1-0-1-changes-provider-a-tool-call-id-serialization-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.1-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "bug-fixes-5",
+      "name": "Bug Fixes 5",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Bug Fixes 5 scope shipped in FlowForge 1.0.1.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-1-bug-fixes-5-fulltext-match-not-used-in-episodic-retrieval-0",
+        "r-1-0-1-bug-fixes-5-full-memory-dump-injected-into-context-1",
+        "r-1-0-1-bug-fixes-5-memory-index-polluted-with-tool-output-noise-2",
+        "r-1-0-1-bug-fixes-5-confidence-inflation-all-entries-at-1-0-3",
+        "r-1-0-1-bug-fixes-5-provider-a-tool-call-id-serialization-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.1-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "new-features-3-beyond-rust-parity",
+      "name": "New Features 3 Beyond Rust Parity",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "New Features 3 Beyond Rust Parity scope shipped in FlowForge 1.0.1.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-1-new-features-3-beyond-rust-parity-search-memories-query-to",
+        "r-1-0-1-new-features-3-beyond-rust-parity-query-aware-memory-index",
+        "r-1-0-1-new-features-3-beyond-rust-parity-confidence-normalization"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.1-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "behavioral-improvements-2",
+      "name": "Behavioral Improvements 2",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Behavioral Improvements 2 scope shipped in FlowForge 1.0.1.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-1-behavioral-improvements-2-change-0",
+        "r-1-0-1-behavioral-improvements-2-anti-confabulation-behavioral-co",
+        "r-1-0-1-behavioral-improvements-2-two-stage-injection-rust-parity-"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.1-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "documentation-1",
+      "name": "Documentation 1",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Documentation 1 scope shipped in FlowForge 1.0.1.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-1-documentation-1-doc-0",
+        "r-1-0-1-documentation-1-docs-memory-architecture-spec-md-1"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.1-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-shipped",
+      "label": "1.0.1 shipped",
+      "status": "complete",
+      "date": "2026-04-12",
+      "order": 1,
+      "itemIds": [
+        "r-1-0-1-changes-fulltext-match-not-used-in-episodic-retrieval-0",
+        "r-1-0-1-changes-full-memory-dump-injected-into-context-1",
+        "r-1-0-1-changes-memory-index-polluted-with-tool-output-noise-2",
+        "r-1-0-1-changes-confidence-inflation-all-entries-at-1-0-3",
+        "r-1-0-1-changes-provider-a-tool-call-id-serialization-4",
+        "r-1-0-1-bug-fixes-5-fulltext-match-not-used-in-episodic-retrieval-0",
+        "r-1-0-1-bug-fixes-5-full-memory-dump-injected-into-context-1",
+        "r-1-0-1-bug-fixes-5-memory-index-polluted-with-tool-output-noise-2",
+        "r-1-0-1-bug-fixes-5-confidence-inflation-all-entries-at-1-0-3",
+        "r-1-0-1-bug-fixes-5-provider-a-tool-call-id-serialization-4",
+        "r-1-0-1-new-features-3-beyond-rust-parity-search-memories-query-to",
+        "r-1-0-1-new-features-3-beyond-rust-parity-query-aware-memory-index",
+        "r-1-0-1-new-features-3-beyond-rust-parity-confidence-normalization",
+        "r-1-0-1-behavioral-improvements-2-change-0",
+        "r-1-0-1-behavioral-improvements-2-anti-confabulation-behavioral-co",
+        "r-1-0-1-behavioral-improvements-2-two-stage-injection-rust-parity-",
+        "r-1-0-1-documentation-1-doc-0",
+        "r-1-0-1-documentation-1-docs-memory-architecture-spec-md-1"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-notes",
+      "label": "1.0.1 release notes",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "docs/releases/v1.0.1-release-notes.md"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog entry",
+      "kind": "document",
+      "status": "complete",
+      "href": "CHANGELOG.md"
+    }
+  ]
+}

@@ -1,0 +1,453 @@
+{
+  "id": "v1-0-3",
+  "version": "1.0.3",
+  "name": "FlowForge 1.0.3",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "WebSocket-first dashboard architecture replacing all HTTP polling, struct-driven settings schema derived from the Config struct, plugin/app catalog with registry fallback, and a sweep of workspace/theme/layout bug fixes. Zero `setInterval` calls survive in the dashboard.",
+  "targetDate": "2026-04-12",
+  "releasedAt": "2026-04-12T12:00:00.000Z",
+  "lastUpdated": "2026-04-12T12:00:00.000Z",
+  "updateSource": "docs/releases/v1.0.3-release-notes.md, CHANGELOG.md",
+  "scope": {
+    "required": [
+      {
+        "id": "r-1-0-3-changes-ws-protocol-go-0",
+        "title": "ws_protocol.go",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "WebSocket upgrade, ticket validation, topic subscription protocol",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-changes-ws-topics-go-1",
+        "title": "ws_topics.go",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Topic registry: sessions, traces, health, logs, metrics, config",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-changes-pipeline-bridge-2",
+        "title": "Pipeline bridge",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Pipeline publishes lifecycle events to EventBus; WS subscribers receive them",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-changes-ticket-auth-3",
+        "title": "Ticket auth",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "WS connections require a validated ticket (anti-CSRF, anti-replay)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-changes-polling-removal-4",
+        "title": "Polling removal",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "All setInterval-based polling replaced with topic subscriptions",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Changes section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "changes",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-websocket-first-dashboard-pr-34-ws-protocol-go-0",
+        "title": "ws_protocol.go",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "WebSocket upgrade, ticket validation, topic subscription protocol",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the WebSocket-First Dashboard (PR #34) section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "websocket-first-dashboard-pr-34",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-websocket-first-dashboard-pr-34-ws-topics-go-1",
+        "title": "ws_topics.go",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Topic registry: sessions, traces, health, logs, metrics, config",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the WebSocket-First Dashboard (PR #34) section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "websocket-first-dashboard-pr-34",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-websocket-first-dashboard-pr-34-pipeline-bridge-2",
+        "title": "Pipeline bridge",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Pipeline publishes lifecycle events to EventBus; WS subscribers receive them",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the WebSocket-First Dashboard (PR #34) section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "websocket-first-dashboard-pr-34",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-websocket-first-dashboard-pr-34-ticket-auth-3",
+        "title": "Ticket auth",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "WS connections require a validated ticket (anti-CSRF, anti-replay)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the WebSocket-First Dashboard (PR #34) section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "websocket-first-dashboard-pr-34",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-websocket-first-dashboard-pr-34-polling-removal-4",
+        "title": "Polling removal",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "All setInterval-based polling replaced with topic subscriptions",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the WebSocket-First Dashboard (PR #34) section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "websocket-first-dashboard-pr-34",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-struct-driven-settings-schema-pr-33-config-schema-go-0",
+        "title": "config_schema.ts",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "/api/config/schema endpoint — 303 fields reflected from Config struct",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Struct-Driven Settings Schema (PR #33) section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "struct-driven-settings-schema-pr-33",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-struct-driven-settings-schema-pr-33-config-defaults-go-1",
+        "title": "config_defaults.go",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Default values extracted from DefaultConfig() via reflect",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Struct-Driven Settings Schema (PR #33) section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "struct-driven-settings-schema-pr-33",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-struct-driven-settings-schema-pr-33-config-loader-go-2",
+        "title": "config_loader.go",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "TOML + env overlay loader with validation",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Struct-Driven Settings Schema (PR #33) section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "struct-driven-settings-schema-pr-33",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-struct-driven-settings-schema-pr-33-config-validation-go-3",
+        "title": "config_validation.go",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Constraint enforcement (ranges, enums, required fields)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Struct-Driven Settings Schema (PR #33) section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "struct-driven-settings-schema-pr-33",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-struct-driven-settings-schema-pr-33-settings-ui-4",
+        "title": "Settings UI",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Dashboard settings page now derives form from schema, not hardcoded TOML",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Struct-Driven Settings Schema (PR #33) section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "struct-driven-settings-schema-pr-33",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-plugin-app-catalog-pr-33-remote-plugin-catalog-from-roboti",
+        "title": "Remote plugin catalog from flowforge",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Remote plugin catalog from flowforge.ai/registry/plugins.json",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Plugin + App Catalog (PR #33) section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "plugin-app-catalog-pr-33",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-plugin-app-catalog-pr-33-registry-fallback-1",
+        "title": "Registry fallback",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Registry fallback: local installed plugins merged with remote catalog",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Plugin + App Catalog (PR #33) section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "plugin-app-catalog-pr-33",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-3-plugin-app-catalog-pr-33-installed-only-theme-dropdown-no-",
+        "title": "Installed-only theme dropdown (no phantom entries)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Installed-only theme dropdown (no phantom entries)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Plugin + App Catalog (PR #33) section of the 1.0.3 release notes.",
+        "decisionSource": "docs/releases/v1.0.3-release-notes.md",
+        "workstreamId": "plugin-app-catalog-pr-33",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.3-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "changes",
+      "name": "Changes",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Changes scope shipped in FlowForge 1.0.3.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-3-changes-ws-protocol-go-0",
+        "r-1-0-3-changes-ws-topics-go-1",
+        "r-1-0-3-changes-pipeline-bridge-2",
+        "r-1-0-3-changes-ticket-auth-3",
+        "r-1-0-3-changes-polling-removal-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.3-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "websocket-first-dashboard-pr-34",
+      "name": "Websocket First Dashboard Pr 34",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Websocket First Dashboard Pr 34 scope shipped in FlowForge 1.0.3.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-3-websocket-first-dashboard-pr-34-ws-protocol-go-0",
+        "r-1-0-3-websocket-first-dashboard-pr-34-ws-topics-go-1",
+        "r-1-0-3-websocket-first-dashboard-pr-34-pipeline-bridge-2",
+        "r-1-0-3-websocket-first-dashboard-pr-34-ticket-auth-3",
+        "r-1-0-3-websocket-first-dashboard-pr-34-polling-removal-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.3-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "struct-driven-settings-schema-pr-33",
+      "name": "Struct Driven Settings Schema Pr 33",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Struct Driven Settings Schema Pr 33 scope shipped in FlowForge 1.0.3.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-3-struct-driven-settings-schema-pr-33-config-schema-go-0",
+        "r-1-0-3-struct-driven-settings-schema-pr-33-config-defaults-go-1",
+        "r-1-0-3-struct-driven-settings-schema-pr-33-config-loader-go-2",
+        "r-1-0-3-struct-driven-settings-schema-pr-33-config-validation-go-3",
+        "r-1-0-3-struct-driven-settings-schema-pr-33-settings-ui-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.3-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "plugin-app-catalog-pr-33",
+      "name": "Plugin App Catalog Pr 33",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Plugin App Catalog Pr 33 scope shipped in FlowForge 1.0.3.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-3-plugin-app-catalog-pr-33-remote-plugin-catalog-from-roboti",
+        "r-1-0-3-plugin-app-catalog-pr-33-registry-fallback-1",
+        "r-1-0-3-plugin-app-catalog-pr-33-installed-only-theme-dropdown-no-"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.3-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-shipped",
+      "label": "1.0.3 shipped",
+      "status": "complete",
+      "date": "2026-04-12",
+      "order": 1,
+      "itemIds": [
+        "r-1-0-3-changes-ws-protocol-go-0",
+        "r-1-0-3-changes-ws-topics-go-1",
+        "r-1-0-3-changes-pipeline-bridge-2",
+        "r-1-0-3-changes-ticket-auth-3",
+        "r-1-0-3-changes-polling-removal-4",
+        "r-1-0-3-websocket-first-dashboard-pr-34-ws-protocol-go-0",
+        "r-1-0-3-websocket-first-dashboard-pr-34-ws-topics-go-1",
+        "r-1-0-3-websocket-first-dashboard-pr-34-pipeline-bridge-2",
+        "r-1-0-3-websocket-first-dashboard-pr-34-ticket-auth-3",
+        "r-1-0-3-websocket-first-dashboard-pr-34-polling-removal-4",
+        "r-1-0-3-struct-driven-settings-schema-pr-33-config-schema-go-0",
+        "r-1-0-3-struct-driven-settings-schema-pr-33-config-defaults-go-1",
+        "r-1-0-3-struct-driven-settings-schema-pr-33-config-loader-go-2",
+        "r-1-0-3-struct-driven-settings-schema-pr-33-config-validation-go-3",
+        "r-1-0-3-struct-driven-settings-schema-pr-33-settings-ui-4",
+        "r-1-0-3-plugin-app-catalog-pr-33-remote-plugin-catalog-from-roboti",
+        "r-1-0-3-plugin-app-catalog-pr-33-registry-fallback-1",
+        "r-1-0-3-plugin-app-catalog-pr-33-installed-only-theme-dropdown-no-"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-notes",
+      "label": "1.0.3 release notes",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "docs/releases/v1.0.3-release-notes.md"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog entry",
+      "kind": "document",
+      "status": "complete",
+      "href": "CHANGELOG.md"
+    }
+  ]
+}

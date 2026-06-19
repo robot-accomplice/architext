@@ -1,0 +1,228 @@
+{
+  "id": "v1-1-2",
+  "version": "1.1.2",
+  "name": "v1.1.2 reliability + channels",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Reliability hotfix + agency confinement + DB writer/read pool split + email STARTTLS. Every fix was proven from recorded state (production daemon log + state.db), TDD'd (RED->GREEN), with the full module suite green (60 ok / 0 fail) and the db race detector clean. BEHAVIORAL CORRECTNESS: the inbound dedup claim now fails open (a transient store_snapshot on the idempotency INSERT was silently dropping user messages — two Chat Connector messages eaten during a maintenance lock storm, RCA 2026-06-11); read-only agency action classes (observe/summarize/diagnose) are confined to read-only tools at execution (the action-class policy gated the decision but not the tool surface, so a 'summarize' approval spawned three self-funding workflows via orchestrate-subagents/retry-task on 2026-06-09). SCHEDULER: the cron worker dropped every cron-expression job for ~2 months because a non-nullable scan of NULL schedule_every_ms silently failed; fixed with a nullable scan + fail-loud, and legacy cron_runs columns are converged (error->error_msg, created_at->timestamp, output_text canonicalized) so the revived worker records run history. DB CONTENTION (corruption-window fix): state.db has corrupted in production; the single shared pool is split into a dedicated 1-connection serialized writer + a concurrent read pool, the O(n^2) correlated hygiene dedup that held the WAL writer ~90s is rewritten set-based, the backup VACUUM INTO moved off the writer, and store_snapshot is surfaced honestly. CHANNELS: STARTTLS is a real mail security mode end to end (inbound mail + outbound mail, configurable outbound mail security), enabling a local Proton Bridge. LIVE VALIDATION (operator instance, binary 1.1.2-dev.06be37e8): clean startup on the 468MB production DB, cron_runs converged in place, the scheduler revived (workspace cleanup ran for the first time since 2026-04-06 and recorded to the converged schema), agency confinement active, and the email channel validated both directions over STARTTLS (inbound mail auth + allowed_senders filtering, outbound mail send). PRE-SHIP SOAK (2026-06-11, cloud route, production quiesced): the v1.1.2 cron guard-exhaustion regression is FIXED — 0 release-gate log findings (the first soak had 9; the autonomous capability-denial exemption eliminated them), 22/23 families grade A (capability_denial_specificity and execution_truth stay A, so user-facing false-denial detection is intact). The single rotating non-A is current_events_truth (fresh_external_info), grounded as a soak-isolation artifact: the isolated instance sandbox-killed the external ghola fetch at 20s ('signal: killed') while host ghola AND curl fetch the same Open-Meteo URL in under 1s — not a network, tool, model, or v1.1.2-code fault. continuity_topic_anchor is a verifier-sensitivity on a reply-only literal that passes on re-run. Full module suite green (60 ok / 0 fail) + db race detector clean. The two residual rotating failures do not trace to any v1.1.2 change (the changes touch autonomous turns, DB plumbing, inbound handling, and email — not the user-facing turn path these scenarios exercise). FORMAL TAG/PUBLISH PENDING. DEFERRED (justified, tracked in roadmap.json): agency blocked-proposal notification (its recorded trigger is mooted by the cron revival), cron-job creation validation (the briefings still carry delivery_mode='none'), and 'service stop' respawn under launchd KeepAlive (service-management behavior with its own test surface).",
+  "targetWindow": "Formal cut after audit of PR #94 per docs/testing/release-procedure.md",
+  "lastUpdated": "2026-06-11T18:30:00Z",
+  "updateSource": "v1.1.2 merged to develop + deployed-and-validated on operator instance (2026-06-11); formal tag/publish pending",
+  "scope": {
+    "required": [
+      {
+        "id": "inbound-fail-open-lock-storm",
+        "title": "Inbound dedup fails open; maintenance lock-storm root cause fixed; honest store_snapshot",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "The inbound dedup claim is an idempotency guard, but a claim ERROR was treated as fatal and dropped the user's message; on a store_snapshot (maintenance hygiene holding the single WAL writer) two Chat Connector messages were silently eaten (RCA 2026-06-11). claimInboundForProcessing now fails open (process + surface), channel- and cause-agnostic. The lock-storm root cause — an O(n^2) correlated-subquery hygiene dedup over un-indexed working_memory content that held the writer ~90s — is rewritten as a single-scan window function. store_snapshot is classified as honest transient contention instead of a generic failure.",
+        "owner": "maintainer",
+        "priority": "critical",
+        "workstreamId": "v112-reliability",
+        "dependsOn": [],
+        "evidence": [
+          "launchd.err.log 2026-06-11: store_snapshot dropped Chat Connector messages 11911/11913 (absent from inbound_message_receipts)",
+          "internal/daemon/daemon_handlers_test.go::TestClaimInboundForProcessing_FailsOpenWhenClaimCannotBeRecorded",
+          "internal/db/hygiene_test.go::TestDedupToolFactAccretion_PlanHasNoCorrelatedSubquery",
+          "src/engine/failure_presenter_test.go::TestUserVisibleFailureMessage_DatabaseBusyIsHonestTransient"
+        ]
+      },
+      {
+        "id": "cron-scheduler-revival",
+        "title": "Revive the cron scheduler (NULL schedule_every_ms) and converge legacy cron_runs schema",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "CronWorker.listEnabledJobs scanned NULL schedule_every_ms into a non-nullable int64 and the loop's silent continue dropped every cron-expression job on every tick; production cron had not run since 2026-04-06. Fixed with a nullable scan + errBus reporting. Companion: legacy cron_runs columns are reconciled to canonical (error->error_msg, created_at->timestamp) idempotently every startup, output_text is canonicalized, and the dual-read fallback removed, so the revived worker's recordRun records history. Validated live: workspace cleanup ran for the first time since April and recorded to the converged schema.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "v112-reliability",
+        "dependsOn": [],
+        "evidence": [
+          "internal/schedule/worker_nullinterval_test.go (RED reproduction)",
+          "internal/db/cron_runs_reconcile_test.go (legacy->canonical convergence + output_text)",
+          "live: cron_runs 'workspace cleanup' success 2026-06-11T17:46:02Z (first since 2026-04-06)"
+        ]
+      },
+      {
+        "id": "agency-action-class-confinement",
+        "title": "Confine read-only agency action classes (observe/summarize/diagnose) to read-only tools",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "The action-class policy gated the decision but not the execution tool surface, so a 'summarize' approval on a stale task called retry-task and orchestrate-subagents and spawned three self-funding workflows (recorded 2026-06-09). agency.IsReadOnlyActionClass marks the three executing classes read-only; the executor sets pipeline.Input.ReadOnlyToolSurface; the agent loop blocks any tools.MakesExecutionProgress call under that surface (authoritative dispatch backstop, catches request_tools), and the pipeline pre-filters the selected surface. Creation of the resurrection loop is severed; existing zombies age out via the normal sweep, no production surgery.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "v112-reliability",
+        "dependsOn": [],
+        "evidence": [
+          "internal/agency/action_class_test.go::TestIsReadOnlyActionClass",
+          "internal/agent/readonly_surface_test.go::TestMutatingToolBlockedUnderReadOnlySurface",
+          "internal/agencyexec/pipeline_executor_test.go::TestPipelineExecutor_ConfinesReadOnlyActionClassToReadOnlySurface"
+        ]
+      },
+      {
+        "id": "db-rw-pool-split",
+        "title": "Dedicated serialized writer pool + concurrent read pool",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "state.db is permanently contended and has corrupted in production (state.db.corrupt.20260422-*). Store is split into writeDB (MaxOpenConns=1, serialized: all writes/DDL/transactions/WAL checkpoint) + readDB (concurrent WAL readers, hot-path reads); in-memory shares one handle since a second pool to a :memory: DSN is a separate database. The backup VACUUM INTO moved onto the read pool. Verified safe before splitting: no connection-affinity hazards (no last_insert_rowid/changes/RETURNING/temp tables) and all transactions are tx.*-only (the 1-conn writer cannot self-deadlock). Deployed and clean on the 468MB production DB.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "v112-reliability",
+        "dependsOn": [],
+        "evidence": [
+          "internal/db/store_rwsplit_test.go (pool config, read-your-writes, concurrent-writer serialization, in-memory single-handle)",
+          "full module suite 60 ok / 0 fail + db race detector clean (323s)",
+          "live: 1.1.2-dev.06be37e8 clean startup on the 468MB production DB"
+        ]
+      },
+      {
+        "id": "email-channel-starttls",
+        "title": "Email channel STARTTLS for inbound mail and outbound mail (local-bridge capable)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "The mail transport only did implicit-TLS or plain, so a STARTTLS endpoint (a local Proton Bridge on 127.0.0.1) could not connect. STARTTLS is now a real security mode end to end; outbound mail security is configurable (smtp_security) like inbound mail/inbound mail; inbound mail upgrades in-protocol before login; outbound mail uses an explicit dial->STARTTLS->auth->send client; a loopback bridge's self-signed cert is skip-verified (loopback only) while remote hosts stay fully verified. Validated live both directions on the operator's bridge.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "v112-channels",
+        "dependsOn": [],
+        "evidence": [
+          "internal/mail/transport_starttls_test.go (RED reproductions)",
+          "live mail-smoke: inbound mail auth + STARTTLS + allowed_senders filtering OK; outbound mail send OK to owner@example.com",
+          "operator Proton Bridge: STARTTLS on 127.0.0.1:1143/1025"
+        ]
+      },
+      {
+        "id": "autonomous-capability-denial-exemption",
+        "title": "Exempt autonomous (agency/cron) turns from the capability-denial false-denial",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Surfaced by the v1.1.2 pre-ship soak: the execution-truth capability-denial guard false-denies an honest 'I can't fully do this' when any action tool ran (coarse semantic proxy / generic lexical kind), retrying autonomous turns into exhaustion. Recorded: production wasted 11 retries on an agency memory-diagnose that honestly said recall_memory wasn't on its surface; the cron revival exposed it further (revived briefing jobs that ask for more than the agent can do exhausted the guard). Input.Autonomous threads through session->GuardContext (set on the agency and cron executors); checkCapabilityDenialAfterToolEvidence skips when autonomous so the task completes with an honest result. User-facing turns still enforce the false-denial. Pre-existing guard fragility, made visible by the (correct) scheduler revival.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "v112-reliability",
+        "dependsOn": [],
+        "evidence": [
+          "src/engine/guards_truthfulness_test.go::TestExecutionTruthGuard_ExemptsCapabilityDenialOnAutonomousTurn",
+          "production state.db: agency memory-diagnose session a97bf72d exhausted 11 attempts (2026-06-11 19:02)",
+          "v1.1.2 soak release-gate findings: cron guard_retry_exhaustion (daemon_subsystems.go:162 / worker.go:223)"
+        ]
+      }
+    ],
+    "stretch": [],
+    "planned": [],
+    "deferred": [
+      {
+        "id": "agency-blocked-proposal-notification",
+        "title": "Surface repeatedly-blocked agency proposals to the operator",
+        "kind": "feature",
+        "status": "deferred",
+        "summary": "A blocked agency proposal that recurs (queue_scheduler_job catch-up was blocked every ~5 min while the scheduler was dead, never surfaced) should produce one deduped operator notification. Deferred because the cron revival removes the specific recorded trigger; the general observability gap remains tracked in roadmap.json.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "dependsOn": [],
+        "evidence": [
+          "roadmap.json#agency-blocked-proposal-notification"
+        ]
+      },
+      {
+        "id": "cron-job-creation-validation",
+        "title": "Validate cron jobs at creation (reject delivery-less briefings, normalize agent_id)",
+        "kind": "bug-fix",
+        "status": "deferred",
+        "summary": "The briefing jobs carry delivery_mode='none' and payload action 'noop', so even after revival they produce output that is never pushed to a channel. The systemic fix is creation-time validation, not hand-editing the rows. Tracked in roadmap.json.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "dependsOn": [],
+        "evidence": [
+          "roadmap.json#cron-job-creation-validation"
+        ]
+      },
+      {
+        "id": "service-stop-respawn-keepalive",
+        "title": "Make 'flowforge service stop' stay stopped under launchd KeepAlive",
+        "kind": "bug-fix",
+        "status": "deferred",
+        "summary": "The launchd plist sets KeepAlive=true and 'service stop' only SIGTERMs, so launchd respawns the daemon. Fix: plist KeepAlive={SuccessfulExit=false} or have stop bootout/disable the agent. Out of scope for this batch; service-management behavior with its own test surface. Tracked in roadmap.json.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "dependsOn": [],
+        "evidence": [
+          "roadmap.json#service-stop-respawn-keepalive"
+        ]
+      }
+    ],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "v112-reliability",
+      "status": "complete",
+      "name": "Reliability + DB contention + agency",
+      "owner": "maintainer",
+      "posture": "on-track",
+      "summary": "Inbound fail-open, lock-storm root cause, cron scheduler revival + cron_runs convergence, agency action-class confinement, and the DB writer/read pool split.",
+      "progress": 100,
+      "itemIds": [
+        "inbound-fail-open-lock-storm",
+        "cron-scheduler-revival",
+        "agency-action-class-confinement",
+        "db-rw-pool-split",
+        "autonomous-capability-denial-exemption"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "v112-channels",
+      "status": "complete",
+      "name": "Channels",
+      "owner": "maintainer",
+      "posture": "on-track",
+      "summary": "Email channel STARTTLS for inbound mail and outbound mail, enabling the local Proton Bridge.",
+      "progress": 100,
+      "itemIds": [
+        "email-channel-starttls"
+      ],
+      "evidence": []
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "v112-full-suite",
+      "label": "Full module suite green (60 ok / 0 fail) + db race detector clean (323s)",
+      "kind": "test",
+      "status": "complete",
+      "href": "internal/db/store_rwsplit_test.go"
+    },
+    {
+      "id": "v112-behavioral-soak",
+      "label": "Pre-ship behavioral soak (cloud, production quiesced): 0 release-gate findings (cron guard-exhaustion regression FIXED, was 9), 22/23 families grade A; the one non-A (current_events_truth) is a grounded soak-isolation fetch-kill (host ghola+curl fetch the same URL in <1s), not a v1.1.2 regression",
+      "kind": "test",
+      "status": "complete",
+      "href": "/tmp/artifact"
+    },
+    {
+      "id": "v112-live-scheduler-revival",
+      "label": "Live: cron scheduler revived on the operator instance (first run since 2026-04-06, recorded to converged schema)",
+      "kind": "test",
+      "status": "complete",
+      "href": "internal/schedule/worker_nullinterval_test.go"
+    },
+    {
+      "id": "v112-live-email-starttls",
+      "label": "Live: email validated both directions over STARTTLS on the operator's Proton Bridge (inbound mail auth + allowed_senders filtering; outbound mail send)",
+      "kind": "test",
+      "status": "complete",
+      "href": "internal/mail/transport_starttls_test.go"
+    },
+    {
+      "id": "v112-pr-merged",
+      "label": "PR #94 merged to develop (merge ad367826); formal tag/release-workflow/publish pending",
+      "kind": "document",
+      "status": "complete",
+      "href": "https://code-host.example.com/repo"
+    }
+  ]
+}

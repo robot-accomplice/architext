@@ -1,0 +1,27 @@
+{
+  "schemaVersion": "1.5.0",
+  "project": {
+    "id": "flowforge",
+    "name": "FlowForge",
+    "summary": "Workflow automation platform with a CLI, TUI, browser dashboard, daemon runtime, scheduler, integration connectors, context store, tool execution, automation-route selection, and a centralized workflow execution engine."
+  },
+  "generatedAt": "2026-05-16T12:38:30.002Z",
+  "defaultViewId": "system-map",
+  "files": {
+    "nodes": "nodes.json",
+    "flows": "flows.json",
+    "views": "views.json",
+    "dataClassification": "data-classification.json",
+    "decisions": "decisions.json",
+    "risks": "risks.json",
+    "glossary": "glossary.json",
+    "rules": "rules.json",
+    "roadmap": "roadmap.json",
+    "releases": "releases/index.json"
+  },
+  "notes": [
+    "Sanitized, relabeled Architext review corpus derived from a real multi-surface automation runtime.",
+    "Structure (graph topology, flows, C4 levels, release scope) is preserved 1:1; only identity-bearing labels and prose are generic.",
+    "Built deterministically by test/fixtures/corpus-build.mjs for rendering review; not a live project's architecture."
+  ]
+}

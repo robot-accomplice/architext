@@ -1,0 +1,161 @@
+{
+  "id": "v1-0-12",
+  "version": "1.0.12",
+  "name": "FlowForge 1.0.12",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "`v1.0.12` is a patch release for release-asset download resilience.",
+  "targetDate": "2026-05-08",
+  "releasedAt": "2026-05-08T12:00:00.000Z",
+  "lastUpdated": "2026-05-08T12:00:00.000Z",
+  "updateSource": "docs/releases/v1.0.12-release-notes.md, CHANGELOG.md",
+  "scope": {
+    "required": [
+      {
+        "id": "r-1-0-12-fixed-flowforge-upgrade-all-now-retries-transient-http-fa",
+        "title": "flowforge upgrade all now retries transient HTTP failures for release asset",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "flowforge upgrade all now retries transient HTTP failures for release asset",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Fixed section of the 1.0.12 release notes.",
+        "decisionSource": "docs/releases/v1.0.12-release-notes.md",
+        "workstreamId": "fixed",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.12-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-12-fixed-flowforge-upgrade-all-now-falls-back-from-browser-d",
+        "title": "flowforge upgrade all now falls back from browser_download_url to the",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "flowforge upgrade all now falls back from browser_download_url to the",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Fixed section of the 1.0.12 release notes.",
+        "decisionSource": "docs/releases/v1.0.12-release-notes.md",
+        "workstreamId": "fixed",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.12-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-12-fixed-scripts-install-2",
+        "title": "scripts/install",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "scripts/install.sh and scripts/install.ps1 now retry transient installer",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Fixed section of the 1.0.12 release notes.",
+        "decisionSource": "docs/releases/v1.0.12-release-notes.md",
+        "workstreamId": "fixed",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.12-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-12-fixed-regression-coverage-now-pins-transient-release-asse",
+        "title": "Regression coverage now pins transient release-asset recovery across the platform",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Regression coverage now pins transient release-asset recovery across the platform",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Fixed section of the 1.0.12 release notes.",
+        "decisionSource": "docs/releases/v1.0.12-release-notes.md",
+        "workstreamId": "fixed",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.12-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-12-fixed-go-test-4",
+        "title": "the unit-test suite",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "the unit-test suite ./cmd/updatecmd ./scripts -count=1",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Fixed section of the 1.0.12 release notes.",
+        "decisionSource": "docs/releases/v1.0.12-release-notes.md",
+        "workstreamId": "fixed",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.12-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "fixed",
+      "name": "Fixed",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Fixed scope shipped in FlowForge 1.0.12.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-12-fixed-flowforge-upgrade-all-now-retries-transient-http-fa",
+        "r-1-0-12-fixed-flowforge-upgrade-all-now-falls-back-from-browser-d",
+        "r-1-0-12-fixed-scripts-install-2",
+        "r-1-0-12-fixed-regression-coverage-now-pins-transient-release-asse",
+        "r-1-0-12-fixed-go-test-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.12-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-shipped",
+      "label": "1.0.12 shipped",
+      "status": "complete",
+      "date": "2026-05-08",
+      "order": 1,
+      "itemIds": [
+        "r-1-0-12-fixed-flowforge-upgrade-all-now-retries-transient-http-fa",
+        "r-1-0-12-fixed-flowforge-upgrade-all-now-falls-back-from-browser-d",
+        "r-1-0-12-fixed-scripts-install-2",
+        "r-1-0-12-fixed-regression-coverage-now-pins-transient-release-asse",
+        "r-1-0-12-fixed-go-test-4"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-notes",
+      "label": "1.0.12 release notes",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "docs/releases/v1.0.12-release-notes.md"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog entry",
+      "kind": "document",
+      "status": "complete",
+      "href": "CHANGELOG.md"
+    }
+  ]
+}

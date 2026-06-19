@@ -1,0 +1,453 @@
+{
+  "id": "v1-0-9",
+  "version": "1.0.9",
+  "name": "FlowForge 1.0.9",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "`v1.0.9` is the public binary hotfix for the post-`v1.0.8` vault/web/artifact behavior fixes.",
+  "targetDate": "2026-05-06",
+  "releasedAt": "2026-05-06T12:00:00.000Z",
+  "lastUpdated": "2026-05-06T12:00:00.000Z",
+  "updateSource": "docs/releases/v1.0.9-release-notes.md, CHANGELOG.md",
+  "scope": {
+    "required": [
+      {
+        "id": "r-1-0-9-purpose-previous-release-0",
+        "title": "Previous release",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Previous release: v1.0.8",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Purpose section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "purpose",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-purpose-hotfix-release-1",
+        "title": "Hotfix release",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Hotfix release: v1.0.9",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Purpose section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "purpose",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-purpose-source-commit-2",
+        "title": "Source commit",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Source commit: <run-id>",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Purpose section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "purpose",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-purpose-corrected-failure-3",
+        "title": "Corrected failure",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Corrected failure: published binary artifacts lagged the merged hotfix code.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Purpose section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "purpose",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-hotfix-scope-tool-call-leakage-guard-hardening-0",
+        "title": "Tool-call leakage guard hardening",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Tool-call leakage guard hardening.",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-hotfix-scope-artifact-write-proof-and-claim-alignment-1",
+        "title": "Artifact-write proof and claim alignment",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Artifact-write proof and claim alignment.",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-hotfix-scope-capability-denial-specificity-2",
+        "title": "Capability-denial specificity",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Capability-denial specificity.",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-hotfix-scope-conversation-continuity-and-topic-drift-repai",
+        "title": "Conversation continuity and topic-drift repair",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Conversation continuity and topic-drift repair.",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-hotfix-scope-execution-liveness-and-memory-intake-soak-cov",
+        "title": "Execution-liveness and memory-intake soak coverage",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Execution-liveness and memory-intake soak coverage.",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-final-behavioral-soak-scorecard-command-0",
+        "title": "Command",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Command: SOAK_SERVER_MODE=clone python3 scripts/run-agent-behavior-soak.py",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Behavioral Soak Scorecard section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "final-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-final-behavioral-soak-scorecard-result-1",
+        "title": "Result",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Result: 33/33 scenarios passed, 0 failed",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Behavioral Soak Scorecard section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "final-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-final-behavioral-soak-scorecard-run-timestamp-2",
+        "title": "Run timestamp",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Run timestamp: 2026-05-06T17:19:17Z",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Behavioral Soak Scorecard section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "final-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-final-behavioral-soak-scorecard-report-path-3",
+        "title": "Report path",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Report path: /tmp/artifact",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Behavioral Soak Scorecard section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "final-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-final-behavioral-soak-scorecard-state-snapshot-4",
+        "title": "State snapshot",
+        "kind": "test",
+        "status": "complete",
+        "summary": "State snapshot: /tmp/artifact",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Behavioral Soak Scorecard section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "final-behavioral-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-release-gate-github-latest-advances-to-v1-0",
+        "title": "GitHub latest advances to v1",
+        "kind": "test",
+        "status": "complete",
+        "summary": "GitHub latest advances to v1.0.9.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Release Gate section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "release-gate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-release-gate-all-platform-binaries-and-sha256sums-1",
+        "title": "All platform binaries and SHA256SUMS",
+        "kind": "test",
+        "status": "complete",
+        "summary": "All platform binaries and SHA256SUMS.txt are published.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Release Gate section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "release-gate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-release-gate-flowforge-upgrade-all-from-the-original-1-2",
+        "title": "flowforge upgrade all from the original 1",
+        "kind": "test",
+        "status": "complete",
+        "summary": "flowforge upgrade all from the original 1.0.8 binary installs 1.0.9.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Release Gate section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "release-gate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-9-release-gate-flowforge-version-reports-1-3",
+        "title": "flowforge version reports 1",
+        "kind": "test",
+        "status": "complete",
+        "summary": "flowforge version reports 1.0.9 after upgrade.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Release Gate section of the 1.0.9 release notes.",
+        "decisionSource": "docs/releases/v1.0.9-release-notes.md",
+        "workstreamId": "release-gate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.9-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "purpose",
+      "name": "Purpose",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Purpose scope shipped in FlowForge 1.0.9.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-9-purpose-previous-release-0",
+        "r-1-0-9-purpose-hotfix-release-1",
+        "r-1-0-9-purpose-source-commit-2",
+        "r-1-0-9-purpose-corrected-failure-3"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.9-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "hotfix-scope",
+      "name": "Hotfix Scope",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Hotfix Scope scope shipped in FlowForge 1.0.9.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-9-hotfix-scope-tool-call-leakage-guard-hardening-0",
+        "r-1-0-9-hotfix-scope-artifact-write-proof-and-claim-alignment-1",
+        "r-1-0-9-hotfix-scope-capability-denial-specificity-2",
+        "r-1-0-9-hotfix-scope-conversation-continuity-and-topic-drift-repai",
+        "r-1-0-9-hotfix-scope-execution-liveness-and-memory-intake-soak-cov"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.9-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "final-behavioral-soak-scorecard",
+      "name": "Final Behavioral Soak Scorecard",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Final Behavioral Soak Scorecard scope shipped in FlowForge 1.0.9.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-9-final-behavioral-soak-scorecard-command-0",
+        "r-1-0-9-final-behavioral-soak-scorecard-result-1",
+        "r-1-0-9-final-behavioral-soak-scorecard-run-timestamp-2",
+        "r-1-0-9-final-behavioral-soak-scorecard-report-path-3",
+        "r-1-0-9-final-behavioral-soak-scorecard-state-snapshot-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.9-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "release-gate",
+      "name": "Release Gate",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Release Gate scope shipped in FlowForge 1.0.9.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-9-release-gate-github-latest-advances-to-v1-0",
+        "r-1-0-9-release-gate-all-platform-binaries-and-sha256sums-1",
+        "r-1-0-9-release-gate-flowforge-upgrade-all-from-the-original-1-2",
+        "r-1-0-9-release-gate-flowforge-version-reports-1-3"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.9-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-shipped",
+      "label": "1.0.9 shipped",
+      "status": "complete",
+      "date": "2026-05-06",
+      "order": 1,
+      "itemIds": [
+        "r-1-0-9-purpose-previous-release-0",
+        "r-1-0-9-purpose-hotfix-release-1",
+        "r-1-0-9-purpose-source-commit-2",
+        "r-1-0-9-purpose-corrected-failure-3",
+        "r-1-0-9-hotfix-scope-tool-call-leakage-guard-hardening-0",
+        "r-1-0-9-hotfix-scope-artifact-write-proof-and-claim-alignment-1",
+        "r-1-0-9-hotfix-scope-capability-denial-specificity-2",
+        "r-1-0-9-hotfix-scope-conversation-continuity-and-topic-drift-repai",
+        "r-1-0-9-hotfix-scope-execution-liveness-and-memory-intake-soak-cov",
+        "r-1-0-9-final-behavioral-soak-scorecard-command-0",
+        "r-1-0-9-final-behavioral-soak-scorecard-result-1",
+        "r-1-0-9-final-behavioral-soak-scorecard-run-timestamp-2",
+        "r-1-0-9-final-behavioral-soak-scorecard-report-path-3",
+        "r-1-0-9-final-behavioral-soak-scorecard-state-snapshot-4",
+        "r-1-0-9-release-gate-github-latest-advances-to-v1-0",
+        "r-1-0-9-release-gate-all-platform-binaries-and-sha256sums-1",
+        "r-1-0-9-release-gate-flowforge-upgrade-all-from-the-original-1-2",
+        "r-1-0-9-release-gate-flowforge-version-reports-1-3"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-notes",
+      "label": "1.0.9 release notes",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "docs/releases/v1.0.9-release-notes.md"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog entry",
+      "kind": "document",
+      "status": "complete",
+      "href": "CHANGELOG.md"
+    }
+  ]
+}
