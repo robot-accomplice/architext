@@ -72,6 +72,21 @@ impl Mode {
         matches!(self, Mode::Flows)
     }
 
+    /// A neutral one-line description of what a *diagram-less* list mode shows,
+    /// surfaced in the selector rail in place of a diagram/flow selector. Replaces
+    /// the old terse, negative "X has no diagram projection" note (which read as
+    /// an error) with a positive statement of the mode's content. Returns `None`
+    /// for modes that drive a diagram or carry their own selector (Release Truth),
+    /// where the rail already has an affordance and no note is shown.
+    pub fn rail_summary(self) -> Option<&'static str> {
+        match self {
+            Mode::RepoTree => Some("Browse the repository file tree with ownership tags."),
+            Mode::BlastRadius => Some("Trace what a change to a node reaches across the model."),
+            Mode::Rules => Some("Review the project's rules, ranked by criticality."),
+            _ => None,
+        }
+    }
+
     /// Whether this mode renders one selected flow as a ROUTED `plan()` diagram
     /// (flow drives → view resolves to a compatible flow-projection → the shared
     /// `DiagramSvg` renders it). Both Flows and Data/Risks do this; Data/Risks
@@ -180,5 +195,36 @@ pub fn apply_theme(theme: Theme) {
     }
     if let Some(storage) = local_storage() {
         let _ = storage.set_item(THEME_STORAGE_KEY, theme.attr());
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn list_modes_get_a_neutral_rail_summary_others_get_none() {
+        // The three diagram-less LIST modes describe what they show (no negative
+        // "has no diagram projection" messaging); every diagram/selector-driven
+        // mode returns None so the rail keeps its own affordance.
+        for mode in [Mode::RepoTree, Mode::BlastRadius, Mode::Rules] {
+            let summary = mode.rail_summary().expect("list mode should have a summary");
+            assert!(!summary.is_empty());
+            assert!(
+                !summary.to_lowercase().contains("no diagram"),
+                "{} summary must not carry negative 'no diagram' wording: {summary}",
+                mode.label(),
+            );
+        }
+        for mode in [
+            Mode::Flows,
+            Mode::Sequence,
+            Mode::C4,
+            Mode::Deployment,
+            Mode::DataRisks,
+            Mode::ReleaseTruth,
+        ] {
+            assert!(mode.rail_summary().is_none(), "{} should have no rail summary", mode.label());
+        }
     }
 }

@@ -23,6 +23,12 @@ use super::sequence::{
 const CARD_HEIGHT: f64 = 40.0;
 /// Card top y (just below the canvas top).
 const CARD_TOP: f64 = 14.0;
+/// Bottom of the participant header band (cards span `CARD_TOP..CARD_TOP +
+/// CARD_HEIGHT`). The message/activation/frame layers are clipped to start here
+/// so a first-row action label (drawn 17px above its line at `MESSAGE_START_Y`,
+/// i.e. y≈51) can never bleed up into the header band and peek out behind the
+/// participant cards / top activation bar (the `eTarg…` clipping artifact).
+const HEADER_BAND_BOTTOM: f64 = CARD_TOP + CARD_HEIGHT;
 /// Truncation cap for the action label (JS slices to 23 + "…" past 26).
 const ACTION_MAX: usize = 26;
 const ACTION_KEEP: usize = 23;
@@ -57,6 +63,12 @@ pub fn SequenceSvg(
     let view_box = format!("0 0 {} {}", layout.content_width, layout.content_height);
     let transform =
         move || format!("translate({} {}) scale({})", pan_x.get(), pan_y.get(), zoom.get());
+    // Clip the body layers (frames / activations / messages) so nothing renders
+    // above the header band. Height is generous (the full content box) — only the
+    // top edge matters. Lifelines are NOT clipped: they intentionally start just
+    // below the band and run the full height.
+    let body_clip_height = (layout.content_height - HEADER_BAND_BOTTOM).max(0.0);
+    let body_clip_width = layout.content_width;
 
     let participants = layout.participants.clone();
     let lifelines = layout.lifelines.clone();
@@ -77,6 +89,11 @@ pub fn SequenceSvg(
                 >
                     <path d="M 0 0 L 10 5 L 0 10 z" class="flow-arrowhead"></path>
                 </marker>
+                // Clip the body layers to below the participant header band so a
+                // first-row action label can't bleed up behind the header cards.
+                <clipPath id="sequence-body-clip">
+                    <rect x="0" y=HEADER_BAND_BOTTOM width=body_clip_width height=body_clip_height></rect>
+                </clipPath>
             </defs>
             <g class="sequence-transform" transform=transform>
                 // Z-order: lifelines, frames, activation bars, messages, then
@@ -84,22 +101,26 @@ pub fn SequenceSvg(
                 <g class="sequence-lifelines">
                     {lifelines.into_iter().map(|l| view! { <SeqLifeline line=l/> }).collect_view()}
                 </g>
-                <g class="sequence-frames">
-                    {frames.into_iter().map(|f| view! { <SeqFrame frame=f/> }).collect_view()}
-                </g>
-                <g class="sequence-activations">
-                    {bars.into_iter().map(|b| view! { <SeqActivationBar bar=b/> }).collect_view()}
-                </g>
-                <g class="sequence-messages">
-                    {messages.into_iter().map(|m| {
-                        let step_id = m.step_id.clone();
-                        let is_selected = Signal::derive(move || {
-                            selected_step.get().as_deref() == Some(step_id.as_str())
-                        });
-                        view! {
-                            <SeqMessage message=m selected=is_selected on_select_step=on_select_step/>
-                        }
-                    }).collect_view()}
+                // Body layers (frames / activations / messages) clipped to below
+                // the header band — keeps stray top-row labels out of the header.
+                <g class="sequence-body" clip-path="url(#sequence-body-clip)">
+                    <g class="sequence-frames">
+                        {frames.into_iter().map(|f| view! { <SeqFrame frame=f/> }).collect_view()}
+                    </g>
+                    <g class="sequence-activations">
+                        {bars.into_iter().map(|b| view! { <SeqActivationBar bar=b/> }).collect_view()}
+                    </g>
+                    <g class="sequence-messages">
+                        {messages.into_iter().map(|m| {
+                            let step_id = m.step_id.clone();
+                            let is_selected = Signal::derive(move || {
+                                selected_step.get().as_deref() == Some(step_id.as_str())
+                            });
+                            view! {
+                                <SeqMessage message=m selected=is_selected on_select_step=on_select_step/>
+                            }
+                        }).collect_view()}
+                    </g>
                 </g>
                 <g class="sequence-participants">
                     {participants.into_iter().map(|p| {

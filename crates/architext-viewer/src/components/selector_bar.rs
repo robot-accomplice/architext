@@ -159,14 +159,13 @@ pub fn SelectorBar() -> impl IntoView {
                 </div>
             </Show>
 
-            // The "no diagram projection" note: only for diagram-less modes that
-            // have NO selector here (Repo Tree, Rules, Blast Radius). Release
-            // Truth is excluded — it shows the RELEASE selector above.
-            <Show when=move || {
-                view_options().is_empty() && state.mode.get() != Mode::ReleaseTruth
-            }>
+            // Diagram-less list modes (Repo Tree, Rules, Blast Radius) have no
+            // selector here; show a neutral one-liner about what the mode shows
+            // instead of a negative "no diagram projection" note. Release Truth is
+            // excluded — it carries the RELEASE selector above.
+            <Show when=move || state.mode.get().rail_summary().is_some()>
                 <p class="selector-bar__note">
-                    {move || format!("{} has no diagram projection", state.mode.get().label())}
+                    {move || state.mode.get().rail_summary().unwrap_or_default()}
                 </p>
             </Show>
         </div>
