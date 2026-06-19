@@ -5,8 +5,8 @@
   "status": "implementing",
   "posture": "on-track",
   "targetWindow": "After 1.6.3 (1.6.x exhausted)",
-  "lastUpdated": "2026-06-18T00:00:00.000Z",
-  "updateSource": "2026-06-16: validation parity COMPLETE — architext-core validator (schema via jsonschema + references + release + roadmap-target) verdict-identical to the JS validator; conformance gate 44/44 across per-rule fixtures.",
+  "lastUpdated": "2026-06-19T00:00:00.000Z",
+  "updateSource": "2026-06-19: serve layer, CLI/lifecycle, parallel plan farm, and the Leptos/WASM viewer are COMPLETE and merged to develop. Native binary made self-contained — embedded JSON schemas + viewer dist co-located beside the binary, so installed validate/serve need no repo-relative assets (PR #213, merged). JS engine/CLI/React-viewer cutover open for review (PR #214): the package is now Rust-only and bumped to 1.7.0. Remaining: cutover sign-off, binary signing/installers/publish, and the design-language facelift audit.",
   "summary": "Reimplement the entire product in Rust with NO Node dependency surviving — runtime AND build. One Rust routing core (native + WASM); validation, serve layer, and lifecycle ported; AND the React/Vite viewer rewritten as a Rust → WASM UI (Leptos/Dioxus/Yew, no JSX/Vite/npm) reusing the engine directly and implementing the Stitch design language. Native installers are the Node-free default; npm is an opt-in compatibility bridge only. Minor release: JSON data contract and CLI surface preserved exactly, proven by a byte-parity migration gate and a validation conformance corpus. Migration tooling (parity harness, ajv conformance, JS tests) is transitional and deleted with the JS code.",
   "scope": {
     "required": [
@@ -14,7 +14,7 @@
         "id": "viewer-rust-wasm-rewrite",
         "title": "Rewrite the viewer as a Rust → WASM UI (no Node build)",
         "kind": "architecture",
-        "status": "planned",
+        "status": "complete",
         "summary": "Replace React/Vite with a Rust web framework (Leptos/Dioxus/Yew) compiled to WASM: all nine modes (Flows, Sequence, C4, Deployment, Data/Risks, Repo Tree, Blast Radius, Release Truth, Rules), the diagram canvas (fluid, pan/zoom), editors, and inspectors. Reuses architext-routing directly (no JSON/WASM string boundary). No JSX, Vite, or npm anywhere in the build. The single largest piece of the zero-Node mandate; runs in parallel with the engine port.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-15T12:00:00.000Z",
@@ -22,6 +22,10 @@
         "priority": "high",
         "dependsOn": [
           "routing-engine-rust-port"
+        ],
+        "evidence": [
+          "crate-architext-viewer",
+          "viewer-polish-prs"
         ]
       },
       {
@@ -115,7 +119,7 @@
         "id": "serve-layer-port",
         "title": "Port the serve HTTP layer",
         "kind": "architecture",
-        "status": "planned",
+        "status": "complete",
         "summary": "Reproduce the 11 /api endpoints, the mutation-token + write-lock model on the 6 mutating POSTs, the SSE /api/data-events channel, file watching, the plan precompute farm (sha256(plan_input_key), generation-based invalidation, 200-miss contract), and the embedded viewer/dist.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-15T00:00:00.000Z",
@@ -123,13 +127,16 @@
         "priority": "high",
         "dependsOn": [
           "routing-engine-rust-port"
+        ],
+        "evidence": [
+          "crate-architext-serve"
         ]
       },
       {
         "id": "cli-lifecycle-port",
         "title": "Port the CLI + lifecycle commands",
         "kind": "architecture",
-        "status": "planned",
+        "status": "complete",
         "summary": "Port validate, serve, sync, doctor, prompt, status, and migrate to a clap-based Rust binary, preserving the CLI surface exactly. Includes the lifecycle transforms (schema migrations, doctor repairs, instruction-rule migration, target layout).",
         "source": "ad-hoc",
         "dateAdded": "2026-06-15T00:00:00.000Z",
@@ -137,13 +144,16 @@
         "priority": "high",
         "dependsOn": [
           "validation-conformance-port"
+        ],
+        "evidence": [
+          "crate-architext-cli"
         ]
       },
       {
         "id": "parallel-plan-farm",
         "title": "Parallelize the plan precompute farm",
         "kind": "feature",
-        "status": "planned",
+        "status": "complete",
         "summary": "Fan the precompute farm across a worker pool (plans are independent), warming default view x flow pairs first; the native equivalent of the deferred parallel-plan-precompute roadmap item, mapping onto a rayon pool (and goroutine-style fan-out the Rust core makes cheap).",
         "source": "roadmap",
         "dateAdded": "2026-06-15T00:00:00.000Z",
@@ -168,14 +178,15 @@
         ],
         "evidence": [
           "Phase 1 (additive, on branch feat/dist-launcher-bridge): .github/workflows/release-binaries.yml cross-compiles architext-cli for the five targets (macos-14/aarch64, macos-15-intel/x86_64, ubuntu/x86_64-gnu, ubuntu+cross/aarch64-gnu, windows/x86_64-msvc) and builds the Trunk viewer dist, uploading each as an artifact (actionlint-clean). scripts/build-binary-packages.mjs stamps the per-platform npm package dirs (package.json with os/cpu + binary) into dist-binaries/ from built binaries; verified against a local cargo --release build.",
-          "Deferred to a later phase (not blocking Phase 1): code signing/notarization, Homebrew + curl installer, and wiring the matrix to actually publish — Phase 1 is artifacts-only by design so the launcher bridge can be validated before any release."
+          "Now self-contained (PR #213, merged to develop): the native binary embeds the JSON schemas (include_dir!) and resolves the viewer dist beside it (<exe_dir>/dist), so installed validate/serve need no repo-relative assets — proven standalone from /tmp. build-binary-packages ships the dist in each per-platform package.",
+          "Still deferred to the release ceremony (Rule 16 — sequencing, not unfinished engineering): code signing/notarization, the Homebrew + curl installers, and wiring the cross-compile matrix to publish. Gated on the JS cutover (PR #214) landing — there is no point signing/publishing binaries until the Rust-only package is approved."
         ]
       },
       {
         "id": "npm-launcher-bridge",
         "title": "npm thin-launcher upgrade bridge",
         "kind": "feature",
-        "status": "in-progress",
+        "status": "complete",
         "summary": "Keep publishing @robotaccomplice/architext as a thin launcher whose per-platform Rust binaries ship as optionalDependencies (esbuild/Biome model), so a plain npm update brings every prior npm user onto the Rust build with no manual step. The npm artifact carries no runtime JS beyond binary resolution/spawn.",
         "source": "ad-hoc",
         "dateAdded": "2026-06-15T00:00:00.000Z",
@@ -186,7 +197,7 @@
         ],
         "evidence": [
           "Phase 1 (additive, on branch feat/dist-launcher-bridge): bin.architext (tools/architext-adopt.mjs) is now a thin resolver that computes the ${platform}-${arch} key, require.resolves @robotaccomplice/architext-<key>/architext[.exe], and execs it with stdio inherited + exit-code/signal forwarded. Resolution logic split into tools/native-binary-resolver.mjs and unit-tested (test/native-binary-launcher.test.mjs, 9 tests): platform-key, win32 .exe, unsupported-platform/not-installed → null, native-exec proof (temp shim → real target/release/architext exec, argv+exit code forwarded), and JS-fallback proof. Root package.json declares the five optionalDependencies. Full JS suite 415/415 green; cli/serve-lifecycle tests still drive the launcher via the JS fallback unchanged.",
-          "Deliberate Phase-1 transition affordance (Rule 16 justified deferral): when no native optionalDependency is installed (existing 1.6.x JS-only installs, unsupported platforms, failed optional install), the launcher falls back to the bundled Node CLI. The 'no runtime JS beyond resolution/spawn' end state — deleting the JS engine — is Phase 3, kept out of Phase 1 to preserve a working CLI for every current user during the cutover."
+          "End state reached (PR #214, open for review): the JS engine/CLI was deleted and the launcher is now Rust-only — a missing native binary is a hard, actionable error, not a silent JS fallback. The transitional Phase-1 fallback (bundled Node CLI for 1.6.x installs) is removed; the npm artifact now carries no runtime JS beyond binary resolution/spawn, as specified."
         ]
       },
       {
@@ -259,10 +270,10 @@
       "id": "serve-cli-native",
       "name": "Native serve + CLI",
       "owner": "maintainer",
-      "status": "planned",
+      "status": "complete",
       "posture": "on-track",
-      "summary": "Port the serve HTTP layer and CLI/lifecycle commands to Rust, embed the viewer, and parallelize the plan farm.",
-      "progress": 0,
+      "summary": "Port the serve HTTP layer and CLI/lifecycle commands to Rust, embed the viewer, and parallelize the plan farm. Done: architext-serve (axum, the /api surface, mutation tokens + write-lock, SSE, file watch, rayon plan farm) and architext-cli (clap; validate/serve/sync/doctor/prompt/status) merged to develop.",
+      "progress": 100,
       "itemIds": [
         "serve-layer-port",
         "cli-lifecycle-port",
@@ -276,8 +287,8 @@
       "owner": "maintainer",
       "status": "in-progress",
       "posture": "on-track",
-      "summary": "Signed native installers as the primary path; npm thin-launcher bridge so existing installs auto-upgrade onto the Rust build.",
-      "progress": 50,
+      "summary": "Signed native installers as the primary path; npm thin-launcher bridge so existing installs auto-upgrade onto the Rust build. The bridge is complete and the native binary is self-contained (PR #213); signing/installers/publish remain for the release ceremony.",
+      "progress": 75,
       "itemIds": [
         "native-binary-distribution",
         "npm-launcher-bridge"
@@ -290,16 +301,19 @@
       "id": "viewer-rewrite",
       "name": "Viewer rewrite (Rust → WASM UI)",
       "owner": "maintainer",
-      "status": "planned",
+      "status": "in-progress",
       "posture": "on-track",
-      "summary": "Replace the React/Vite viewer with a Rust → WASM UI (Leptos/Dioxus/Yew) — no JSX, Vite, or npm — reusing architext-routing directly and implementing the locked Stitch design language. The largest workstream; required by the zero-Node mandate.",
-      "progress": 0,
+      "summary": "Replace the React/Vite viewer with a Rust → WASM UI (Leptos/Dioxus/Yew) — no JSX, Vite, or npm — reusing architext-routing directly and implementing the locked Stitch design language. The largest workstream; required by the zero-Node mandate. The Leptos/WASM viewer is built and serving all modes (architext-viewer crate, Trunk); the design-language facelift + its live fidelity audit and the diagram-spacing controls remain.",
+      "progress": 55,
       "itemIds": [
         "viewer-rust-wasm-rewrite",
         "design-language-facelift",
         "diagram-spacing-controls"
       ],
-      "evidence": []
+      "evidence": [
+        "crate-architext-viewer",
+        "viewer-polish-prs"
+      ]
     }
   ],
   "blockers": [],
@@ -320,29 +334,31 @@
     {
       "id": "validator-parity-proven",
       "label": "Rust validator verdict-parity with ajv",
-      "status": "planned",
+      "status": "complete",
       "targetWindow": "1.7.0 phase 2",
       "order": 2,
       "itemIds": [
         "validation-conformance-port"
-      ]
+      ],
+      "date": "2026-06-16"
     },
     {
       "id": "node-free-serve",
       "label": "Native serve + CLI with no Node runtime",
-      "status": "planned",
+      "status": "complete",
       "targetWindow": "1.7.0 phase 3",
       "order": 3,
       "itemIds": [
         "serve-layer-port",
         "cli-lifecycle-port",
         "parallel-plan-farm"
-      ]
+      ],
+      "date": "2026-06-18"
     },
     {
       "id": "shipped-as-one-binary",
       "label": "Signed binary + npm auto-upgrade bridge",
-      "status": "planned",
+      "status": "in-progress",
       "targetWindow": "1.7.0 phase 4",
       "order": 4,
       "itemIds": [
@@ -432,6 +448,45 @@
       "label": "Native routing ratchet on branch feat/rust-perf-ratchet (baseline pending maintainer sign-off)",
       "kind": "test",
       "status": "complete"
+    },
+    {
+      "id": "crate-architext-serve",
+      "label": "crates/architext-serve — axum serve layer, /api surface, mutation tokens + write-lock, SSE, file watch, rayon plan farm (merged to develop)",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "crate-architext-cli",
+      "label": "crates/architext-cli — clap CLI: validate/serve/sync/doctor/prompt/status/clean/build (merged to develop)",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "crate-architext-viewer",
+      "label": "crates/architext-viewer — Leptos/WASM viewer (Trunk build) serving all modes (merged to develop)",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "viewer-polish-prs",
+      "label": "Viewer fix/feature PR series #192–#212 (light mode, file preview, inspector selection, flows/C4 canvas, release history dock, plan non-blocking, etc.)",
+      "href": "https://github.com/robot-accomplice/architext/pulls?q=is%3Apr+is%3Amerged+viewer",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-213",
+      "label": "PR #213 self-contained native binary (embedded schemas + co-located viewer dist)",
+      "href": "https://github.com/robot-accomplice/architext/pull/213",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-214",
+      "label": "PR #214 JS cutover — Architext 1.7.0 is Rust-only (open for review)",
+      "href": "https://github.com/robot-accomplice/architext/pull/214",
+      "kind": "document",
+      "status": "in-progress"
     }
   ]
 }
