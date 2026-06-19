@@ -29,7 +29,7 @@ use crate::components::repo_tree::RepoTree;
 use crate::components::rules_panel::RulesPanel;
 use crate::components::spinner::CanvasSpinner;
 use crate::components::steps_panel::StepsPanel;
-use crate::data::fetch_farm_plan;
+use crate::data::fetch_farm_plan_polling;
 use crate::data::models::{Flow, Node, View};
 use crate::diagram::plan::{
     compute_structural_plan, layout_config_from_diagram, plan_hash,
@@ -349,8 +349,14 @@ pub fn CanvasPanel() -> impl IntoView {
         let hash = plan_hash(&request.key);
 
         spawn_local(async move {
-            // Farm HIT → deserialized plan; MISS / error → in-process fallback.
-            let plan = match fetch_farm_plan(&hash).await {
+            // Poll the native plan farm (responsive await, main thread stays free)
+            // instead of computing the plan in-process on the UI thread — the
+            // latter freezes a dense diagram for the whole plan duration. The farm
+            // warms its whole map atomically in the background, so early requests
+            // miss; we poll (~up to 5 min) with `routing` kept true (loading
+            // state). Only a genuinely non-precomputed plan falls through to a
+            // one-off in-process computation.
+            let plan = match fetch_farm_plan_polling(&hash, 600, 500).await {
                 Some(plan) => plan,
                 None => plan_diagram(&request.plan_diagram_input),
             };

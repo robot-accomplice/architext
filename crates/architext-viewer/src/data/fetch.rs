@@ -103,6 +103,32 @@ pub async fn fetch_farm_plan(hash: &str) -> Option<Plan> {
     serde_json::from_value::<Plan>(plan_value.clone()).ok()
 }
 
+/// Poll the serve plan farm for `hash` until it warms, or `max_attempts` is
+/// reached, with a non-blocking [`gloo_timers`] delay between tries.
+///
+/// The native farm precomputes every flow×view plan in the background at startup
+/// (and re-warms on config writes), swapping the whole map in atomically — so
+/// requests MISS until the parallel precompute finishes. Polling keeps the main
+/// thread FREE while we wait (the caller shows its routing state), instead of
+/// computing the plan in-process on the UI thread, which freezes a dense diagram
+/// for the entire plan duration (the routing-perf "blocker"). The native farm is
+/// also faster than the in-process WASM path and runs off the browser thread.
+///
+/// Returns `None` only if the farm never warms the plan within the window — a
+/// genuinely non-precomputed plan — where the caller does a one-off in-process
+/// computation as a last resort.
+pub async fn fetch_farm_plan_polling(hash: &str, max_attempts: u32, delay_ms: u32) -> Option<Plan> {
+    for attempt in 0..max_attempts {
+        if let Some(plan) = fetch_farm_plan(hash).await {
+            return Some(plan);
+        }
+        if attempt + 1 < max_attempts {
+            gloo_timers::future::TimeoutFuture::new(delay_ms).await;
+        }
+    }
+    None
+}
+
 /// Fetch the live repo file list from `/api/repo-tree`. Fetched on demand by the
 /// Repo Tree surface (the file list is volatile, served `no-store`, and not part
 /// of the once-loaded manifest dataset).
