@@ -45,7 +45,13 @@ pub fn refresh_farm(farm: &Farm, data_dir: &Path) {
             for entry in entries {
                 map.insert(entry.hash, PlanEntry { plan_json: entry.plan_json });
             }
+            let count = map.len();
             *farm.write().expect("farm write lock") = map;
+            // One line per refresh — fires once at startup and once per explicit
+            // config write, NOT on data-watch events (the farm is deliberately
+            // not wired to the watch hub, so it can't loop the way the legacy
+            // Node farm did when its refresh was bound to every watcher event).
+            tracing::info!("plan farm: precomputed {count} diagram plan(s)");
         }
         Err(err) => {
             tracing::warn!("plan farm enumeration failed: {err}");
