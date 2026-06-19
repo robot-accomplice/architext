@@ -34,10 +34,14 @@ pub enum LabelKind {
     Relationship { kind: RelationshipKind, word: String },
 }
 
-/// A label ready to render: its `kind`, anchor, and background box.
+/// A label ready to render: its `kind`, anchor, and background box. `step_id` is
+/// the owning flow step's id for a `Number` badge (so it can highlight when that
+/// step is selected, mirroring the edge + the sequence message); `None` for
+/// structural relationship pills, which are not steps.
 #[derive(Clone)]
 pub struct LabelView {
     pub kind: LabelKind,
+    pub step_id: Option<String>,
     pub anchor_x: f64,
     pub anchor_y: f64,
     pub box_rect: Rect,
@@ -48,10 +52,13 @@ pub struct LabelView {
 /// small glyph pill centered on the anchor, with the relationship word as a
 /// hover `title` (the word is also spelled out in the legend).
 #[component]
-pub fn DiagramLabel(label: LabelView) -> impl IntoView {
+pub fn DiagramLabel(label: LabelView, #[prop(into)] selected: Signal<bool>) -> impl IntoView {
     match label.kind {
+        // The number badge takes the `--accent` active treatment when its step is
+        // selected — the same STATE signal the active edge and the sequence
+        // message use, so selecting a step lights up its pill on every diagram.
         LabelKind::Number(text) => view! {
-            <g class="flow-label">
+            <g class="flow-label" class=("flow-label--active", move || selected.get())>
                 <circle
                     class="flow-label__badge"
                     cx=label.anchor_x

@@ -1131,6 +1131,19 @@ button.c4-breadcrumb__crumb:hover {
   dominant-baseline: central;
   pointer-events: none;
 }
+/* Selected step → active number pill: the same --accent state treatment the
+   active edge gets (svg keys both on selected_step), so selecting a step lights
+   up its pill on flow diagrams as it already does on sequence diagrams. */
+.flow-label--active .flow-label__badge {
+  fill: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  stroke: var(--accent);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 4px var(--accent-glow));
+}
+.flow-label--active .flow-label__badge-num {
+  fill: var(--accent);
+  font-weight: 600;
+}
 
 /* ── Decision diamonds (tinted with the affiliated node's role color) ─────── */
 .flow-decision {
