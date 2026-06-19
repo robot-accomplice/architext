@@ -110,6 +110,7 @@ const NODE_NAME_MAP = {
   "wallet-service": "Billing and Credits Service",
   "product-knowledge-service": "Knowledge Base Service",
   "test-release-harness": "Test and Release Harness",
+  "sqlite-store": "Embedded SQL Store",
   "unified-pipeline-entry": "Workflow Execution Engine",
   "turn-policy-engine": "Run Policy and Trigger Engine",
   "context-builder": "Execution Context Builder",
@@ -355,13 +356,20 @@ function neutralizeDynamic(s) {
   return out;
 }
 
-// Collapse artifacts of token expansion: "the the X" -> "the X", "a a X" -> "a X".
+// Collapse artifacts of token expansion. These are self-inflicted adjacent
+// duplications introduced when a scrubbed token's replacement ends in a word
+// that the surrounding source text repeats (e.g. "SQLite store" -> "embedded
+// SQL store" + "store"). Listed explicitly so legitimate source phrasings like
+// "multi-turn turn" or "handled-error ERROR" are left intact.
 function tidy(s) {
   return s
     .replace(/\bthe the\b/g, "the")
     .replace(/\bThe the\b/g, "The")
     .replace(/\ba a\b/g, "a")
-    .replace(/\bA a\b/g, "A");
+    .replace(/\bA a\b/g, "A")
+    .replace(/\bruntime runtime\b/g, "runtime")
+    .replace(/\bRuntime runtime\b/g, "Runtime")
+    .replace(/\bstore store\b/g, "store");
 }
 
 function scrub(value) {

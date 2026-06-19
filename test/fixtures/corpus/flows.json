@@ -757,7 +757,7 @@
       "id": "memory-lifecycle",
       "name": "Memory retrieval, ingest, and maintenance",
       "status": "implemented",
-      "summary": "The pipeline and background services retrieve, persist, curate, index, and repair memory records in the local embedded SQL store store.",
+      "summary": "The pipeline and background services retrieve, persist, curate, index, and repair memory records in the local embedded SQL store.",
       "trigger": "Pipeline prepares context, completes a turn, or background memory curation runs.",
       "actors": [
         "operator"

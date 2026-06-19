@@ -3,12 +3,12 @@
     {
       "id": "embedder-runtime-pinned-invariant",
       "title": "The embedder runtime is a pinned, asserted invariant; floors are calibrated against it",
-      "summary": "Behavioral guard and classifier floors are cosine thresholds derived from a specific local embedder (embed-model) under a specific embedded-runtime runtime and task-prefix scheme. The runtime is therefore a pinned invariant: memory.expected_embedder_runtime records the calibrated version, and models embedder-check plus daemon startup probe /api/version and FAIL LOUD on mismatch. embed-model must be embedded with its task-instruction prefix (never raw text). Stored vectors carry an embedding_version fingerprint (model | prefix-scheme | runtime); a change marks them stale for re-embedding. If the runtime pin changes, every absolute floor must be re-derived against the new pinned, prefixed baseline.",
+      "summary": "Behavioral guard and classifier floors are cosine thresholds derived from a specific local embedder (embed-model) under a specific embedded-runtime and task-prefix scheme. The runtime is therefore a pinned invariant: memory.expected_embedder_runtime records the calibrated version, and models embedder-check plus daemon startup probe /api/version and FAIL LOUD on mismatch. embed-model must be embedded with its task-instruction prefix (never raw text). Stored vectors carry an embedding_version fingerprint (model | prefix-scheme | runtime); a change marks them stale for re-embedding. If the runtime pin changes, every absolute floor must be re-derived against the new pinned, prefixed baseline.",
       "category": "Architecture",
       "criticality": "high",
       "order": 331,
       "source": "maintainer",
-      "rationale": "2026-06-06 RCA: an unpinned embedded-runtime runtime auto-updated 0.24.0 -> 0.30.6 and silently shifted embed-model output past a calibrated guard floor, a behavioral regression with byte-identical code and model weights. Pinning + asserting the runtime turns silent drift into a loud, diagnosable gate failure; prefixing keeps embeddings in-distribution so margins are larger and more stable.",
+      "rationale": "2026-06-06 RCA: an unpinned embedded-runtime auto-updated 0.24.0 -> 0.30.6 and silently shifted embed-model output past a calibrated guard floor, a behavioral regression with byte-identical code and model weights. Pinning + asserting the runtime turns silent drift into a loud, diagnosable gate failure; prefixing keeps embeddings in-distribution so margins are larger and more stable.",
       "appliesTo": [
         "embedder foundation",
         "behavioral guards and classifiers",

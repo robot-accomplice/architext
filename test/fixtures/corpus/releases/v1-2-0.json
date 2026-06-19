@@ -126,7 +126,7 @@
       "name": "Bundled embed-model embedder sidecar",
       "owner": "maintainer",
       "posture": "on-track",
-      "summary": "Daemon-supervised llama.cpp sidecar for embed-model embeddings, DELIVERED and the standing default. WS1 SupervisedProcess seam + WS2-4 (resource-bounded args, library env, vector-space validation gate, embed-model prefix fix, broadened cloud menu AD-8) + WS6 (decommissioned the legacy Embedded Runtime runtime-version pin — bundled GGUF content hash supersedes it; field retained as opt-in for own-Embedded Runtime operators). WS5 contradiction-threshold recalibration is performed by the pre-ship embedder behavioral soak gate (ceremony); sidecar RAM bound is the live gate (blocker v120-blocker-sidecar-ram). Code complete; gates run at ceremony.",
+      "summary": "Daemon-supervised llama.cpp sidecar for embed-model embeddings, DELIVERED and the standing default. WS1 SupervisedProcess seam + WS2-4 (resource-bounded args, library env, vector-space validation gate, embed-model prefix fix, broadened cloud menu AD-8) + WS6 (decommissioned the legacy Embedded Runtime-version pin — bundled GGUF content hash supersedes it; field retained as opt-in for own-Embedded Runtime operators). WS5 contradiction-threshold recalibration is performed by the pre-ship embedder behavioral soak gate (ceremony); sidecar RAM bound is the live gate (blocker v120-blocker-sidecar-ram). Code complete; gates run at ceremony.",
       "progress": 100,
       "itemIds": [
         "v120-embedder-sidecar-item",

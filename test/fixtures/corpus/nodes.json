@@ -839,7 +839,7 @@
     {
       "id": "sql-store",
       "type": "data-store",
-      "name": "embedded SQL store store",
+      "name": "Embedded SQL Store",
       "summary": "Durable local database for sessions, turns, memory, traces, config-derived runtime state, cron jobs, skills, tools, metrics, and domain repositories.",
       "responsibilities": [
         "Persist runtime state.",
