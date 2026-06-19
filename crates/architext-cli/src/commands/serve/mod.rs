@@ -247,6 +247,18 @@ fn viewer_dist_dir() -> PathBuf {
         return PathBuf::from(d);
     }
 
+    // Installed native binary: the per-platform optionalDependency package ships
+    // the viewer dist next to the binary (`<exe_dir>/dist`). Checked first so a
+    // packaged install is self-contained, independent of any repo layout (the
+    // dev candidates below resolve `crates/architext-viewer/dist` from source).
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(beside) = exe.parent().map(|d| d.join("dist")) {
+            if beside.join("index.html").exists() {
+                return beside;
+            }
+        }
+    }
+
     let repo_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())

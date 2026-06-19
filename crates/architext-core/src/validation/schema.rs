@@ -4,7 +4,32 @@
 
 use std::path::Path;
 
+use include_dir::{include_dir, Dir};
 use serde_json::Value;
+
+/// The JSON schemas, embedded at compile time from the repo's `viewer/schema/`.
+/// Lets an installed native binary validate with no `viewer/schema/` on disk;
+/// `read_schema_json` prefers an on-disk schema (dev / explicit override) and
+/// falls back to this embedded copy.
+static EMBEDDED_SCHEMAS: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/../../viewer/schema");
+
+/// Read a schema by filename: prefer the on-disk `schema_dir/<file>` (dev or an
+/// explicit override), else the schema embedded in the binary.
+fn read_schema_json(schema_dir: &Path, file: &str) -> Result<Value, String> {
+    let path = schema_dir.join(file);
+    if let Ok(text) = std::fs::read_to_string(&path) {
+        return serde_json::from_str(&text)
+            .map_err(|e| format!("invalid JSON in {}: {}", path.display(), e));
+    }
+    match EMBEDDED_SCHEMAS.get_file(file).and_then(|f| f.contents_utf8()) {
+        Some(text) => serde_json::from_str(text)
+            .map_err(|e| format!("invalid JSON in embedded schema {file}: {e}")),
+        None => Err(format!(
+            "schema not found: {file} (no {} on disk, and not embedded)",
+            path.display()
+        )),
+    }
+}
 
 /// Mapping from logical file key (as used in `manifest.files`) to the
 /// corresponding schema filename in the schema directory.
@@ -83,8 +108,7 @@ pub fn validate_schema(data_dir: &Path, schema_dir: &Path, errors: &mut Vec<Stri
         }
     };
 
-    let manifest_schema_path = schema_dir.join("manifest.schema.json");
-    match read_json(&manifest_schema_path) {
+    match read_schema_json(schema_dir, "manifest.schema.json") {
         Ok(schema) => match build_validator(&schema) {
             Ok(validator) => validate_instance("manifest", &validator, &manifest, errors),
             Err(e) => errors.push(e),
@@ -130,8 +154,7 @@ pub fn validate_schema(data_dir: &Path, schema_dir: &Path, errors: &mut Vec<Stri
             }
         };
 
-        let schema_path = schema_dir.join(fs.schema_file);
-        let schema = match read_json(&schema_path) {
+        let schema = match read_schema_json(schema_dir, fs.schema_file) {
             Ok(v) => v,
             Err(e) => {
                 errors.push(e);
