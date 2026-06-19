@@ -122,7 +122,12 @@
      border / ring / inner-glow on --accent — NOT a --c4-* role hue. --accent is
      deliberately distinct from every role color above (green-leaning teal vs the
      client cyan #00e5ff) so "active" never collides with "client/system". */
-  --accent: #19f2c4;
+  /* `--accent-base` is the literal; `--accent` aliases it. The release/severity
+     "healthy" tone references --accent-base (NOT --accent) so a card that sets
+     `style="--accent: <healthy-tone>"` doesn't become `--accent: var(--accent)`
+     — a self-reference cycle that invalidates the property and drops the color. */
+  --accent-base: #19f2c4;
+  --accent: var(--accent-base);
   --accent-ring: rgba(25, 242, 196, 0.45);
   --accent-glow: rgba(25, 242, 196, 0.16);
 
@@ -212,7 +217,8 @@
   --sens-medium:  #a87800;
   --sens-low:     #6b7a80;
 
-  --accent: #0a9e72;
+  --accent-base: #0a9e72;
+  --accent: var(--accent-base);
   --accent-ring: rgba(10, 158, 114, 0.40);
   --accent-glow: rgba(10, 158, 114, 0.12);
 }
@@ -251,6 +257,14 @@
   border-radius: var(--chip-radius);
   color: var(--muted);
   background: var(--panel-2);
+}
+/* State pill: the caller sets an inline `color:<tone>` (the release/severity
+   token) — currentColor then drives the border + a soft fill, so a status reads
+   as a colored PILL (complete→accent/green, blocked→--sev-critical/red,
+   deferred→--dim/gray) instead of faintly-tinted text on a neutral chip. */
+.chip--state {
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 16%, transparent);
 }
 
 /* Count pill: fully-round status/count indicator. */
