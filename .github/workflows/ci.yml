@@ -106,3 +106,15 @@ jobs:
 
       - name: Rust serve end-to-end smoke
         run: bash scripts/rust-serve-smoke.sh
+
+      # Routing parity: every routing-corpus flow + the real diagrams must be
+      # byte-identical between the JS engine and the Rust WASM engine. Catches
+      # any Rust-vs-JS routing divergence (e.g. the js_sign / point-collapse bug)
+      # before it can ship. Transitional — retires when the JS engine is deleted.
+      - name: Install wasm-pack
+        uses: jetli/wasm-pack-action@v0.4.0
+
+      - name: Route parity gate (JS engine vs Rust WASM)
+        run: |
+          wasm-pack build crates/architext-routing --target nodejs --out-dir pkg --features wasm
+          node viewer/tools/route-diff-harness.mjs gate

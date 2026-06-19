@@ -169,32 +169,63 @@ function buildStructuralInput(viewId) {
   return { view, relationships, visibleNodeIds, style: "orthogonal", ...diagramLayoutFor(view, relationships.length) };
 }
 
+// --- comparison core ---
+function compare(input) {
+  const jsPlan = planDiagram(input);
+  const rustPlan = rehydrateRustPlan(JSON.parse(wasm.plan(serializePlanInput(input))));
+  const jsMounts = edgeMounts(jsPlan, input.relationships);
+  const rustMounts = edgeMounts(rustPlan, input.relationships);
+  const allIds = [...new Set([...jsMounts.keys(), ...rustMounts.keys()])];
+  const diverged = [];
+  for (const id of allIds) {
+    const j = jsMounts.get(id), r = rustMounts.get(id);
+    if (!j || !r) { diverged.push({ id }); continue; }
+    if (j.sourceSide !== r.sourceSide || j.targetSide !== r.targetSide || j.d !== r.d) diverged.push({ id });
+  }
+  return { jsPlan, rustPlan, jsMounts, rustMounts, allIds, diverged };
+}
+
 // --- main ---
 const [mode, a, b] = process.argv.slice(2);
+
+// CI gate: every routing-corpus flow + the real architext diagrams must be
+// byte-identical JS↔Rust (mount faces + d-strings). Exits non-zero on any drift.
+if (mode === "gate") {
+  const dir = path.join(repoRoot, "test/fixtures/routing-corpus");
+  const corpusFlows = loadJson(path.join(dir, "flows.json")).flows.map((f) => f.id);
+  const realSpecs = [["flow", "architecture-maintenance", "dataflow"], ["structural", "deployment"], ["structural", "c4-context"]];
+  let failed = 0;
+  for (const id of corpusFlows) {
+    const { diverged } = compare(buildCorpusInput(id));
+    if (diverged.length) { failed += diverged.length; console.error(`✗ corpus ${id}: ${diverged.length} divergent (${diverged.map((d) => d.id).join(",")})`); }
+    else console.log(`✓ corpus ${id}`);
+  }
+  for (const [m, x, y] of realSpecs) {
+    const { diverged } = compare(m === "flow" ? buildRealFlowInput(x, y) : buildStructuralInput(x));
+    if (diverged.length) { failed += diverged.length; console.error(`✗ ${m} ${x} ${y ?? ""}: ${diverged.length} divergent`); }
+    else console.log(`✓ ${m} ${x} ${y ?? ""}`);
+  }
+  if (failed) { console.error(`\nROUTE PARITY GATE FAILED: ${failed} divergent edge(s) JS↔Rust`); process.exit(1); }
+  console.log("\nROUTE PARITY GATE: all flows byte-identical JS↔Rust ✓");
+  process.exit(0);
+}
+
 let input;
 if (mode === "corpus") input = buildCorpusInput(a);
 else if (mode === "flow") input = buildRealFlowInput(a, b);
 else if (mode === "structural") input = buildStructuralInput(a);
-else { console.error("usage: corpus <flowId> | flow <flowId> <viewId> | structural <viewId>"); process.exit(2); }
+else { console.error("usage: gate | corpus <flowId> | flow <flowId> <viewId> | structural <viewId>"); process.exit(2); }
 
-const jsPlan = planDiagram(input);
-const rustPlan = rehydrateRustPlan(JSON.parse(wasm.plan(serializePlanInput(input))));
-
-const jsMounts = edgeMounts(jsPlan, input.relationships);
-const rustMounts = edgeMounts(rustPlan, input.relationships);
-
+const { jsPlan, rustPlan, jsMounts, rustMounts, allIds } = compare(input);
 console.log(`# mode=${mode} ${a ?? ""} ${b ?? ""}  view=${input.view.id}  edges=${input.relationships.length}`);
 console.log(`# JS   metrics: ${JSON.stringify(metrics(jsPlan, input.relationships))}`);
 console.log(`# Rust metrics: ${JSON.stringify(metrics(rustPlan, input.relationships))}`);
 console.log(`#`);
 console.log(`# per-edge (★ = divergent):`);
-const allIds = [...new Set([...jsMounts.keys(), ...rustMounts.keys()])];
 for (const id of allIds) {
   const j = jsMounts.get(id), r = rustMounts.get(id);
   if (!j || !r) { console.log(`★ ${id}  MISSING js=${!!j} rust=${!!r}`); continue; }
-  const mountDiff = j.sourceSide !== r.sourceSide || j.targetSide !== r.targetSide;
-  const dDiff = j.d !== r.d;
-  const mark = (mountDiff || dDiff) ? "★" : " ";
+  const mark = (j.sourceSide !== r.sourceSide || j.targetSide !== r.targetSide || j.d !== r.d) ? "★" : " ";
   console.log(`${mark} ${id.padEnd(18)} ${j.from}->${j.to}`);
   console.log(`    JS   src=${j.sourceSide.padEnd(6)} tgt=${j.targetSide.padEnd(6)} bends=${j.bends}  d=${j.d}`);
   console.log(`    Rust src=${r.sourceSide.padEnd(6)} tgt=${r.targetSide.padEnd(6)} bends=${r.bends}  d=${r.d}`);
