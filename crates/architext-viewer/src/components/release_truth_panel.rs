@@ -58,6 +58,8 @@ pub fn ReleaseTruthPanel() -> impl IntoView {
     create_effect(move |_| {
         selected.get();
         planning_mode.set(false);
+        // A path-item selection from the prior release must not linger.
+        state.selected_release_item.set(None);
     });
 
     // The historical trend chart is docked at the bottom (fixed), with the
@@ -260,8 +262,17 @@ fn milestone_step(m: MilestoneView) -> impl IntoView {
     let blocked_by = (!m.blocked_by.is_empty()).then(|| {
         format!("Blocked by: {}", m.blocked_by.join(", "))
     });
+    // The step is "active" when the selected item lives in it, so selecting a
+    // line lights up its own pill AND its parent step's pill together.
+    let sel = use_app_state().selected_release_item;
+    let item_ids: Vec<String> = m.items.iter().map(|i| i.id.clone()).collect();
+    let is_active = move || sel.get().is_some_and(|s| item_ids.contains(&s));
     view! {
-        <article class="release-path-step accent-surface" style=format!("--accent:{rail}")>
+        <article
+            class="release-path-step accent-surface"
+            class=("is-active", is_active)
+            style=format!("--accent:{rail}")
+        >
             <div class="release-path-marker mono">{m.path_number}</div>
             <div class="release-path-body">
                 <div class="release-path-coarse">
@@ -288,6 +299,13 @@ fn milestone_step(m: MilestoneView) -> impl IntoView {
 fn path_item_line(item: PathItem) -> impl IntoView {
     // Tone keys off the item's status (blocked items already read "Blocked").
     let rail = release_tone_color_var(release_tone(item.status.as_deref()));
+    // Clicking the line selects the item (drives the inspector detail). Read the
+    // shared signal from context so the free helper stays a pure render fn.
+    let sel = use_app_state().selected_release_item;
+    let id = item.id.clone();
+    let id_active = id.clone();
+    let is_selected = move || sel.get().as_deref() == Some(id_active.as_str());
+    let on_click = move |_| sel.set(Some(id.clone()));
     let kind = item.kind.clone().unwrap_or_default();
     let status = item.status.clone().unwrap_or_else(|| "planned".to_string());
     let priority = item.priority.clone();
@@ -306,7 +324,12 @@ fn path_item_line(item: PathItem) -> impl IntoView {
     let blocked_by = item.blocked_by.clone().map(|b| format!("Blocked by: {b}"));
 
     view! {
-        <div class="release-path-line accent-surface" style=format!("--accent:{rail}")>
+        <div
+            class="release-path-line accent-surface"
+            class=("release-path-line--selected", is_selected)
+            style=format!("--accent:{rail}")
+            on:click=on_click
+        >
             <span class="chip chip--state release-path-state" style=format!("color:{rail}")>{item.line_state.clone()}</span>
             <div class="release-path-line__main">
                 <strong>{item.title.clone()}</strong>
