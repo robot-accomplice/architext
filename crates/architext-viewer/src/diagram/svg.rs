@@ -6,7 +6,7 @@
 //! are applied as a single `transform` on the inner `<g>` (translate + scale),
 //! driven by signals owned by the canvas panel.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use architext_routing::model::{Plan, Rect};
 use leptos::*;
@@ -71,6 +71,12 @@ pub fn build_render_model(
             .collect())
         .unwrap_or_default();
 
+    // The "in active flow" id set: the union of every flow step's `from` + `to`
+    // endpoints. `None` flow (structural C4/Deployment) → no orphan concept, so
+    // `is_in_flow` treats every node as in-flow.
+    let in_flow_ids = flow_node_ids(flow);
+    let is_in_flow = |id: &str| flow.is_none() || in_flow_ids.contains(id);
+
     // Node cards: rects that resolve to a real dataset node.
     let mut node_views = Vec::new();
     let mut decisions = Vec::new();
@@ -81,6 +87,7 @@ pub fn build_render_model(
                 name: node.name.clone(),
                 node_type: node.node_type.clone(),
                 rect: rect.clone(),
+                in_flow: is_in_flow(id),
             }),
             None => {
                 // An augmented (decision) rect — tint with the component's role
@@ -204,6 +211,20 @@ pub fn legend_for(
     LegendModel { node_types, relationship_kinds }
 }
 
+/// The set of node ids that participate in the active flow: the union of every
+/// flow step's `from` and `to` endpoints. `None` flow (structural C4/Deployment
+/// mode) returns an empty set — callers treat "no flow" as "every node in flow".
+pub fn flow_node_ids(flow: Option<&Flow>) -> HashSet<String> {
+    let mut ids = HashSet::new();
+    if let Some(f) = flow {
+        for step in &f.steps {
+            ids.insert(step.from.clone());
+            ids.insert(step.to.clone());
+        }
+    }
+    ids
+}
+
 /// The role-type to tint a decision diamond: the type of the component the
 /// decision step targets (`decision:<stepId>` → step.to → node.type).
 fn decision_component_type<'a>(
@@ -266,6 +287,12 @@ pub fn DiagramSvg(
     /// equals the step id, so an edge whose id matches gets the `--accent` active
     /// treatment. Always `None` in structural (C4 / deployment) mode.
     #[prop(into)] selected_step: Signal<Option<String>>,
+    /// Whether to render the out-of-flow ("unrelated") node cards (dimmed) and
+    /// their associated decision rects / edges. `false` (default) hides them so
+    /// the active flow is the sole visual focus; `true` shows them dimmed. In
+    /// structural (C4 / deployment) mode there is no flow, every node is
+    /// in-flow, and this prop has no effect.
+    #[prop(into)] show_unrelated: Signal<bool>,
     #[prop(into)] on_select: Callback<String>,
 ) -> impl IntoView {
     let nodes_by_id: HashMap<&str, &Node> = nodes.iter().map(|n| (n.id.as_str(), n)).collect();
@@ -314,13 +341,21 @@ pub fn DiagramSvg(
                     }).collect_view()}
                 </g>
                 <g class="flow-nodes">
-                    {node_items.into_iter().map(|n| {
-                        let id = n.id.clone();
-                        let is_selected = Signal::derive(move || {
-                            selected_node.get().as_deref() == Some(id.as_str())
-                        });
-                        view! { <DiagramNode node=n selected=is_selected on_select=on_select/> }
-                    }).collect_view()}
+                    {move || {
+                        let show = show_unrelated.get();
+                        node_items
+                            .iter()
+                            .filter(|n| n.in_flow || show)
+                            .cloned()
+                            .map(|n| {
+                                let id = n.id.clone();
+                                let is_selected = Signal::derive(move || {
+                                    selected_node.get().as_deref() == Some(id.as_str())
+                                });
+                                view! { <DiagramNode node=n selected=is_selected on_select=on_select/> }
+                            })
+                            .collect_view()
+                    }}
                 </g>
             </g>
         </svg>
@@ -329,7 +364,44 @@ pub fn DiagramSvg(
 
 #[cfg(test)]
 mod tests {
-    use super::pill_label;
+    use super::{flow_node_ids, pill_label};
+    use crate::data::models::{Flow, FlowStep};
+
+    fn step(id: &str, from: &str, to: &str) -> FlowStep {
+        FlowStep {
+            id: id.to_string(),
+            from: from.to_string(),
+            to: to.to_string(),
+            action: String::new(),
+            summary: None,
+            kind: None,
+            outcome: None,
+            return_of: None,
+        }
+    }
+
+    #[test]
+    fn flow_node_ids_is_union_of_step_endpoints() {
+        let flow = Flow {
+            id: "f".into(),
+            name: "f".into(),
+            status: None,
+            summary: None,
+            trigger: None,
+            steps: vec![step("s1", "a", "b"), step("s2", "b", "c")],
+            sequence_frames: vec![],
+        };
+        let ids = flow_node_ids(Some(&flow));
+        assert_eq!(ids.len(), 3);
+        assert!(ids.contains("a") && ids.contains("b") && ids.contains("c"));
+    }
+
+    #[test]
+    fn flow_node_ids_empty_without_flow() {
+        // Structural (C4/Deployment) mode → no flow → empty set, and callers
+        // treat that as "every node is in-flow".
+        assert!(flow_node_ids(None).is_empty());
+    }
 
     #[test]
     fn flow_step_labels_collapse_to_the_step_number() {

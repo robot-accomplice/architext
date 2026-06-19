@@ -12,7 +12,7 @@
 //! plan (built from node `dependencies`) + per-edge labels and no flow. The
 //! remaining (diagram-less) modes keep the placard.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use leptos::*;
 use leptos::ev::{MouseEvent, WheelEvent};
@@ -34,7 +34,7 @@ use crate::diagram::plan::{
     compute_structural_plan, layout_config_from_diagram, plan_hash,
 };
 use crate::diagram::sequence::{build_sequence_layout, SequenceConfig, SequenceLayout};
-use crate::diagram::svg::legend_for;
+use crate::diagram::svg::{flow_node_ids, legend_for};
 use crate::diagram::{DiagramSvg, SequenceSvg};
 use crate::selection::child_c4_view_for_node;
 use crate::state::use_app_state;
@@ -71,8 +71,15 @@ struct ContentBounds {
 
 /// The bounding box of everything that actually renders — node rects unioned
 /// with label boxes and route polyline points — so `fit` frames the diagram, not
-/// the full padded canvas (which includes margins + disconnected-node columns).
-fn content_bounds(plan: &Plan) -> Option<ContentBounds> {
+/// the full padded canvas (which includes margins).
+///
+/// When `in_flow` is `Some`, only the IN-FLOW node rects are unioned (plus all
+/// routes + label boxes, which only exist between in-flow endpoints). This is
+/// the fix for the orphan-column misframing: the engine parks out-of-flow nodes
+/// in a tall side column, and unioning them stretched the bounds so the actual
+/// flow rendered tiny in the corner. `None` (structural C4/Deployment mode →
+/// no flow, no orphans) unions every node rect, unchanged.
+fn content_bounds(plan: &Plan, in_flow: Option<&HashSet<String>>) -> Option<ContentBounds> {
     let mut min_x = f64::INFINITY;
     let mut min_y = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
@@ -85,7 +92,19 @@ fn content_bounds(plan: &Plan) -> Option<ContentBounds> {
         max_y = max_y.max(y1);
     };
 
-    for rect in plan.node_rects.values().chain(plan.label_boxes.values()) {
+    for (id, rect) in &plan.node_rects {
+        // Skip out-of-flow node cards: they're hidden by default and parked in a
+        // disconnected column, so framing them would shrink the actual flow.
+        // Decision rects (`decision:<step>`) are never out-of-flow, so the
+        // `in_flow` membership test keeps them (they aren't real node ids).
+        if let Some(set) = in_flow {
+            if !set.contains(id) && !id.starts_with("decision:") {
+                continue;
+            }
+        }
+        grow(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
+    }
+    for rect in plan.label_boxes.values() {
         grow(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
     }
     for route in plan.routes.values() {
@@ -162,6 +181,10 @@ pub fn CanvasPanel() -> impl IntoView {
     let viewport_ref = create_node_ref::<html::Div>();
     // Legend overlay open/closed state (default minimized; expandable).
     let legend_collapsed = create_rw_signal(true);
+    // Whether to show the out-of-flow ("unrelated") node cards (UX #2). Default
+    // OFF: the active flow is the sole focus, orphan cards are hidden. Toggling
+    // ON reveals them dimmed and re-fits to frame everything (see the fit path).
+    let show_unrelated = create_rw_signal(false);
 
     // The resolved layout config from /api/config (defaults if absent). The
     // dataset is loaded once and never mutated, so this reads untracked — it is
@@ -330,6 +353,31 @@ pub fn CanvasPanel() -> impl IntoView {
         })
     });
 
+    // Count of out-of-flow ("unrelated") node cards in the current flows
+    // diagram: real node rects whose id is not a flow endpoint. `0` whenever
+    // there's no flow (structural modes) — used to gate the toggle button so it
+    // appears only when there is actually something to reveal.
+    let unrelated_count = create_memo(move |_| {
+        diagram_inputs.with(|inputs| {
+            inputs
+                .as_ref()
+                .and_then(|(plan, flow, _, _, _)| {
+                    let flow = flow.as_ref()?;
+                    let in_flow = flow_node_ids(Some(flow));
+                    let n = plan
+                        .node_rects
+                        .keys()
+                        .filter(|id| !id.starts_with("decision:") && !in_flow.contains(*id))
+                        .count();
+                    Some(n)
+                })
+                .unwrap_or(0)
+        })
+    });
+    // Plain boolean for the toggle's visibility gate (the `view!` tag parser
+    // mis-reads an inline `>`/`>=` in a `when=` attribute as the tag close).
+    let has_unrelated = create_memo(move |_| unrelated_count.get() > 0);
+
     // Fit a content box (min/max corners, in viewBox/plan coordinate units)
     // into the measured viewport: as zoomed-in as possible while the whole box
     // stays in view, then centered. Shared by the plan-diagram and sequence
@@ -371,8 +419,14 @@ pub fn CanvasPanel() -> impl IntoView {
             );
             return;
         }
-        let Some((plan, _, _, _, _)) = diagram_inputs.get_untracked() else { return };
-        let Some(bounds) = content_bounds(&plan) else { return };
+        let Some((plan, flow, _, _, _)) = diagram_inputs.get_untracked() else { return };
+        // Frame the IN-FLOW geometry only (the fix for UX #1/#2): the engine
+        // parks out-of-flow nodes in a tall side column, so framing them left
+        // the actual flow tiny in a corner. When the user opts to SHOW the
+        // unrelated nodes, frame the full plan so they're visible.
+        let in_flow = flow.as_ref().map(|f| flow_node_ids(Some(f)));
+        let restrict = if show_unrelated.get_untracked() { None } else { in_flow.as_ref() };
+        let Some(bounds) = content_bounds(&plan, restrict) else { return };
         // The plan viewBox is the full canvas; content is a sub-region of it.
         fit_bounds(bounds, plan.canvas_width, plan.canvas_height);
     };
@@ -389,6 +443,9 @@ pub fn CanvasPanel() -> impl IntoView {
         // The footer steps panel reduces the canvas height when open; re-fit when
         // it toggles so the diagram re-frames for the resized viewport.
         let _ = state.steps_collapsed.get();
+        // Toggling "show unrelated nodes" changes what `fit` frames (flow-only
+        // vs the full plan), so re-fit when it flips.
+        let _ = show_unrelated.get();
         // Defer past layout: the first rAF runs before the steps-panel/collapse
         // reflow settles, so a second rAF measures the CURRENT stage rect and the
         // diagram ends up centered+fitted for the real viewport.
@@ -503,6 +560,7 @@ pub fn CanvasPanel() -> impl IntoView {
                                 zoom=zoom
                                 selected_node=state.selected_node
                                 selected_step=state.selected_step
+                                show_unrelated=show_unrelated
                                 on_select=on_select
                             />
                         }.into_view(),
@@ -562,6 +620,24 @@ pub fn CanvasPanel() -> impl IntoView {
                     <button title="Zoom in" on:click=move |_| zoom_by(ZOOM_STEP)>"+"</button>
                 </div>
             </Show>
+            // "Show unrelated nodes" toggle (UX #2) — only over a flows diagram
+            // that actually has out-of-flow nodes to reveal.
+            <Show when=move || has_unrelated.get()>
+                <button
+                    class="canvas-panel__unrelated-toggle"
+                    class:is-active=move || show_unrelated.get()
+                    on:click=move |_| show_unrelated.update(|s| *s = !*s)
+                >
+                    {move || {
+                        let n = unrelated_count.get();
+                        if show_unrelated.get() {
+                            format!("Hide {n} unrelated")
+                        } else {
+                            format!("Show {n} unrelated")
+                        }
+                    }}
+                </button>
+            </Show>
             // Type/relationship legend (bottom-left, above the placard). Reflects
             // only the types/kinds present in the current diagram; hidden when the
             // current surface has no diagram (empty model → renders nothing).
@@ -591,6 +667,44 @@ mod tests {
 
     fn bounds(min_x: f64, min_y: f64, max_x: f64, max_y: f64) -> ContentBounds {
         ContentBounds { min_x, min_y, max_x, max_y }
+    }
+
+    // A minimal plan: one in-flow node near the origin and one orphan node
+    // parked far down the canvas (mirroring the engine's out-of-flow column).
+    fn plan_with_orphan() -> Plan {
+        serde_json::from_value(serde_json::json!({
+            "canvasWidth": 1000.0, "canvasHeight": 1000.0,
+            "nodeWidth": 136.0, "nodeHeight": 54.0,
+            "laneWidth": 200.0, "rowGap": 60.0, "marginX": 24.0, "marginY": 24.0,
+            "visibleNodeIds": ["a", "orphan"],
+            "laneIndexByNode": [], "rowIndexByNode": [],
+            "nodeRects": [
+                ["a", {"x": 100.0, "y": 100.0, "width": 136.0, "height": 54.0}],
+                ["orphan", {"x": 100.0, "y": 900.0, "width": 136.0, "height": 54.0}]
+            ],
+            "routes": [], "labelBoxes": []
+        }))
+        .expect("valid plan json")
+    }
+
+    #[test]
+    fn content_bounds_excludes_orphans_when_in_flow_restricted() {
+        // The fix for UX #1/#2: restricting to the in-flow set ("a") must NOT
+        // stretch the bounds down to the parked orphan at y=900.
+        let plan = plan_with_orphan();
+        let in_flow: HashSet<String> = ["a".to_string()].into_iter().collect();
+        let b = content_bounds(&plan, Some(&in_flow)).expect("bounds");
+        assert!(b.max_y < 200.0, "orphan must be excluded, max_y={}", b.max_y);
+        assert_eq!(b.min_y, 100.0);
+        assert_eq!(b.max_y, 154.0);
+    }
+
+    #[test]
+    fn content_bounds_includes_all_nodes_when_unrestricted() {
+        // Structural mode (None) and "show unrelated" both union every node.
+        let plan = plan_with_orphan();
+        let b = content_bounds(&plan, None).expect("bounds");
+        assert_eq!(b.max_y, 954.0, "all nodes unioned, max_y={}", b.max_y);
     }
 
     // Map the CONTENT centre through the fit transform + the `meet` letterbox to
