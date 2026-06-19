@@ -1486,13 +1486,23 @@ button:focus-visible {
   font-size: var(--overline-size);
 }
 
-/* A tree row: a 3px left rail (owner color on files), then a fixed grid of
-   caret · type-icon · name · size · modified · owner — the columns the React
-   RepoTreeWorkspace shows. Size/modified are mono and right-aligned so they
-   read as a scannable metadata gutter. */
+/* The tree caps its width so the metadata gutter sits near the names instead
+   of being flung to the far edge of a wide panel (the "extraordinary
+   whitespace"). Header + rows share this cap, so their columns stay aligned. */
+.repo-tree__body {
+  --repo-tree-max-width: 52rem;
+  max-width: var(--repo-tree-max-width);
+}
+
+/* A tree row: a 3px left rail (owner color on files), then a grid of
+   lead · size · modified · owner — the columns the React RepoTreeWorkspace
+   shows. The lead column (caret · type-icon · name) is the ONLY part that
+   indents with depth, so the fixed Size/Modified/Owner columns stay at an
+   identical x for every row and the header. Size/modified are mono and
+   right-aligned so they read as a scannable metadata gutter. */
 .repo-row {
   display: grid;
-  grid-template-columns: 12px 18px minmax(0, 1fr) 64px 56px auto;
+  grid-template-columns: minmax(0, 1fr) 64px 56px auto;
   align-items: center;
   gap: var(--pad-tight);
   height: 24px;
@@ -1501,6 +1511,14 @@ button:focus-visible {
   border-left: var(--accent-rail) solid transparent;
   color: var(--muted);
   user-select: none;
+}
+/* The lead column: caret + icon + name as a flex. The per-depth indent is
+   padding HERE (not on the row), so it never displaces the metadata columns. */
+.repo-row__lead {
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+  min-width: 0; /* lets the name ellipsis instead of widening the column */
 }
 .repo-row--dir { cursor: pointer; }
 .repo-row--owned { cursor: pointer; }
@@ -1516,10 +1534,12 @@ button:focus-visible {
 }
 .repo-row--colhead:hover { background: none; }
 .repo-row__caret {
+  flex: 0 0 12px;
   color: var(--dim);
   text-align: center;
 }
 .repo-row__icon {
+  flex: 0 0 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1536,6 +1556,8 @@ button:focus-visible {
   stroke-linejoin: round;
 }
 .repo-row__name {
+  flex: 1 1 auto;
+  min-width: 0;
   color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
