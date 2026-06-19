@@ -48,6 +48,9 @@ web-sys = { version = "0.3", features = [
 # Same-origin async fetch of the Architext data docs (/data/**, /api/config)
 # and the serve plan farm (/api/plan/{hash}).
 gloo-net = { version = "0.6", default-features = false, features = ["http", "json"] }
+# Non-blocking poll delay (TimeoutFuture) while waiting for the native plan farm
+# to warm — keeps the main thread free instead of computing a plan in-process.
+gloo-timers = { version = "0.3", features = ["futures"] }
 serde = { version = "1", features = ["derive"] }
 # `preserve_order` keeps the config field/section spec in the server's authored
 # order (laneWidth, rowGap, …) when the config editor renders controls from the
