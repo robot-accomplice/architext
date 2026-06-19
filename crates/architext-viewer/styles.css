@@ -847,6 +847,24 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
 }
+/* "Show/Hide unrelated nodes" toggle (UX #2): sits under the zoom controls,
+   top-right of the canvas. Matches the canvas-control chrome (mono caps on a
+   raised panel); the active (showing) state is expressed via --accent. */
+.canvas-panel__unrelated-toggle {
+  position: absolute;
+  top: calc(var(--pad) + 28px + var(--grid));
+  right: var(--pad);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: var(--grid) var(--pad);
+  height: 28px;
+}
+.canvas-panel__unrelated-toggle.is-active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 .canvas-panel__hint {
   position: absolute;
   left: 50%;
@@ -1056,6 +1074,14 @@ button:focus-visible {
 .flow-node--selected .flow-node__card {
   stroke: var(--accent);
   filter: drop-shadow(0 0 6px var(--accent-glow));
+}
+
+/* Out-of-flow ("unrelated") node (UX #2): dimmed to ~0.3 and non-interactive
+   so the active flow stays the visual focus. Shown only when the user opts in
+   via the "Show unrelated nodes" toggle. */
+.flow-node--unrelated {
+  opacity: 0.3;
+  pointer-events: none;
 }
 
 /* Structural relationship pill: a small --surface/--edge hairline square sized

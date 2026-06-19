@@ -83,6 +83,11 @@ pub struct NodeView {
     pub name: String,
     pub node_type: String,
     pub rect: Rect,
+    /// Whether the node is part of the active flow (an endpoint of some flow
+    /// step). `true` when there is no flow (structural C4/Deployment mode →
+    /// every node is "in flow"). When `false` the card is dimmed and
+    /// non-interactive (the `flow-node--unrelated` state).
+    pub in_flow: bool,
 }
 
 /// Render one node card. `selected` toggles the `--accent` state treatment;
@@ -104,13 +109,14 @@ pub fn DiagramNode(
     let icon_transform = format!("translate({ICON_PAD} {ICON_PAD}) scale({icon_scale})");
     let icon_color = role.clone();
 
-    // Card classes: base + selected state (rule 1: state ≠ role hue).
-    let group_class = move || {
-        if selected.get() {
-            "flow-node flow-node--selected"
-        } else {
-            "flow-node"
-        }
+    // Card classes: base + selected state (rule 1: state ≠ role hue). An
+    // out-of-flow ("unrelated") node carries `flow-node--unrelated` (CSS dims it
+    // and disables pointer events) so the active flow stays the visual focus.
+    let in_flow = node.in_flow;
+    let group_class = move || match (in_flow, selected.get()) {
+        (false, _) => "flow-node flow-node--unrelated",
+        (true, true) => "flow-node flow-node--selected",
+        (true, false) => "flow-node",
     };
 
     // Wrap the name once; the line count drives both the name tspans and the
