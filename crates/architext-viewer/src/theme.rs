@@ -87,6 +87,15 @@ impl Mode {
     /// routed-plan projections and the Sequence lifeline projection all render
     /// one selected flow; the difference is how each lays it out, handled
     /// downstream.
+    /// Whether a canvas node click in this mode selects a node for the inspector.
+    /// Every diagram surface (Flows/Sequence/C4/Deployment/Data-Risks) and the
+    /// node-list surfaces (Blast Radius, Repo Tree) set `selected_node` on click;
+    /// Rules and Release Truth have no clickable architecture node. Drives the
+    /// inspector's "select a node" hint for node-bearing modes without a flow.
+    pub fn has_clickable_nodes(self) -> bool {
+        !matches!(self, Mode::Rules | Mode::ReleaseTruth)
+    }
+
     pub fn projects_flows(self) -> bool {
         matches!(self, Mode::Flows | Mode::Sequence | Mode::DataRisks)
     }
