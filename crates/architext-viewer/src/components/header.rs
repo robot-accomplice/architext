@@ -63,6 +63,15 @@ pub fn Header() -> impl IntoView {
             <div class="topbar__actions">
                 <LiveIndicator/>
                 <button
+                    class="topbar__theme-btn"
+                    title=move || format!("Switch to {} theme", state.theme.get().toggle_label())
+                    aria-label=move || format!("Switch to {} theme", state.theme.get().toggle_label())
+                    on:click=move |_| state.theme.update(|t| *t = t.toggled())
+                >
+                    <span aria-hidden="true">{move || state.theme.get().toggle_icon()}</span>
+                    {move || state.theme.get().toggle_label()}
+                </button>
+                <button
                     class="topbar__config-btn"
                     title="View resolved diagram configuration"
                     on:click=move |_| config_open.set(true)

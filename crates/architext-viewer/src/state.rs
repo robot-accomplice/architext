@@ -11,7 +11,7 @@ use std::rc::Rc;
 
 use crate::data::ArchitectureData;
 use crate::selection;
-use crate::theme::Mode;
+use crate::theme::{load_theme, Mode, Theme};
 
 /// The reactive application state. Cheap to clone (signals are `Copy`).
 #[derive(Clone, Copy)]
@@ -63,6 +63,11 @@ pub struct AppState {
     /// index's currentReleaseId / newest release) by `ReleaseTruthPanel`; `None`
     /// until then or if no releases are recorded.
     pub selected_release: RwSignal<Option<String>>,
+
+    /// Active color theme (Dark default / Light). Seeded from localStorage in
+    /// `new`; an effect in `App` applies it as `data-theme` on <html> and
+    /// persists changes.
+    pub theme: RwSignal<Theme>,
 }
 
 impl AppState {
@@ -94,6 +99,7 @@ impl AppState {
             live_connected: create_rw_signal(false),
             invalid_notice: create_rw_signal(None),
             selected_release: create_rw_signal(None),
+            theme: create_rw_signal(load_theme()),
         }
     }
 
