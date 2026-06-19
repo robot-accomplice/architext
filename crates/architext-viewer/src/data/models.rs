@@ -407,6 +407,17 @@ pub struct ReleaseIndex {
     pub releases: Vec<ReleaseSummary>,
 }
 
+/// Per-release roll-up counts (the `counts` object on each summary). Only the
+/// two the trend chart plots are modeled; serde ignores the rest.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseCounts {
+    #[serde(default)]
+    pub features: i64,
+    #[serde(default)]
+    pub bug_fixes: i64,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseSummary {
@@ -421,6 +432,17 @@ pub struct ReleaseSummary {
     pub posture: Option<String>,
     #[serde(default)]
     pub summary: Option<String>,
+    /// Feature/bug-fix roll-up, plotted by the release trend chart.
+    #[serde(default)]
+    pub counts: ReleaseCounts,
+    /// Completion / target timestamps — the chart sorts + labels by these
+    /// (releasedAt, else targetDate, else targetWindow), matching the React viewer.
+    #[serde(default)]
+    pub released_at: Option<String>,
+    #[serde(default)]
+    pub target_date: Option<String>,
+    #[serde(default)]
+    pub target_window: Option<String>,
     /// Relative path of the detail file, under the `releases/` directory.
     #[serde(default)]
     pub file: Option<String>,
