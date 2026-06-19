@@ -22,7 +22,7 @@
 // Packages with no binary available are still stamped (package.json only) so the
 // set is inspectable, but a missing binary is reported as a warning.
 
-import { existsSync, mkdirSync, copyFileSync, writeFileSync, chmodSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, cpSync, writeFileSync, chmodSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -62,8 +62,9 @@ function packageJsonFor(key) {
     description: `Native Architext CLI binary for ${key}.`,
     license: rootPkg.license,
     repository: rootPkg.repository,
-    // Only the binary is the payload.
-    files: [binaryName(key.split("-")[0])],
+    // Payload: the native binary + the viewer dist shipped beside it (the serve
+    // command resolves `<exe_dir>/dist`, so the installed binary is self-contained).
+    files: [binaryName(key.split("-")[0]), "dist"],
     os,
     cpu,
     // No bin/main: this package is resolved by the root launcher, not run directly.
@@ -102,6 +103,16 @@ function stampPackage(key, outDir, binarySrc) {
       chmodSync(dest, 0o755);
     }
     hasBinary = true;
+
+    // Ship the Trunk-built viewer dist beside the binary so `architext serve`
+    // resolves `<exe_dir>/dist` with no repo-relative assets. The dist is a build
+    // artifact (trunk) — it must exist before stamping.
+    const distSrc = join(repoRoot, "crates", "architext-viewer", "dist");
+    if (existsSync(join(distSrc, "index.html"))) {
+      cpSync(distSrc, join(pkgDir, "dist"), { recursive: true });
+    } else {
+      console.warn(`! viewer dist not found at ${distSrc} — run \`trunk build\` first; package ${key} will lack the viewer`);
+    }
   }
   return { dir: pkgDir, hasBinary, binName };
 }
