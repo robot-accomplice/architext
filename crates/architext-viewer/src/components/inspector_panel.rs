@@ -10,7 +10,8 @@ use leptos::*;
 
 use crate::components::data_risks_panel::DataRisksPanel;
 use crate::components::notes_editor::NotesSection;
-use crate::data::models::{DataClass, Node, View};
+use crate::data::fetch_node_git;
+use crate::data::models::{DataClass, Node, NodeGit, View};
 use crate::diagram::role_color_var;
 use crate::release_truth::{release_path, release_tone, ReleaseDoc};
 use crate::severity::release_tone_color_var;
@@ -139,6 +140,8 @@ pub fn InspectorPanel() -> impl IntoView {
                             &node,
                         );
                         let clear = move |_| state.selected_node.set(None);
+                        let source_paths = node.source_paths.clone();
+                        let paths_csv = source_paths.join(",");
                         return view! {
                             <button class="inspector__back" on:click=clear>
                                 "‹ back to view"
@@ -164,6 +167,17 @@ pub fn InspectorPanel() -> impl IntoView {
                                 Some("var(--sens-medium)"),
                             )}
                             {chip_group("Appears in views", rel.appears_in, None)}
+                            {(!source_paths.is_empty()).then(move || view! {
+                                <div class="inspector__card">
+                                    <div class="overline">"SOURCE"</div>
+                                    {source_paths.iter().map(|p| view! {
+                                        <p class="inspector__meta mono">{p.clone()}</p>
+                                    }).collect_view()}
+                                </div>
+                            })}
+                            {(!paths_csv.is_empty()).then(move || view! {
+                                <NodeDevWindow paths=paths_csv/>
+                            })}
                             <NotesSection
                                 label="Node notes".to_string()
                                 target_kind="node".to_string()
@@ -348,6 +362,66 @@ pub fn InspectorPanel() -> impl IntoView {
                 >"‹"</button>
             </Show>
         </aside>
+    }
+}
+
+/// Trim an ISO datetime to its `YYYY-MM-DD` date for display.
+fn short_date(iso: &str) -> String {
+    iso.get(..10).unwrap_or(iso).to_string()
+}
+
+/// Human "active span" between two ISO datetimes (parsed via the JS `Date`), or
+/// `None` when either is missing/unparseable. Days under a year, else years.
+fn active_span(first: Option<&str>, last: Option<&str>) -> Option<String> {
+    let (f, l) = (first?, last?);
+    let fms = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(f)).get_time();
+    let lms = js_sys::Date::new(&wasm_bindgen::JsValue::from_str(l)).get_time();
+    if fms.is_nan() || lms.is_nan() {
+        return None;
+    }
+    let days = ((lms - fms) / 86_400_000.0).round().max(0.0) as i64;
+    Some(if days >= 365 {
+        format!("{:.1} years", days as f64 / 365.0)
+    } else if days <= 1 {
+        "under a day".to_string()
+    } else {
+        format!("{days} days")
+    })
+}
+
+/// The git "development window" for a node, fetched on demand from
+/// `/api/node-git` for its `sourcePaths`. Renders nothing while loading or when
+/// the paths are untracked (the sanitized corpus) — supplementary, never blank.
+/// Uses a plain signal + `spawn_local` (not a `Resource`/`Suspense`, which would
+/// conflict with the App-level data Suspense — mirrors the Repo Tree fetch).
+#[component]
+fn NodeDevWindow(paths: String) -> impl IntoView {
+    let git = create_rw_signal::<Option<NodeGit>>(None);
+    spawn_local(async move {
+        git.set(fetch_node_git(&paths).await);
+    });
+    move || {
+        git.get().filter(|g| g.tracked).map(|g| {
+            let first = g.first_commit.clone().map(|d| short_date(&d)).unwrap_or_default();
+            let last = g.last_commit.clone().map(|d| short_date(&d)).unwrap_or_default();
+            let span = active_span(g.first_commit.as_deref(), g.last_commit.as_deref());
+            let commits = g.commit_count.unwrap_or(0);
+            let authors = g.authors.join(", ");
+            view! {
+                <div class="accent-surface inspector__card">
+                    <div class="overline">"DEVELOPMENT"</div>
+                    <p class="inspector__meta">"First seen "<span class="mono">{first}</span></p>
+                    <p class="inspector__meta">"Last changed "<span class="mono">{last}</span></p>
+                    {span.map(|d| view! {
+                        <p class="inspector__meta">{format!("Active span: {d}")}</p>
+                    })}
+                    <p class="inspector__meta">{format!("{commits} commits")}</p>
+                    {(!authors.is_empty()).then(|| view! {
+                        <p class="inspector__meta">{format!("Contributors: {authors}")}</p>
+                    })}
+                </div>
+            }
+        })
     }
 }
 
