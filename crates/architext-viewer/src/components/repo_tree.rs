@@ -119,9 +119,11 @@ pub fn RepoTree() -> impl IntoView {
                     view! {
                         <div class="repo-tree__body">
                             <div class="repo-row repo-row--colhead" aria-hidden="true">
-                                <span class="repo-row__caret"></span>
-                                <span class="repo-row__icon"></span>
-                                <span class="repo-row__name">"Name"</span>
+                                <div class="repo-row__lead">
+                                    <span class="repo-row__caret"></span>
+                                    <span class="repo-row__icon"></span>
+                                    <span class="repo-row__name">"Name"</span>
+                                </div>
                                 <span class="repo-row__size">"Size"</span>
                                 <span class="repo-row__time">"Modified"</span>
                                 <span class="repo-row__owner">"Owner"</span>
@@ -204,26 +206,28 @@ fn render_node(
                     view! { <span class="repo-row__owner"></span> }.into_view(),
                 )
             };
-            let style = format!("{indent};border-left-color:{rail}");
+            let style = format!("border-left-color:{rail}");
 
             // Children are rendered eagerly but hidden when collapsed, so the
             // expand toggle is instant and selection state is preserved.
             let children_view = render_children(node, depth + 1, state, collapsed, now);
             view! {
                 <div class="repo-row repo-row--dir" style=style on:click=on_click>
-                    <span class="repo-row__caret">
-                        {move || if is_collapsed.get() { "▸" } else { "▾" }}
-                    </span>
-                    <span class="repo-row__icon repo-row__icon--folder">
-                        <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d=move || if is_collapsed.get() {
-                                glyph_path("folder")
-                            } else {
-                                glyph_path("folder-open")
-                            }/>
-                        </svg>
-                    </span>
-                    <span class="repo-row__name repo-row__name--dir">{name}</span>
+                    <div class="repo-row__lead" style=indent>
+                        <span class="repo-row__caret">
+                            {move || if is_collapsed.get() { "▸" } else { "▾" }}
+                        </span>
+                        <span class="repo-row__icon repo-row__icon--folder">
+                            <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d=move || if is_collapsed.get() {
+                                    glyph_path("folder")
+                                } else {
+                                    glyph_path("folder-open")
+                                }/>
+                            </svg>
+                        </span>
+                        <span class="repo-row__name repo-row__name--dir">{name}</span>
+                    </div>
                     <span class="repo-row__size"></span>
                     <span class="repo-row__time"></span>
                     {owner_view}
@@ -246,7 +250,7 @@ fn render_node(
                 // Unowned files get a neutral rail (the hairline), never a role hue.
                 None => ("var(--line)".to_string(), String::new(), None),
             };
-            let style = format!("{indent};border-left-color:{rail}");
+            let style = format!("border-left-color:{rail}");
 
             let on_click = move |_| {
                 if let Some(id) = owner_id.clone() {
@@ -266,13 +270,15 @@ fn render_node(
                     style=style
                     on:click=on_click
                 >
-                    <span class="repo-row__caret"></span>
-                    <span class="repo-row__icon" style=format!("color:{}", icon.color)>
-                        <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d=glyph_path(icon.glyph)/>
-                        </svg>
-                    </span>
-                    <span class="repo-row__name">{name}</span>
+                    <div class="repo-row__lead" style=indent>
+                        <span class="repo-row__caret"></span>
+                        <span class="repo-row__icon" style=format!("color:{}", icon.color)>
+                            <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d=glyph_path(icon.glyph)/>
+                            </svg>
+                        </span>
+                        <span class="repo-row__name">{name}</span>
+                    </div>
                     <span class="repo-row__size">{size_text}</span>
                     <span class="repo-row__time">{time_text}</span>
                     {if owner_label.is_empty() {
