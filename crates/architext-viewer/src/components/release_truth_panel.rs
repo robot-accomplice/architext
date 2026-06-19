@@ -26,6 +26,7 @@
 use leptos::*;
 
 use crate::components::release_planning::ReleasePlanningEditor;
+use crate::components::release_trend_chart::ReleaseTrendChart;
 use crate::release_truth::{release_path, release_tone, MilestoneView, PathItem, ReleaseDoc};
 use crate::severity::release_tone_color_var;
 use crate::state::use_app_state;
@@ -59,11 +60,17 @@ pub fn ReleaseTruthPanel() -> impl IntoView {
         planning_mode.set(false);
     });
 
+    // The historical trend chart is docked at the bottom (fixed), with the
+    // release detail scrolling independently above it. The dock is minimizable
+    // so the reader can reclaim the vertical space for the detail.
+    let history_minimized = create_rw_signal(false);
+
     view! {
         <div class="release-panel">
             // ── Selected release truth (or the planning editor) ──────────────
             // The release SELECTOR lives in the left nav (SelectorBar); this
-            // column holds only the detail for the shared selection.
+            // column holds only the detail for the shared selection, and SCROLLS
+            // independently of the fixed history dock below.
             <div class="release-panel__detail">
                 {move || {
                     let data = state.data.get();
@@ -138,6 +145,24 @@ pub fn ReleaseTruthPanel() -> impl IntoView {
                     }
                     .into_view()
                 }}
+            </div>
+
+            // ── Historical trend chart — FIXED bottom dock, minimizable ──────
+            <div
+                class="release-history-dock"
+                class=("release-history-dock--min", move || history_minimized.get())
+            >
+                <div class="release-history-dock__head">
+                    <span class="overline">"RELEASE HISTORY"</span>
+                    <button
+                        class="release-history-dock__toggle mono"
+                        type="button"
+                        on:click=move |_| history_minimized.update(|v| *v = !*v)
+                    >
+                        {move || if history_minimized.get() { "▴ Show chart" } else { "▾ Hide chart" }}
+                    </button>
+                </div>
+                {move || (!history_minimized.get()).then(|| view! { <ReleaseTrendChart/> })}
             </div>
         </div>
     }

@@ -2177,10 +2177,99 @@ button.blast-chip { cursor: pointer; }
    --c4-* role hue); versions/dates are mono. */
 /* The release SELECTOR moved to the left-nav southern slot (SelectorBar); this
    panel now holds only the selected release's detail, single column. */
+/* Flex column: the detail SCROLLS independently above a FIXED history dock. */
 .release-panel {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  gap: var(--pad);
 }
-.release-panel__detail { display: flex; flex-direction: column; gap: var(--pad); }
+.release-panel__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Historical trend chart docked at the bottom (fixed); minimizing collapses it
+   to just the header bar so the reader can reclaim the space for the detail. */
+.release-history-dock {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+  padding-top: var(--pad-tight);
+  border-top: 1px solid var(--line);
+}
+.release-history-dock__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad-tight);
+}
+.release-history-dock__toggle { font-size: var(--overline-size); padding: 2px 8px; }
+.release-history-dock--min { gap: 0; }
+
+/* ── Release trend chart (F14) — ported from the React ReleaseTrendChart, with
+   the literal --blue/--yellow remapped onto the facelift token scale. ─────── */
+.release-history { display: grid; gap: 8px; }
+.release-history svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1200 / 240;
+  min-height: 0;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  overflow: visible;
+}
+.release-history g[role="listitem"] { cursor: help; }
+.release-history g[role="listitem"]:focus { outline: none; }
+.release-history text {
+  fill: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0;
+}
+.release-history .release-chart-y-label { font-size: 7px; }
+.release-history .release-chart-x-label { font-size: 6.5px; }
+.release-chart-axis { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+.release-chart-tick {
+  fill: none;
+  stroke: color-mix(in srgb, var(--line-strong) 35%, transparent);
+  stroke-width: 0.5;
+}
+.release-chart-active-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-dasharray: 2 3;
+  stroke-width: 1;
+  opacity: 0.85;
+}
+.release-chart-line { fill: none; stroke-width: 1.2; }
+.release-chart-area { opacity: 0.18; }
+.release-chart-area.feature { fill: var(--accent); }
+.release-chart-area.fix { fill: var(--sev-medium); }
+.release-chart-line.feature { stroke: var(--accent); }
+.release-chart-line.fix { stroke: var(--sev-medium); }
+.release-history circle { fill: var(--surface); stroke: var(--accent); stroke-width: 1.2; }
+.release-history circle.active { fill: var(--sev-medium); stroke: var(--sev-medium); }
+.release-history circle.healthy { stroke: var(--accent); }
+.release-history circle.progressing { stroke: var(--sev-medium); }
+.release-history circle.blocked { stroke: var(--sev-critical); }
+.release-history circle.inactive { stroke: var(--line-strong); }
+.release-chart-legend {
+  display: flex;
+  gap: 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.release-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.release-chart-legend i { width: 14px; height: 2px; background: var(--accent); }
+.release-chart-legend i.fix { background: var(--sev-medium); }
 .release-panel__hint { color: var(--dim); }
 .release-panel__hint--error { color: var(--sev-critical); }
 .release-panel__section { margin: var(--pad-tight) 0 0; }
