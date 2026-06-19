@@ -75,6 +75,24 @@
         ]
       },
       {
+        "id": "routing-fitness-ratchet-rust",
+        "title": "Native routing fitness + perf ratchet (post-cutover regression gate)",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Before this, routing quality + work-volume were gated ONLY by the JS ratchet (test/routing-corpus-fitness.test.mjs), which imports the JS engine and dies when Phase 3 deletes it — so the cutover would have shipped 1.7.0 with zero routing-regression protection. This is the native equivalent: crates/architext-routing/tests/corpus_fitness.rs runs the same in-repo corpus (test/fixtures/routing-corpus) through the Rust plan_diagram path and freezes a Rust baseline (tests/fixtures/corpus-fitness-baseline.json). It gates the eight JS GATED_METRICS (routes, bends, crossings, pairInternalCrossings, laneOrderViolations, closeParallelRuns, sharedSegments, repeatedCrossings) and the three deterministic PERF_GATED_COUNTERS (edgesPlanned, cheapCandidateCount, gridRouteCalls). The JS Tier-2 machine-normalized wall-ratio is intentionally not ported (non-deterministic; counters are the robust CI-safe half). Surfacing the work counters required a small additive engine change: route_edges_with_stats / plan_diagram_with_stats expose a CorpusPlanStats out-param while the stats-free route_edges / plan_diagram (WASM bridge) are unchanged. Distinct from differential-parity-harness: that is the one-time JS-vs-Rust byte-parity migration gate; this is the permanent Rust-vs-frozen-baseline regression gate that survives the cutover. Baseline VALUES are committed and require maintainer sign-off.",
+        "source": "ad-hoc",
+        "dateAdded": "2026-06-18T00:00:00.000Z",
+        "workstreamId": "engine-port",
+        "priority": "high",
+        "dependsOn": [
+          "routing-engine-rust-port",
+          "differential-parity-harness"
+        ],
+        "evidence": [
+          "routing-fitness-ratchet-branch"
+        ]
+      },
+      {
         "id": "validation-conformance-port",
         "title": "Port validation with a conformance corpus",
         "kind": "architecture",
@@ -213,7 +231,8 @@
       "itemIds": [
         "routing-engine-rust-port",
         "js-compat-determinism",
-        "differential-parity-harness"
+        "differential-parity-harness",
+        "routing-fitness-ratchet-rust"
       ],
       "evidence": [
         "pr-119",
@@ -406,6 +425,12 @@
       "label": "PR #143 validation: per-rule corpus 44/44",
       "href": "https://github.com/robot-accomplice/architext/pull/143",
       "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "routing-fitness-ratchet-branch",
+      "label": "Native routing ratchet on branch feat/rust-perf-ratchet (baseline pending maintainer sign-off)",
+      "kind": "test",
       "status": "complete"
     }
   ]

@@ -29,7 +29,9 @@ use serde_json::Value;
 
 use crate::js_compat::js_hypot;
 use crate::model::{Plan, Point, Rect, Route};
-use crate::route_edges::orchestration::{route_edges, InputRelationship, NodeRect, RouteEdgesInput};
+use crate::route_edges::orchestration::{
+    route_edges_with_stats, CorpusPlanStats, InputRelationship, NodeRect, RouteEdgesInput,
+};
 use crate::route_ports::SideAnchors;
 use crate::route_geometry::rects_overlap;
 use crate::route_labels::{estimated_label_box, LabelBox, LabelRelationship};
@@ -504,6 +506,13 @@ fn place_label(
 /// Computes the full planned diagram: node rects, routes, label boxes, and
 /// warnings. Returns a `Plan` struct ready for serialization to the wire shape.
 pub fn plan_diagram(input: &PlanDiagramInput) -> Plan {
+    plan_diagram_with_stats(input).0
+}
+
+/// Same as [`plan_diagram`] but also returns the deterministic planner work
+/// counters ([`CorpusPlanStats`]). Used by the perf ratchet; the WASM/native
+/// bridge uses the stats-free [`plan_diagram`].
+pub fn plan_diagram_with_stats(input: &PlanDiagramInput) -> (Plan, CorpusPlanStats) {
     let node_width = input.node_width;
     let node_height = input.node_height;
     let lane_width = input.lane_width;
@@ -628,7 +637,7 @@ pub fn plan_diagram(input: &PlanDiagramInput) -> Plan {
         grid_route_max_expansions: 3000,
     };
 
-    let routed_edges = route_edges(&route_edges_input);
+    let (routed_edges, plan_stats) = route_edges_with_stats(&route_edges_input);
 
     // Build relationships-by-id map
     let relationships_by_id: IndexMap<String, &RelationshipInput> =
@@ -757,7 +766,7 @@ pub fn plan_diagram(input: &PlanDiagramInput) -> Plan {
     // node_rects as IndexMap<String, Rect>
     let node_rects_map: IndexMap<String, Rect> = node_rects;
 
-    Plan {
+    let plan = Plan {
         canvas_width,
         canvas_height,
         node_width,
@@ -775,7 +784,8 @@ pub fn plan_diagram(input: &PlanDiagramInput) -> Plan {
         warnings: warnings.into_iter()
             .filter_map(|w| serde_json::from_value(w).ok())
             .collect(),
-    }
+    };
+    (plan, plan_stats)
 }
 
 // ---------------------------------------------------------------------------

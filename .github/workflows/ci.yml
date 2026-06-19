@@ -95,6 +95,15 @@ jobs:
       - name: Run Rust workspace tests
         run: cargo test --workspace
 
+      # Native routing fitness + perf ratchet over the in-repo corpus. This is the
+      # Rust equivalent of test/routing-corpus-fitness.test.mjs and is the routing
+      # regression gate after the 1.7.0 JS-engine cutover. It already runs under
+      # `cargo test --workspace` above; this explicit step names the gate so a
+      # failure is attributed to "routing corpus ratchet" rather than buried in the
+      # workspace output.
+      - name: Routing corpus fitness + perf ratchet
+        run: cargo test -p architext-routing --test corpus_fitness
+
       - name: Lint wasm viewer with clippy
         run: cargo clippy -p architext-viewer --target wasm32-unknown-unknown -- -D warnings
 
