@@ -93,7 +93,10 @@ pub fn RepoTree() -> impl IntoView {
     });
 
     view! {
-        <div class="repo-tree">
+        <div
+            class="repo-tree"
+            class=("repo-tree--previewing", move || selected_file.get().is_some())
+        >
             <div class="repo-tree__main">
             <div class="repo-tree__header">
                 <div class="overline">"REPO TREE"</div>

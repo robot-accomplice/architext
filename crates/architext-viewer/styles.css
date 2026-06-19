@@ -1475,10 +1475,15 @@ button:focus-visible {
    cap lives on .repo-tree__body inside it, so the table stays compact while
    this column still yields its slack to the preview pane. */
 .repo-tree__main {
-  flex: 0 1 auto;
+  flex: 1 1 0;
   min-width: 0;
+  max-width: 52rem;       /* mirrors the F16 body cap: on a wide center the table stops here and the preview takes the freed width; on a narrow center the two panes share 50/50 instead of the table starving the preview */
   overflow: auto;
 }
+/* No file selected → the preview collapses and the table reclaims the full
+   width (the F16 layout). Clicking a file reveals the preview and the panes
+   share the row. */
+.repo-tree:not(.repo-tree--previewing) .repo-file-preview { display: none; }
 /* Right pane: the file preview, filling the width the F16 cap freed up. A
    hairline border separates it from the table; it scrolls on its own. */
 .repo-file-preview {
