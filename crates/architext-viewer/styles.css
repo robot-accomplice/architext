@@ -2414,7 +2414,10 @@ button.blast-chip { cursor: pointer; }
   border: var(--hairline) solid var(--line);
   overflow: hidden;
 }
-.release-progress__bar { height: 100%; background: var(--accent); }
+/* Always the literal accent green, never the cascaded posture tone: the bar's
+   FILL already shows how much is left, so coloring it amber/red over-communicates
+   "not finished". --accent-base ignores any --accent the release card sets. */
+.release-progress__bar { height: 100%; background: var(--accent-base); }
 .release-progress__label { color: var(--dim); font-size: var(--overline-size); }
 
 .release-path { display: flex; flex-direction: column; gap: var(--pad-tight); }
