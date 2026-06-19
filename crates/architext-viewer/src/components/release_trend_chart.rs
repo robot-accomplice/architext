@@ -56,7 +56,7 @@ pub fn ReleaseTrendChart() -> impl IntoView {
                     .as_ref()
                     .map(|idx| idx.releases.clone())
                     .unwrap_or_default();
-                sorted.sort_by(|a, b| sort_key(a).cmp(&sort_key(b)));
+                sorted.sort_by_key(sort_key);
                 if sorted.is_empty() {
                     return view! {
                         <p class="release-panel__hint">"No release history to chart."</p>
