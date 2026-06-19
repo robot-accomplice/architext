@@ -91,3 +91,85 @@ impl Mode {
         matches!(self, Mode::Flows | Mode::Sequence | Mode::DataRisks)
     }
 }
+
+/// Color theme — dark (the locked Cyber-Tactical default) or light. The actual
+/// token values live in `styles.css` (`:root` = dark, `:root[data-theme=light]`
+/// = light); this enum is the Rust-side state + the `data-theme` attribute value
+/// applied to `<html>`. Persisted in localStorage so the choice survives reload.
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+pub enum Theme {
+    Dark,
+    Light,
+}
+
+const THEME_STORAGE_KEY: &str = "architext-theme";
+
+impl Theme {
+    /// The `data-theme` attribute value (also the persisted string).
+    pub fn attr(self) -> &'static str {
+        match self {
+            Theme::Dark => "dark",
+            Theme::Light => "light",
+        }
+    }
+
+    fn from_attr(s: &str) -> Option<Self> {
+        match s {
+            "dark" => Some(Theme::Dark),
+            "light" => Some(Theme::Light),
+            _ => None,
+        }
+    }
+
+    /// The other theme (for a toggle).
+    pub fn toggled(self) -> Self {
+        match self {
+            Theme::Dark => Theme::Light,
+            Theme::Light => Theme::Dark,
+        }
+    }
+
+    /// Label for the toggle control — names the theme it switches TO.
+    pub fn toggle_label(self) -> &'static str {
+        match self {
+            Theme::Dark => "Light",
+            Theme::Light => "Dark",
+        }
+    }
+
+    /// Glyph for the toggle — shows the target theme's icon (sun when going to
+    /// light, moon when going to dark).
+    pub fn toggle_icon(self) -> &'static str {
+        match self {
+            Theme::Dark => "☀",
+            Theme::Light => "☾",
+        }
+    }
+}
+
+/// Browser `localStorage` (same-origin), or None outside a window context.
+fn local_storage() -> Option<web_sys::Storage> {
+    web_sys::window()?.local_storage().ok().flatten()
+}
+
+/// The persisted theme, defaulting to Dark (the locked design language) when no
+/// choice has been stored.
+pub fn load_theme() -> Theme {
+    local_storage()
+        .and_then(|s| s.get_item(THEME_STORAGE_KEY).ok().flatten())
+        .and_then(|v| Theme::from_attr(&v))
+        .unwrap_or(Theme::Dark)
+}
+
+/// Persist the theme choice and apply it as `data-theme` on `<html>` so every
+/// surface (including popovers rendered outside the app subtree) re-themes.
+pub fn apply_theme(theme: Theme) {
+    if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+        if let Some(root) = doc.document_element() {
+            let _ = root.set_attribute("data-theme", theme.attr());
+        }
+    }
+    if let Some(storage) = local_storage() {
+        let _ = storage.set_item(THEME_STORAGE_KEY, theme.attr());
+    }
+}

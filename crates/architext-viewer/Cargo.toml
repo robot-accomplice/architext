@@ -37,6 +37,12 @@ web-sys = { version = "0.3", features = [
     "EventSource",
     "MessageEvent",
     "Event",
+    # Theme toggle: persist the choice in localStorage and apply `data-theme`
+    # on <html> (Document/Element) so the whole document — popovers included —
+    # picks up the light/dark token set.
+    "Window",
+    "Document",
+    "Storage",
 ] }
 
 # Same-origin async fetch of the Architext data docs (/data/**, /api/config)

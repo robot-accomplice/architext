@@ -162,6 +162,58 @@
   font-size: var(--body-size);
 }
 
+/* ── Light theme ──────────────────────────────────────────────────────────
+   A light variant of the locked Cyber-Tactical palette (applied via
+   `data-theme="light"` on <html>; dark is :root default). The tiered-black
+   surface ramp inverts to tiered whites (page → elevated → white popover), the
+   text ramp flips to dark-on-light, and the neon role/severity/accent hues are
+   re-tuned to darker, saturated values that hold contrast on a light
+   background (bright neons wash out on white). Role IDENTITY is preserved
+   (client=system, queue=deployment; accent stays greener than client so
+   "active" never reads as "client"). Non-color tokens (type, shape, grid,
+   widths) inherit from :root and are not repeated. */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --canvas-black: #e9edf1;   /* diagram canvas — cool light grey so node cards still read as raised */
+  --bg: #eef1f4;             /* app background */
+  --surface: #f4f6f8;        /* base surface under panels */
+  --panel: #f9fafc;          /* panels (nav / inspector) */
+  --panel-2: #ffffff;        /* raised controls within panels */
+  --popover: #ffffff;        /* popovers / menus (lifted by border) */
+
+  --ink: #14181b;            /* primary text */
+  --muted: #44535a;          /* secondary text / overlines */
+  --dim: #6b7a80;            /* tertiary / disabled */
+
+  --line: #cfd8dd;
+  --line-strong: #8c9aa1;
+  --edge: #51626a;           /* diagram route stroke — dark enough on the light canvas */
+
+  --c4-actor: #c81e8e;
+  --c4-client: #0a86a6;
+  --c4-service: #7c3aed;
+  --c4-worker: #a87800;
+  --c4-data: #1a8f3c;
+  --c4-external: #5a6b72;
+  --c4-deployment: #c26a09;
+  --c4-module: #0f8a55;
+  --c4-system: #0a86a6;
+  --c4-queue: #c26a09;
+
+  --sev-critical: #d3253f;
+  --sev-high:     #c26a09;
+  --sev-medium:   #a87800;
+  --sev-low:      #6b7a80;
+  --sens-high:    #d3253f;
+  --sens-medium:  #a87800;
+  --sens-low:     #6b7a80;
+
+  --accent: #0a9e72;
+  --accent-ring: rgba(10, 158, 114, 0.40);
+  --accent-glow: rgba(10, 158, 114, 0.12);
+}
+
 /* ── Primitives (real classes shared by every mode) ───────────────────────── */
 
 /* Overline: the ONE section-label / eyebrow treatment. */
@@ -372,7 +424,8 @@ button:focus-visible {
 }
 /* Config button: on-language hairline + mono, --accent only as a STATE signal
    (hover/active) — never a role hue (rule 1). */
-.topbar__config-btn {
+.topbar__config-btn,
+.topbar__theme-btn {
   font-family: var(--font-mono);
   font-size: var(--overline-size);
   letter-spacing: var(--overline-tracking);
@@ -384,11 +437,15 @@ button:focus-visible {
   border-radius: var(--card-radius);
 }
 .topbar__config-btn:hover,
-.topbar__config-btn:focus-visible {
+.topbar__config-btn:focus-visible,
+.topbar__theme-btn:hover,
+.topbar__theme-btn:focus-visible {
   color: var(--accent);
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent-ring);
 }
+/* The theme toggle's leading glyph sits a touch larger than the mono label. */
+.topbar__theme-btn span[aria-hidden] { font-size: 1.1em; margin-right: 2px; }
 
 /* ── Config drawer (read-only resolved diagram config) ───────────────────────
    A right-side drawer over the shell + a click-away scrim. Values are read-only
