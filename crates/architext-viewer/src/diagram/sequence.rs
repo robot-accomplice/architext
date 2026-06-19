@@ -25,7 +25,16 @@ use std::collections::HashMap;
 /// `headerY` — top of the participant header card band.
 const HEADER_Y: f64 = 18.0;
 /// `messageStartY` — y of the first message row (also the activation/​frame origin).
-const MESSAGE_START_Y: f64 = 68.0;
+///
+/// Raised from the JS port's `68` to `84` to fix a header clipping bug: each
+/// message's action label is drawn 17px above its line, so at `68` the first
+/// label landed at y≈51 — inside the participant header band (cards span
+/// y≈14..54) — and its gutter portion peeked out behind the header cards / top
+/// activation bar (the `eTarg…` artifact). `84` lifts the first label to y≈67,
+/// clear of the band. All downstream geometry (activations, frames, lifelines,
+/// content height) is derived from this origin, so the whole body shifts down
+/// together and spacing is preserved.
+const MESSAGE_START_Y: f64 = 84.0;
 /// Bottom padding added below the last message row (`+ 38` in the height calc).
 const HEIGHT_TAIL: f64 = 38.0;
 /// Lifeline top offset below the header (`headerY + 48`).
@@ -574,7 +583,7 @@ mod tests {
         // Content box is positive and matches the JS formula.
         assert!(layout.content_width > 0.0 && layout.content_height > 0.0);
         assert_eq!(layout.content_width, 28.0 * 2.0 + 5.0 * 146.0);
-        assert_eq!(layout.content_height, 68.0 + 6.0 * 56.0 + 38.0);
+        assert_eq!(layout.content_height, 84.0 + 6.0 * 56.0 + 38.0);
         // One lifeline per participant.
         assert_eq!(layout.lifelines.len(), 5);
         // Role types are single-sourced from the node.type.
@@ -591,9 +600,31 @@ mod tests {
         assert_eq!(layout.participants[0].x, 28.0 + 0.0 * 146.0 + 146.0 / 2.0);
         // xFor(index 2) = 28 + 2*146 + 73 = 393
         assert_eq!(layout.participants[2].x, 28.0 + 2.0 * 146.0 + 146.0 / 2.0);
-        // yForStepIndex(0) = 68; row 3 = 68 + 3*56 = 236
-        assert_eq!(layout.messages[0].y, 68.0);
-        assert_eq!(layout.messages[3].y, 68.0 + 3.0 * 56.0);
+        // yForStepIndex(0) = 84 (raised from the JS port's 68 to clear the header
+        // band — see MESSAGE_START_Y); row 3 = 84 + 3*56 = 252
+        assert_eq!(layout.messages[0].y, 84.0);
+        assert_eq!(layout.messages[3].y, 84.0 + 3.0 * 56.0);
+    }
+
+    #[test]
+    fn first_action_label_clears_header_band() {
+        // Regression: the first message's action label is drawn ~17px above its
+        // line (`y - 17` in sequence_svg). With the old MESSAGE_START_Y=68 that
+        // label landed at y=51, inside the participant header band (cards span
+        // y≈14..54), and its gutter portion peeked out behind the header cards /
+        // top activation bar (the `eTarg…` artifact). The label must sit fully
+        // below the header band so it can never reappear there.
+        const HEADER_BAND_BOTTOM: f64 = 14.0 + 40.0; // CARD_TOP + CARD_HEIGHT (sequence_svg)
+        const ACTION_LABEL_LIFT: f64 = 17.0; // y - 17 in SeqMessage
+        const LABEL_ASCENT: f64 = 9.0; // ~11px text rises this far above baseline
+        let (flow, nodes) = fresh_install_like();
+        let by_id: HashMap<&str, &Node> = nodes.iter().map(|n| (n.id.as_str(), n)).collect();
+        let layout = build_sequence_layout(&flow, &by_id, &SequenceConfig::default());
+        let first_label_top = layout.messages[0].y - ACTION_LABEL_LIFT - LABEL_ASCENT;
+        assert!(
+            first_label_top >= HEADER_BAND_BOTTOM,
+            "first action label top {first_label_top} must clear header band bottom {HEADER_BAND_BOTTOM}",
+        );
     }
 
     #[test]
@@ -682,9 +713,10 @@ mod tests {
         // x = 28 + 0*146 + 8 = 36 ; width = (2-0+1)*146 - 16 = 422.
         assert_eq!(f.x, 28.0 + 8.0);
         assert_eq!(f.width, 3.0 * 146.0 - 16.0);
-        // y = yForStep(0) - 30 = 38 ; height = yForStep(1) - 38 + 34 = 124 - 38 + 34 = 120.
-        assert_eq!(f.y, 68.0 - 30.0);
-        assert_eq!(f.height, (68.0 + 56.0) - 38.0 + 34.0);
+        // y = yForStep(0) - 30 = 54 ; height = yForStep(1) - y + 34 = 140 - 54 + 34 = 120
+        // (origin-independent: the MESSAGE_START_Y term cancels in the height).
+        assert_eq!(f.y, 84.0 - 30.0);
+        assert_eq!(f.height, (84.0 + 56.0) - (84.0 - 30.0) + 34.0);
     }
 
     #[test]
