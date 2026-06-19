@@ -196,8 +196,8 @@ fn release_detail_view(doc: ReleaseDoc) -> impl IntoView {
                 })}
             </div>
             <div class="chip-row release-head__meta">
-                <span class="chip" style=format!("color:{status_rail}")>{status}</span>
-                <span class="chip" style=format!("color:{posture_rail}")>{posture}</span>
+                <span class="chip chip--state" style=format!("color:{status_rail}")>{status}</span>
+                <span class="chip chip--state" style=format!("color:{posture_rail}")>{posture}</span>
                 {(!target.is_empty()).then(|| view! {
                     <span class="mono chip release-head__target">{target}</span>
                 })}
@@ -232,9 +232,12 @@ fn release_detail_view(doc: ReleaseDoc) -> impl IntoView {
                                     <span class="mono release-ws__progress">{format!("{prog}%")}</span>
                                 </div>
                                 <div class="chip-row">
-                                    {w.status.map(|s| view! { <span class="chip">{s}</span> })}
+                                    {w.status.map(|s| {
+                                        let sr = release_tone_color_var(release_tone(Some(&s)));
+                                        view! { <span class="chip chip--state" style=format!("color:{sr}")>{s}</span> }
+                                    })}
                                     {w.posture.map(|p| view! {
-                                        <span class="chip" style=format!("color:{rail}")>{p}</span>
+                                        <span class="chip chip--state" style=format!("color:{rail}")>{p}</span>
                                     })}
                                     {w.owner.map(|o| view! { <span class="chip">{o}</span> })}
                                 </div>
@@ -262,7 +265,7 @@ fn milestone_step(m: MilestoneView) -> impl IntoView {
             <div class="release-path-marker mono">{m.path_number}</div>
             <div class="release-path-body">
                 <div class="release-path-coarse">
-                    <span class="chip release-path-state" style=format!("color:{rail}")>{m.line_state.clone()}</span>
+                    <span class="chip chip--state release-path-state" style=format!("color:{rail}")>{m.line_state.clone()}</span>
                     <strong class="release-path-label">{m.label.clone()}</strong>
                     <span class="release-path-desc mono">
                         {format!("{} · {} · {} items", m.timing, m.completion_text, m.item_count)}
@@ -304,7 +307,7 @@ fn path_item_line(item: PathItem) -> impl IntoView {
 
     view! {
         <div class="release-path-line accent-surface" style=format!("--accent:{rail}")>
-            <span class="chip release-path-state" style=format!("color:{rail}")>{item.line_state.clone()}</span>
+            <span class="chip chip--state release-path-state" style=format!("color:{rail}")>{item.line_state.clone()}</span>
             <div class="release-path-line__main">
                 <strong>{item.title.clone()}</strong>
                 {item.summary.clone().map(|s| view! { <span class="release-path-line__summary">{s}</span> })}
