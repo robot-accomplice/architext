@@ -123,6 +123,57 @@ fn sort_children(node: &mut TreeNode) {
     }
 }
 
+/// Classify a repo path as "noise" — high-volume tooling artifacts that bury
+/// real source files (the `.playwright-mcp/console-*.log` spam) and any path
+/// with a dot-prefixed directory segment (`.git/`, `.cache/`, …). Dotfiles at
+/// the leaf (e.g. `.gitignore`) are NOT noise — only dot-prefixed *directory*
+/// segments and the dedicated tooling dirs are. The "hide noise" toggle filters
+/// these by default so the first screen shows real files.
+pub fn is_noise_path(path: &str) -> bool {
+    let mut segments: Vec<&str> = path.split('/').collect();
+    // The last segment is the file name; a leading-dot file name is a dotfile,
+    // not a noise *directory*, so only directory segments are inspected.
+    segments.pop();
+    segments
+        .iter()
+        .any(|seg| seg.starts_with('.') && !seg.is_empty())
+}
+
+/// Narrow a flat file list for rendering. Filtering happens at the file level
+/// *before* `build_repo_tree`, so the surviving files' ancestor directories are
+/// recreated automatically — keeping matching files plus their ancestor dirs
+/// (the spec's filter behaviour) without any tree pruning. A file survives when:
+/// it passes the text query (substring on its path, case-insensitive), it is not
+/// hidden by the noise filter, and — when an owner is selected — it resolves to
+/// that owning node index.
+pub fn filter_files(
+    files: &[FileEntry],
+    query: &str,
+    owner_filter: Option<usize>,
+    hide_noise: bool,
+    owner_index: &[OwnerEntry],
+) -> Vec<FileEntry> {
+    let q = query.trim().to_lowercase();
+    files
+        .iter()
+        .filter(|f| {
+            if hide_noise && is_noise_path(&f.path) {
+                return false;
+            }
+            if !q.is_empty() && !f.path.to_lowercase().contains(&q) {
+                return false;
+            }
+            if let Some(want) = owner_filter {
+                if resolve_owner(&f.path, owner_index) != Some(want) {
+                    return false;
+                }
+            }
+            true
+        })
+        .cloned()
+        .collect()
+}
+
 /// One `(prefix, node-index)` entry of the owner index. `prefix` is a
 /// `sourcePaths` entry with trailing slashes trimmed.
 #[derive(Debug, Clone)]
@@ -306,23 +357,18 @@ const MINUTE_MS: i64 = 60 * 1000;
 const HOUR_MS: i64 = 60 * MINUTE_MS;
 const DAY_MS: i64 = 24 * HOUR_MS;
 
-/// Compact relative time ("just now", "3m", "2h", "5d", "3mo", "1y"). `now` is
-/// injected for testability. `None` mtime renders as "". Port of
-/// `formatRelativeTime`.
+/// Coarse relative time for the Modified column ("today", "5d", "3mo", "1y").
+/// UX review #7: minute/hour granularity (`1m`/`2m`) is low-value churn noise,
+/// so anything under a day collapses to "today"; days and above stay. `now` is
+/// injected for testability. `None` mtime renders as "".
 pub fn format_relative_time(mtime: Option<i64>, now: i64) -> String {
     let mtime = match mtime {
         Some(m) => m,
         None => return String::new(),
     };
     let delta = (now - mtime).max(0);
-    if delta < MINUTE_MS {
-        return "just now".to_string();
-    }
-    if delta < HOUR_MS {
-        return format!("{}m", delta / MINUTE_MS);
-    }
     if delta < DAY_MS {
-        return format!("{}h", delta / HOUR_MS);
+        return "today".to_string();
     }
     let days = delta / DAY_MS;
     if days < 30 {
@@ -479,17 +525,77 @@ mod tests {
     }
 
     #[test]
-    fn format_relative_time_matches_js_buckets() {
+    fn format_relative_time_coarsens_subday_to_today() {
         let now = 1_000_000_000_000_i64;
         assert_eq!(format_relative_time(None, now), "");
-        assert_eq!(format_relative_time(Some(now), now), "just now");
-        assert_eq!(format_relative_time(Some(now - 30 * 1000), now), "just now");
-        assert_eq!(format_relative_time(Some(now - 5 * MINUTE_MS), now), "5m");
-        assert_eq!(format_relative_time(Some(now - 3 * HOUR_MS), now), "3h");
+        // UX #7: minute/hour churn collapses to "today" — no more 1m/2m/3h noise.
+        assert_eq!(format_relative_time(Some(now), now), "today");
+        assert_eq!(format_relative_time(Some(now - 5 * MINUTE_MS), now), "today");
+        assert_eq!(format_relative_time(Some(now - 3 * HOUR_MS), now), "today");
+        // Days and coarser stay as before.
         assert_eq!(format_relative_time(Some(now - 5 * DAY_MS), now), "5d");
         assert_eq!(format_relative_time(Some(now - 40 * DAY_MS), now), "1mo");
         assert_eq!(format_relative_time(Some(now - 400 * DAY_MS), now), "1y");
-        // Future mtime clamps to "just now" (delta floored at 0).
-        assert_eq!(format_relative_time(Some(now + DAY_MS), now), "just now");
+        // Future mtime clamps to "today" (delta floored at 0).
+        assert_eq!(format_relative_time(Some(now + DAY_MS), now), "today");
+    }
+
+    #[test]
+    fn is_noise_path_flags_tooling_and_dot_dirs_not_dotfiles() {
+        // The Playwright MCP log spam that buries the first screen.
+        assert!(is_noise_path(".playwright-mcp/console-1.log"));
+        // Any dot-prefixed directory segment, at any depth.
+        assert!(is_noise_path(".git/config"));
+        assert!(is_noise_path("src/.cache/blob"));
+        // A leaf dotfile is NOT noise — it is a real file under a real dir.
+        assert!(!is_noise_path(".gitignore"));
+        assert!(!is_noise_path("src/main.rs"));
+        assert!(!is_noise_path("README.md"));
+    }
+
+    #[test]
+    fn filter_files_narrows_by_query_noise_and_owner() {
+        let nodes = vec![node("svc", "service", &["src"])];
+        let idx = build_owner_index(&nodes);
+        let files = vec![
+            file("src/main.rs"),
+            file("src/lib.rs"),
+            file("docs/readme.md"),
+            file(".playwright-mcp/console-1.log"),
+        ];
+
+        // Default (hide noise, no query, no owner) drops the log spam only.
+        let out = filter_files(&files, "", None, true, &idx);
+        let paths: Vec<&str> = out.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths, vec!["src/main.rs", "src/lib.rs", "docs/readme.md"]);
+
+        // Text query is a case-insensitive path substring.
+        let out = filter_files(&files, "MAIN", None, true, &idx);
+        assert_eq!(out.len(), 1);
+        assert_eq!(out[0].path, "src/main.rs");
+
+        // Owner filter keeps only files resolving to that node.
+        let out = filter_files(&files, "", Some(0), true, &idx);
+        let paths: Vec<&str> = out.iter().map(|f| f.path.as_str()).collect();
+        assert_eq!(paths, vec!["src/main.rs", "src/lib.rs"]);
+
+        // Disabling the noise filter surfaces the spam again.
+        let out = filter_files(&files, "", None, false, &idx);
+        assert_eq!(out.len(), 4);
+    }
+
+    #[test]
+    fn filtered_files_rebuild_to_matching_files_plus_ancestor_dirs() {
+        // The filter narrows the flat list; build_repo_tree then recreates only
+        // the ancestor dirs of the survivors — no orphan/empty dirs remain.
+        let files = vec![file("src/main.rs"), file("src/data/fetch.rs"), file("docs/x.md")];
+        let kept = filter_files(&files, "fetch", None, true, &[]);
+        let tree = build_repo_tree(&kept);
+        // Only `src` survives at root (docs had no match); inside it only `data`.
+        assert_eq!(tree.children.len(), 1);
+        assert_eq!(tree.children[0].name, "src");
+        assert_eq!(tree.children[0].children.len(), 1);
+        assert_eq!(tree.children[0].children[0].name, "data");
+        assert_eq!(tree.children[0].children[0].children[0].path, "src/data/fetch.rs");
     }
 }

@@ -25,8 +25,8 @@ use crate::data::{
 };
 use crate::diagram::role_color_var;
 use crate::repo_tree_model::{
-    build_owner_index, build_repo_tree, dominant_owner, file_icon, format_relative_time,
-    format_size, resolve_owner, FileEntry, TreeKind, TreeNode,
+    build_owner_index, build_repo_tree, dominant_owner, file_icon, filter_files,
+    format_relative_time, format_size, resolve_owner, FileEntry, TreeKind, TreeNode,
 };
 use crate::state::use_app_state;
 
@@ -77,6 +77,14 @@ pub fn RepoTree() -> impl IntoView {
     // Collapsed directory paths (expanded by default).
     let collapsed = create_rw_signal::<HashSet<String>>(HashSet::new());
 
+    // ── Signal-to-noise controls (UX review #7) ──────────────────────────────
+    // Text filter over file paths; hide-noise (Playwright logs / dot-dirs) on by
+    // default so the first screen shows real files; an optional owning-node id
+    // filter driven by the owner chips.
+    let query = create_rw_signal(String::new());
+    let hide_noise = create_rw_signal(true);
+    let owner_filter = create_rw_signal::<Option<String>>(None);
+
     // The currently-previewed file path (right pane). `None` = empty state.
     let selected_file = create_rw_signal::<Option<String>>(None);
     // The preview fetch outcome. `None` while loading the selected file.
@@ -115,6 +123,20 @@ pub fn RepoTree() -> impl IntoView {
                         }
                     })}
             </div>
+            // ── Signal-to-noise controls ────────────────────────────────────
+            {move || repo.get()
+                .and_then(|r| r.ok())
+                .filter(|p| !p.files.is_empty())
+                .map(|_| view! {
+                    <RepoTreeControls
+                        query
+                        hide_noise
+                        owner_filter
+                        collapsed
+                        repo
+                        state
+                    />
+                })}
             {move || match repo.get() {
                 None => view! {
                     <p class="repo-tree__hint">"Loading repo file list…"</p>
@@ -139,12 +161,41 @@ pub fn RepoTree() -> impl IntoView {
                             mtime: f.mtime,
                         })
                         .collect();
-                    let tree = build_repo_tree(&files);
+                    // Apply the signal-to-noise filters BEFORE folding the tree,
+                    // so build_repo_tree recreates only the ancestor dirs of the
+                    // surviving files (matching files + ancestors, no orphans).
+                    let data = state.data.get_untracked();
+                    let owner_index = build_owner_index(&data.nodes);
+                    let owner_idx = owner_filter.get().and_then(|id| {
+                        data.nodes.iter().position(|n| n.id == id)
+                    });
+                    let kept = filter_files(
+                        &files,
+                        &query.get(),
+                        owner_idx,
+                        hide_noise.get(),
+                        &owner_index,
+                    );
+                    if kept.is_empty() {
+                        return view! {
+                            <p class="repo-tree__hint">
+                                "No files match the current filter."
+                            </p>
+                        }.into_view();
+                    }
+                    let kept_count = kept.len();
+                    let total = files.len();
+                    let tree = build_repo_tree(&kept);
                     // Single clock read for the whole render — matches the React
                     // `now = Date.now()` memo (stable across all rows).
                     let now = js_sys::Date::now() as i64;
                     view! {
                         <div class="repo-tree__body">
+                            {(kept_count != total).then(|| view! {
+                                <p class="repo-tree__filtered">
+                                    {format!("Showing {kept_count} of {total} files")}
+                                </p>
+                            })}
                             <div class="repo-row repo-row--colhead" aria-hidden="true">
                                 <div class="repo-row__lead">
                                     <span class="repo-row__caret"></span>
@@ -163,6 +214,132 @@ pub fn RepoTree() -> impl IntoView {
             </div>
             <FilePreview selected_file preview/>
         </div>
+    }
+}
+
+/// The controls bar: a path filter, collapse/expand-all, a "hide noise" toggle
+/// (Playwright logs / dot-dirs, on by default), and owner filter chips. Owns
+/// only the control signals; the body render reacts to them.
+#[component]
+fn RepoTreeControls(
+    query: RwSignal<String>,
+    hide_noise: RwSignal<bool>,
+    owner_filter: RwSignal<Option<String>>,
+    collapsed: RwSignal<HashSet<String>>,
+    repo: RwSignal<RepoState>,
+    state: crate::state::AppState,
+) -> impl IntoView {
+    // Collapse every directory present in the (filtered) repo; expand clears it.
+    let collapse_all = move |_| {
+        let Some(Ok(payload)) = repo.get_untracked() else { return };
+        let data = state.data.get_untracked();
+        let owner_index = build_owner_index(&data.nodes);
+        let owner_idx = owner_filter
+            .get_untracked()
+            .and_then(|id| data.nodes.iter().position(|n| n.id == id));
+        let files: Vec<FileEntry> = payload
+            .files
+            .iter()
+            .map(|f| FileEntry { path: f.path.clone(), size: f.size, mtime: f.mtime })
+            .collect();
+        let kept = filter_files(
+            &files,
+            &query.get_untracked(),
+            owner_idx,
+            hide_noise.get_untracked(),
+            &owner_index,
+        );
+        let tree = build_repo_tree(&kept);
+        let mut dirs = HashSet::new();
+        collect_dir_paths(&tree, &mut dirs);
+        collapsed.set(dirs);
+    };
+    let expand_all = move |_| collapsed.set(HashSet::new());
+
+    // Owner chips: the distinct nodes that own at least one repo file, so the
+    // chip set is exactly the owners a user can filter by.
+    let owner_chips = create_memo(move |_| {
+        let Some(Ok(payload)) = repo.get() else { return Vec::new() };
+        let data = state.data.get();
+        let owner_index = build_owner_index(&data.nodes);
+        let mut seen: HashSet<usize> = HashSet::new();
+        let mut chips: Vec<(String, String, String)> = Vec::new();
+        for f in &payload.files {
+            if let Some(idx) = resolve_owner(&f.path, &owner_index) {
+                if seen.insert(idx) {
+                    if let Some(n) = data.nodes.get(idx) {
+                        chips.push((n.id.clone(), n.name.clone(), n.node_type.clone()));
+                    }
+                }
+            }
+        }
+        chips.sort_by(|a, b| a.1.cmp(&b.1));
+        chips
+    });
+
+    view! {
+        <div class="repo-tree__controls">
+            <input
+                class="blast-search repo-tree__filter"
+                r#type="text"
+                placeholder="Filter files…"
+                prop:value=move || query.get()
+                on:input=move |ev| query.set(event_target_value(&ev))
+            />
+            <div class="repo-tree__control-row">
+                <button class="chip repo-tree__btn" on:click=collapse_all>"Collapse all"</button>
+                <button class="chip repo-tree__btn" on:click=expand_all>"Expand all"</button>
+                <button
+                    class="chip repo-tree__btn"
+                    class:is-active=move || hide_noise.get()
+                    title="Hide .playwright-mcp logs and dot-directories"
+                    on:click=move |_| hide_noise.update(|v| *v = !*v)
+                >"Hide noise"</button>
+            </div>
+            {move || {
+                let chips = owner_chips.get();
+                (!chips.is_empty()).then(|| view! {
+                    <div class="repo-tree__owners">
+                        <span class="overline repo-tree__owners-label">"OWNER"</span>
+                        {chips.into_iter().map(|(id, name, node_type)| {
+                            let color = role_color_var(&node_type);
+                            let chip_id = id.clone();
+                            let is_active = create_memo(move |_| {
+                                owner_filter.get().as_deref() == Some(chip_id.as_str())
+                            });
+                            let toggle_id = id.clone();
+                            let on_click = move |_| {
+                                owner_filter.update(|cur| {
+                                    if cur.as_deref() == Some(toggle_id.as_str()) {
+                                        *cur = None;
+                                    } else {
+                                        *cur = Some(toggle_id.clone());
+                                    }
+                                });
+                            };
+                            view! {
+                                <button
+                                    class="chip repo-tree__owner-chip"
+                                    class:is-active=move || is_active.get()
+                                    style=format!("--owner-color:{color}")
+                                    on:click=on_click
+                                >{name}</button>
+                            }
+                        }).collect_view()}
+                    </div>
+                })
+            }}
+        </div>
+    }
+}
+
+/// Collect every directory path in a (sub)tree into `out` (for collapse-all).
+fn collect_dir_paths(node: &TreeNode, out: &mut HashSet<String>) {
+    for child in &node.children {
+        if child.kind == TreeKind::Dir {
+            out.insert(child.path.clone());
+            collect_dir_paths(child, out);
+        }
     }
 }
 
