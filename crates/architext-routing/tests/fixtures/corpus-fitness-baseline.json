@@ -2,22 +2,22 @@
   "metrics": {
     "bracket-intermediates": {
       "routes": 10,
-      "bends": 25,
-      "crossings": 3,
-      "pairInternalCrossings": 0,
+      "bends": 22,
+      "crossings": 4,
+      "pairInternalCrossings": 1,
       "laneOrderViolations": 0,
-      "closeParallelRuns": 1,
+      "closeParallelRuns": 0,
       "sharedSegments": 0,
       "repeatedCrossings": 0
     },
     "bundle-coaligned": {
       "routes": 8,
       "bends": 19,
-      "crossings": 10,
+      "crossings": 1,
       "pairInternalCrossings": 1,
-      "laneOrderViolations": 1,
-      "closeParallelRuns": 1,
-      "sharedSegments": 2,
+      "laneOrderViolations": 0,
+      "closeParallelRuns": 0,
+      "sharedSegments": 0,
       "repeatedCrossings": 0
     },
     "bundle-return-gutter": {
@@ -163,14 +163,14 @@
   },
   "perf": {
     "bracket-intermediates": {
-      "edgesPlanned": 589,
-      "cheapCandidateCount": 183748,
-      "gridRouteCalls": 350
+      "edgesPlanned": 573,
+      "cheapCandidateCount": 181641,
+      "gridRouteCalls": 342
     },
     "bundle-coaligned": {
-      "edgesPlanned": 667,
-      "cheapCandidateCount": 220332,
-      "gridRouteCalls": 711
+      "edgesPlanned": 651,
+      "cheapCandidateCount": 218343,
+      "gridRouteCalls": 704
     },
     "bundle-return-gutter": {
       "edgesPlanned": 365,
