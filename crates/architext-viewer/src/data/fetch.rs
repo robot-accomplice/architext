@@ -124,6 +124,17 @@ pub async fn fetch_file(path: &str) -> Result<FilePreviewPayload, FetchError> {
     get_json::<FilePreviewPayload>(&url).await
 }
 
+/// Fetch a node's git development window from `/api/node-git?paths=<csv>`. Fetched
+/// on demand when a node is selected in the inspector. Non-fatal — the window is
+/// supplementary, so any failure (or a server without the endpoint) degrades to
+/// `None` and the inspector simply omits the section. `paths` is the node's
+/// `sourcePaths` joined by commas, percent-encoded so paths round-trip safely.
+pub async fn fetch_node_git(paths: &str) -> Option<NodeGit> {
+    let encoded = String::from(js_sys::encode_uri_component(paths));
+    let url = format!("/api/node-git?paths={encoded}");
+    get_json::<NodeGit>(&url).await.ok()
+}
+
 /// Fetch the running CLI version from `/api/status` (`status.cliVersion`) for the
 /// header eyebrow. Non-fatal — the version is display-only, so a failure (or an
 /// older server without the field) degrades to `None` and the eyebrow omits it.

@@ -478,6 +478,24 @@ pub struct RepoFile {
     pub mtime: Option<i64>,
 }
 
+// ─── /api/node-git ─────────────────────────────────────────────────────────
+
+/// `/api/node-git?paths=` payload — a node's git "development window" derived
+/// from its `sourcePaths`. `tracked` is false (and the rest absent) when the
+/// paths are not in the serving repo (e.g. the sanitized review corpus).
+#[derive(Debug, Clone, Deserialize)]
+pub struct NodeGit {
+    pub tracked: bool,
+    #[serde(rename = "firstCommit", default)]
+    pub first_commit: Option<String>,
+    #[serde(rename = "lastCommit", default)]
+    pub last_commit: Option<String>,
+    #[serde(rename = "commitCount", default)]
+    pub commit_count: Option<u64>,
+    #[serde(default)]
+    pub authors: Vec<String>,
+}
+
 // ─── /api/file ─────────────────────────────────────────────────────────────
 
 /// `/api/file?path=` payload (`{ path, size, language, truncated, binary, html }`).
