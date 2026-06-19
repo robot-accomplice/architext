@@ -147,14 +147,18 @@ pub fn build_render_model(
         let collapsed = pill_label(&raw_label);
         // A flow-step label collapses to its number (a badge); anything else
         // is a structural relationship label → a glyph pill (the word kept
-        // for the hover title + legend).
-        let kind = if collapsed != raw_label {
-            LabelKind::Number(collapsed)
+        // for the hover title + legend). A number badge carries its route id (==
+        // step id) so it can highlight when that step is selected.
+        let (kind, step_id) = if collapsed != raw_label {
+            (LabelKind::Number(collapsed), Some(id.clone()))
         } else {
-            LabelKind::Relationship {
-                kind: RelationshipKind::classify(&raw_label),
-                word: raw_label,
-            }
+            (
+                LabelKind::Relationship {
+                    kind: RelationshipKind::classify(&raw_label),
+                    word: raw_label,
+                },
+                None,
+            )
         };
         let box_rect = plan.label_boxes.get(id).cloned().unwrap_or(Rect {
             x: route.label_x,
@@ -164,6 +168,7 @@ pub fn build_render_model(
         });
         labels.push(LabelView {
             kind,
+            step_id,
             anchor_x: route.label_x,
             anchor_y: route.label_y,
             box_rect,
@@ -452,7 +457,13 @@ pub fn DiagramSvg(
                     }).collect_view()}
                 </g>
                 <g class="flow-labels">
-                    {label_items.into_iter().map(|l| view! { <DiagramLabel label=l/> }).collect_view()}
+                    {label_items.into_iter().map(|l| {
+                        let sid = l.step_id.clone();
+                        let is_selected = Signal::derive(move || {
+                            sid.is_some() && selected_step.get().as_deref() == sid.as_deref()
+                        });
+                        view! { <DiagramLabel label=l selected=is_selected/> }
+                    }).collect_view()}
                 </g>
                 <g class="flow-decisions">
                     {decision_items.into_iter().map(|(rect, role)| view! {
