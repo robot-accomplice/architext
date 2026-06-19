@@ -108,3 +108,60 @@ jobs:
           name: architext-viewer-dist
           path: crates/architext-viewer/dist
           if-no-files-found: error
+
+  # Per-platform proof that the STAMPED, self-contained package actually works:
+  # stamp the binary + co-located dist (build-binary-packages), then run it from
+  # OUTSIDE the repo so it must rely on its embedded schemas (validate) and the
+  # co-located <exe_dir>/dist (serve), not the source tree.
+  #
+  # linux-arm64 is intentionally omitted (Rule 16): the default fleet has no
+  # arm64 Linux runner to execute that binary, and the linux-arm64 cross-build
+  # (build-cli) + the darwin-arm64 native smoke already cover arm64
+  # self-containment. Wire in an arm64 Linux runner here if one becomes standard.
+  native-smoke:
+    name: native smoke ${{ matrix.target_key }}
+    needs: [build-cli, build-viewer]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target_key: darwin-arm64
+            runner: macos-14
+            bin: architext
+          - target_key: darwin-x64
+            runner: macos-15-intel
+            bin: architext
+          - target_key: linux-x64
+            runner: ubuntu-latest
+            bin: architext
+          - target_key: win32-x64
+            runner: windows-latest
+            bin: architext.exe
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 20
+
+      - name: Download native binary
+        uses: actions/download-artifact@v4
+        with:
+          name: architext-binary-${{ matrix.target_key }}
+          path: bin-stage
+
+      - name: Download viewer dist
+        uses: actions/download-artifact@v4
+        with:
+          name: architext-viewer-dist
+          path: crates/architext-viewer/dist
+
+      - name: Stamp the self-contained package (binary + co-located dist)
+        run: node scripts/build-binary-packages.mjs --binary bin-stage/${{ matrix.bin }} --target ${{ matrix.target_key }} --out dist-binaries
+
+      - name: Native package smoke (embedded schemas + co-located dist)
+        run: node scripts/smoke-native-package.mjs dist-binaries/${{ matrix.target_key }} .
