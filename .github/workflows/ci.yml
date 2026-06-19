@@ -125,5 +125,8 @@ jobs:
 
       - name: Route parity gate (JS engine vs Rust WASM)
         run: |
-          wasm-pack build crates/architext-routing --target nodejs --out-dir pkg --features wasm
+          # Pass `--features` to cargo via `--` (portable): newer wasm-pack
+          # versions reject `--features` as a direct `build` flag, which broke the
+          # gate once the action's pinned-"latest" wasm-pack rolled forward.
+          wasm-pack build crates/architext-routing --target nodejs --out-dir pkg -- --features wasm
           node viewer/tools/route-diff-harness.mjs gate
