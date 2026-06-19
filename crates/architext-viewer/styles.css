@@ -2457,6 +2457,13 @@ button.blast-chip { cursor: pointer; }
   align-items: baseline;
   gap: var(--pad-tight);
   padding: var(--grid) var(--pad-tight);
+  cursor: pointer;
+}
+.release-path-line:hover { background: var(--panel-2); }
+/* Selected item — the --accent state ring (already toned per the item's status
+   via the inline --accent), matching the diagram node selection treatment. */
+.release-path-line--selected {
+  box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-glow);
 }
 .release-path-line__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .release-path-line__main strong { color: var(--ink); font-size: var(--body-size); }

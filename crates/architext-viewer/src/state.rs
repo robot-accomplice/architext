@@ -63,6 +63,10 @@ pub struct AppState {
     /// index's currentReleaseId / newest release) by `ReleaseTruthPanel`; `None`
     /// until then or if no releases are recorded.
     pub selected_release: RwSignal<Option<String>>,
+    /// The Release Path item selected by clicking its line — drives the
+    /// inspector's item detail in Release Truth mode (the item id). Cleared when
+    /// the selected release changes.
+    pub selected_release_item: RwSignal<Option<String>>,
 
     /// Active color theme (Dark default / Light). Seeded from localStorage in
     /// `new`; an effect in `App` applies it as `data-theme` on <html> and
@@ -99,6 +103,7 @@ impl AppState {
             live_connected: create_rw_signal(false),
             invalid_notice: create_rw_signal(None),
             selected_release: create_rw_signal(None),
+            selected_release_item: create_rw_signal(None),
             theme: create_rw_signal(load_theme()),
         }
     }

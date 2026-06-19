@@ -12,7 +12,7 @@ use crate::components::data_risks_panel::DataRisksPanel;
 use crate::components::notes_editor::NotesSection;
 use crate::data::models::{DataClass, Node, View};
 use crate::diagram::role_color_var;
-use crate::release_truth::release_tone;
+use crate::release_truth::{release_path, release_tone, ReleaseDoc};
 use crate::severity::release_tone_color_var;
 use crate::state::use_app_state;
 use crate::theme::Mode;
@@ -177,6 +177,58 @@ pub fn InspectorPanel() -> impl IntoView {
                 // hosts the data-class + risk side panel (its own scales).
                 if mode == Mode::DataRisks {
                     return view! { <DataRisksPanel/> }.into_view();
+                }
+
+                // Release Truth: a clicked Release Path item shows its detail
+                // here (resolved through the same release_path the panel renders,
+                // so the inspector and the path agree). Falls through to the
+                // release count summary when nothing is selected.
+                if mode == Mode::ReleaseTruth {
+                    if let Some(item_id) = state.selected_release_item.get() {
+                        let item = state
+                            .selected_release
+                            .get()
+                            .and_then(|rid| {
+                                data.release_details.iter().find(|d| d.id == rid).map(|d| d.raw.clone())
+                            })
+                            .and_then(|raw| ReleaseDoc::from_value(&raw))
+                            .map(|doc| release_path(&doc))
+                            .and_then(|path| {
+                                path.into_iter().flat_map(|m| m.items).find(|i| i.id == item_id)
+                            });
+                        if let Some(it) = item {
+                            let rail = release_tone_color_var(release_tone(it.status.as_deref()));
+                            let clear = move |_| state.selected_release_item.set(None);
+                            let meta: Vec<String> = [
+                                it.kind.clone(),
+                                it.priority.clone().map(|p| format!("{p} priority")),
+                                it.owner.clone(),
+                                (!it.workstream_name.is_empty()).then(|| it.workstream_name.clone()),
+                                (!it.scope.is_empty()).then(|| it.scope.clone()),
+                            ]
+                            .into_iter()
+                            .flatten()
+                            .collect();
+                            return view! {
+                                <button class="inspector__back" on:click=clear>"‹ back to release"</button>
+                                <div class="accent-surface inspector__card" style=format!("--accent:{rail}")>
+                                    <div class="overline">"RELEASE ITEM"</div>
+                                    <h2 class="inspector__title">{it.title.clone()}</h2>
+                                    <span class="chip chip--state" style=format!("color:{rail}")>
+                                        {it.line_state.clone()}
+                                    </span>
+                                    {it.summary.clone().map(|s| view! { <p class="inspector__meta">{s}</p> })}
+                                    {(!meta.is_empty()).then(|| view! {
+                                        <p class="inspector__meta mono">{meta.join(" · ")}</p>
+                                    })}
+                                    {it.blocked_by.clone().map(|b| view! {
+                                        <p class="release-path-blockers">{format!("Blocked by: {b}")}</p>
+                                    })}
+                                </div>
+                            }
+                            .into_view();
+                        }
+                    }
                 }
 
                 // Genuinely diagram-less data modes summarize their own set and
