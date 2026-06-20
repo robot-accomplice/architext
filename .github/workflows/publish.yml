@@ -206,6 +206,11 @@ jobs:
         shell: bash
         env:
           DRY: ${{ needs.resolve.outputs.dry_run }}
+          # Auth precedence: a granular NPM_TOKEN secret is the reliable path for
+          # the first publish of the five brand-new package names. If the secret
+          # is unset this is empty and we fall back to OIDC trusted publishing
+          # (which needs a trusted publisher configured per package).
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: |
           set -euo pipefail
           flags="--access public"
@@ -213,6 +218,12 @@ jobs:
             flags="$flags --dry-run"
           else
             flags="$flags --provenance"
+          fi
+          # When no NPM_TOKEN is provided, strip the empty `_authToken` line that
+          # setup-node wrote so it doesn't shadow OIDC trusted publishing with a
+          # failed empty-token auth. With a token present, leave it in place.
+          if [ -z "${NODE_AUTH_TOKEN:-}" ] && [ -n "${NPM_CONFIG_USERCONFIG:-}" ]; then
+            sed -i '/:_authToken=/d' "$NPM_CONFIG_USERCONFIG" 2>/dev/null || true
           fi
           # Binary packages FIRST so the launcher's optionalDependencies resolve.
           for key in darwin-arm64 darwin-x64 linux-x64 linux-arm64 win32-x64; do
