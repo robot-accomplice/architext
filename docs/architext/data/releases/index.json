@@ -550,6 +550,27 @@
         "stretch": 0
       },
       "file": "v1-7-1.json"
+    },
+    {
+      "id": "v1-7-2",
+      "version": "1.7.2",
+      "name": "Architext 1.7.2 Native Install + Self-Update",
+      "status": "implementing",
+      "posture": "on-track",
+      "targetDate": "2026-06-20",
+      "lastUpdated": "2026-06-20T00:00:00.000Z",
+      "summary": "Native install + self-update release: a shell installer and an architext update/upgrade command download checksum-verified binaries from GitHub releases, so npm becomes an optional bridge users can leave. Releases now attach per-platform binaries plus SHA256SUMS, and an Architext release notifies the roboticus-site repository to re-sync.",
+      "counts": {
+        "features": 2,
+        "bugFixes": 1,
+        "workstreams": 1,
+        "blockers": 0,
+        "complete": 3,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-7-2.json"
     }
   ]
 }
