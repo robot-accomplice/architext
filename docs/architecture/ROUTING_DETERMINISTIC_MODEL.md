@@ -62,10 +62,22 @@ deterministic procedure** (pseudocode) and **§4 why it is deterministic.**
 2. **Q2 — crossings** `crossings(r)`: intersections with other routes.
 3. **Q3 — length** `length(r)`: Manhattan length.
 
-**Priority law:** `Q1 ≻ Q2 ≻ Q3`, lexicographic, no slack. **The bend score is the
-highest-cost element — an extra clean bend always loses**, even to crossings and
-always to length (maintainer, confirmed 2026-06-20); a *reversal* bend loses
-catastrophically (β jumps to 99). Consequences:
+**LAW REVISION (maintainer, 2026-06-20): crossings can outweigh a bend.** The
+strict bends-first order below held until the fan-out evidence: under it, fan
+crossings are *irreducible* — removing them needs a C's extra bend, which the
+order forbids, so a crossed 1-bend L always beat a clean 2-bend C (measured:
+forcing Cs scored β 138→243, crossings 18→98, worse on both — strict bends-first
+made the L-router law-optimal at 138/18). The maintainer ruled that in dense fans
+a clean C reads better than a crossed L. The clean-shape cost is therefore now
+**weighted, not lexicographic**: `cost = W_b·bends + W_x·crossings + W_len·length`
+(dogleg/reversal still a hard exclusion at `REVERSAL_BEND_PENALTY`=99). A C beats
+an L when `W_b < Δcrossings · W_x`. The text below is the **superseded** strict
+order, kept for provenance.
+
+**Superseded strict priority law:** `Q1 ≻ Q2 ≻ Q3`, lexicographic, no slack. **The
+bend score was the highest-cost element — an extra clean bend always loses**,
+even to crossings and always to length; a *reversal* bend loses
+catastrophically (β jumps to 99). Consequences (of the superseded order):
 - a straight/L is taken **even when it crosses**, over any extra-bend route with
   fewer or zero crossings;
 - more distance is *always* accepted to remove a bend;

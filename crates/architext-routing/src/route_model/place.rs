@@ -202,8 +202,12 @@ fn is_facing(sa: Side, sb: Side) -> bool {
 /// dogleg. `frac` staggers the jog by fan order so the Cs nest instead of sharing
 /// one channel.
 fn build_c(sa: Side, pa: &Point, pb: &Point, frac: f64) -> Vec<Point> {
+    // Nesting: the jog channel moves toward the source as the fan order grows
+    // (nearest target jogs nearest the target, farthest jogs nearest the source),
+    // so the Cs nest instead of crossing — hence `1 - frac`, not `frac`.
+    let t = 1.0 - frac;
     if sa.is_horizontal() {
-        let jog_x = pa.x + (pb.x - pa.x) * frac;
+        let jog_x = pa.x + (pb.x - pa.x) * t;
         vec![
             pa.clone(),
             Point { x: jog_x, y: pa.y },
@@ -211,7 +215,7 @@ fn build_c(sa: Side, pa: &Point, pb: &Point, frac: f64) -> Vec<Point> {
             pb.clone(),
         ]
     } else {
-        let jog_y = pa.y + (pb.y - pa.y) * frac;
+        let jog_y = pa.y + (pb.y - pa.y) * t;
         vec![
             pa.clone(),
             Point { x: pa.x, y: jog_y },
@@ -373,6 +377,75 @@ fn build_slotted_with_sides(
             None => detour[ei].clone(),
         })
         .collect()
+}
+
+/// Clean-shape cost weights (LAW REVISION 2026-06-20: crossings can outweigh a
+/// bend). `cost = W_BEND·bends + W_CROSS·crossings`. With these, a C (2 bends)
+/// beats an L (1 bend) when the L would cross ≥2 placed routes. A dogleg still
+/// loses outright (`bend_score` returns `REVERSAL_BEND_PENALTY`). Tunable.
+const W_BEND: f64 = 1.0;
+const W_CROSS: f64 = 1.0;
+
+/// Weighted cost of a route against the already-placed routes.
+fn weighted_cost(route: &[Point], placed: &[Vec<Point>]) -> f64 {
+    let b = bend_score(route);
+    let x: usize = placed.iter().map(|p| polyline_crossings(route, p)).sum();
+    W_BEND * b + W_CROSS * (x as f64)
+}
+
+/// Route every edge choosing, per edge, between the crossing/length-optimal L
+/// ([`best_clean_route`]) and the facing-surface C, by WEIGHTED cost vs the
+/// already-placed routes (the revised law — crossings can outweigh a bend). C is
+/// taken only where it is weighted-cheaper, so lone/reciprocal edges keep their
+/// L. Falls back to Component 2. Always monotone — zero doglegs.
+pub fn route_all_weighted_sided(nodes: &[Rect], edges: &[Edge]) -> Vec<RoutedEdge> {
+    let mut placed: Vec<Vec<Point>> = Vec::new();
+    let mut out: Vec<RoutedEdge> = Vec::with_capacity(edges.len());
+    for e in edges {
+        let a = &nodes[e.a];
+        let b = &nodes[e.b];
+        let obstacles = obstacles_for(nodes, e.a, e.b);
+        let l = best_clean_route(a, b, &obstacles, &placed);
+        let (csa, csb) = facing_pair(a, b);
+        let c = build_l_or_c(csa, &csa.mount_at(a, 0.5), csb, &csb.mount_at(b, 0.5), 0.5, &obstacles);
+        let routed = match (l, c) {
+            (Some(lc), Some(cpts)) => {
+                if weighted_cost(&cpts, &placed) < weighted_cost(&lc.points, &placed) {
+                    RoutedEdge { route: cpts, sides: Some((csa, csb)) }
+                } else {
+                    RoutedEdge { route: lc.points, sides: Some((lc.side_a, lc.side_b)) }
+                }
+            }
+            (Some(lc), None) => RoutedEdge { route: lc.points, sides: Some((lc.side_a, lc.side_b)) },
+            (None, Some(cpts)) => RoutedEdge { route: cpts, sides: Some((csa, csb)) },
+            (None, None) => RoutedEdge {
+                route: forced_detour(a, b, &obstacles, &placed).unwrap_or_default(),
+                sides: None,
+            },
+        };
+        if !routed.route.is_empty() {
+            placed.push(routed.route.clone());
+        }
+        out.push(routed);
+    }
+    out
+}
+
+/// Weighted-law router: per-edge L-or-C by weighted cost, then slotting. Monotone.
+///
+/// MEASURED on FlowForge (corrected jog): β 138→219, crossings 18→59 — still
+/// worse than the L-router. The C-nesting itself works (forced-C nests clean
+/// column fans to 0 crossings), but the **per-edge greedy** L/C choice is myopic:
+/// it commits a C from crossings-vs-placed-so-far, while the final crossings
+/// depend on slotting + the *other* C's, so it over-picks C's that don't all
+/// nest. The realized win needs a **coordinated per-fan** decision (detect the
+/// fan, build all-L vs all-C, compare actual nested crossings, pick per fan) —
+/// the next step. Kept as a tested building block; default stays route_all_slotted.
+pub fn route_all_weighted(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> {
+    let routed = route_all_weighted_sided(nodes, edges);
+    let sides: Vec<Option<(Side, Side)>> = routed.iter().map(|r| r.sides).collect();
+    let detour: Vec<Vec<Point>> = routed.iter().map(|r| r.route.clone()).collect();
+    build_slotted_with_sides(nodes, edges, &sides, &detour)
 }
 
 /// Total strictly-interior crossings across all route pairs.
