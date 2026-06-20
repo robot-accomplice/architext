@@ -1,0 +1,56 @@
+{
+  "id": "v1-7-1",
+  "version": "1.7.1",
+  "name": "Architext 1.7.1 Serve Startup Fix",
+  "status": "implementing",
+  "posture": "on-track",
+  "summary": "Patch release: architext serve binds and opens its URL immediately instead of blocking on the full plan-farm precompute, so a large corpus no longer makes the CLI appear frozen during startup.",
+  "targetDate": "2026-06-20",
+  "lastUpdated": "2026-06-20T00:00:00.000Z",
+  "updateSource": "Patch release prep: ships the serve non-blocking farm-warm fix (PR #225). Measured time-to-reachable on a 15-flow x 30-view corpus: 96,316 ms -> 91 ms.",
+  "scope": {
+    "required": [
+      {
+        "id": "serve-nonblocking-farm-warm",
+        "title": "Non-blocking serve startup (background farm warm)",
+        "kind": "bug-fix",
+        "summary": "The CLI serve path called build_farm(), which synchronously precomputes every flow x view plan before binding the listener and printing the URL, so `architext serve` on a large corpus sat silently for ~96s and looked frozen. Build an empty farm so the server binds and prints its URL immediately, and warm the farm in a background spawn_blocking task; the viewer polls the farm and shows its progress overlay while diagrams compute.",
+        "evidence": ["pr-225"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "patch-corrections",
+        "dependsOn": []
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "patch-corrections",
+      "name": "Patch corrections",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Serve startup latency fix shipped as a patch on top of 1.7.0.",
+      "progress": 100,
+      "itemIds": ["serve-nonblocking-farm-warm"],
+      "evidence": ["pr-225"]
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "pr-225",
+      "label": "PR #225 serve: bind immediately, warm the plan farm in the background",
+      "href": "https://github.com/robot-accomplice/architext/pull/225",
+      "kind": "document",
+      "status": "complete"
+    }
+  ]
+}

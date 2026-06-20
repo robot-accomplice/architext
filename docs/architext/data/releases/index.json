@@ -528,6 +528,27 @@
       },
       "file": "v1-7-0.json",
       "releasedAt": "2026-06-20T07:06:41.767Z"
+    },
+    {
+      "id": "v1-7-1",
+      "version": "1.7.1",
+      "name": "Architext 1.7.1 Serve Startup Fix",
+      "status": "implementing",
+      "posture": "on-track",
+      "targetDate": "2026-06-20",
+      "lastUpdated": "2026-06-20T00:00:00.000Z",
+      "summary": "Patch release: architext serve binds and opens its URL immediately instead of blocking on the full plan-farm precompute, so a large corpus no longer makes the CLI appear frozen during startup.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 1,
+        "workstreams": 1,
+        "blockers": 0,
+        "complete": 1,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-7-1.json"
     }
   ]
 }
