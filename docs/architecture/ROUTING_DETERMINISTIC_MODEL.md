@@ -283,6 +283,10 @@ route_all(V, E):
         require ¬doubles_back(r) ∧ clears(r, O)  # H2, H3 — always, asserted
         placed[e] = r
     distribute_mounts(placed)                    # spread slots on shared surfaces
+    reorder_mounts(placed)                        # LANE NESTING: adjacent-swap the
+                                                 # slot order on each surface, keep a
+                                                 # swap only when crossings drop. Pure
+                                                 # reordering — never adds a bend.
     straighten(placed)                           # §0 rule 6: undo any distribution
                                                  # that turned a straight into a jog,
                                                  # even at the cost of even spacing
@@ -373,16 +377,16 @@ S(D) = W_BEND·Σ β(r) + W_CROSS·crossings(D) + W_LEN·Σ length(r)   (weighte
   `∩` arch `M 458 104 → 458 88 → 878 88 → 878 104` (WEE → Automation over Context
   Store). Corpus-wide `(β 182, crossings 22)` vs engine baseline
   `(β 1064, crossings 28, doglegs 9)`.
-- **The §0 law raised crossings 10 → 22 on purpose.** The earlier `(β 149,
-  crossings 10)` was bought by the coordinated router toggling fans to the facing
-  `_|ˉ` **Z jog** (then mispriced as a "C" = 2). Under §0 those score 99 and are
-  rejected, so the count now tells the truth (22, still < engine 28). **Shape
-  legitimacy first; crossings are the next optimization** (no unjustifiable Z is an
-  acceptable price for a lower crossing count).
-- **Open (next):** (1) the §0-rule-6 **straightening pass** — undo slot distribution
-  that turned a facing straight into a jog; (2) crossing reduction that stays within
-  the {straight, L, C} shape space (route-aware channel routing with arches, not Z
-  jogs).
+- **§0 law then mount-order repair: crossings 10 → 22 → 5.** The §0 law first
+  raised crossings 10 → 22 *on purpose* — the old 10 was bought by toggling fans to
+  the facing `_|ˉ` **Z jog** (mispriced as a "C"); §0 prices those 99 and rejects
+  them. Then the **mount-order repair** (lane nesting — adjacent-swap each surface's
+  slot order, keep when crossings drop, shape untouched) took crossings **22 → 5**
+  with β unchanged at 182. `agent-turn-flow` went 6 → **0** crossings while staying
+  `{4 C, 4 straight, 10 L}`. Model leads the engine **crossings 28 → 5, β 1064 →
+  182, doglegs 9 → 0** — all with only straight / L / C shapes.
+- **Open (next):** the residual 5 crossings (other flows) — more lane nesting and
+  surface re-selection within the {straight, L, C} shape space (never Z jogs).
 
 ### Procedure
 1. **Baseline.** Score every known diagram (routing-corpus *and* FlowForge) under
