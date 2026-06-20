@@ -14,7 +14,9 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 
 use super::component2::monotone_detour;
-use super::select::{best_clean_route, polyline_crossings, side_center_mounts, Candidate};
+use super::select::{
+    best_clean_route, clean_candidates, polyline_crossings, side_center_mounts, Candidate,
+};
 use super::{bend_score, build_path_01, clears, Side};
 use crate::model::{Point, Rect};
 use crate::route_geometry::route_length;
@@ -173,40 +175,33 @@ fn opposite_rank(nodes: &[Rect], e: Edge, node_idx: usize, side: Side) -> f64 {
     }
 }
 
-/// Like [`route_all`], but parallel edges sharing a surface are spread across it
-/// instead of overlapping at the centre. Per surface, edges are ordered by their
-/// opposite endpoint (co-monotone, to minimise intra-bundle crossings) and given
-/// evenly-spaced mount slots; each clean route is rebuilt from its slotted mounts
-/// (falling back to the centre route if a slot breaks feasibility). Component-2
-/// detours are left as-is. Still monotone everywhere — zero doglegs.
-pub fn route_all_slotted(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> {
-    let routed = route_all_sided(nodes, edges);
+const SIDE_OF: [Side; 4] = [Side::Left, Side::Right, Side::Top, Side::Bottom];
 
-    // Group clean edges by the surface each end mounts: (node, side.index) -> edges.
+/// Build slotted routes for an explicit per-edge surface assignment. Clean edges
+/// (`sides[ei] = Some`) are spread across each surface (co-monotone order, even
+/// slots) and rebuilt from their slotted mounts; edges with `sides[ei] = None`
+/// use `detour[ei]` (their Component-2 route). Still monotone everywhere.
+fn build_slotted_with_sides(
+    nodes: &[Rect],
+    edges: &[Edge],
+    sides: &[Option<(Side, Side)>],
+    detour: &[Vec<Point>],
+) -> Vec<Vec<Point>> {
     let mut surface: HashMap<(usize, u8), Vec<usize>> = HashMap::new();
     for (ei, e) in edges.iter().enumerate() {
-        if let Some((sa, sb)) = routed[ei].sides {
+        if let Some((sa, sb)) = sides[ei] {
             surface.entry((e.a, sa.index())).or_default().push(ei);
             surface.entry((e.b, sb.index())).or_default().push(ei);
         }
     }
-
-    let side_of = |idx: u8| match idx {
-        0 => Side::Left,
-        1 => Side::Right,
-        2 => Side::Top,
-        _ => Side::Bottom,
-    };
     let mut mount_a: Vec<Option<Point>> = vec![None; edges.len()];
     let mut mount_b: Vec<Option<Point>> = vec![None; edges.len()];
-
-    // Deterministic surface order so slot assignment is reproducible.
     let mut keys: Vec<(usize, u8)> = surface.keys().copied().collect();
     keys.sort_unstable();
     for k in keys {
         let mut group = surface.remove(&k).unwrap();
         let (node_idx, side_idx) = k;
-        let side = side_of(side_idx);
+        let side = SIDE_OF[side_idx as usize];
         let rect = &nodes[node_idx];
         group.sort_by(|&i, &j| {
             opposite_rank(nodes, edges[i], node_idx, side)
@@ -225,23 +220,111 @@ pub fn route_all_slotted(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> {
             }
         }
     }
-
-    // Rebuild clean edges from slotted mounts; keep detours as-is.
     edges
         .iter()
         .enumerate()
-        .map(|(ei, e)| match routed[ei].sides {
+        .map(|(ei, e)| match sides[ei] {
             Some((sa, sb)) => {
                 let pa = mount_a[ei].clone().unwrap_or_else(|| sa.mount_at(&nodes[e.a], 0.5));
                 let pb = mount_b[ei].clone().unwrap_or_else(|| sb.mount_at(&nodes[e.b], 0.5));
                 let obstacles = obstacles_for(nodes, e.a, e.b);
                 build_path_01(sa, &pa, sb, &pb)
                     .filter(|pts| clears(pts, &obstacles))
-                    .unwrap_or_else(|| routed[ei].route.clone())
+                    .unwrap_or_else(|| detour[ei].clone())
             }
-            None => routed[ei].route.clone(),
+            None => detour[ei].clone(),
         })
         .collect()
+}
+
+/// Total strictly-interior crossings across all route pairs.
+fn total_crossings(routes: &[Vec<Point>]) -> usize {
+    let mut n = 0usize;
+    for i in 0..routes.len() {
+        for j in (i + 1)..routes.len() {
+            n += polyline_crossings(&routes[i], &routes[j]);
+        }
+    }
+    n
+}
+
+/// Like [`route_all`], but parallel edges sharing a surface are spread across it
+/// instead of overlapping (co-monotone slots). Component-2 detours unchanged.
+/// Still monotone everywhere — zero doglegs.
+pub fn route_all_slotted(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> {
+    let routed = route_all_sided(nodes, edges);
+    let sides: Vec<Option<(Side, Side)>> = routed.iter().map(|r| r.sides).collect();
+    let detour: Vec<Vec<Point>> = routed.iter().map(|r| r.route.clone()).collect();
+    build_slotted_with_sides(nodes, edges, &sides, &detour)
+}
+
+/// [`route_all_slotted`] plus a crossing-aware **surface re-selection** repair:
+/// for each clean edge, try every feasible clean surface pair and keep the choice
+/// that lowers TOTAL slotted crossings, iterating to a fixpoint. Deterministic
+/// (edge order, candidate order, first strict improvement), bounded, monotone
+/// everywhere (zero doglegs), and **never increases crossings** vs plain slotting.
+///
+/// LIMITATION (measured on FlowForge, 2026-06-20): this single-edge greedy does
+/// NOT reduce the fan-out crossing pattern (many edges from one node fanning to a
+/// column). Migrating one fan edge to the facing surface just trades crossings
+/// with the edges still on the original surface — a local minimum. The fan must
+/// move as a COORDINATED group; that is the deferred global/eviction optimization.
+/// So this is kept as a correct, never-worse refinement, not the default path.
+pub fn route_all_slotted_min_crossings(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> {
+    let routed = route_all_sided(nodes, edges);
+    let mut sides: Vec<Option<(Side, Side)>> = routed.iter().map(|r| r.sides).collect();
+    let detour: Vec<Vec<Point>> = routed.iter().map(|r| r.route.clone()).collect();
+
+    // Feasible clean surface pairs per clean edge (the re-selection candidates).
+    let cand_sides: Vec<Vec<(Side, Side)>> = edges
+        .iter()
+        .enumerate()
+        .map(|(ei, e)| {
+            if sides[ei].is_none() {
+                return Vec::new();
+            }
+            let obstacles = obstacles_for(nodes, e.a, e.b);
+            clean_candidates(&nodes[e.a], &nodes[e.b], &obstacles)
+                .into_iter()
+                .map(|c| (c.side_a, c.side_b))
+                .collect()
+        })
+        .collect();
+
+    let mut routes = build_slotted_with_sides(nodes, edges, &sides, &detour);
+    let mut best = total_crossings(&routes);
+    const MAX_ROUNDS: usize = 4;
+    for _ in 0..MAX_ROUNDS {
+        if best == 0 {
+            break;
+        }
+        let mut improved = false;
+        for ei in 0..edges.len() {
+            let orig = match sides[ei] {
+                Some(s) => s,
+                None => continue,
+            };
+            for &cand in &cand_sides[ei] {
+                if cand == orig {
+                    continue;
+                }
+                sides[ei] = Some(cand);
+                let trial = build_slotted_with_sides(nodes, edges, &sides, &detour);
+                let x = total_crossings(&trial);
+                if x < best {
+                    best = x;
+                    routes = trial;
+                    improved = true;
+                    break;
+                }
+                sides[ei] = Some(orig);
+            }
+        }
+        if !improved {
+            break;
+        }
+    }
+    routes
 }
 
 #[cfg(test)]
@@ -315,6 +398,32 @@ mod tests {
             assert!(monotone(r));
         }
         assert_ne!(routes[0], routes[1], "parallel edges land on distinct slots");
+    }
+
+    #[test]
+    fn min_crossings_never_worse_and_stays_monotone() {
+        // A fan: one source to several offset targets. The crossing-aware repair
+        // must not increase crossings vs plain slotting, and stays dogleg-free.
+        let nodes = vec![
+            rect(0.0, 200.0),   // source
+            rect(400.0, 0.0),
+            rect(400.0, 150.0),
+            rect(400.0, 300.0),
+            rect(400.0, 450.0),
+        ];
+        let edges = vec![
+            Edge { a: 0, b: 1 },
+            Edge { a: 0, b: 2 },
+            Edge { a: 0, b: 3 },
+            Edge { a: 0, b: 4 },
+        ];
+        let plain = total_crossings(&route_all_slotted(&nodes, &edges));
+        let repaired_routes = route_all_slotted_min_crossings(&nodes, &edges);
+        let repaired = total_crossings(&repaired_routes);
+        assert!(repaired <= plain, "repair never increases crossings");
+        for r in &repaired_routes {
+            assert!(monotone(r), "still zero doglegs after repair");
+        }
     }
 
     #[test]
