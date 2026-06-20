@@ -78,10 +78,10 @@ fn main() {
 
     let version = package_version();
 
-    // JS: if (options.checkUpdates) { … } — not in this slice (side-effecting)
+    // --check-updates: report whether a newer native release is available.
     if opts.check_updates {
-        eprintln!("--check-updates is not yet implemented in the Rust CLI");
-        process::exit(1);
+        commands::update::check(version);
+        return;
     }
 
     // JS: if (options.command === "version") { console.log(version); return; }
@@ -98,6 +98,12 @@ fn main() {
 
     if opts.command == "explain" {
         commands::explain::run(&opts.topic);
+        return;
+    }
+
+    // `update`: self-update the native binary from GitHub releases (no target).
+    if opts.command == "update" {
+        commands::update::run(version);
         return;
     }
 
