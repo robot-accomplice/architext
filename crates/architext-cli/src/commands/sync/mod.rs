@@ -1,5 +1,5 @@
-//! `sync` / `install` / `upgrade` / `migrate` command — Rust port of
-//! `syncTarget` from `src/adapters/cli/architext-cli.mjs`.
+//! `sync` / `install` / `migrate` command — Rust port of `syncTarget`.
+//! (`upgrade` was historically an alias here; it now updates the binary.)
 //!
 //! Sub-modules:
 //!   - `target_layout`   — path helpers + constants

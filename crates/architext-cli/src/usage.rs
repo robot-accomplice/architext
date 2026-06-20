@@ -1,5 +1,6 @@
-//! Port of `usage()` from `src/adapters/cli/command-line.mjs`.
-//! The string must be byte-identical to the JS output.
+//! `usage()` text for the CLI. (Originally a byte-identical port of the JS
+//! command-line help; the JS CLI was removed at the 1.7.0 cutover, so this is
+//! now the sole source of truth and can evolve with the Rust CLI.)
 
 pub fn usage() -> &'static str {
     "Usage:
@@ -11,8 +12,9 @@ Path:
     architext serve /path/to/repo
 
 Commands:
-  sync | install | upgrade   Install data-only Architext or migrate old copied installs.
+  sync | install             Install data-only Architext or migrate old copied installs.
   migrate                    Alias for sync, intended for old copied installs.
+  update | upgrade           Update the architext binary to the latest release.
   doctor                     Diagnose installation health and optionally repair drift.
   status                     Print installation status. Use --json for machine output.
   serve                      Run the package-owned local viewer for a target repo.
@@ -36,7 +38,7 @@ Options:
   --restart                  Sync and restart a recorded background serve instance.
   --refresh                  Alias for --restart.
   --update                   Alias for --restart. Use --check-updates for package updates.
-  --check-updates            Check npm for a newer Architext package.
+  --check-updates            Report whether a newer Architext release is available.
   --open                     Open the local viewer in the system browser.
   --no-open                  Do not open the system browser.
   --host <host>              Serve bind host. Defaults to 127.0.0.1.
@@ -74,6 +76,7 @@ Examples:
   architext serve --stop
   architext serve --restart --instance <id>
   architext --check-updates
+  architext update
   architext serve --host 127.0.0.1 --port 4517
   architext --version
   architext validate .

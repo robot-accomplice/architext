@@ -3,15 +3,15 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-2ff801)](LICENSE)
 [![CI](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml)
 [![npm version](https://img.shields.io/npm/v/%40robotaccomplice%2Farchitext?color=00dbe9)](https://www.npmjs.com/package/@robotaccomplice/architext)
-![Node 20+](https://img.shields.io/badge/node-%3E%3D20-00dbe9)
+![Rust](https://img.shields.io/badge/Rust-native-00dbe9)
+![WebAssembly](https://img.shields.io/badge/viewer-WebAssembly-654ff0)
+![Native binary](https://img.shields.io/badge/install-native%20binary-2ff801)
+![Zero Node runtime](https://img.shields.io/badge/Node%20runtime-none-2ff801)
 ![Global CLI](https://img.shields.io/badge/global%20CLI-yes-2ff801)
 ![Target Repos](https://img.shields.io/badge/target%20repos-data--only-2ff801)
 ![Local First](https://img.shields.io/badge/local--first-yes-00dbe9)
 ![Runtime CDN](https://img.shields.io/badge/runtime%20CDN-none-2ff801)
 ![JSON Schema](https://img.shields.io/badge/schema-JSON%20Schema-fed639)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.x-00dbe9)
-![React](https://img.shields.io/badge/React-19-00dbe9)
-![Vite](https://img.shields.io/badge/Vite-6-00dbe9)
 
 Architext is a local, project-owned architecture, release, rules, and dataflow
 viewer generated from strict JSON files.
@@ -133,35 +133,54 @@ validation, release tracking, rules, and release packaging.
 
 ![Architext Rules view showing ranked project rules grouped by category](docs/assets/screenshots/architext-rules.png)
 
-## Install Or Upgrade In A Project
+## Installing Architext
 
-The simplest interface is the `architext` CLI.
+Architext ships as a self-contained native binary. No Node runtime is required.
 
-Install it globally:
+### Quick install (recommended)
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/robot-accomplice/architext/main/install.sh | sh
+```
+
+This downloads the latest release binary for your platform, verifies its SHA-256
+checksum, and installs it to `~/.local/bin` (override with
+`ARCHITEXT_INSTALL_DIR`). Make sure that directory is on your `PATH`.
+
+### Manual native install
+
+Download the binary for your platform from the
+[latest release](https://github.com/robot-accomplice/architext/releases/latest)
+(`architext-darwin-arm64`, `architext-darwin-x64`, `architext-linux-x64`,
+`architext-linux-arm64`, or `architext-win32-x64.exe`), verify it against
+`SHA256SUMS`, make it executable, and put it on your `PATH`.
+
+### Via npm (transitional)
+
+npm is supported as a bridge for existing users while Architext moves to native
+distribution. It installs the same native binary behind a thin launcher:
 
 ```sh
 npm install -g @robotaccomplice/architext
 ```
 
-Use the scoped package name exactly. The unscoped `architext` npm package is a
-different project and is not maintained by Robot Accomplice; installing it can
-leave you with an unrelated `0.0.7` CLI.
+Use the scoped package name exactly; the unscoped `architext` npm package is an
+unrelated project.
 
-If `architext --version` reports `0.0.7`, remove the unrelated package and
-install the scoped package:
+### Keeping it current
 
 ```sh
-npm uninstall -g architext
-npm install -g @robotaccomplice/architext
+architext update          # download + install the latest native binary
+architext --check-updates # report whether a newer version is available
 ```
 
-From a local Architext clone during development, install the current checkout:
+`architext update` replaces the running binary in place. If it detects an
+npm-managed install, it installs a native copy to `~/.local/bin` and prints the
+steps to drop the npm version — the comfortable path off npm.
 
-```sh
-npm install -g /path/to/architext
-```
+## Adopt Architext In A Project
 
-After that, from any target project repository:
+From any target project repository:
 
 ```sh
 architext sync
@@ -202,17 +221,14 @@ npm run architext:clean
 
 Those root scripts call the global `architext` CLI with `.` as the target path.
 
-Install explicitly:
+Install or update project data explicitly:
 
 ```sh
 architext sync
 ```
 
-Upgrade explicitly:
-
-```sh
-architext sync
-```
+(`architext upgrade` no longer means `sync`; it updates the architext binary.
+Use `architext sync` for project data.)
 
 Run non-interactively:
 
@@ -330,6 +346,8 @@ architext clean [path]
 architext explain flows
 architext version
 architext --version
+architext update
+architext --check-updates
 ```
 
 Use `doctor` when something looks wrong. It reports the installed version,
@@ -464,9 +482,8 @@ running foreground and background serve processes with stable instance ids. `--s
 the current Architext package and then relaunch the same target on the same host
 and port. If sync fails, the existing server is left running.
 
-`--check-updates` checks npm for a newer Architext package, prompts before
-installing it globally, and then prompts to refresh none, one, or all running
-background instances using the newly installed `architext` command. `--open`
+`--check-updates` reports whether a newer Architext release is available on
+GitHub; run `architext update` to install it. `--open`
 launches the system browser after the viewer is reachable. The command always
 prints a plain local URL so terminals that auto-link URLs remain enough even
 when browser launch is unavailable.
@@ -488,7 +505,7 @@ Serve lifecycle options:
 | `--restart` | Sync and relaunch a recorded background server. |
 | `--refresh` | Alias for `--restart`. |
 | `--update` | Alias for `--restart`; use `--check-updates` for package installation. |
-| `--check-updates` | Check npm for a newer package, install after confirmation, then refresh selected running instances. |
+| `--check-updates` | Report whether a newer native release is available; install with `architext update`. |
 
 Serve process state is local runtime state, not project architecture data. It is
 not written into `docs/architext/data/*.json` and should not be committed.
@@ -663,16 +680,22 @@ target repository layout, migration behavior, and release/package lifecycle.
 
 ## Distribution
 
-Architext is intended to be installed as a global npm CLI:
+Architext is distributed as native binaries for macOS, Linux, and Windows
+(arm64 and x64), built and published from CI with sigstore provenance. The
+recommended install is the shell installer or a direct binary download from the
+[releases page](https://github.com/robot-accomplice/architext/releases/latest);
+see [Installing Architext](#installing-architext).
 
 ```sh
-npm install -g @robotaccomplice/architext
+curl -fsSL https://raw.githubusercontent.com/robot-accomplice/architext/main/install.sh | sh
 architext sync
 architext serve
 ```
 
-The package name is scoped. Do not install the unscoped `architext` npm package;
-it is a different project and can install an unrelated `0.0.7` binary.
+npm remains a transitional bridge (`npm install -g @robotaccomplice/architext`)
+that installs the same native binary behind a thin launcher. It is being retired
+in favor of native distribution plus `architext update`. Use the scoped package
+name exactly.
 
 ## Repository Status
 
