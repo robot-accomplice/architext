@@ -17,7 +17,7 @@ use super::component2::monotone_detour;
 use super::select::{
     best_clean_route, clean_candidates, polyline_crossings, side_center_mounts, Candidate,
 };
-use super::{bend_score, build_path_01, clears, Side, MIN_SURFACE_STEM};
+use super::{bend_score, build_path_01, clears, Side, EPS, MIN_SURFACE_STEM};
 use crate::model::{Point, Rect};
 use crate::route_geometry::route_length;
 
@@ -376,6 +376,78 @@ fn build_slotted_with_sides(
             }
         }
     }
+
+    // §0 rule 6 — STRAIGHTENING PASS. Slot distribution can push a *facing* pair
+    // (opposite normals) to different tangent offsets, turning a route that could
+    // be a clean straight into an avoidable jog. Pull both mounts to a common
+    // coordinate inside the surfaces' overlap when the straight clears O — even
+    // though that breaks even spacing — guarded so the moved mount never coincides
+    // with another mount on the same surface (which would overlap a reciprocal).
+    let coincides = |mounts_a: &[Option<Point>], mounts_b: &[Option<Point>], ei: usize, node: usize, p: &Point| {
+        edges.iter().enumerate().any(|(ej, ej_e)| {
+            if ej == ei {
+                return false;
+            }
+            let other = if ej_e.a == node {
+                mounts_a[ej].as_ref()
+            } else if ej_e.b == node {
+                mounts_b[ej].as_ref()
+            } else {
+                None
+            };
+            other.is_some_and(|q| (q.x - p.x).abs() < EPS && (q.y - p.y).abs() < EPS)
+        })
+    };
+    for ei in 0..edges.len() {
+        let (sa, sb) = match sides[ei] {
+            Some(s) => s,
+            None => continue,
+        };
+        let (na, nb) = (sa.normal(), sb.normal());
+        let facing = (na.0 + nb.0).abs() < EPS && (na.1 + nb.1).abs() < EPS;
+        if !facing {
+            continue;
+        }
+        let (pa, pb) = match (mount_a[ei].clone(), mount_b[ei].clone()) {
+            (Some(a), Some(b)) => (a, b),
+            _ => continue,
+        };
+        let e = edges[ei];
+        let (ra, rb) = (&nodes[e.a], &nodes[e.b]);
+        let obstacles = obstacles_for(nodes, e.a, e.b);
+        let (qa, qb) = if sa.is_horizontal() {
+            if (pa.y - pb.y).abs() < EPS {
+                continue; // already straight
+            }
+            let lo = ra.y.max(rb.y) + MIN_SURFACE_STEM;
+            let hi = (ra.y + ra.height).min(rb.y + rb.height) - MIN_SURFACE_STEM;
+            if lo > hi {
+                continue; // surfaces don't overlap enough to straighten into
+            }
+            let c = pa.y.clamp(lo, hi);
+            (Point { x: pa.x, y: c }, Point { x: pb.x, y: c })
+        } else {
+            if (pa.x - pb.x).abs() < EPS {
+                continue;
+            }
+            let lo = ra.x.max(rb.x) + MIN_SURFACE_STEM;
+            let hi = (ra.x + ra.width).min(rb.x + rb.width) - MIN_SURFACE_STEM;
+            if lo > hi {
+                continue;
+            }
+            let c = pa.x.clamp(lo, hi);
+            (Point { x: c, y: pa.y }, Point { x: c, y: pb.y })
+        };
+        if !clears(&[qa.clone(), qb.clone()], &obstacles) {
+            continue;
+        }
+        if coincides(&mount_a, &mount_b, ei, e.a, &qa) || coincides(&mount_a, &mount_b, ei, e.b, &qb) {
+            continue;
+        }
+        mount_a[ei] = Some(qa);
+        mount_b[ei] = Some(qb);
+    }
+
     edges
         .iter()
         .enumerate()
@@ -831,6 +903,33 @@ mod tests {
         let routes = route_all(&nodes, &edges);
         assert!(!routes[0].is_empty());
         assert!(!crate::route_model::doubles_back(&routes[0]));
+    }
+
+    #[test]
+    fn straightening_pass_aligns_a_distributed_facing_pair() {
+        // A.Right carries two edges (to B and to C below it), so A→B is slotted
+        // OFF-centre while B.Left (its only edge) sits centred — a facing JOG. The
+        // §0 rule-6 straightening pass pulls both mounts to a common y, recovering a
+        // clean straight even though that breaks even slot spacing. Without the pass
+        // this edge is a 2-bend Z (offset facing surfaces).
+        let nodes = vec![
+            Rect { x: 0.0, y: 0.0, width: 100.0, height: 200.0 },     // A
+            Rect { x: 400.0, y: 0.0, width: 100.0, height: 200.0 },   // B (same height, faces A)
+            Rect { x: 400.0, y: 300.0, width: 100.0, height: 100.0 }, // C — pulls A.Right slotting
+        ];
+        let edges = vec![Edge { a: 0, b: 1 }, Edge { a: 0, b: 2 }];
+        let sides = vec![
+            Some((Side::Right, Side::Left)),
+            Some((Side::Right, Side::Top)),
+        ];
+        let detour = vec![Vec::new(), Vec::new()];
+        let routes = build_slotted_with_sides(&nodes, &edges, &sides, &detour);
+        assert_eq!(
+            crate::route_model::bends(&routes[0]),
+            0,
+            "facing pair must straighten to 0 bends, got {:?}",
+            routes[0]
+        );
     }
 
     #[test]
