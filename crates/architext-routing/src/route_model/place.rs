@@ -17,7 +17,7 @@ use super::component2::monotone_detour;
 use super::select::{
     best_clean_route, clean_candidates, polyline_crossings, side_center_mounts, Candidate,
 };
-use super::{bend_score, build_path_01, clears, Side, EPS, MIN_SURFACE_STEM};
+use super::{bend_score, build_arch, build_path_01, clears, Side, EPS, MIN_SURFACE_STEM};
 use crate::model::{Point, Rect};
 use crate::route_geometry::route_length;
 
@@ -238,9 +238,16 @@ fn build_c(sa: Side, pa: &Point, pb: &Point, frac: f64) -> Vec<Point> {
     }
 }
 
-/// Build a clean shape between two mounts on the given surfaces: straight/L via
-/// [`build_path_01`], else — if the surfaces face each other — a monotone C
-/// (jog) staggered by `frac`. Returns the first that clears `obstacles`.
+/// How much each successive like-facing arch pushes its crossbar further out, so
+/// a bundle of arches between the same two surfaces nests instead of coinciding.
+const ARCH_STAGGER: f64 = 18.0;
+
+/// Build a clean shape between two mounts on the given surfaces. **Like-facing**
+/// (`sa == sb`) builds a C arch ([`build_arch`]) — NOT `build_path_01`, whose
+/// "straight" between two same-orientation faces degenerates to a line grazing the
+/// shared surface plane. Otherwise straight/L via [`build_path_01`], else — if the
+/// surfaces face each other — a monotone C (jog) staggered by `frac`. Returns the
+/// first that clears `obstacles`.
 fn build_l_or_c(
     sa: Side,
     pa: &Point,
@@ -249,6 +256,12 @@ fn build_l_or_c(
     frac: f64,
     obstacles: &[Rect],
 ) -> Option<Vec<Point>> {
+    if sa == sb {
+        // Stagger the crossbar by fan order so a bundle of like-facing arches nests.
+        let stem = MIN_SURFACE_STEM + frac * ARCH_STAGGER;
+        let arch = build_arch(sa, pa, pb, obstacles, stem);
+        return arch.filter(|a| clears(a, obstacles));
+    }
     if let Some(pts) = build_path_01(sa, pa, sb, pb) {
         if clears(&pts, obstacles) {
             return Some(pts);

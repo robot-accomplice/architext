@@ -313,18 +313,25 @@ pub fn build_arch(
         return None;
     }
     if side.is_horizontal() {
-        // Left/Right: horizontal stems, vertical crossbar at x = cx. Span on y.
+        // Left/Right: horizontal stems, vertical crossbar at x = cx. The crossbar
+        // steps past the obstacles that overlap the degenerate straight line it
+        // replaces — those in the y-band that ALSO straddle `base` (the shared
+        // mount x). Obstacles off to the side (not on the straight) are irrelevant
+        // and must NOT push the crossbar (that would drag the stems through them).
         let (lo, hi) = (p_a.y.min(p_b.y), p_a.y.max(p_b.y));
-        let spanning = |r: &Rect| r.y < hi + EPS && r.y + r.height > lo - EPS;
+        let base = if side == Side::Right { p_a.x.max(p_b.x) } else { p_a.x.min(p_b.x) };
+        let blocks = |r: &Rect| {
+            r.y < hi + EPS && r.y + r.height > lo - EPS && r.x <= base + EPS && r.x + r.width >= base - EPS
+        };
         let cx = if side == Side::Right {
-            let mut m = p_a.x.max(p_b.x);
-            for r in obstacles.iter().filter(|r| spanning(r)) {
+            let mut m = base;
+            for r in obstacles.iter().filter(|r| blocks(r)) {
                 m = m.max(r.x + r.width);
             }
             m + stem
         } else {
-            let mut m = p_a.x.min(p_b.x);
-            for r in obstacles.iter().filter(|r| spanning(r)) {
+            let mut m = base;
+            for r in obstacles.iter().filter(|r| blocks(r)) {
                 m = m.min(r.x);
             }
             m - stem
@@ -336,18 +343,23 @@ pub fn build_arch(
             p_b.clone(),
         ])
     } else {
-        // Top/Bottom: vertical stems, horizontal crossbar at y = cy. Span on x.
+        // Top/Bottom: vertical stems, horizontal crossbar at y = cy. Same rule on
+        // the other axis — step past only obstacles in the x-band that straddle
+        // `base` (the shared mount y).
         let (lo, hi) = (p_a.x.min(p_b.x), p_a.x.max(p_b.x));
-        let spanning = |r: &Rect| r.x < hi + EPS && r.x + r.width > lo - EPS;
+        let base = if side == Side::Bottom { p_a.y.max(p_b.y) } else { p_a.y.min(p_b.y) };
+        let blocks = |r: &Rect| {
+            r.x < hi + EPS && r.x + r.width > lo - EPS && r.y <= base + EPS && r.y + r.height >= base - EPS
+        };
         let cy = if side == Side::Bottom {
-            let mut m = p_a.y.max(p_b.y);
-            for r in obstacles.iter().filter(|r| spanning(r)) {
+            let mut m = base;
+            for r in obstacles.iter().filter(|r| blocks(r)) {
                 m = m.max(r.y + r.height);
             }
             m + stem
         } else {
-            let mut m = p_a.y.min(p_b.y);
-            for r in obstacles.iter().filter(|r| spanning(r)) {
+            let mut m = base;
+            for r in obstacles.iter().filter(|r| blocks(r)) {
                 m = m.min(r.y);
             }
             m - stem
