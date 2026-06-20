@@ -22,6 +22,10 @@ use std::path::Path;
 use crate::diagram_config::DiagramConfig;
 use crate::plan_diagram::{plan_diagram, plan_diagram_with_stats, ExtraNodeRect};
 use crate::route_diagnostics::DiagMetrics;
+use crate::route_geometry::route_length;
+use crate::route_model::bend_score;
+use crate::route_model::place::{route_all, Edge};
+use crate::route_model::select::polyline_crossings;
 use crate::plan_request::{
     build_flow_plan_request,
     types::{Flow, FlowsFile, View, ViewsFile},
@@ -205,6 +209,99 @@ pub fn score_flow_plans(
         if let Some(metrics) = diag {
             out.push((flow.id.clone(), view.id.clone(), metrics));
         }
+    }
+    Ok(out)
+}
+
+/// Head-to-head score for one (flow, view): the current engine vs the
+/// deterministic model, on the **same** node layout.
+pub struct ScorePair {
+    pub flow_id: String,
+    pub view_id: String,
+    /// Current-engine diagnostics (β via `bend_score`-equivalent, crossings, length).
+    pub engine: DiagMetrics,
+    pub model_beta: f64,
+    pub model_crossings: usize,
+    pub model_length: f64,
+    /// Edges the model could not route even with a monotone detour (should be 0).
+    pub model_unrouted: usize,
+}
+
+/// Score the deterministic model (`route_all`) against the current engine on
+/// every (flow, view) pair, using the SAME node layout the plan produced. This
+/// is ROUTING_DETERMINISTIC_MODEL.md §5 step 2-3: run the model on the baseline's
+/// scenarios and compare S = (β, crossings, length). The model is dogleg-free by
+/// construction, so its β carries no `REVERSAL_BEND_PENALTY` terms.
+///
+/// Caveat: mounts are side-centres, so parallel edges sharing a surface overlap
+/// (inflating model crossings/length) until mount-slot spreading lands — but β,
+/// the headline dogleg term, is already meaningful.
+pub fn score_model_vs_engine(
+    data_dir: &Path,
+    diagram_config: &DiagramConfig,
+) -> Result<Vec<ScorePair>, String> {
+    let (flows, views) = load_flows_and_views(data_dir)?;
+    let flow_view_type_set: std::collections::HashSet<&str> =
+        flow_view_types().iter().copied().collect();
+    let layout_config = diagram_config.layout.to_layout_config();
+    let pairs: Vec<(&View, &Flow)> = views
+        .iter()
+        .filter(|v| flow_view_type_set.contains(v.view_type.as_str()))
+        .flat_map(|v| {
+            flows
+                .iter()
+                .filter(move |f| flow_compatible_with_view(f, v))
+                .map(move |f| (v, f))
+        })
+        .collect();
+
+    let mut out = Vec::with_capacity(pairs.len());
+    for (view, flow) in pairs {
+        let mut req = build_flow_plan_request(view, flow, Some(&layout_config), "orthogonal");
+        req.plan_diagram_input.diagnostics = true;
+        let (plan, _stats, diag) = plan_diagram_with_stats(&req.plan_diagram_input);
+        let engine = match diag {
+            Some(m) => m,
+            None => continue,
+        };
+
+        // Build the model's node/edge view from the SAME layout the plan used.
+        let node_ids: Vec<String> = plan.node_rects.keys().cloned().collect();
+        let index_of: std::collections::HashMap<&str, usize> =
+            node_ids.iter().enumerate().map(|(i, k)| (k.as_str(), i)).collect();
+        let nodes: Vec<crate::model::Rect> =
+            node_ids.iter().map(|k| plan.node_rects[k].clone()).collect();
+        let edges: Vec<Edge> = req
+            .plan_diagram_input
+            .relationships
+            .iter()
+            .filter_map(|r| {
+                let a = *index_of.get(r.from.as_str())?;
+                let b = *index_of.get(r.to.as_str())?;
+                Some(Edge { a, b })
+            })
+            .collect();
+
+        let routes = route_all(&nodes, &edges);
+        let model_unrouted = routes.iter().filter(|r| r.is_empty()).count();
+        let model_beta: f64 = routes.iter().map(|r| bend_score(r)).sum();
+        let model_length: f64 = routes.iter().map(|r| route_length(r)).sum();
+        let mut model_crossings = 0usize;
+        for i in 0..routes.len() {
+            for j in (i + 1)..routes.len() {
+                model_crossings += polyline_crossings(&routes[i], &routes[j]);
+            }
+        }
+
+        out.push(ScorePair {
+            flow_id: flow.id.clone(),
+            view_id: view.id.clone(),
+            engine,
+            model_beta,
+            model_crossings,
+            model_length,
+            model_unrouted,
+        });
     }
     Ok(out)
 }
