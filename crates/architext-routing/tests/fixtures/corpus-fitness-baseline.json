@@ -13,8 +13,8 @@
     "bundle-coaligned": {
       "routes": 8,
       "bends": 19,
-      "crossings": 1,
-      "pairInternalCrossings": 1,
+      "crossings": 0,
+      "pairInternalCrossings": 0,
       "laneOrderViolations": 0,
       "closeParallelRuns": 0,
       "sharedSegments": 0,
