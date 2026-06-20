@@ -1,6 +1,6 @@
 {
   "name": "architext",
-  "version": "1.6.3",
+  "version": "1.7.0",
   "description": "Maintain machine-readable architecture documentation and Release Truth for repositories that use docs/architext/data JSON or the architext CLI.",
   "author": {
     "name": "Robot Accomplice",

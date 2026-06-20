@@ -6,7 +6,7 @@
 //! are applied as a single `transform` on the inner `<g>` (translate + scale),
 //! driven by signals owned by the canvas panel.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use architext_routing::model::{Plan, Rect};
 use leptos::*;
@@ -30,6 +30,10 @@ pub struct RenderModel {
     pub decisions: Vec<(Rect, String)>,
     pub edges: Vec<EdgeView>,
     pub labels: Vec<LabelView>,
+    /// Top-left anchor of the "NOT IN THIS FLOW" overline above the parked
+    /// out-of-flow cluster, in canvas/plan coordinates. `None` when there are no
+    /// out-of-flow cards (structural modes, or a flow that covers every node).
+    pub parked_label: Option<(f64, f64)>,
 }
 
 /// The legend payload, derived from ONLY what the current view renders: the
@@ -62,6 +66,7 @@ pub fn build_render_model(
     flow: Option<&Flow>,
     edge_labels: &HashMap<String, String>,
     nodes_by_id: &HashMap<&str, &Node>,
+    drillable_ids: &HashSet<String>,
 ) -> RenderModel {
     // Edge kind per step id (the route key == the flow step id). Empty in
     // structural mode → every edge defaults to Process.
@@ -70,6 +75,12 @@ pub fn build_render_model(
             .map(|s| (s.id.as_str(), EdgeKind::from_step_kind(s.kind.as_deref())))
             .collect())
         .unwrap_or_default();
+
+    // The "in active flow" id set: the union of every flow step's `from` + `to`
+    // endpoints. `None` flow (structural C4/Deployment) → no orphan concept, so
+    // `is_in_flow` treats every node as in-flow.
+    let in_flow_ids = flow_node_ids(flow);
+    let is_in_flow = |id: &str| flow.is_none() || in_flow_ids.contains(id);
 
     // Node cards: rects that resolve to a real dataset node.
     let mut node_views = Vec::new();
@@ -81,6 +92,9 @@ pub fn build_render_model(
                 name: node.name.clone(),
                 node_type: node.node_type.clone(),
                 rect: rect.clone(),
+                in_flow: is_in_flow(id),
+                scale: 1.0,
+                drillable: drillable_ids.contains(id),
             }),
             None => {
                 // An augmented (decision) rect — tint with the component's role
@@ -133,14 +147,18 @@ pub fn build_render_model(
         let collapsed = pill_label(&raw_label);
         // A flow-step label collapses to its number (a badge); anything else
         // is a structural relationship label → a glyph pill (the word kept
-        // for the hover title + legend).
-        let kind = if collapsed != raw_label {
-            LabelKind::Number(collapsed)
+        // for the hover title + legend). A number badge carries its route id (==
+        // step id) so it can highlight when that step is selected.
+        let (kind, step_id) = if collapsed != raw_label {
+            (LabelKind::Number(collapsed), Some(id.clone()))
         } else {
-            LabelKind::Relationship {
-                kind: RelationshipKind::classify(&raw_label),
-                word: raw_label,
-            }
+            (
+                LabelKind::Relationship {
+                    kind: RelationshipKind::classify(&raw_label),
+                    word: raw_label,
+                },
+                None,
+            )
         };
         let box_rect = plan.label_boxes.get(id).cloned().unwrap_or(Rect {
             x: route.label_x,
@@ -150,6 +168,7 @@ pub fn build_render_model(
         });
         labels.push(LabelView {
             kind,
+            step_id,
             anchor_x: route.label_x,
             anchor_y: route.label_y,
             box_rect,
@@ -165,6 +184,12 @@ pub fn build_render_model(
         label.anchor_y = y;
     }
 
+    // Park the out-of-flow ("unrelated") cards into a compact, dimmed cluster to
+    // the RIGHT of the in-flow bounding box (UX #2 — they're visible, secondary,
+    // not hidden). The engine interleaves them with the flow, so we override
+    // their rects in the viewer render layer (the engine is untouched).
+    let parked_label = park_unrelated(&mut node_views);
+
     RenderModel {
         canvas_width: plan.canvas_width,
         canvas_height: plan.canvas_height,
@@ -172,7 +197,106 @@ pub fn build_render_model(
         decisions,
         edges,
         labels,
+        parked_label,
     }
+}
+
+/// Geometry of the parked out-of-flow cluster (canvas px). Cards render
+/// `PARK_SCALE`× the full card; `PARK_GAP_X` separates the in-flow bbox from the
+/// cluster, `PARK_GAP` is the in-cluster gutter, and the column wraps to
+/// `PARK_COLS` once it exceeds `PARK_MAX_ROWS` cards (a 2-col grid for many
+/// orphans, like the demo's tall column kept compact).
+const PARK_SCALE: f64 = 0.62;
+const PARK_GAP_X: f64 = 64.0;
+const PARK_GAP: f64 = 10.0;
+const PARK_MAX_ROWS: usize = 12;
+const PARK_COLS: usize = 2;
+/// Vertical room reserved above the first parked card for the "NOT IN THIS FLOW"
+/// overline (so the label clears the top card).
+const PARK_LABEL_GAP: f64 = 18.0;
+
+/// The placed slot (top-left + scaled footprint, in canvas px) of one parked
+/// out-of-flow card, plus the "NOT IN THIS FLOW" overline anchor for the cluster.
+pub struct ParkLayout {
+    /// Parked-card slots in iteration order of the input ids: top-left of the
+    /// rendered (already-scaled) footprint and its `width`×`height`.
+    pub slots: Vec<Rect>,
+    /// Top-left anchor of the cluster overline (above the first parked card).
+    pub label_anchor: (f64, f64),
+}
+
+/// Compute the parked-cluster layout to the RIGHT of the in-flow bounding box.
+///
+/// Shared by the render model (which moves each out-of-flow `NodeView` into its
+/// slot) and `content_bounds`/fit (which must frame the parked cluster at its
+/// repositioned location, not the engine's interleaved one). The engine places
+/// out-of-flow nodes interleaved with the flow, so this is a VIEWER render-layer
+/// transform — the engine is untouched.
+///
+/// `in_flow_rects` are the engine rects of the in-flow cards (the frame the
+/// cluster sits beside); `parked_natural` are the engine rects of the
+/// out-of-flow cards, in the order their slots are returned. Cards lay out in a
+/// single column, wrapping to [`PARK_COLS`] columns past [`PARK_MAX_ROWS`], each
+/// at [`PARK_SCALE`]. Returns `None` when either set is empty.
+pub fn park_layout(in_flow_rects: &[Rect], parked_natural: &[Rect]) -> Option<ParkLayout> {
+    if in_flow_rects.is_empty() || parked_natural.is_empty() {
+        return None;
+    }
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    for r in in_flow_rects {
+        min_y = min_y.min(r.y);
+        max_x = max_x.max(r.x + r.width);
+    }
+
+    // Rendered cell size: natural card size scaled down. All engine node rects
+    // share the configured node size, so the first is representative.
+    let cell_w = parked_natural[0].width * PARK_SCALE;
+    let cell_h = parked_natural[0].height * PARK_SCALE;
+    let cols = if parked_natural.len() > PARK_MAX_ROWS { PARK_COLS } else { 1 };
+    let origin_x = max_x + PARK_GAP_X;
+    let origin_y = min_y + PARK_LABEL_GAP;
+
+    let slots = (0..parked_natural.len())
+        .map(|slot| {
+            let col = slot % cols;
+            let row = slot / cols;
+            Rect {
+                x: origin_x + col as f64 * (cell_w + PARK_GAP),
+                y: origin_y + row as f64 * (cell_h + PARK_GAP),
+                width: cell_w,
+                height: cell_h,
+            }
+        })
+        .collect();
+
+    Some(ParkLayout { slots, label_anchor: (origin_x, min_y) })
+}
+
+/// Reposition every out-of-flow `NodeView` into the parked cluster (via
+/// [`park_layout`]) and return the cluster overline anchor. The card keeps its
+/// NATURAL `width`/`height` and gets `scale = PARK_SCALE`; only `x`/`y` move to
+/// the slot top-left (the card scales uniformly at render time). Returns `None`
+/// when there is nothing to park.
+fn park_unrelated(nodes: &mut [NodeView]) -> Option<(f64, f64)> {
+    let in_flow_rects: Vec<Rect> =
+        nodes.iter().filter(|n| n.in_flow).map(|n| n.rect.clone()).collect();
+    let parked_idx: Vec<usize> = nodes
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| !n.in_flow)
+        .map(|(i, _)| i)
+        .collect();
+    let parked_natural: Vec<Rect> =
+        parked_idx.iter().map(|&i| nodes[i].rect.clone()).collect();
+
+    let layout = park_layout(&in_flow_rects, &parked_natural)?;
+    for (&idx, slot) in parked_idx.iter().zip(&layout.slots) {
+        nodes[idx].scale = PARK_SCALE;
+        nodes[idx].rect.x = slot.x;
+        nodes[idx].rect.y = slot.y;
+    }
+    Some(layout.label_anchor)
 }
 
 /// Public legend derivation for the canvas overlay: the distinct node types of
@@ -202,6 +326,20 @@ pub fn legend_for(
         }
     }
     LegendModel { node_types, relationship_kinds }
+}
+
+/// The set of node ids that participate in the active flow: the union of every
+/// flow step's `from` and `to` endpoints. `None` flow (structural C4/Deployment
+/// mode) returns an empty set — callers treat "no flow" as "every node in flow".
+pub fn flow_node_ids(flow: Option<&Flow>) -> HashSet<String> {
+    let mut ids = HashSet::new();
+    if let Some(f) = flow {
+        for step in &f.steps {
+            ids.insert(step.from.clone());
+            ids.insert(step.to.clone());
+        }
+    }
+    ids
 }
 
 /// The role-type to tint a decision diamond: the type of the component the
@@ -258,6 +396,11 @@ pub fn DiagramSvg(
     edge_labels: HashMap<String, String>,
     #[allow(unused)] view: DataView,
     nodes: Vec<Node>,
+    /// Node ids whose card DRILLS DOWN to a scoped C4 child view (C4 mode only;
+    /// empty in every other mode). Drives the per-card drilldown affordance. The
+    /// caller computes this from the active C4 view + all views, so the SVG layer
+    /// stays agnostic of the C4 hierarchy rules.
+    #[prop(optional)] drillable_node_ids: HashSet<String>,
     #[prop(into)] pan_x: Signal<f64>,
     #[prop(into)] pan_y: Signal<f64>,
     #[prop(into)] zoom: Signal<f64>,
@@ -266,10 +409,17 @@ pub fn DiagramSvg(
     /// equals the step id, so an edge whose id matches gets the `--accent` active
     /// treatment. Always `None` in structural (C4 / deployment) mode.
     #[prop(into)] selected_step: Signal<Option<String>>,
+    /// Whether to render the parked out-of-flow ("unrelated") node cards (dimmed,
+    /// smaller, clustered to the right) and their overline. `true` (the default)
+    /// keeps them VISIBLE but secondary so the active flow dominates; toggling
+    /// `false` fully hides them to declutter. In structural (C4 / deployment)
+    /// mode there is no flow, every node is in-flow, and this prop has no effect.
+    #[prop(into)] show_unrelated: Signal<bool>,
     #[prop(into)] on_select: Callback<String>,
 ) -> impl IntoView {
     let nodes_by_id: HashMap<&str, &Node> = nodes.iter().map(|n| (n.id.as_str(), n)).collect();
-    let model = build_render_model(&plan, flow.as_ref(), &edge_labels, &nodes_by_id);
+    let model =
+        build_render_model(&plan, flow.as_ref(), &edge_labels, &nodes_by_id, &drillable_node_ids);
 
     let view_box = format!("0 0 {} {}", model.canvas_width, model.canvas_height);
     let transform = move || format!("translate({} {}) scale({})", pan_x.get(), pan_y.get(), zoom.get());
@@ -278,6 +428,7 @@ pub fn DiagramSvg(
     let decision_items = model.decisions.clone();
     let edge_items = model.edges.clone();
     let label_items = model.labels.clone();
+    let parked_label = model.parked_label;
 
     view! {
         <svg class="flow-svg" viewBox=view_box preserveAspectRatio="xMidYMid meet">
@@ -306,21 +457,51 @@ pub fn DiagramSvg(
                     }).collect_view()}
                 </g>
                 <g class="flow-labels">
-                    {label_items.into_iter().map(|l| view! { <DiagramLabel label=l/> }).collect_view()}
+                    {label_items.into_iter().map(|l| {
+                        let sid = l.step_id.clone();
+                        let is_selected = Signal::derive(move || {
+                            sid.is_some() && selected_step.get().as_deref() == sid.as_deref()
+                        });
+                        view! { <DiagramLabel label=l selected=is_selected/> }
+                    }).collect_view()}
                 </g>
                 <g class="flow-decisions">
                     {decision_items.into_iter().map(|(rect, role)| view! {
                         <DecisionDiamond rect=rect role_var=role/>
                     }).collect_view()}
                 </g>
+                // "NOT IN THIS FLOW" overline above the parked cluster. Drawn
+                // with the parked cards (same `show_unrelated` gate); absent when
+                // there is nothing parked.
+                {parked_label.map(|(lx, ly)| view! {
+                    <text
+                        class="flow-parked-label overline"
+                        x=lx
+                        y=ly
+                        style=move || if show_unrelated.get() { "" } else { "display:none" }
+                    >
+                        "NOT IN THIS FLOW"
+                    </text>
+                })}
                 <g class="flow-nodes">
-                    {node_items.into_iter().map(|n| {
-                        let id = n.id.clone();
-                        let is_selected = Signal::derive(move || {
-                            selected_node.get().as_deref() == Some(id.as_str())
-                        });
-                        view! { <DiagramNode node=n selected=is_selected on_select=on_select/> }
-                    }).collect_view()}
+                    {move || {
+                        // Parked out-of-flow cards are VISIBLE by default; the
+                        // toggle (`show_unrelated`) lets the user fully hide them
+                        // to declutter.
+                        let show = show_unrelated.get();
+                        node_items
+                            .iter()
+                            .filter(|n| n.in_flow || show)
+                            .cloned()
+                            .map(|n| {
+                                let id = n.id.clone();
+                                let is_selected = Signal::derive(move || {
+                                    selected_node.get().as_deref() == Some(id.as_str())
+                                });
+                                view! { <DiagramNode node=n selected=is_selected on_select=on_select/> }
+                            })
+                            .collect_view()
+                    }}
                 </g>
             </g>
         </svg>
@@ -329,7 +510,95 @@ pub fn DiagramSvg(
 
 #[cfg(test)]
 mod tests {
-    use super::pill_label;
+    use super::{flow_node_ids, park_layout, pill_label, PARK_SCALE};
+    use architext_routing::model::Rect;
+    use crate::data::models::{Flow, FlowStep};
+
+    fn rect(x: f64, y: f64) -> Rect {
+        Rect { x, y, width: 136.0, height: 54.0 }
+    }
+
+    #[test]
+    fn park_layout_places_cluster_right_of_in_flow_bbox() {
+        // In-flow bbox spans x 100..436; the cluster must start to the right of
+        // the in-flow max-x, never overlapping the flow.
+        let in_flow = [rect(100.0, 100.0), rect(300.0, 200.0)];
+        let parked = [rect(0.0, 0.0), rect(0.0, 0.0)];
+        let layout = park_layout(&in_flow, &parked).expect("layout");
+        let in_flow_max_x = 300.0 + 136.0;
+        for slot in &layout.slots {
+            assert!(slot.x > in_flow_max_x, "slot.x={} must clear flow", slot.x);
+        }
+        assert!(layout.label_anchor.0 > in_flow_max_x, "label clears flow");
+    }
+
+    #[test]
+    fn park_layout_cards_are_smaller_than_natural() {
+        let in_flow = [rect(0.0, 0.0)];
+        let parked = [rect(0.0, 0.0)];
+        let layout = park_layout(&in_flow, &parked).expect("layout");
+        let s = &layout.slots[0];
+        assert!((s.width - 136.0 * PARK_SCALE).abs() < 1e-9, "scaled width");
+        assert!((s.height - 54.0 * PARK_SCALE).abs() < 1e-9, "scaled height");
+        assert!(s.width < 136.0 && s.height < 54.0, "parked card is smaller");
+    }
+
+    #[test]
+    fn park_layout_single_column_until_threshold_then_two() {
+        let in_flow = [rect(0.0, 0.0)];
+        // 12 parked → single column (all share one x).
+        let twelve: Vec<Rect> = (0..12).map(|_| rect(0.0, 0.0)).collect();
+        let l = park_layout(&in_flow, &twelve).expect("layout");
+        assert!(l.slots.iter().all(|s| (s.x - l.slots[0].x).abs() < 1e-9), "1 col");
+        // 13 parked → wraps to two columns (two distinct x values).
+        let thirteen: Vec<Rect> = (0..13).map(|_| rect(0.0, 0.0)).collect();
+        let l2 = park_layout(&in_flow, &thirteen).expect("layout");
+        let xs: std::collections::HashSet<u64> =
+            l2.slots.iter().map(|s| s.x.to_bits()).collect();
+        assert_eq!(xs.len(), 2, "should wrap to 2 columns");
+    }
+
+    #[test]
+    fn park_layout_none_when_no_in_flow_or_no_parked() {
+        assert!(park_layout(&[], &[rect(0.0, 0.0)]).is_none(), "no in-flow");
+        assert!(park_layout(&[rect(0.0, 0.0)], &[]).is_none(), "nothing to park");
+    }
+
+    fn step(id: &str, from: &str, to: &str) -> FlowStep {
+        FlowStep {
+            id: id.to_string(),
+            from: from.to_string(),
+            to: to.to_string(),
+            action: String::new(),
+            summary: None,
+            kind: None,
+            outcome: None,
+            return_of: None,
+        }
+    }
+
+    #[test]
+    fn flow_node_ids_is_union_of_step_endpoints() {
+        let flow = Flow {
+            id: "f".into(),
+            name: "f".into(),
+            status: None,
+            summary: None,
+            trigger: None,
+            steps: vec![step("s1", "a", "b"), step("s2", "b", "c")],
+            sequence_frames: vec![],
+        };
+        let ids = flow_node_ids(Some(&flow));
+        assert_eq!(ids.len(), 3);
+        assert!(ids.contains("a") && ids.contains("b") && ids.contains("c"));
+    }
+
+    #[test]
+    fn flow_node_ids_empty_without_flow() {
+        // Structural (C4/Deployment) mode → no flow → empty set, and callers
+        // treat that as "every node is in-flow".
+        assert!(flow_node_ids(None).is_empty());
+    }
 
     #[test]
     fn flow_step_labels_collapse_to_the_step_number() {

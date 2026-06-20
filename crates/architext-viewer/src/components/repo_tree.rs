@@ -20,11 +20,13 @@ use std::collections::HashSet;
 use leptos::*;
 use leptos::spawn_local;
 
-use crate::data::{fetch_repo_tree, models::RepoFile, FetchError};
+use crate::data::{
+    fetch_file, fetch_repo_tree, models::FilePreviewPayload, models::RepoFile, FetchError,
+};
 use crate::diagram::role_color_var;
 use crate::repo_tree_model::{
-    build_owner_index, build_repo_tree, dominant_owner, file_icon, format_relative_time,
-    format_size, resolve_owner, FileEntry, TreeKind, TreeNode,
+    build_owner_index, build_repo_tree, dominant_owner, file_icon, filter_files,
+    format_relative_time, format_size, resolve_owner, FileEntry, TreeKind, TreeNode,
 };
 use crate::state::use_app_state;
 
@@ -33,6 +35,12 @@ const INDENT_PX: f64 = 14.0; // per-depth indent (matches the JS workspace)
 /// The repo-tree fetch outcome held in a plain signal (no nested `<Suspense>`,
 /// which conflicts with the App-level data Suspense). `None` while loading.
 type RepoState = Option<Result<crate::data::models::RepoTreePayload, FetchError>>;
+
+/// The file-preview fetch outcome for the right pane. `None` while no file is
+/// selected OR while the selected file's contents are still loading — the pane
+/// distinguishes the two via `selected_file` being set (loading) vs unset
+/// (empty hint).
+type PreviewState = Option<Result<FilePreviewPayload, FetchError>>;
 
 /// The SVG `path` `d` for a `DiagramIcon` glyph key used by the repo tree
 /// (file-type glyphs + folder glyphs). Mirrors the React `DiagramIcon` paths
@@ -69,8 +77,35 @@ pub fn RepoTree() -> impl IntoView {
     // Collapsed directory paths (expanded by default).
     let collapsed = create_rw_signal::<HashSet<String>>(HashSet::new());
 
+    // ── Signal-to-noise controls (UX review #7) ──────────────────────────────
+    // Text filter over file paths; hide-noise (Playwright logs / dot-dirs) on by
+    // default so the first screen shows real files; an optional owning-node id
+    // filter driven by the owner chips.
+    let query = create_rw_signal(String::new());
+    let hide_noise = create_rw_signal(true);
+    let owner_filter = create_rw_signal::<Option<String>>(None);
+
+    // The currently-previewed file path (right pane). `None` = empty state.
+    let selected_file = create_rw_signal::<Option<String>>(None);
+    // The preview fetch outcome. `None` while loading the selected file.
+    let preview = create_rw_signal::<PreviewState>(None);
+
+    // When `selected_file` changes to a path, fetch its highlighted contents.
+    // Each click clears the prior result first (loading state), then resolves.
+    create_effect(move |_| {
+        let Some(path) = selected_file.get() else { return };
+        preview.set(None);
+        spawn_local(async move {
+            preview.set(Some(fetch_file(&path).await));
+        });
+    });
+
     view! {
-        <div class="repo-tree">
+        <div
+            class="repo-tree"
+            class=("repo-tree--previewing", move || selected_file.get().is_some())
+        >
+            <div class="repo-tree__main">
             <div class="repo-tree__header">
                 <div class="overline">"REPO TREE"</div>
                 {move || repo.get()
@@ -88,6 +123,20 @@ pub fn RepoTree() -> impl IntoView {
                         }
                     })}
             </div>
+            // ── Signal-to-noise controls ────────────────────────────────────
+            {move || repo.get()
+                .and_then(|r| r.ok())
+                .filter(|p| !p.files.is_empty())
+                .map(|_| view! {
+                    <RepoTreeControls
+                        query
+                        hide_noise
+                        owner_filter
+                        collapsed
+                        repo
+                        state
+                    />
+                })}
             {move || match repo.get() {
                 None => view! {
                     <p class="repo-tree__hint">"Loading repo file list…"</p>
@@ -112,26 +161,273 @@ pub fn RepoTree() -> impl IntoView {
                             mtime: f.mtime,
                         })
                         .collect();
-                    let tree = build_repo_tree(&files);
+                    // Apply the signal-to-noise filters BEFORE folding the tree,
+                    // so build_repo_tree recreates only the ancestor dirs of the
+                    // surviving files (matching files + ancestors, no orphans).
+                    let data = state.data.get_untracked();
+                    let owner_index = build_owner_index(&data.nodes);
+                    let owner_idx = owner_filter.get().and_then(|id| {
+                        data.nodes.iter().position(|n| n.id == id)
+                    });
+                    let kept = filter_files(
+                        &files,
+                        &query.get(),
+                        owner_idx,
+                        hide_noise.get(),
+                        &owner_index,
+                    );
+                    if kept.is_empty() {
+                        return view! {
+                            <p class="repo-tree__hint">
+                                "No files match the current filter."
+                            </p>
+                        }.into_view();
+                    }
+                    let kept_count = kept.len();
+                    let total = files.len();
+                    let tree = build_repo_tree(&kept);
                     // Single clock read for the whole render — matches the React
                     // `now = Date.now()` memo (stable across all rows).
                     let now = js_sys::Date::now() as i64;
                     view! {
                         <div class="repo-tree__body">
+                            {(kept_count != total).then(|| view! {
+                                <p class="repo-tree__filtered">
+                                    {format!("Showing {kept_count} of {total} files")}
+                                </p>
+                            })}
                             <div class="repo-row repo-row--colhead" aria-hidden="true">
-                                <span class="repo-row__caret"></span>
-                                <span class="repo-row__icon"></span>
-                                <span class="repo-row__name">"Name"</span>
+                                <div class="repo-row__lead">
+                                    <span class="repo-row__caret"></span>
+                                    <span class="repo-row__icon"></span>
+                                    <span class="repo-row__name">"Name"</span>
+                                </div>
                                 <span class="repo-row__size">"Size"</span>
                                 <span class="repo-row__time">"Modified"</span>
                                 <span class="repo-row__owner">"Owner"</span>
                             </div>
-                            {render_children(&tree, 0, state, collapsed, now)}
+                            {render_children(&tree, 0, state, collapsed, selected_file, now)}
                         </div>
                     }.into_view()
                 }
             }}
+            </div>
+            <FilePreview selected_file preview/>
         </div>
+    }
+}
+
+/// The controls bar: a path filter, collapse/expand-all, a "hide noise" toggle
+/// (Playwright logs / dot-dirs, on by default), and owner filter chips. Owns
+/// only the control signals; the body render reacts to them.
+#[component]
+fn RepoTreeControls(
+    query: RwSignal<String>,
+    hide_noise: RwSignal<bool>,
+    owner_filter: RwSignal<Option<String>>,
+    collapsed: RwSignal<HashSet<String>>,
+    repo: RwSignal<RepoState>,
+    state: crate::state::AppState,
+) -> impl IntoView {
+    // Collapse every directory present in the (filtered) repo; expand clears it.
+    let collapse_all = move |_| {
+        let Some(Ok(payload)) = repo.get_untracked() else { return };
+        let data = state.data.get_untracked();
+        let owner_index = build_owner_index(&data.nodes);
+        let owner_idx = owner_filter
+            .get_untracked()
+            .and_then(|id| data.nodes.iter().position(|n| n.id == id));
+        let files: Vec<FileEntry> = payload
+            .files
+            .iter()
+            .map(|f| FileEntry { path: f.path.clone(), size: f.size, mtime: f.mtime })
+            .collect();
+        let kept = filter_files(
+            &files,
+            &query.get_untracked(),
+            owner_idx,
+            hide_noise.get_untracked(),
+            &owner_index,
+        );
+        let tree = build_repo_tree(&kept);
+        let mut dirs = HashSet::new();
+        collect_dir_paths(&tree, &mut dirs);
+        collapsed.set(dirs);
+    };
+    let expand_all = move |_| collapsed.set(HashSet::new());
+
+    // Owner chips: the distinct nodes that own at least one repo file, so the
+    // chip set is exactly the owners a user can filter by.
+    let owner_chips = create_memo(move |_| {
+        let Some(Ok(payload)) = repo.get() else { return Vec::new() };
+        let data = state.data.get();
+        let owner_index = build_owner_index(&data.nodes);
+        let mut seen: HashSet<usize> = HashSet::new();
+        let mut chips: Vec<(String, String, String)> = Vec::new();
+        for f in &payload.files {
+            if let Some(idx) = resolve_owner(&f.path, &owner_index) {
+                if seen.insert(idx) {
+                    if let Some(n) = data.nodes.get(idx) {
+                        chips.push((n.id.clone(), n.name.clone(), n.node_type.clone()));
+                    }
+                }
+            }
+        }
+        chips.sort_by(|a, b| a.1.cmp(&b.1));
+        chips
+    });
+
+    view! {
+        <div class="repo-tree__controls">
+            <input
+                class="blast-search repo-tree__filter"
+                r#type="text"
+                placeholder="Filter files…"
+                prop:value=move || query.get()
+                on:input=move |ev| query.set(event_target_value(&ev))
+            />
+            <div class="repo-tree__control-row">
+                <button class="chip repo-tree__btn" on:click=collapse_all>"Collapse all"</button>
+                <button class="chip repo-tree__btn" on:click=expand_all>"Expand all"</button>
+                <button
+                    class="chip repo-tree__btn"
+                    class:is-active=move || hide_noise.get()
+                    title="Hide .playwright-mcp logs and dot-directories"
+                    on:click=move |_| hide_noise.update(|v| *v = !*v)
+                >"Hide noise"</button>
+            </div>
+            {move || {
+                let chips = owner_chips.get();
+                (!chips.is_empty()).then(|| view! {
+                    <div class="repo-tree__owners">
+                        <span class="overline repo-tree__owners-label">"OWNER"</span>
+                        {chips.into_iter().map(|(id, name, node_type)| {
+                            let color = role_color_var(&node_type);
+                            let chip_id = id.clone();
+                            let is_active = create_memo(move |_| {
+                                owner_filter.get().as_deref() == Some(chip_id.as_str())
+                            });
+                            let toggle_id = id.clone();
+                            let on_click = move |_| {
+                                owner_filter.update(|cur| {
+                                    if cur.as_deref() == Some(toggle_id.as_str()) {
+                                        *cur = None;
+                                    } else {
+                                        *cur = Some(toggle_id.clone());
+                                    }
+                                });
+                            };
+                            view! {
+                                <button
+                                    class="chip repo-tree__owner-chip"
+                                    class:is-active=move || is_active.get()
+                                    style=format!("--owner-color:{color}")
+                                    on:click=on_click
+                                >{name}</button>
+                            }
+                        }).collect_view()}
+                    </div>
+                })
+            }}
+        </div>
+    }
+}
+
+/// Collect every directory path in a (sub)tree into `out` (for collapse-all).
+fn collect_dir_paths(node: &TreeNode, out: &mut HashSet<String>) {
+    for child in &node.children {
+        if child.kind == TreeKind::Dir {
+            out.insert(child.path.clone());
+            collect_dir_paths(child, out);
+        }
+    }
+}
+
+/// The right pane: renders the selected file's syntax-highlighted contents, or
+/// an empty hint when nothing is selected. Loading and error states are
+/// explicit (FAIL LOUD — never a blank pane). Binary/truncated files carry a
+/// clear notice.
+#[component]
+fn FilePreview(
+    selected_file: RwSignal<Option<String>>,
+    preview: RwSignal<PreviewState>,
+) -> impl IntoView {
+    view! {
+        <div class="repo-file-preview">
+            {move || match (selected_file.get(), preview.get()) {
+                // Nothing selected yet → empty hint.
+                (None, _) => view! {
+                    <p class="repo-file-preview__hint">"Select a file to preview"</p>
+                }.into_view(),
+                // Selected but not yet resolved → loading.
+                (Some(path), None) => view! {
+                    <div class="repo-file-preview__header">
+                        <span class="repo-file-preview__path">{path}</span>
+                    </div>
+                    <p class="repo-file-preview__hint">"Loading file…"</p>
+                }.into_view(),
+                // Fetch failed → explicit error (FAIL LOUD).
+                (Some(path), Some(Err(err))) => view! {
+                    <div class="repo-file-preview__header">
+                        <span class="repo-file-preview__path">{path}</span>
+                    </div>
+                    <p class="repo-file-preview__hint repo-file-preview__hint--error">
+                        {format!("Could not load file: {err}")}
+                    </p>
+                }.into_view(),
+                // Resolved.
+                (Some(_), Some(Ok(payload))) => {
+                    let meta = preview_meta(&payload);
+                    let notice = preview_notice(&payload);
+                    let body = if payload.binary {
+                        view! {
+                            <p class="repo-file-preview__hint">
+                                "Binary file — no text preview."
+                            </p>
+                        }.into_view()
+                    } else {
+                        // Server-rendered, inline-styled highlight HTML.
+                        let html = payload.html.clone().unwrap_or_default();
+                        view! {
+                            <div class="repo-file-preview__code" inner_html=html></div>
+                        }.into_view()
+                    };
+                    view! {
+                        <div class="repo-file-preview__header">
+                            <span class="repo-file-preview__path">{payload.path.clone()}</span>
+                            <span class="repo-file-preview__meta">{meta}</span>
+                        </div>
+                        {notice}
+                        {body}
+                    }.into_view()
+                }
+            }}
+        </div>
+    }
+}
+
+/// The header metadata line: `size · language`.
+fn preview_meta(p: &FilePreviewPayload) -> String {
+    let size = if p.size.is_some() { format_size(p.size) } else { String::new() };
+    match (&size, &p.language) {
+        (s, Some(lang)) if !s.is_empty() => format!("{s} · {lang}"),
+        (s, _) if !s.is_empty() => s.clone(),
+        (_, Some(lang)) => lang.clone(),
+        _ => String::new(),
+    }
+}
+
+/// A truncation notice, shown above the code when the server only sent the head.
+fn preview_notice(p: &FilePreviewPayload) -> View {
+    if p.truncated && !p.binary {
+        view! {
+            <p class="repo-file-preview__notice">
+                "Large file — showing the first 512 KiB."
+            </p>
+        }
+        .into_view()
+    } else {
+        ().into_view()
     }
 }
 
@@ -143,12 +439,13 @@ fn render_children(
     depth: usize,
     state: crate::state::AppState,
     collapsed: RwSignal<HashSet<String>>,
+    selected_file: RwSignal<Option<String>>,
     now: i64,
 ) -> View {
     parent
         .children
         .iter()
-        .map(|child| render_node(child, depth, state, collapsed, now))
+        .map(|child| render_node(child, depth, state, collapsed, selected_file, now))
         .collect_view()
 }
 
@@ -157,6 +454,7 @@ fn render_node(
     depth: usize,
     state: crate::state::AppState,
     collapsed: RwSignal<HashSet<String>>,
+    selected_file: RwSignal<Option<String>>,
     now: i64,
 ) -> View {
     let indent = format!("padding-left:{}px", depth as f64 * INDENT_PX);
@@ -204,26 +502,29 @@ fn render_node(
                     view! { <span class="repo-row__owner"></span> }.into_view(),
                 )
             };
-            let style = format!("{indent};border-left-color:{rail}");
+            let style = format!("border-left-color:{rail}");
 
             // Children are rendered eagerly but hidden when collapsed, so the
             // expand toggle is instant and selection state is preserved.
-            let children_view = render_children(node, depth + 1, state, collapsed, now);
+            let children_view =
+                render_children(node, depth + 1, state, collapsed, selected_file, now);
             view! {
                 <div class="repo-row repo-row--dir" style=style on:click=on_click>
-                    <span class="repo-row__caret">
-                        {move || if is_collapsed.get() { "▸" } else { "▾" }}
-                    </span>
-                    <span class="repo-row__icon repo-row__icon--folder">
-                        <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d=move || if is_collapsed.get() {
-                                glyph_path("folder")
-                            } else {
-                                glyph_path("folder-open")
-                            }/>
-                        </svg>
-                    </span>
-                    <span class="repo-row__name repo-row__name--dir">{name}</span>
+                    <div class="repo-row__lead" style=indent>
+                        <span class="repo-row__caret">
+                            {move || if is_collapsed.get() { "▸" } else { "▾" }}
+                        </span>
+                        <span class="repo-row__icon repo-row__icon--folder">
+                            <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d=move || if is_collapsed.get() {
+                                    glyph_path("folder")
+                                } else {
+                                    glyph_path("folder-open")
+                                }/>
+                            </svg>
+                        </span>
+                        <span class="repo-row__name repo-row__name--dir">{name}</span>
+                    </div>
                     <span class="repo-row__size"></span>
                     <span class="repo-row__time"></span>
                     {owner_view}
@@ -246,12 +547,17 @@ fn render_node(
                 // Unowned files get a neutral rail (the hairline), never a role hue.
                 None => ("var(--line)".to_string(), String::new(), None),
             };
-            let style = format!("{indent};border-left-color:{rail}");
+            let style = format!("border-left-color:{rail}");
 
+            // Clicking a file row keeps the existing behaviour (select the
+            // owning node, if any) AND sets the preview path so the right pane
+            // fetches + renders the file's contents.
+            let click_path = path.clone();
             let on_click = move |_| {
                 if let Some(id) = owner_id.clone() {
                     state.set_selected_node(id);
                 }
+                selected_file.set(Some(click_path.clone()));
             };
             let owned = owner.is_some();
 
@@ -266,13 +572,15 @@ fn render_node(
                     style=style
                     on:click=on_click
                 >
-                    <span class="repo-row__caret"></span>
-                    <span class="repo-row__icon" style=format!("color:{}", icon.color)>
-                        <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
-                            <path d=glyph_path(icon.glyph)/>
-                        </svg>
-                    </span>
-                    <span class="repo-row__name">{name}</span>
+                    <div class="repo-row__lead" style=indent>
+                        <span class="repo-row__caret"></span>
+                        <span class="repo-row__icon" style=format!("color:{}", icon.color)>
+                            <svg class="repo-glyph" viewBox="0 0 24 24" aria-hidden="true">
+                                <path d=glyph_path(icon.glyph)/>
+                            </svg>
+                        </span>
+                        <span class="repo-row__name">{name}</span>
+                    </div>
                     <span class="repo-row__size">{size_text}</span>
                     <span class="repo-row__time">{time_text}</span>
                     {if owner_label.is_empty() {

@@ -12,29 +12,30 @@
 //! plan (built from node `dependencies`) + per-edge labels and no flow. The
 //! remaining (diagram-less) modes keep the placard.
 
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use leptos::*;
 use leptos::ev::{MouseEvent, WheelEvent};
 
-use architext_routing::model::Plan;
+use architext_routing::model::{Plan, Rect};
 use architext_routing::plan_diagram::plan_diagram;
 use architext_routing::plan_request::build_flow_plan_request;
 
 use crate::components::blast_radius_panel::BlastRadiusPanel;
+use crate::components::c4_breadcrumb::C4Breadcrumb;
 use crate::components::legend::Legend;
 use crate::components::release_truth_panel::ReleaseTruthPanel;
 use crate::components::repo_tree::RepoTree;
 use crate::components::rules_panel::RulesPanel;
 use crate::components::spinner::CanvasSpinner;
 use crate::components::steps_panel::StepsPanel;
-use crate::data::fetch_farm_plan;
+use crate::data::fetch_farm_plan_polling;
 use crate::data::models::{Flow, Node, View};
 use crate::diagram::plan::{
     compute_structural_plan, layout_config_from_diagram, plan_hash,
 };
 use crate::diagram::sequence::{build_sequence_layout, SequenceConfig, SequenceLayout};
-use crate::diagram::svg::legend_for;
+use crate::diagram::svg::{flow_node_ids, legend_for, park_layout};
 use crate::diagram::{DiagramSvg, SequenceSvg};
 use crate::selection::child_c4_view_for_node;
 use crate::state::use_app_state;
@@ -71,8 +72,25 @@ struct ContentBounds {
 
 /// The bounding box of everything that actually renders — node rects unioned
 /// with label boxes and route polyline points — so `fit` frames the diagram, not
-/// the full padded canvas (which includes margins + disconnected-node columns).
-fn content_bounds(plan: &Plan) -> Option<ContentBounds> {
+/// the full padded canvas (which includes margins).
+///
+/// `in_flow` is `None` in structural (C4/Deployment) mode → every node rect is
+/// unioned, unchanged. In flows mode it is `Some(set)`; the out-of-flow
+/// ("unrelated") cards are NEVER framed at their engine positions (the engine
+/// interleaves them with the flow, so unioning them shrank the flow into a
+/// corner — the UX #2 bug). Instead:
+///   - `show_parked == true`: union the in-flow rects with the PARKED cluster's
+///     repositioned, compact slots (and its overline anchor), exactly the layout
+///     the render model uses — fit frames flow + parked together, yet the flow
+///     dominates because the parked cards are small;
+///   - `show_parked == false`: frame only the in-flow geometry.
+///
+/// Decision rects (`decision:<step>`) are never out-of-flow, so they stay framed.
+fn content_bounds(
+    plan: &Plan,
+    in_flow: Option<&HashSet<String>>,
+    show_parked: bool,
+) -> Option<ContentBounds> {
     let mut min_x = f64::INFINITY;
     let mut min_y = f64::INFINITY;
     let mut max_x = f64::NEG_INFINITY;
@@ -85,12 +103,39 @@ fn content_bounds(plan: &Plan) -> Option<ContentBounds> {
         max_y = max_y.max(y1);
     };
 
-    for rect in plan.node_rects.values().chain(plan.label_boxes.values()) {
+    // In-flow + decision rects at their engine positions; collect the out-of-flow
+    // real-node rects (not framed in place) for the parked-cluster pass.
+    let mut in_flow_rects: Vec<Rect> = Vec::new();
+    let mut parked_natural: Vec<Rect> = Vec::new();
+    for (id, rect) in &plan.node_rects {
+        let out_of_flow = in_flow
+            .map(|set| !set.contains(id) && !id.starts_with("decision:"))
+            .unwrap_or(false);
+        if out_of_flow {
+            parked_natural.push(rect.clone());
+            continue;
+        }
+        in_flow_rects.push(rect.clone());
+        grow(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
+    }
+    for rect in plan.label_boxes.values() {
         grow(rect.x, rect.y, rect.x + rect.width, rect.y + rect.height);
     }
     for route in plan.routes.values() {
         for p in &route.points {
             grow(p.x, p.y, p.x, p.y);
+        }
+    }
+
+    // Frame the parked cluster at its repositioned slots (same layout the render
+    // model uses) so fit shows both the flow and the parked column.
+    if show_parked {
+        if let Some(layout) = park_layout(&in_flow_rects, &parked_natural) {
+            let (lx, ly) = layout.label_anchor;
+            grow(lx, ly, lx, ly);
+            for s in &layout.slots {
+                grow(s.x, s.y, s.x + s.width, s.y + s.height);
+            }
         }
     }
 
@@ -162,6 +207,11 @@ pub fn CanvasPanel() -> impl IntoView {
     let viewport_ref = create_node_ref::<html::Div>();
     // Legend overlay open/closed state (default minimized; expandable).
     let legend_collapsed = create_rw_signal(true);
+    // Whether to show the parked out-of-flow ("unrelated") cluster (UX #2).
+    // Default ON: the parked cards are visible but secondary (dimmed, smaller,
+    // clustered to the right) so the active flow dominates. Toggling OFF fully
+    // hides them and re-fits to the in-flow bbox only (see the fit path).
+    let show_unrelated = create_rw_signal(true);
 
     // The resolved layout config from /api/config (defaults if absent). The
     // dataset is loaded once and never mutated, so this reads untracked — it is
@@ -252,17 +302,36 @@ pub fn CanvasPanel() -> impl IntoView {
         sequence_inputs.set(None);
 
         // C4 + Deployment: structural plan (node dependencies → edges), labelled
-        // by the relationship rule, no flow. NOT in the farm (flows-only) →
-        // compute in-process, synchronously, then clear the indicator.
+        // by the relationship rule, no flow. NOT in the farm (flows-only), so it
+        // is computed in-process — but ASYNC (spawn_local + a one-tick yield) so
+        // the "Routing" spinner PAINTS before the synchronous structural compute
+        // blocks the main thread. Computing it inline froze the click with no
+        // indication that anything would happen.
         match mode {
             Mode::C4 | Mode::Deployment => {
-                let bundle = view_idx.and_then(|i| data.views.get(i).cloned()).map(|view| {
-                    let structural =
-                        compute_structural_plan(&view, &data.nodes, &layout_config());
-                    (structural.plan, None, structural.edge_labels, view, data.nodes.clone())
+                let Some(view) = view_idx.and_then(|i| data.views.get(i).cloned()) else {
+                    diagram_inputs.set(None);
+                    routing.set(false);
+                    return;
+                };
+                let nodes = data.nodes.clone();
+                let layout = layout_config();
+                spawn_local(async move {
+                    // Yield a frame so the spinner renders, then compute.
+                    gloo_timers::future::TimeoutFuture::new(16).await;
+                    let structural = compute_structural_plan(&view, &nodes, &layout);
+                    // Guard against a newer selection started while we computed.
+                    if generation.get_untracked() == gen {
+                        diagram_inputs.set(Some((
+                            structural.plan,
+                            None,
+                            structural.edge_labels,
+                            view,
+                            nodes,
+                        )));
+                        routing.set(false);
+                    }
                 });
-                diagram_inputs.set(bundle);
-                routing.set(false);
                 return;
             }
             // Flows / Data-Risks render the selected flow as a routed plan; fall
@@ -299,8 +368,14 @@ pub fn CanvasPanel() -> impl IntoView {
         let hash = plan_hash(&request.key);
 
         spawn_local(async move {
-            // Farm HIT → deserialized plan; MISS / error → in-process fallback.
-            let plan = match fetch_farm_plan(&hash).await {
+            // Poll the native plan farm (responsive await, main thread stays free)
+            // instead of computing the plan in-process on the UI thread — the
+            // latter freezes a dense diagram for the whole plan duration. The farm
+            // warms its whole map atomically in the background, so early requests
+            // miss; we poll (~up to 5 min) with `routing` kept true (loading
+            // state). Only a genuinely non-precomputed plan falls through to a
+            // one-off in-process computation.
+            let plan = match fetch_farm_plan_polling(&hash, 600, 500).await {
                 Some(plan) => plan,
                 None => plan_diagram(&request.plan_diagram_input),
             };
@@ -329,6 +404,31 @@ pub fn CanvasPanel() -> impl IntoView {
                 .unwrap_or_default()
         })
     });
+
+    // Count of out-of-flow ("unrelated") node cards in the current flows
+    // diagram: real node rects whose id is not a flow endpoint. `0` whenever
+    // there's no flow (structural modes) — used to gate the toggle button so it
+    // appears only when there is actually something to reveal.
+    let unrelated_count = create_memo(move |_| {
+        diagram_inputs.with(|inputs| {
+            inputs
+                .as_ref()
+                .and_then(|(plan, flow, _, _, _)| {
+                    let flow = flow.as_ref()?;
+                    let in_flow = flow_node_ids(Some(flow));
+                    let n = plan
+                        .node_rects
+                        .keys()
+                        .filter(|id| !id.starts_with("decision:") && !in_flow.contains(*id))
+                        .count();
+                    Some(n)
+                })
+                .unwrap_or(0)
+        })
+    });
+    // Plain boolean for the toggle's visibility gate (the `view!` tag parser
+    // mis-reads an inline `>`/`>=` in a `when=` attribute as the tag close).
+    let has_unrelated = create_memo(move |_| unrelated_count.get() > 0);
 
     // Fit a content box (min/max corners, in viewBox/plan coordinate units)
     // into the measured viewport: as zoomed-in as possible while the whole box
@@ -371,8 +471,15 @@ pub fn CanvasPanel() -> impl IntoView {
             );
             return;
         }
-        let Some((plan, _, _, _, _)) = diagram_inputs.get_untracked() else { return };
-        let Some(bounds) = content_bounds(&plan) else { return };
+        let Some((plan, flow, _, _, _)) = diagram_inputs.get_untracked() else { return };
+        // Frame the IN-FLOW geometry plus the PARKED cluster (UX #1/#2): the
+        // engine interleaves out-of-flow nodes with the flow, so they're never
+        // framed at their engine positions. With the cluster shown we union the
+        // in-flow rects with the parked slots (small + dimmed → the flow still
+        // dominates); when the user hides the cluster we frame the flow only.
+        let in_flow = flow.as_ref().map(|f| flow_node_ids(Some(f)));
+        let show_parked = show_unrelated.get_untracked();
+        let Some(bounds) = content_bounds(&plan, in_flow.as_ref(), show_parked) else { return };
         // The plan viewBox is the full canvas; content is a sub-region of it.
         fit_bounds(bounds, plan.canvas_width, plan.canvas_height);
     };
@@ -389,6 +496,9 @@ pub fn CanvasPanel() -> impl IntoView {
         // The footer steps panel reduces the canvas height when open; re-fit when
         // it toggles so the diagram re-frames for the resized viewport.
         let _ = state.steps_collapsed.get();
+        // Toggling "show unrelated nodes" changes what `fit` frames (flow-only
+        // vs the full plan), so re-fit when it flips.
+        let _ = show_unrelated.get();
         // Defer past layout: the first rAF runs before the steps-panel/collapse
         // reflow settles, so a second rAF measures the CURRENT stage rect and the
         // diagram ends up centered+fitted for the real viewport.
@@ -425,9 +535,14 @@ pub fn CanvasPanel() -> impl IntoView {
     };
     let end_drag = move |_: MouseEvent| dragging.set(false);
 
-    // Node click: in C4 mode, a decomposable node (one with a scoped child C4
-    // view) drills DOWN to that child view; otherwise (and in every other mode)
-    // it selects the node for the inspector — exactly the JS viewer's behavior.
+    // Node click reconciliation (C4 mode): a node that HAS a scoped child C4
+    // view (some view's `scopeNodeId == node.id` at the next C4 level) drills
+    // DOWN into that child — pushing it onto the breadcrumb trail so there is a
+    // clear way back. A node WITHOUT a scoped child view (a leaf, an external /
+    // out-of-boundary actor) does NOT drill; it selects the node for the
+    // inspector instead, so every node click still does *something* legible and
+    // we never fabricate a child view. Outside C4 mode the click always selects
+    // (the inspector behavior every other diagram surface relies on).
     let on_select = Callback::new(move |node_id: String| {
         if state.mode.get_untracked() == Mode::C4 {
             let data = state.data.get_untracked();
@@ -435,7 +550,7 @@ pub fn CanvasPanel() -> impl IntoView {
                 if let Some(child_idx) =
                     child_c4_view_for_node(&data.views, &view.view_type, &node_id)
                 {
-                    state.set_view(child_idx);
+                    state.drill_to_c4_view(child_idx);
                     return;
                 }
             }
@@ -491,21 +606,36 @@ pub fn CanvasPanel() -> impl IntoView {
                         }.into_view();
                     }
                     match diagram_inputs.get() {
-                        Some((plan, flow, edge_labels, view, nodes)) => view! {
+                        Some((plan, flow, edge_labels, view, nodes)) => {
+                            // In C4 mode, the nodes that have a scoped child view
+                            // are drillable; the card shows the drilldown cue and
+                            // a click opens that child. Empty in every other mode
+                            // (no drilldown), so no affordance renders there.
+                            let drillable = if state.mode.get() == Mode::C4 {
+                                state.data.with(|d| {
+                                    crate::selection::drillable_node_ids(&d.views, &view.view_type)
+                                })
+                            } else {
+                                std::collections::HashSet::new()
+                            };
+                            view! {
                             <DiagramSvg
                                 plan=plan
                                 flow=flow
                                 edge_labels=edge_labels
                                 view=view
                                 nodes=nodes
+                                drillable_node_ids=drillable
                                 pan_x=pan_x
                                 pan_y=pan_y
                                 zoom=zoom
                                 selected_node=state.selected_node
                                 selected_step=state.selected_step
+                                show_unrelated=show_unrelated
                                 on_select=on_select
                             />
-                        }.into_view(),
+                            }.into_view()
+                        }
                         // Non-diagram surfaces render their own component in the
                         // center region; the rest keep the explanatory placard.
                         None => match state.mode.get() {
@@ -513,6 +643,12 @@ pub fn CanvasPanel() -> impl IntoView {
                             Mode::Rules => view! { <RulesPanel/> }.into_view(),
                             Mode::BlastRadius => view! { <BlastRadiusPanel/> }.into_view(),
                             Mode::ReleaseTruth => view! { <ReleaseTruthPanel/> }.into_view(),
+                            // While a (re)compute is in flight the spinner overlay
+                            // conveys progress — don't flash the diagram-less "no
+                            // projection" hint for C4/Deployment, which DO have a
+                            // diagram (computed async). Show the hint only once the
+                            // compute settled and there is genuinely no diagram.
+                            _ if routing.get() => ().into_view(),
                             _ => view! {
                                 <p class="canvas-panel__hint">
                                     {move || format!(
@@ -562,6 +698,30 @@ pub fn CanvasPanel() -> impl IntoView {
                     <button title="Zoom in" on:click=move |_| zoom_by(ZOOM_STEP)>"+"</button>
                 </div>
             </Show>
+            // C4 drill-down breadcrumb (top-left) — the trail of views the user
+            // drilled through. Self-gating: renders only in C4 mode with a
+            // multi-crumb trail, so it stays out of every other mode's canvas.
+            <C4Breadcrumb/>
+            // Parked-cluster toggle (UX #2) — only over a flows diagram that
+            // actually has out-of-flow nodes. The cluster is shown by default
+            // (visible but secondary); the toggle lets the user fully hide it to
+            // declutter, and re-fits to the in-flow bbox only.
+            <Show when=move || has_unrelated.get()>
+                <button
+                    class="canvas-panel__unrelated-toggle"
+                    class:is-active=move || !show_unrelated.get()
+                    on:click=move |_| show_unrelated.update(|s| *s = !*s)
+                >
+                    {move || {
+                        let n = unrelated_count.get();
+                        if show_unrelated.get() {
+                            format!("Hide {n} unrelated")
+                        } else {
+                            format!("Show {n} unrelated")
+                        }
+                    }}
+                </button>
+            </Show>
             // Type/relationship legend (bottom-left, above the placard). Reflects
             // only the types/kinds present in the current diagram; hidden when the
             // current surface has no diagram (empty model → renders nothing).
@@ -591,6 +751,71 @@ mod tests {
 
     fn bounds(min_x: f64, min_y: f64, max_x: f64, max_y: f64) -> ContentBounds {
         ContentBounds { min_x, min_y, max_x, max_y }
+    }
+
+    // A minimal plan: one in-flow node near the origin and one orphan node
+    // parked far down the canvas (mirroring the engine's out-of-flow column).
+    fn plan_with_orphan() -> Plan {
+        serde_json::from_value(serde_json::json!({
+            "canvasWidth": 1000.0, "canvasHeight": 1000.0,
+            "nodeWidth": 136.0, "nodeHeight": 54.0,
+            "laneWidth": 200.0, "rowGap": 60.0, "marginX": 24.0, "marginY": 24.0,
+            "visibleNodeIds": ["a", "orphan"],
+            "laneIndexByNode": [], "rowIndexByNode": [],
+            "nodeRects": [
+                ["a", {"x": 100.0, "y": 100.0, "width": 136.0, "height": 54.0}],
+                ["orphan", {"x": 100.0, "y": 900.0, "width": 136.0, "height": 54.0}]
+            ],
+            "routes": [], "labelBoxes": []
+        }))
+        .expect("valid plan json")
+    }
+
+    #[test]
+    fn content_bounds_never_frames_orphan_at_its_engine_position() {
+        // UX #2: the engine parks the orphan far down (y=900). Whether the parked
+        // cluster is shown or hidden, that engine position must NEVER stretch the
+        // bounds — otherwise the flow shrinks into a corner.
+        let plan = plan_with_orphan();
+        let in_flow: HashSet<String> = ["a".to_string()].into_iter().collect();
+        for show_parked in [true, false] {
+            let b = content_bounds(&plan, Some(&in_flow), show_parked).expect("bounds");
+            assert!(
+                b.max_y < 200.0,
+                "orphan engine y=900 must not be framed (show_parked={show_parked}), max_y={}",
+                b.max_y
+            );
+            assert_eq!(b.min_y, 100.0, "in-flow top anchors the frame");
+        }
+    }
+
+    #[test]
+    fn content_bounds_frames_parked_cluster_to_the_right_when_shown() {
+        // With the cluster shown, the orphan is REPOSITIONED to a compact slot to
+        // the right of the in-flow bbox — so the bounds extend right (past the
+        // in-flow max-x at 236), not down.
+        let plan = plan_with_orphan();
+        let in_flow: HashSet<String> = ["a".to_string()].into_iter().collect();
+        let shown = content_bounds(&plan, Some(&in_flow), true).expect("bounds");
+        let hidden = content_bounds(&plan, Some(&in_flow), false).expect("bounds");
+        // Hidden frames the in-flow card only (x 100..236).
+        assert_eq!(hidden.max_x, 236.0, "hidden frames in-flow only");
+        // Shown extends the frame rightward to include the parked slot.
+        assert!(
+            shown.max_x > 236.0,
+            "parked cluster sits to the right, max_x={}",
+            shown.max_x
+        );
+        // The parked slot is compact (scaled), so the frame stays modest.
+        assert!(shown.max_x < 400.0, "parked cluster is compact, max_x={}", shown.max_x);
+    }
+
+    #[test]
+    fn content_bounds_includes_all_nodes_in_structural_mode() {
+        // Structural mode (`None`): no flow, no orphans → every node rect unioned.
+        let plan = plan_with_orphan();
+        let b = content_bounds(&plan, None, true).expect("bounds");
+        assert_eq!(b.max_y, 954.0, "all nodes unioned, max_y={}", b.max_y);
     }
 
     // Map the CONTENT centre through the fit transform + the `meet` letterbox to

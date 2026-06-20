@@ -1,0 +1,453 @@
+{
+  "id": "v1-0-7",
+  "version": "1.0.7",
+  "name": "FlowForge 1.0.7",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "FlowForge 1.0.7 release tracked from release notes and changelog.",
+  "targetDate": "2026-04-23",
+  "releasedAt": "2026-04-23T12:00:00.000Z",
+  "lastUpdated": "2026-04-23T12:00:00.000Z",
+  "updateSource": "docs/releases/v1.0.7-release-notes.md, CHANGELOG.md",
+  "scope": {
+    "required": [
+      {
+        "id": "r-1-0-7-what-this-release-is-for-repeated-firsthand-failures-and-o",
+        "title": "repeated firsthand failures and operator reports now enter through canonical RCA",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "repeated firsthand failures and operator reports now enter through canonical RCA",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the What This Release Is For section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "what-this-release-is-for",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-what-this-release-is-for-each-unique-framework-owned-failu",
+        "title": "each unique framework-owned failure class gets its own roadmap item",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "each unique framework-owned failure class gets its own roadmap item",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the What This Release Is For section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "what-this-release-is-for",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-what-this-release-is-for-obvious-repeated-failures-are-the",
+        "title": "obvious repeated failures are the target, not every speculative weakness",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "obvious repeated failures are the target, not every speculative weakness",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the What This Release Is For section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "what-this-release-is-for",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-what-this-release-is-for-fixes-are-only-considered-complet",
+        "title": "fixes are only considered complete when architecture, documentation, RCA,",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "fixes are only considered complete when architecture, documentation, RCA,",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the What This Release Is For section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "what-this-release-is-for",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-what-this-release-is-for-model-registry-truth-is-being-tig",
+        "title": "model registry truth is being tightened as one system, so routing,",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "model registry truth is being tightened as one system, so routing,",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the What This Release Is For section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "what-this-release-is-for",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-what-operators-should-notice-what-kind-of-task-it-thought-",
+        "title": "what kind of task it thought it was handling",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "what kind of task it thought it was handling",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the What Operators Should Notice section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "what-operators-should-notice",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-what-operators-should-notice-how-much-context-and-tool-sur",
+        "title": "how much context and tool surface it assembled",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "how much context and tool surface it assembled",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the What Operators Should Notice section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "what-operators-should-notice",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-what-operators-should-notice-which-model-provider-path-it-",
+        "title": "which model/provider path it chose",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "which model/provider path it chose",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the What Operators Should Notice section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "what-operators-should-notice",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-what-operators-should-notice-whether-it-was-still-waiting-",
+        "title": "whether it was still waiting on the first attempt or stuck in retries",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "whether it was still waiting on the first attempt or stuck in retries",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the What Operators Should Notice section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "what-operators-should-notice",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-what-operators-should-notice-what-fallback-or-retry-behavi",
+        "title": "what fallback or retry behavior occurred",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "what fallback or retry behavior occurred",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the What Operators Should Notice section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "what-operators-should-notice",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-better-visibility-when-a-turn-goes-wrong-what-kind-of-task",
+        "title": "what kind of task it thought it was handling",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "what kind of task it thought it was handling",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Better visibility when a turn goes wrong section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "better-visibility-when-a-turn-goes-wrong",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-better-visibility-when-a-turn-goes-wrong-how-much-context-",
+        "title": "how much context and tool surface it assembled",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "how much context and tool surface it assembled",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Better visibility when a turn goes wrong section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "better-visibility-when-a-turn-goes-wrong",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-better-visibility-when-a-turn-goes-wrong-which-model-provi",
+        "title": "which model/provider path it chose",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "which model/provider path it chose",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Better visibility when a turn goes wrong section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "better-visibility-when-a-turn-goes-wrong",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-better-visibility-when-a-turn-goes-wrong-whether-it-was-st",
+        "title": "whether it was still waiting on the first attempt or stuck in retries",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "whether it was still waiting on the first attempt or stuck in retries",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Better visibility when a turn goes wrong section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "better-visibility-when-a-turn-goes-wrong",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-better-visibility-when-a-turn-goes-wrong-what-fallback-or-",
+        "title": "what fallback or retry behavior occurred",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "what fallback or retry behavior occurred",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Better visibility when a turn goes wrong section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "better-visibility-when-a-turn-goes-wrong",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-better-behavior-on-lightweight-conversational-turns-lighte",
+        "title": "lighter prompt envelopes",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "lighter prompt envelopes",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Better behavior on lightweight conversational turns section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "better-behavior-on-lightweight-conversational-turns",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-better-behavior-on-lightweight-conversational-turns-fewer-",
+        "title": "fewer unnecessary tools",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "fewer unnecessary tools",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Better behavior on lightweight conversational turns section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "better-behavior-on-lightweight-conversational-turns",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-7-better-behavior-on-lightweight-conversational-turns-less-i",
+        "title": "less irrelevant operational/status leakage",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "less irrelevant operational/status leakage",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Better behavior on lightweight conversational turns section of the 1.0.7 release notes.",
+        "decisionSource": "docs/releases/v1.0.7-release-notes.md",
+        "workstreamId": "better-behavior-on-lightweight-conversational-turns",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.7-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "what-this-release-is-for",
+      "name": "What This Release Is For",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "What This Release Is For scope shipped in FlowForge 1.0.7.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-7-what-this-release-is-for-repeated-firsthand-failures-and-o",
+        "r-1-0-7-what-this-release-is-for-each-unique-framework-owned-failu",
+        "r-1-0-7-what-this-release-is-for-obvious-repeated-failures-are-the",
+        "r-1-0-7-what-this-release-is-for-fixes-are-only-considered-complet",
+        "r-1-0-7-what-this-release-is-for-model-registry-truth-is-being-tig"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.7-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "what-operators-should-notice",
+      "name": "What Operators Should Notice",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "What Operators Should Notice scope shipped in FlowForge 1.0.7.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-7-what-operators-should-notice-what-kind-of-task-it-thought-",
+        "r-1-0-7-what-operators-should-notice-how-much-context-and-tool-sur",
+        "r-1-0-7-what-operators-should-notice-which-model-provider-path-it-",
+        "r-1-0-7-what-operators-should-notice-whether-it-was-still-waiting-",
+        "r-1-0-7-what-operators-should-notice-what-fallback-or-retry-behavi"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.7-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "better-visibility-when-a-turn-goes-wrong",
+      "name": "Better Visibility When A Turn Goes Wrong",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Better Visibility When A Turn Goes Wrong scope shipped in FlowForge 1.0.7.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-7-better-visibility-when-a-turn-goes-wrong-what-kind-of-task",
+        "r-1-0-7-better-visibility-when-a-turn-goes-wrong-how-much-context-",
+        "r-1-0-7-better-visibility-when-a-turn-goes-wrong-which-model-provi",
+        "r-1-0-7-better-visibility-when-a-turn-goes-wrong-whether-it-was-st",
+        "r-1-0-7-better-visibility-when-a-turn-goes-wrong-what-fallback-or-"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.7-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "better-behavior-on-lightweight-conversational-turns",
+      "name": "Better Behavior On Lightweight Conversational Turns",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Better Behavior On Lightweight Conversational Turns scope shipped in FlowForge 1.0.7.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-7-better-behavior-on-lightweight-conversational-turns-lighte",
+        "r-1-0-7-better-behavior-on-lightweight-conversational-turns-fewer-",
+        "r-1-0-7-better-behavior-on-lightweight-conversational-turns-less-i"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.7-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-shipped",
+      "label": "1.0.7 shipped",
+      "status": "complete",
+      "date": "2026-04-23",
+      "order": 1,
+      "itemIds": [
+        "r-1-0-7-what-this-release-is-for-repeated-firsthand-failures-and-o",
+        "r-1-0-7-what-this-release-is-for-each-unique-framework-owned-failu",
+        "r-1-0-7-what-this-release-is-for-obvious-repeated-failures-are-the",
+        "r-1-0-7-what-this-release-is-for-fixes-are-only-considered-complet",
+        "r-1-0-7-what-this-release-is-for-model-registry-truth-is-being-tig",
+        "r-1-0-7-what-operators-should-notice-what-kind-of-task-it-thought-",
+        "r-1-0-7-what-operators-should-notice-how-much-context-and-tool-sur",
+        "r-1-0-7-what-operators-should-notice-which-model-provider-path-it-",
+        "r-1-0-7-what-operators-should-notice-whether-it-was-still-waiting-",
+        "r-1-0-7-what-operators-should-notice-what-fallback-or-retry-behavi",
+        "r-1-0-7-better-visibility-when-a-turn-goes-wrong-what-kind-of-task",
+        "r-1-0-7-better-visibility-when-a-turn-goes-wrong-how-much-context-",
+        "r-1-0-7-better-visibility-when-a-turn-goes-wrong-which-model-provi",
+        "r-1-0-7-better-visibility-when-a-turn-goes-wrong-whether-it-was-st",
+        "r-1-0-7-better-visibility-when-a-turn-goes-wrong-what-fallback-or-",
+        "r-1-0-7-better-behavior-on-lightweight-conversational-turns-lighte",
+        "r-1-0-7-better-behavior-on-lightweight-conversational-turns-fewer-",
+        "r-1-0-7-better-behavior-on-lightweight-conversational-turns-less-i"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-notes",
+      "label": "1.0.7 release notes",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "docs/releases/v1.0.7-release-notes.md"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog entry",
+      "kind": "document",
+      "status": "complete",
+      "href": "CHANGELOG.md"
+    }
+  ]
+}

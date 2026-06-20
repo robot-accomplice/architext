@@ -1,0 +1,159 @@
+{
+  "id": "v1-1-5",
+  "version": "1.1.5",
+  "name": "v1.1.5 injection-defense completeness + flaky-test elimination",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Security + reliability PATCH on the behavioral-correctness line. SECURITY: closes two prompt-injection-defense deferrals. (1) injection-output-cap-fail-loud (#113): the v1.1.3 input DoS cap (256KB) also governed the L4 output scan, so a legitimately large clean tool/LLM OUTPUT was scored as a maximal threat and either mislabeled '[Tool output filtered: potential injection detected]' or silently emptied; output now has a separate 1MiB cap and a bounded-prefix scan (clean large output passes, prefix injection still caught, oversized emits an honest tool_output_scan_truncated event), input stays fail-closed (deliberately asymmetric). (2) injection-positional-override-detection (#115): CheckInput matched 'ignore...previous' but not positional overrides ('ignore everything above', entity-encoded included), which scored 0 and reached the model unsanitized; a positional pattern now scores them caution so they are redacted (found by the adversarial exercise, root-caused deterministically). RELIABILITY: the flaky-test problem is eliminated wholesale and gated — an audit of all 64 test-sleep sites converted the flaky ones across nine packages to assert.Eventually polling (+ atomic watched-file writes, a load-invariant concurrency ratio, explicit eviction timestamps, a size-detectable keystore change), and a CI guard (scripts/check-test-sleeps.sh) blocks new time.Sleep-then-assert beyond the reviewed baseline (#116-#119). COVERAGE/PROCESS: adversarial-issue coverage to 0 gaps / 100% (#114), and the product-knowledge pack audit made a mandatory release-checklist item (#110). No new user-facing feature surface (that is v1.2.0, the packaged embedder). PRE-SHIP SOAK (2026-06-14, clone, cloud-provider-v4-flash, production quiesced): full 38-scenario battery 37/38, release_gate_findings=0, 22/23 families grade A; the one non-A (continuity_topic_anchor) is a documented verifier-sensitivity re-verified PASS 3/3 in isolation (variance, unrelated to the injection-path changes). SHIPPED (2026-06-14): promoted via PR #121 (develop->main, merge 66257224), tag v1.1.5; release workflow green, CI tree-reuse fired (Pre-release Validation reused the green develop push CI for tree 6798d9da — heavy validation steps skipped, third consecutive release validating the machinery); published live — the darwin-arm64 binary reports 1.1.5 clean on go1.26.4 (no -dev), SHA256SUMS.txt present, /releases/latest resolves v1.1.5 (prerelease=false), site release-sync dispatch succeeded (pipeline-owned deploy).",
+  "targetWindow": "Patch release; formal cut after pre-ship behavioral soak per docs/testing/release-procedure.md",
+  "lastUpdated": "2026-06-14T13:20:00Z",
+  "releasedAt": "2026-06-14T13:13:00Z",
+  "updateSource": "PRs #110, #113, #114, #115, #116, #117, #118, #119 + artifacts #120 merged to develop; promoted via #121 and tag v1.1.5 shipped 2026-06-14; release workflow green with CI tree-reuse",
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "workstreams": [
+    {
+      "id": "v115-security-reliability",
+      "status": "complete",
+      "name": "Injection-defense completeness + flaky-test elimination",
+      "owner": "maintainer",
+      "posture": "on-track",
+      "summary": "Two injection-defense deferrals closed (output-cap fail-loud, positional-override detection), the flaky-test class eliminated and gated, adversarial coverage to 100%, and the product-knowledge audit made mandatory.",
+      "progress": 100,
+      "itemIds": [
+        "injection-output-cap-fail-loud",
+        "injection-positional-override-detection",
+        "flaky-test-elimination-and-guard",
+        "adversarial-coverage-100",
+        "knowledge-base-mandatory-release-item"
+      ],
+      "evidence": []
+    }
+  ],
+  "evidence": [
+    {
+      "id": "v115-injection-race-fuzz",
+      "label": "internal/agent green under -race; FuzzInjectionDetector_Sanitize clean (input DoS guard intact)",
+      "kind": "test",
+      "status": "complete",
+      "href": "internal/agent/injection_test.go"
+    },
+    {
+      "id": "v115-flaky-guard",
+      "label": "Flaky-test CI guard validated (clean tree passes; synthetic new test sleep fails)",
+      "kind": "manual-check",
+      "status": "complete",
+      "href": "scripts/check-test-sleeps.sh"
+    }
+  ],
+  "scope": {
+    "required": [
+      {
+        "id": "injection-output-cap-fail-loud",
+        "title": "Injection output-cap fails loud instead of silently dropping output",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Separate maxOutputScanBytes (1 MiB) + bounded-prefix scan in ScanOutput, so oversized clean tool/LLM output is no longer scored as a maximal threat and dropped/mislabeled; loop.go emits an honest tool_output_scan_truncated event on oversize; input-path cap stays fail-closed at 256KB. TDD RED->GREEN (oversized benign scored 1.0/blocked, SanitizeModelOutput emptied), internal/agent green under -race, fuzz clean. Closes the v1.1.3 deferral.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "v115-security-reliability",
+        "dependsOn": [],
+        "evidence": [
+          "internal/agent/injection.go ScanOutput + maxOutputScanBytes; internal/agent/loop.go event",
+          "internal/agent/injection_test.go::TestInjection_OutputScan_OversizedBenignNotBlocked; internal/agent/hmac_boundary_test.go::TestSanitizeModelOutput_LargeBenignNotEmptied (both RED before fix)",
+          "PR #113; regression R-115-1"
+        ]
+      },
+      {
+        "id": "injection-positional-override-detection",
+        "title": "Detect positional instruction-override injections",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "CheckInput gained a positional-override pattern (ignore (everything|all|the|any)? (above|below|preceding)) so positional-phrased injections — including HTML-entity-encoded, which CheckInput decodes before matching — score at least caution and are sanitized rather than reaching the model verbatim (they scored 0.0 before). Found by the adversarial exercise; root-caused deterministically from the pipeline injection-defense stage. TDD RED->GREEN, no clean-input false positives, -race + fuzz clean.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "v115-security-reliability",
+        "dependsOn": [],
+        "evidence": [
+          "internal/agent/injection.go instructionPatterns positional override",
+          "internal/agent/injection_test.go::TestInjection_PositionalOverride (RED: positional + entity-encoded scored 0.000)",
+          "PR #115; regression R-115-2"
+        ]
+      },
+      {
+        "id": "flaky-test-elimination-and-guard",
+        "title": "Eliminate flaky tests across nine packages and gate against new ones",
+        "kind": "chore",
+        "status": "complete",
+        "summary": "Audited all 64 test-sleep sites; converted the flaky sleep-then-assert ones to assert.Eventually polling (+ atomic watched-file writes, load-invariant concurrency ratio, explicit eviction timestamps, size-detectable keystore change) across nine packages; added scripts/check-test-sleeps.sh to the CI lint job to fail any new time.Sleep in tests beyond the reviewed baseline. Closes the recurring flaky-CI problem that broke #114/#115.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "v115-security-reliability",
+        "dependsOn": [],
+        "evidence": [
+          "PRs #116, #117, #118 (sweeps); PR #119 (guard: scripts/check-test-sleeps.sh + scripts/test-sleeps-baseline.txt + ci.yml lint step)"
+        ]
+      },
+      {
+        "id": "adversarial-coverage-100",
+        "title": "Adversarial-issue coverage to 0 gaps / 100%",
+        "kind": "chore",
+        "status": "complete",
+        "summary": "Two new guard-edge regression scenarios; systemic corpus fix excluding deferred/unshipped bug-fixes until they ship; justified out-of-scope classifications for non-behavioral fixes (each citing a real gate).",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "v115-security-reliability",
+        "dependsOn": [],
+        "evidence": [
+          "PR #114; scripts/adversarial_coverage.py; testdata/adversarial/out_of_scope.json"
+        ]
+      },
+      {
+        "id": "knowledge-base-mandatory-release-item",
+        "title": "Make the product-knowledge pack audit a mandatory release-checklist item",
+        "kind": "chore",
+        "status": "complete",
+        "summary": "Auditing/updating docs/product-knowledge/manifest.json + its source-backed docs is now a required item in docs/contributing.md release checklist and docs/testing/release-procedure.md preconditions.",
+        "owner": "maintainer",
+        "priority": "low",
+        "workstreamId": "v115-security-reliability",
+        "dependsOn": [],
+        "evidence": [
+          "PR #110; docs/contributing.md; docs/testing/release-procedure.md"
+        ]
+      }
+    ],
+    "stretch": [],
+    "planned": [],
+    "deferred": [
+      {
+        "id": "guard-retry-count-accuracy-for-judge-mediated-retries",
+        "title": "Count grounding-judge-mediated guard retries in guard_retry_count",
+        "kind": "chore",
+        "status": "deferred",
+        "summary": "Judge-mediated task_deferral retries do not increment guard_retry_count; the downstream empty-diagnosis symptom is already fixed (v1.1.4), but the counter itself is still inaccurate for RCA. Carried forward.",
+        "owner": "maintainer",
+        "priority": "low",
+        "dependsOn": [],
+        "evidence": [
+          "roadmap.json#guard-retry-count-accuracy-for-judge-mediated-retries"
+        ]
+      },
+      {
+        "id": "raise-weak-model-floor-honest-blocker-guard",
+        "title": "Honest blocker for tool-calling guard-exhaustion turns",
+        "kind": "bug-fix",
+        "status": "deferred",
+        "summary": "The canned 'After N attempts, we couldn't get an answer' fallback was observed (rare, ~4%) on a tool-calling vault-inspection turn during the v1.1.5 adversarial exercise — an uncovered guard-exhaustion path the v1.1.4 honest-blocker (introspection-only) did not handle. Could not be reliably reproduced this cycle (0/12 in a focused repro), so it cannot yet be root-caused from recorded state; carried as a roadmap item for a dedicated RCA when it can be captured.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "dependsOn": [],
+        "evidence": [
+          "roadmap.json#raise-weak-model-floor-honest-blocker-guard"
+        ]
+      }
+    ],
+    "outOfScope": []
+  }
+}

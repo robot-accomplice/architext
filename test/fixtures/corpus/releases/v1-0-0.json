@@ -1,0 +1,453 @@
+{
+  "id": "v1-0-0",
+  "version": "1.0.0",
+  "name": "FlowForge 1.0.0",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "FlowForge 1.0.0 release tracked from release notes and changelog.",
+  "targetDate": "2026-04-11",
+  "releasedAt": "2026-04-11T12:00:00.000Z",
+  "lastUpdated": "2026-04-11T12:00:00.000Z",
+  "updateSource": "docs/releases/release-1.0.0-notes.md, CHANGELOG.md",
+  "scope": {
+    "required": [
+      {
+        "id": "r-1-0-0-current-inventory-what-s-built-x-react-agent-loop-with-25-",
+        "title": "[x] ReAct agent loop with 25-turn limit, idle detection, loop prevention",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] ReAct agent loop with 25-turn limit, idle detection, loop prevention",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Current Inventory (What's Built) section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "current-inventory-what-s-built",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-current-inventory-what-s-built-x-25-guard-output-safety-pi",
+        "title": "[x] 25-guard output safety pipeline with 13 stage flags",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] 25-guard output safety pipeline with 13 stage flags",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Current Inventory (What's Built) section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "current-inventory-what-s-built",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-current-inventory-what-s-built-x-connector-factory-archite",
+        "title": "[x] Connector-factory architecture (8 entry points, all via RunWorkflow)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] Connector-factory architecture (8 entry points, all via RunWorkflow)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Current Inventory (What's Built) section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "current-inventory-what-s-built",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-current-inventory-what-s-built-x-4-layer-injection-defense",
+        "title": "[x] 4-layer injection defense (boundary, HMAC, policy, output)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] 4-layer injection defense (boundary, HMAC, policy, output)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Current Inventory (What's Built) section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "current-inventory-what-s-built",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-current-inventory-what-s-built-x-claim-based-rbac-authorit",
+        "title": "[x] Claim-based RBAC authority composition",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] Claim-based RBAC authority composition",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Current Inventory (What's Built) section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "current-inventory-what-s-built",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-core-runtime-x-react-agent-loop-with-25-turn-limit-idle-de",
+        "title": "[x] ReAct agent loop with 25-turn limit, idle detection, loop prevention",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] ReAct agent loop with 25-turn limit, idle detection, loop prevention",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Core Runtime section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "core-runtime",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-core-runtime-x-25-guard-output-safety-pipeline-with-13-sta",
+        "title": "[x] 25-guard output safety pipeline with 13 stage flags",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] 25-guard output safety pipeline with 13 stage flags",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Core Runtime section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "core-runtime",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-core-runtime-x-connector-factory-architecture-8-entry-poin",
+        "title": "[x] Connector-factory architecture (8 entry points, all via RunWorkflow)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] Connector-factory architecture (8 entry points, all via RunWorkflow)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Core Runtime section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "core-runtime",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-core-runtime-x-4-layer-injection-defense-boundary-hmac-pol",
+        "title": "[x] 4-layer injection defense (boundary, HMAC, policy, output)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] 4-layer injection defense (boundary, HMAC, policy, output)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Core Runtime section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "core-runtime",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-core-runtime-x-claim-based-rbac-authority-composition-4",
+        "title": "[x] Claim-based RBAC authority composition",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] Claim-based RBAC authority composition",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Core Runtime section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "core-runtime",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-llm-service-x-10-providers-provider-a-provider-b-provider-c-embedded-runtime-",
+        "title": "[x] 10+ providers (Provider A, Provider B, Provider C, Embedded Runtime, OpenRouter, Moonshot, alt-runtime-2, alt-runtime-3, sgl",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] 10+ providers (Provider A, Provider B, Provider C, Embedded Runtime, OpenRouter, Moonshot, alt-runtime-2, alt-runtime-3, alt-runtime-1, container-runtime)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the LLM Service section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "llm-service",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-llm-service-x-6-axis-metascore-routing-efficacy-cost-avail",
+        "title": "[x] 6-axis metascore routing (Efficacy, Cost, Availability, Locality, Confidence, Speed)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] 6-axis metascore routing (Efficacy, Cost, Availability, Locality, Confidence, Speed)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the LLM Service section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "llm-service",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-llm-service-x-ml-router-with-logistic-regression-preferenc",
+        "title": "[x] ML router with logistic regression + preference learning",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] ML router with logistic regression + preference learning",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the LLM Service section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "llm-service",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-llm-service-x-circuit-breaker-per-provider-with-half-open-",
+        "title": "[x] Circuit breaker per provider with half-open recovery",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] Circuit breaker per provider with half-open recovery",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the LLM Service section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "llm-service",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-llm-service-x-3-tier-semantic-cache-exact-hash-tool-aware-",
+        "title": "[x] 3-tier semantic cache (exact hash → tool-aware TTL → cosine similarity)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "[x] 3-tier semantic cache (exact hash → tool-aware TTL → cosine similarity)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the LLM Service section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "llm-service",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-memory-system-x-5-tier-memory-working-episodic-semantic-pr",
+        "title": "[x] 5-tier memory (Working, Episodic, Semantic, Procedural, Relationship)",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "[x] 5-tier memory (Working, Episodic, Semantic, Procedural, Relationship)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Memory System section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "memory-system",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-memory-system-x-sql-fulltext-vector-index-approximate-nearest-neigh",
+        "title": "[x] embedded SQL store full-text search + approximate vector index approximate nearest neighbor",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "[x] embedded SQL store full-text search + approximate vector index approximate nearest neighbor",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Memory System section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "memory-system",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-0-memory-system-x-hippocampus-consolidation-memory-promotion",
+        "title": "[x] Hippocampus consolidation (memory promotion/decay)",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "[x] Hippocampus consolidation (memory promotion/decay)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Memory System section of the 1.0.0 release notes.",
+        "decisionSource": "docs/releases/release-1.0.0-notes.md",
+        "workstreamId": "memory-system",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/release-1.0.0-notes.md",
+          "CHANGELOG.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "current-inventory-what-s-built",
+      "name": "Current Inventory What S Built",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Current Inventory What S Built scope shipped in FlowForge 1.0.0.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-0-current-inventory-what-s-built-x-react-agent-loop-with-25-",
+        "r-1-0-0-current-inventory-what-s-built-x-25-guard-output-safety-pi",
+        "r-1-0-0-current-inventory-what-s-built-x-connector-factory-archite",
+        "r-1-0-0-current-inventory-what-s-built-x-4-layer-injection-defense",
+        "r-1-0-0-current-inventory-what-s-built-x-claim-based-rbac-authorit"
+      ],
+      "evidence": [
+        "docs/releases/release-1.0.0-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "core-runtime",
+      "name": "Core Runtime",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Core Runtime scope shipped in FlowForge 1.0.0.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-0-core-runtime-x-react-agent-loop-with-25-turn-limit-idle-de",
+        "r-1-0-0-core-runtime-x-25-guard-output-safety-pipeline-with-13-sta",
+        "r-1-0-0-core-runtime-x-connector-factory-architecture-8-entry-poin",
+        "r-1-0-0-core-runtime-x-4-layer-injection-defense-boundary-hmac-pol",
+        "r-1-0-0-core-runtime-x-claim-based-rbac-authority-composition-4"
+      ],
+      "evidence": [
+        "docs/releases/release-1.0.0-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "llm-service",
+      "name": "Llm Service",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Llm Service scope shipped in FlowForge 1.0.0.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-0-llm-service-x-10-providers-provider-a-provider-b-provider-c-embedded-runtime-",
+        "r-1-0-0-llm-service-x-6-axis-metascore-routing-efficacy-cost-avail",
+        "r-1-0-0-llm-service-x-ml-router-with-logistic-regression-preferenc",
+        "r-1-0-0-llm-service-x-circuit-breaker-per-provider-with-half-open-",
+        "r-1-0-0-llm-service-x-3-tier-semantic-cache-exact-hash-tool-aware-"
+      ],
+      "evidence": [
+        "docs/releases/release-1.0.0-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "memory-system",
+      "name": "Memory System",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Memory System scope shipped in FlowForge 1.0.0.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-0-memory-system-x-5-tier-memory-working-episodic-semantic-pr",
+        "r-1-0-0-memory-system-x-sql-fulltext-vector-index-approximate-nearest-neigh",
+        "r-1-0-0-memory-system-x-hippocampus-consolidation-memory-promotion"
+      ],
+      "evidence": [
+        "docs/releases/release-1.0.0-notes.md",
+        "CHANGELOG.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-shipped",
+      "label": "1.0.0 shipped",
+      "status": "complete",
+      "date": "2026-04-11",
+      "order": 1,
+      "itemIds": [
+        "r-1-0-0-current-inventory-what-s-built-x-react-agent-loop-with-25-",
+        "r-1-0-0-current-inventory-what-s-built-x-25-guard-output-safety-pi",
+        "r-1-0-0-current-inventory-what-s-built-x-connector-factory-archite",
+        "r-1-0-0-current-inventory-what-s-built-x-4-layer-injection-defense",
+        "r-1-0-0-current-inventory-what-s-built-x-claim-based-rbac-authorit",
+        "r-1-0-0-core-runtime-x-react-agent-loop-with-25-turn-limit-idle-de",
+        "r-1-0-0-core-runtime-x-25-guard-output-safety-pipeline-with-13-sta",
+        "r-1-0-0-core-runtime-x-connector-factory-architecture-8-entry-poin",
+        "r-1-0-0-core-runtime-x-4-layer-injection-defense-boundary-hmac-pol",
+        "r-1-0-0-core-runtime-x-claim-based-rbac-authority-composition-4",
+        "r-1-0-0-llm-service-x-10-providers-provider-a-provider-b-provider-c-embedded-runtime-",
+        "r-1-0-0-llm-service-x-6-axis-metascore-routing-efficacy-cost-avail",
+        "r-1-0-0-llm-service-x-ml-router-with-logistic-regression-preferenc",
+        "r-1-0-0-llm-service-x-circuit-breaker-per-provider-with-half-open-",
+        "r-1-0-0-llm-service-x-3-tier-semantic-cache-exact-hash-tool-aware-",
+        "r-1-0-0-memory-system-x-5-tier-memory-working-episodic-semantic-pr",
+        "r-1-0-0-memory-system-x-sql-fulltext-vector-index-approximate-nearest-neigh",
+        "r-1-0-0-memory-system-x-hippocampus-consolidation-memory-promotion"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-notes",
+      "label": "1.0.0 release notes",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "docs/releases/release-1.0.0-notes.md"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog entry",
+      "kind": "document",
+      "status": "complete",
+      "href": "CHANGELOG.md"
+    }
+  ]
+}

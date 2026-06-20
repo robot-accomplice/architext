@@ -1,0 +1,52 @@
+{
+  "terms": [
+    {
+      "term": "Connector",
+      "definition": "An adapter that parses external protocol input, calls the shared factory or service seam, and formats protocol output. Connectors must not own business logic."
+    },
+    {
+      "term": "Factory",
+      "definition": "The centralized business-logic owner. For agent turns, the factory is the unified pipeline in src/engine."
+    },
+    {
+      "term": "Unified Pipeline",
+      "definition": "The canonical request-to-response lifecycle that owns validation, session resolution, memory, decomposition, tool execution, inference, guards, persistence, and telemetry for agent turns."
+    },
+    {
+      "term": "First-party local surface",
+      "definition": "A local user interface such as CLI or TUI that runs in process and may call shared platform service directly instead of using platform REST loopback."
+    },
+    {
+      "term": "Dashboard webchannel",
+      "definition": "A browser-dashboard websocket topic or control command used for UI snapshots, events, and confirmed controls. It is not an API alias."
+    },
+    {
+      "term": "External API",
+      "definition": "An externally addressable HTTP API surface for integration, remote management, bootstrap, debugging, and explicit API-client actions."
+    },
+    {
+      "term": "Authority-bearing configuration",
+      "definition": "Settings that change what the runtime can do without further prompting, including agency, autonomy, scopes, action classes, concurrency, cadence, notification policy, and cloud token budgets."
+    },
+    {
+      "term": "Agency",
+      "definition": "How proactively FlowForge searches for useful work."
+    },
+    {
+      "term": "Autonomy",
+      "definition": "How often FlowForge must ask before executing approved work."
+    },
+    {
+      "term": "Soak",
+      "definition": "A behavioral release-gate test scenario that strains long-turn, multi-step, and cross-surface agent behavior with quantitative and qualitative scoring."
+    },
+    {
+      "term": "Pipeline trace",
+      "definition": "Structured diagnostic telemetry describing a turn's stages, timings, route, recovery path, and outcome."
+    },
+    {
+      "term": "Canonical multimodal message part",
+      "definition": "A normalized message part for text, file, image, audio, or camera content with provenance, permission, metadata, and retention state."
+    }
+  ]
+}

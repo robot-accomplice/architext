@@ -122,7 +122,12 @@
      border / ring / inner-glow on --accent — NOT a --c4-* role hue. --accent is
      deliberately distinct from every role color above (green-leaning teal vs the
      client cyan #00e5ff) so "active" never collides with "client/system". */
-  --accent: #19f2c4;
+  /* `--accent-base` is the literal; `--accent` aliases it. The release/severity
+     "healthy" tone references --accent-base (NOT --accent) so a card that sets
+     `style="--accent: <healthy-tone>"` doesn't become `--accent: var(--accent)`
+     — a self-reference cycle that invalidates the property and drops the color. */
+  --accent-base: #19f2c4;
+  --accent: var(--accent-base);
   --accent-ring: rgba(25, 242, 196, 0.45);
   --accent-glow: rgba(25, 242, 196, 0.16);
 
@@ -162,6 +167,62 @@
   font-size: var(--body-size);
 }
 
+/* ── Light theme ──────────────────────────────────────────────────────────
+   A light variant of the locked Cyber-Tactical palette (applied via
+   `data-theme="light"` on <html>; dark is :root default). The tiered-black
+   surface ramp inverts to tiered whites (page → elevated → white popover), the
+   text ramp flips to dark-on-light, and the neon role/severity/accent hues are
+   re-tuned to darker, saturated values that hold contrast on a light
+   background (bright neons wash out on white). Role IDENTITY is preserved
+   (client=system, queue=deployment; accent stays greener than client so
+   "active" never reads as "client"). Non-color tokens (type, shape, grid,
+   widths) inherit from :root and are not repeated. */
+:root[data-theme="light"] {
+  color-scheme: light;
+
+  --canvas-black: #e9edf1;   /* diagram canvas — cool light grey so node cards still read as raised */
+  --bg: #eef1f4;             /* app background */
+  --surface: #f4f6f8;        /* base surface under panels */
+  --panel: #f9fafc;          /* panels (nav / inspector) */
+  --panel-2: #ffffff;        /* raised controls within panels */
+  --popover: #ffffff;        /* popovers / menus (lifted by border) */
+
+  --ink: #14181b;            /* primary text */
+  --muted: #44535a;          /* secondary text / overlines */
+  /* Darkened one step (#6b7a80 → #5f6e74) so dim mono sub-labels (actor, module,
+     data-store, overlines) clear WCAG AA (4.5:1) for small text on the light
+     panel surfaces, where they were below comfortable contrast (~3.8–4.5:1). */
+  --dim: #5f6e74;            /* tertiary / disabled */
+
+  --line: #cfd8dd;
+  --line-strong: #8c9aa1;
+  --edge: #51626a;           /* diagram route stroke — dark enough on the light canvas */
+
+  --c4-actor: #c81e8e;
+  --c4-client: #0a86a6;
+  --c4-service: #7c3aed;
+  --c4-worker: #a87800;
+  --c4-data: #1a8f3c;
+  --c4-external: #5a6b72;
+  --c4-deployment: #c26a09;
+  --c4-module: #0f8a55;
+  --c4-system: #0a86a6;
+  --c4-queue: #c26a09;
+
+  --sev-critical: #d3253f;
+  --sev-high:     #c26a09;
+  --sev-medium:   #a87800;
+  --sev-low:      #6b7a80;
+  --sens-high:    #d3253f;
+  --sens-medium:  #a87800;
+  --sens-low:     #6b7a80;
+
+  --accent-base: #0a9e72;
+  --accent: var(--accent-base);
+  --accent-ring: rgba(10, 158, 114, 0.40);
+  --accent-glow: rgba(10, 158, 114, 0.12);
+}
+
 /* ── Primitives (real classes shared by every mode) ───────────────────────── */
 
 /* Overline: the ONE section-label / eyebrow treatment. */
@@ -196,6 +257,14 @@
   border-radius: var(--chip-radius);
   color: var(--muted);
   background: var(--panel-2);
+}
+/* State pill: the caller sets an inline `color:<tone>` (the release/severity
+   token) — currentColor then drives the border + a soft fill, so a status reads
+   as a colored PILL (complete→accent/green, blocked→--sev-critical/red,
+   deferred→--dim/gray) instead of faintly-tinted text on a neutral chip. */
+.chip--state {
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 16%, transparent);
 }
 
 /* Count pill: fully-round status/count indicator. */
@@ -372,7 +441,8 @@ button:focus-visible {
 }
 /* Config button: on-language hairline + mono, --accent only as a STATE signal
    (hover/active) — never a role hue (rule 1). */
-.topbar__config-btn {
+.topbar__config-btn,
+.topbar__theme-btn {
   font-family: var(--font-mono);
   font-size: var(--overline-size);
   letter-spacing: var(--overline-tracking);
@@ -384,11 +454,15 @@ button:focus-visible {
   border-radius: var(--card-radius);
 }
 .topbar__config-btn:hover,
-.topbar__config-btn:focus-visible {
+.topbar__config-btn:focus-visible,
+.topbar__theme-btn:hover,
+.topbar__theme-btn:focus-visible {
   color: var(--accent);
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent-ring);
 }
+/* The theme toggle's leading glyph sits a touch larger than the mono label. */
+.topbar__theme-btn span[aria-hidden] { font-size: 1.1em; margin-right: 2px; }
 
 /* ── Config drawer (read-only resolved diagram config) ───────────────────────
    A right-side drawer over the shell + a click-away scrim. Values are read-only
@@ -790,6 +864,24 @@ button:focus-visible {
   align-items: center;
   justify-content: center;
 }
+/* "Show/Hide unrelated nodes" toggle (UX #2): sits under the zoom controls,
+   top-right of the canvas. Matches the canvas-control chrome (mono caps on a
+   raised panel); the active (showing) state is expressed via --accent. */
+.canvas-panel__unrelated-toggle {
+  position: absolute;
+  top: calc(var(--pad) + 28px + var(--grid));
+  right: var(--pad);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  padding: var(--grid) var(--pad);
+  height: 28px;
+}
+.canvas-panel__unrelated-toggle.is-active {
+  color: var(--accent);
+  border-color: var(--accent);
+}
 .canvas-panel__hint {
   position: absolute;
   left: 50%;
@@ -797,6 +889,66 @@ button:focus-visible {
   transform: translate(-50%, -50%);
   text-align: center;
   color: var(--dim);
+}
+
+/* ── C4 drill-down breadcrumb (top-left canvas overlay) ──────────────────────
+   The path of C4 views the user drilled through (Context › Container: X › …).
+   On-language: overline eyebrow + mono path on a raised, blurred panel chip,
+   matching the legend/placard chrome. Ancestor crumbs are buttons (climb back
+   up); the active crumb is plain text in --accent (STATE, rule 1) so the
+   current level reads as "you are here". */
+.c4-breadcrumb {
+  position: absolute;
+  left: var(--pad);
+  top: var(--pad);
+  display: flex;
+  align-items: center;
+  gap: var(--pad);
+  max-width: calc(100% - 2 * var(--pad));
+  padding: var(--grid) var(--pad);
+  background: color-mix(in srgb, var(--panel) 92%, transparent);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  backdrop-filter: blur(2px);
+}
+.c4-breadcrumb__trail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--grid);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.c4-breadcrumb__item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--grid);
+}
+/* The `›` separator precedes every crumb except the first. */
+.c4-breadcrumb__item + .c4-breadcrumb__item::before {
+  content: "›";
+  color: var(--dim);
+  font-family: var(--font-mono);
+}
+.c4-breadcrumb__crumb {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: 0.02em;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  white-space: nowrap;
+}
+button.c4-breadcrumb__crumb:hover {
+  color: var(--accent);
+  text-decoration: underline;
+}
+.c4-breadcrumb__crumb--current {
+  color: var(--accent);
+  cursor: default;
 }
 
 /* ── Right inspector ──────────────────────────────────────────────────────── */
@@ -827,6 +979,37 @@ button:focus-visible {
   display: flex;
   flex-direction: column;
   gap: var(--grid);
+}
+/* A labeled relationship group in the node panel: .overline label + chip row. */
+.inspector__rel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+}
+/* "‹ back to view" affordance that clears the node selection. */
+.inspector__back {
+  align-self: flex-start;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+}
+.inspector__back:hover {
+  color: var(--ink);
+}
+/* Neutral nothing-selected hint inviting a node click (not an error message). */
+.inspector__hint {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  color: var(--dim);
+  line-height: 1.5;
+  border: var(--hairline) dashed var(--line);
+  border-radius: var(--card-radius);
+  padding: var(--pad);
+  margin: 0;
 }
 
 /* ── Selector region (left nav): flow + view selects ──────────────────────── */
@@ -948,6 +1131,19 @@ button:focus-visible {
   dominant-baseline: central;
   pointer-events: none;
 }
+/* Selected step → active number pill: the same --accent state treatment the
+   active edge gets (svg keys both on selected_step), so selecting a step lights
+   up its pill on flow diagrams as it already does on sequence diagrams. */
+.flow-label--active .flow-label__badge {
+  fill: color-mix(in srgb, var(--accent) 22%, var(--surface));
+  stroke: var(--accent);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 4px var(--accent-glow));
+}
+.flow-label--active .flow-label__badge-num {
+  fill: var(--accent);
+  font-weight: 600;
+}
 
 /* ── Decision diamonds (tinted with the affiliated node's role color) ─────── */
 .flow-decision {
@@ -995,10 +1191,50 @@ button:focus-visible {
   stroke-linejoin: round;
   pointer-events: none;
 }
+/* Drilldown affordance: a bottom-right chevron rendered ONLY on a drillable C4
+   card (a node with a scoped child view). Dim at rest, --accent (STATE) on
+   hover, so the card reads as "click to open the child view"; a node without a
+   child has no chevron, making the absence of drilldown legible. The base
+   `.flow-node` cursor already signals interactivity; the chevron disambiguates
+   drill from inspect. */
+.flow-node__drill {
+  fill: none;
+  stroke: var(--dim);
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+.flow-node--drillable:hover .flow-node__drill {
+  stroke: var(--accent);
+}
+
 /* Selected = STATE treatment (rule 1): --accent ring/glow, never a role hue. */
 .flow-node--selected .flow-node__card {
   stroke: var(--accent);
   filter: drop-shadow(0 0 6px var(--accent-glow));
+}
+
+/* Out-of-flow ("unrelated") node (UX #2): dimmed to ~0.3 and non-interactive,
+   parked in a compact, smaller cluster to the right of the flow so the active
+   flow stays the visual focus while the unrelated nodes remain VISIBLE. The
+   user can fully hide the cluster via the "Hide unrelated" toggle. */
+.flow-node--unrelated {
+  opacity: 0.3;
+  pointer-events: none;
+}
+
+/* "NOT IN THIS FLOW" overline above the parked cluster (SVG text). Mono caps,
+   dim — labels the parked group without competing with the flow. */
+.flow-parked-label {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  fill: var(--dim);
+  text-anchor: start;
+  dominant-baseline: text-after-edge;
+  pointer-events: none;
 }
 
 /* Structural relationship pill: a small --surface/--edge hairline square sized
@@ -1460,7 +1696,96 @@ button:focus-visible {
   padding: var(--pad);
 }
 
-/* ── Repo Tree ──────────────────────────────────────────────────────────── */
+/* ── Repo Tree ────────────────────────────────────────────────────────────
+   Two panes: the file table on the left (keeps the F16 width cap + scrolls),
+   and a file-preview pane on the right filling the freed width. The shared
+   panel rule above gives .repo-tree `position:absolute; inset:0; overflow:auto`;
+   we switch it to a flex row and hand scrolling to the individual panes. */
+.repo-tree {
+  display: flex;
+  align-items: stretch;
+  gap: var(--pad);
+  overflow: hidden;
+}
+/* Left pane: the existing header + tree body. Scrolls independently; the F16
+   cap lives on .repo-tree__body inside it, so the table stays compact while
+   this column still yields its slack to the preview pane. */
+.repo-tree__main {
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 52rem;       /* mirrors the F16 body cap: on a wide center the table stops here and the preview takes the freed width; on a narrow center the two panes share 50/50 instead of the table starving the preview */
+  overflow: auto;
+}
+/* No file selected → the preview collapses and the table reclaims the full
+   width (the F16 layout). Clicking a file reveals the preview and the panes
+   share the row. */
+.repo-tree:not(.repo-tree--previewing) .repo-file-preview { display: none; }
+/* Right pane: the file preview, filling the width the F16 cap freed up. A
+   hairline border separates it from the table; it scrolls on its own. */
+.repo-file-preview {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  border: var(--hairline) solid var(--line);
+  background: var(--surface);
+  overflow: hidden;
+}
+.repo-file-preview__hint {
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: var(--pad);
+  margin: 0;
+}
+.repo-file-preview__hint--error { color: var(--c4-actor); }
+/* Overline header: path on the left, size · language metadata on the right. */
+.repo-file-preview__header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--pad);
+  padding: var(--pad-tight) var(--pad);
+  border-bottom: var(--hairline) solid var(--line);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.repo-file-preview__path {
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.repo-file-preview__meta {
+  color: var(--dim);
+  white-space: nowrap;
+}
+.repo-file-preview__notice {
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  padding: var(--pad-tight) var(--pad);
+  border-bottom: var(--hairline) solid var(--line);
+  margin: 0;
+}
+/* The highlighted code. syntect emits an inline-styled <pre> (its own bg +
+   token colors from the bundled theme); we only own the mono font, the scroll,
+   and "no wrap" so long lines scroll horizontally instead of reflowing. */
+.repo-file-preview__code {
+  flex: 1 1 auto;
+  overflow: auto;
+  padding: var(--pad-tight) var(--pad);
+}
+.repo-file-preview__code pre {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: var(--body-size);
+  white-space: pre;
+  line-height: 1.5;
+}
+
 .repo-tree__header {
   display: flex;
   align-items: center;
@@ -1486,13 +1811,65 @@ button:focus-visible {
   font-size: var(--overline-size);
 }
 
-/* A tree row: a 3px left rail (owner color on files), then a fixed grid of
-   caret · type-icon · name · size · modified · owner — the columns the React
-   RepoTreeWorkspace shows. Size/modified are mono and right-aligned so they
-   read as a scannable metadata gutter. */
+/* ── Signal-to-noise controls (UX review #7) ───────────────────────────────
+   A path filter, collapse/expand-all + hide-noise toggle, and owner filter
+   chips. Reuses the shared .chip / .is-active / .blast-search treatments so the
+   controls match the rest of the facelift (mono, hairline, --accent state). */
+.repo-tree__controls {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+  margin-bottom: var(--pad);
+}
+.repo-tree__filter { width: 100%; }
+.repo-tree__control-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--grid);
+}
+.repo-tree__btn { cursor: pointer; }
+.repo-tree__owners {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--grid);
+}
+.repo-tree__owners-label { margin-right: var(--grid); }
+.repo-tree__owner-chip { cursor: pointer; }
+/* The owner chip carries its node's role hue as a left accent dot, matching the
+   row rail, without overriding the chip's neutral state treatment. */
+.repo-tree__owner-chip::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--owner-color, var(--muted));
+  flex: none;
+}
+.repo-tree__filtered {
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  margin: 0 0 var(--pad-tight);
+}
+
+/* The tree caps its width so the metadata gutter sits near the names instead
+   of being flung to the far edge of a wide panel (the "extraordinary
+   whitespace"). Header + rows share this cap, so their columns stay aligned. */
+.repo-tree__body {
+  --repo-tree-max-width: 52rem;
+  max-width: var(--repo-tree-max-width);
+}
+
+/* A tree row: a 3px left rail (owner color on files), then a grid of
+   lead · size · modified · owner — the columns the React RepoTreeWorkspace
+   shows. The lead column (caret · type-icon · name) is the ONLY part that
+   indents with depth, so the fixed Size/Modified/Owner columns stay at an
+   identical x for every row and the header. Size/modified are mono and
+   right-aligned so they read as a scannable metadata gutter. */
 .repo-row {
   display: grid;
-  grid-template-columns: 12px 18px minmax(0, 1fr) 64px 56px auto;
+  grid-template-columns: minmax(0, 1fr) 64px 56px auto;
   align-items: center;
   gap: var(--pad-tight);
   height: 24px;
@@ -1501,6 +1878,14 @@ button:focus-visible {
   border-left: var(--accent-rail) solid transparent;
   color: var(--muted);
   user-select: none;
+}
+/* The lead column: caret + icon + name as a flex. The per-depth indent is
+   padding HERE (not on the row), so it never displaces the metadata columns. */
+.repo-row__lead {
+  display: flex;
+  align-items: center;
+  gap: var(--pad-tight);
+  min-width: 0; /* lets the name ellipsis instead of widening the column */
 }
 .repo-row--dir { cursor: pointer; }
 .repo-row--owned { cursor: pointer; }
@@ -1516,10 +1901,12 @@ button:focus-visible {
 }
 .repo-row--colhead:hover { background: none; }
 .repo-row__caret {
+  flex: 0 0 12px;
   color: var(--dim);
   text-align: center;
 }
 .repo-row__icon {
+  flex: 0 0 18px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1536,6 +1923,8 @@ button:focus-visible {
   stroke-linejoin: round;
 }
 .repo-row__name {
+  flex: 1 1 auto;
+  min-width: 0;
   color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2009,10 +2398,99 @@ button.blast-chip { cursor: pointer; }
    --c4-* role hue); versions/dates are mono. */
 /* The release SELECTOR moved to the left-nav southern slot (SelectorBar); this
    panel now holds only the selected release's detail, single column. */
+/* Flex column: the detail SCROLLS independently above a FIXED history dock. */
 .release-panel {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  gap: var(--pad);
 }
-.release-panel__detail { display: flex; flex-direction: column; gap: var(--pad); }
+.release-panel__detail {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad);
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* Historical trend chart docked at the bottom (fixed); minimizing collapses it
+   to just the header bar so the reader can reclaim the space for the detail. */
+.release-history-dock {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+  padding-top: var(--pad-tight);
+  border-top: 1px solid var(--line);
+}
+.release-history-dock__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pad-tight);
+}
+.release-history-dock__toggle { font-size: var(--overline-size); padding: 2px 8px; }
+.release-history-dock--min { gap: 0; }
+
+/* ── Release trend chart (F14) — ported from the React ReleaseTrendChart, with
+   the literal --blue/--yellow remapped onto the facelift token scale. ─────── */
+.release-history { display: grid; gap: 8px; }
+.release-history svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1200 / 240;
+  min-height: 0;
+  border: 1px solid var(--line);
+  background: var(--bg);
+  overflow: visible;
+}
+.release-history g[role="listitem"] { cursor: help; }
+.release-history g[role="listitem"]:focus { outline: none; }
+.release-history text {
+  fill: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 7px;
+  letter-spacing: 0;
+}
+.release-history .release-chart-y-label { font-size: 7px; }
+.release-history .release-chart-x-label { font-size: 6.5px; }
+.release-chart-axis { fill: none; stroke: var(--line-strong); stroke-width: 1; }
+.release-chart-tick {
+  fill: none;
+  stroke: color-mix(in srgb, var(--line-strong) 35%, transparent);
+  stroke-width: 0.5;
+}
+.release-chart-active-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-dasharray: 2 3;
+  stroke-width: 1;
+  opacity: 0.85;
+}
+.release-chart-line { fill: none; stroke-width: 1.2; }
+.release-chart-area { opacity: 0.18; }
+.release-chart-area.feature { fill: var(--accent); }
+.release-chart-area.fix { fill: var(--sev-medium); }
+.release-chart-line.feature { stroke: var(--accent); }
+.release-chart-line.fix { stroke: var(--sev-medium); }
+.release-history circle { fill: var(--surface); stroke: var(--accent); stroke-width: 1.2; }
+.release-history circle.active { fill: var(--sev-medium); stroke: var(--sev-medium); }
+.release-history circle.healthy { stroke: var(--accent); }
+.release-history circle.progressing { stroke: var(--sev-medium); }
+.release-history circle.blocked { stroke: var(--sev-critical); }
+.release-history circle.inactive { stroke: var(--line-strong); }
+.release-chart-legend {
+  display: flex;
+  gap: 12px;
+  color: var(--muted);
+  font-family: var(--font-mono);
+  font-size: 10px;
+}
+.release-chart-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.release-chart-legend i { width: 14px; height: 2px; background: var(--accent); }
+.release-chart-legend i.fix { background: var(--sev-medium); }
 .release-panel__hint { color: var(--dim); }
 .release-panel__hint--error { color: var(--sev-critical); }
 .release-panel__section { margin: var(--pad-tight) 0 0; }
@@ -2027,7 +2505,10 @@ button.blast-chip { cursor: pointer; }
   border: var(--hairline) solid var(--line);
   overflow: hidden;
 }
-.release-progress__bar { height: 100%; background: var(--accent); }
+/* Always the literal accent green, never the cascaded posture tone: the bar's
+   FILL already shows how much is left, so coloring it amber/red over-communicates
+   "not finished". --accent-base ignores any --accent the release card sets. */
+.release-progress__bar { height: 100%; background: var(--accent-base); }
 .release-progress__label { color: var(--dim); font-size: var(--overline-size); }
 
 .release-path { display: flex; flex-direction: column; gap: var(--pad-tight); }
@@ -2070,6 +2551,22 @@ button.blast-chip { cursor: pointer; }
   align-items: baseline;
   gap: var(--pad-tight);
   padding: var(--grid) var(--pad-tight);
+  cursor: pointer;
+}
+.release-path-line:hover { background: var(--panel-2); }
+/* Selected item — the --accent state ring (already toned per the item's status
+   via the inline --accent), matching the diagram node selection treatment. */
+.release-path-line--selected {
+  box-shadow: inset 0 0 0 1px var(--accent), 0 0 0 3px var(--accent-glow);
+}
+/* The status pill participates in the highlight: when its line is selected, or
+   its parent step is active (a child line is selected), the pill's border + text
+   read as emphasized rather than sitting static while the row lights up. */
+.release-path-line--selected .release-path-state,
+.release-path-step.is-active .release-path-coarse > .release-path-state {
+  background: color-mix(in srgb, currentColor 30%, transparent);
+  box-shadow: 0 0 0 1px currentColor;
+  font-weight: 600;
 }
 .release-path-line__main { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .release-path-line__main strong { color: var(--ink); font-size: var(--body-size); }

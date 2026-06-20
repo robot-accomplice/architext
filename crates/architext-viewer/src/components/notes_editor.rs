@@ -126,8 +126,12 @@ struct Draft {
 /// The Notes section for the inspector's current target (kind + id). Drops in
 /// under the inspector card; the target is recomputed by the inspector each
 /// render and passed in, so switching the selected node/view re-scopes the list.
+///
+/// `label` names whose notes these are ("View notes" / "Flow notes" /
+/// "Node notes") so two stacked sections aren't ambiguous identical "NOTES"
+/// blocks (UX review #6).
 #[component]
-pub fn NotesSection(target_kind: String, target_id: String) -> impl IntoView {
+pub fn NotesSection(label: String, target_kind: String, target_id: String) -> impl IntoView {
     let state = use_app_state();
     let error = create_rw_signal::<Option<String>>(None);
     let pending = create_rw_signal(false);
@@ -153,7 +157,7 @@ pub fn NotesSection(target_kind: String, target_id: String) -> impl IntoView {
     view! {
         <div class="notes-section">
             <div class="notes-head">
-                <div class="overline">"NOTES"</div>
+                <div class="overline">{label.to_uppercase()}</div>
                 {move || (draft.get().is_none() && !token_missing()).then(|| view! {
                     <button class="notes-add" on:click=start_add>"+ Add note"</button>
                 })}

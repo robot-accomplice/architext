@@ -407,6 +407,17 @@ pub struct ReleaseIndex {
     pub releases: Vec<ReleaseSummary>,
 }
 
+/// Per-release roll-up counts (the `counts` object on each summary). Only the
+/// two the trend chart plots are modeled; serde ignores the rest.
+#[derive(Debug, Clone, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReleaseCounts {
+    #[serde(default)]
+    pub features: i64,
+    #[serde(default)]
+    pub bug_fixes: i64,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReleaseSummary {
@@ -421,6 +432,17 @@ pub struct ReleaseSummary {
     pub posture: Option<String>,
     #[serde(default)]
     pub summary: Option<String>,
+    /// Feature/bug-fix roll-up, plotted by the release trend chart.
+    #[serde(default)]
+    pub counts: ReleaseCounts,
+    /// Completion / target timestamps — the chart sorts + labels by these
+    /// (releasedAt, else targetDate, else targetWindow), matching the React viewer.
+    #[serde(default)]
+    pub released_at: Option<String>,
+    #[serde(default)]
+    pub target_date: Option<String>,
+    #[serde(default)]
+    pub target_window: Option<String>,
     /// Relative path of the detail file, under the `releases/` directory.
     #[serde(default)]
     pub file: Option<String>,
@@ -454,6 +476,45 @@ pub struct RepoFile {
     pub size: Option<u64>,
     #[serde(default)]
     pub mtime: Option<i64>,
+}
+
+// ─── /api/node-git ─────────────────────────────────────────────────────────
+
+/// `/api/node-git?paths=` payload — a node's git "development window" derived
+/// from its `sourcePaths`. `tracked` is false (and the rest absent) when the
+/// paths are not in the serving repo (e.g. the sanitized review corpus).
+#[derive(Debug, Clone, Deserialize)]
+pub struct NodeGit {
+    pub tracked: bool,
+    #[serde(rename = "firstCommit", default)]
+    pub first_commit: Option<String>,
+    #[serde(rename = "lastCommit", default)]
+    pub last_commit: Option<String>,
+    #[serde(rename = "commitCount", default)]
+    pub commit_count: Option<u64>,
+    #[serde(default)]
+    pub authors: Vec<String>,
+}
+
+// ─── /api/file ─────────────────────────────────────────────────────────────
+
+/// `/api/file?path=` payload (`{ path, size, language, truncated, binary, html }`).
+/// Fetched on demand by the Repo Tree file-preview pane when a file row is
+/// clicked. `html` is server-rendered, inline-styled syntax-highlight HTML
+/// (null for binary files); the viewer renders it directly with `inner_html`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct FilePreviewPayload {
+    pub path: String,
+    #[serde(default)]
+    pub size: Option<u64>,
+    #[serde(default)]
+    pub language: Option<String>,
+    #[serde(default)]
+    pub truncated: bool,
+    #[serde(default)]
+    pub binary: bool,
+    #[serde(default)]
+    pub html: Option<String>,
 }
 
 /// `/api/config` payload (`{ diagram, warnings, fields, sections }`).

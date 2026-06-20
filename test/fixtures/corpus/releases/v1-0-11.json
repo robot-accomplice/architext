@@ -1,0 +1,453 @@
+{
+  "id": "v1-0-11",
+  "version": "1.0.11",
+  "name": "FlowForge 1.0.11",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "`v1.0.11` is a patch hotfix for two production-impacting defects found after `v1.0.10`:",
+  "targetDate": "2026-05-07",
+  "releasedAt": "2026-05-07T12:00:00.000Z",
+  "lastUpdated": "2026-05-07T12:00:00.000Z",
+  "updateSource": "docs/releases/v1.0.11-release-notes.md, CHANGELOG.md",
+  "scope": {
+    "required": [
+      {
+        "id": "r-1-0-11-purpose-streamed-web-chat-turns-could-terminate-as-succes",
+        "title": "streamed web/chat turns could terminate as successful without durable,",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "streamed web/chat turns could terminate as successful without durable,",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Purpose section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "purpose",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-purpose-development-test-activity-could-contaminate-local",
+        "title": "development/test activity could contaminate local operator service state, and",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "development/test activity could contaminate local operator service state, and",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Purpose section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "purpose",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-purpose-previous-release-2",
+        "title": "Previous release",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Previous release: v1.0.10",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Purpose section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "purpose",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-purpose-hotfix-release-3",
+        "title": "Hotfix release",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Hotfix release: v1.0.11",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Purpose section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "purpose",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-purpose-source-commit-4",
+        "title": "Source commit",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Source commit: pending until the release commit is created and tagged.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Purpose section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "purpose",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-hotfix-scope-streaming-finalization-now-returns-an-explic",
+        "title": "Streaming finalization now returns an explicit success/failure result",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Streaming finalization now returns an explicit success/failure result.",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-hotfix-scope-the-web-chat-streaming-route-emits-normal-st",
+        "title": "The web-chat streaming route emits normal stream_end only after pipeline",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "The web-chat streaming route emits normal stream_end only after pipeline",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-hotfix-scope-empty-or-unusable-streamed-assistant-content",
+        "title": "Empty or unusable streamed assistant content fails closed and emits a typed",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Empty or unusable streamed assistant content fails closed and emits a typed",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-hotfix-scope-the-dashboard-renders-visible-assistant-erro",
+        "title": "The dashboard renders visible assistant/error fallback copy when a stream",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "The dashboard renders visible assistant/error fallback copy when a stream",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-hotfix-scope-pre-chunk-streaming-provider-errors-are-pres",
+        "title": "Pre-chunk streaming provider errors are preserved during fallback so",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Pre-chunk streaming provider errors are preserved during fallback so",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Hotfix Scope section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "hotfix-scope",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-targeted-hotfix-evidence-command-0",
+        "title": "Command",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Command: SOAK_ASSUME_QUIESCED=1 SOAK_SERVER_MODE=fresh SOAK_SCENARIOS=web_chat_stream_liveness SOAK_REPORT_PATH=/tmp/artifact SOAK_DB_SNAPSHOT_PATH=/tmp/artifact py",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Targeted Hotfix Evidence section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "targeted-hotfix-evidence",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-targeted-hotfix-evidence-result-1",
+        "title": "Result",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Result: 1/1 scenarios passed, 0 failed",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Targeted Hotfix Evidence section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "targeted-hotfix-evidence",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-targeted-hotfix-evidence-report-path-2",
+        "title": "Report path",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Report path: /tmp/artifact",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Targeted Hotfix Evidence section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "targeted-hotfix-evidence",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-targeted-hotfix-evidence-state-snapshot-3",
+        "title": "State snapshot",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "State snapshot: /tmp/artifact",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Targeted Hotfix Evidence section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "targeted-hotfix-evidence",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-targeted-hotfix-evidence-managed-mode-4",
+        "title": "Managed mode",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Managed mode: fresh isolated database",
+        "owner": "maintainer",
+        "priority": "high",
+        "rationale": "Captured from the Targeted Hotfix Evidence section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "targeted-hotfix-evidence",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-final-behavior-soak-scorecard-command-0",
+        "title": "Command",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Command: SOAK_ASSUME_QUIESCED=1 SOAK_SERVER_MODE=fresh SOAK_REPORT_PATH=/tmp/artifact SOAK_DB_SNAPSHOT_PATH=/tmp/artifact python3 scripts/run-agent-behavior-soak.py",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Behavior Soak Scorecard section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "final-behavior-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-final-behavior-soak-scorecard-result-1",
+        "title": "Result",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Result: 34/34 scenarios passed, 0 failed",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Behavior Soak Scorecard section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "final-behavior-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-11-final-behavior-soak-scorecard-release-gate-rows-2",
+        "title": "Release-gate rows",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Release-gate rows: 27/27 passed",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Final Behavior Soak Scorecard section of the 1.0.11 release notes.",
+        "decisionSource": "docs/releases/v1.0.11-release-notes.md",
+        "workstreamId": "final-behavior-soak-scorecard",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.11-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "purpose",
+      "name": "Purpose",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Purpose scope shipped in FlowForge 1.0.11.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-11-purpose-streamed-web-chat-turns-could-terminate-as-succes",
+        "r-1-0-11-purpose-development-test-activity-could-contaminate-local",
+        "r-1-0-11-purpose-previous-release-2",
+        "r-1-0-11-purpose-hotfix-release-3",
+        "r-1-0-11-purpose-source-commit-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.11-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "hotfix-scope",
+      "name": "Hotfix Scope",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Hotfix Scope scope shipped in FlowForge 1.0.11.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-11-hotfix-scope-streaming-finalization-now-returns-an-explic",
+        "r-1-0-11-hotfix-scope-the-web-chat-streaming-route-emits-normal-st",
+        "r-1-0-11-hotfix-scope-empty-or-unusable-streamed-assistant-content",
+        "r-1-0-11-hotfix-scope-the-dashboard-renders-visible-assistant-erro",
+        "r-1-0-11-hotfix-scope-pre-chunk-streaming-provider-errors-are-pres"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.11-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "targeted-hotfix-evidence",
+      "name": "Targeted Hotfix Evidence",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Targeted Hotfix Evidence scope shipped in FlowForge 1.0.11.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-11-targeted-hotfix-evidence-command-0",
+        "r-1-0-11-targeted-hotfix-evidence-result-1",
+        "r-1-0-11-targeted-hotfix-evidence-report-path-2",
+        "r-1-0-11-targeted-hotfix-evidence-state-snapshot-3",
+        "r-1-0-11-targeted-hotfix-evidence-managed-mode-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.11-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "final-behavior-soak-scorecard",
+      "name": "Final Behavior Soak Scorecard",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Final Behavior Soak Scorecard scope shipped in FlowForge 1.0.11.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-11-final-behavior-soak-scorecard-command-0",
+        "r-1-0-11-final-behavior-soak-scorecard-result-1",
+        "r-1-0-11-final-behavior-soak-scorecard-release-gate-rows-2"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.11-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-shipped",
+      "label": "1.0.11 shipped",
+      "status": "complete",
+      "date": "2026-05-07",
+      "order": 1,
+      "itemIds": [
+        "r-1-0-11-purpose-streamed-web-chat-turns-could-terminate-as-succes",
+        "r-1-0-11-purpose-development-test-activity-could-contaminate-local",
+        "r-1-0-11-purpose-previous-release-2",
+        "r-1-0-11-purpose-hotfix-release-3",
+        "r-1-0-11-purpose-source-commit-4",
+        "r-1-0-11-hotfix-scope-streaming-finalization-now-returns-an-explic",
+        "r-1-0-11-hotfix-scope-the-web-chat-streaming-route-emits-normal-st",
+        "r-1-0-11-hotfix-scope-empty-or-unusable-streamed-assistant-content",
+        "r-1-0-11-hotfix-scope-the-dashboard-renders-visible-assistant-erro",
+        "r-1-0-11-hotfix-scope-pre-chunk-streaming-provider-errors-are-pres",
+        "r-1-0-11-targeted-hotfix-evidence-command-0",
+        "r-1-0-11-targeted-hotfix-evidence-result-1",
+        "r-1-0-11-targeted-hotfix-evidence-report-path-2",
+        "r-1-0-11-targeted-hotfix-evidence-state-snapshot-3",
+        "r-1-0-11-targeted-hotfix-evidence-managed-mode-4",
+        "r-1-0-11-final-behavior-soak-scorecard-command-0",
+        "r-1-0-11-final-behavior-soak-scorecard-result-1",
+        "r-1-0-11-final-behavior-soak-scorecard-release-gate-rows-2"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-notes",
+      "label": "1.0.11 release notes",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "docs/releases/v1.0.11-release-notes.md"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog entry",
+      "kind": "document",
+      "status": "complete",
+      "href": "CHANGELOG.md"
+    }
+  ]
+}

@@ -1,0 +1,114 @@
+{
+  "id": "v1-1-4",
+  "version": "1.1.4",
+  "name": "v1.1.4 email inbox-read + honest degradation",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Behavioral release that fixes a real production failure from both directions: a turn where the agent, asked to help with a task it lacked the tools for, looped to a canned 'After 6 attempts, we couldn't get an answer we were confident enough to send' instead of being useful. CAPABILITY: FlowForge had email only as a send/receive channel (inbound polling) with no way for the agent to read or summarize a mailbox, so 'summarize my last 10 days of email' was impossible regardless of tool surface. The new read_inbox tool calls a read-only mail.Service.ListRecent (inbound mail SINCE date scope, BODY.PEEK so mail is never marked seen, bounded full bodies), registered only when inbound mail email is configured; LIVE-VERIFIED end to end against a Proton Bridge (the real config+keystore path read 5 real messages with full bodies, read-only, no state.db touch). HONEST DEGRADATION: RCA from production turn 696abbc9 (turn_diagnostics/turn_diagnostic_events) — asked to propose action on an introspection-only turn (only read-only introspection tools, no action tools), the agent narrated future actions it could not execute; the task_deferral guard rejected every attempt and the grounding judge correctly declined to forgive; after 6 attempts the turn exhausted into the canned fallback. That exhaustion now yields an honest limitation answer (the action can be described/proposed but not executed because only read-only introspection tools were available; enable the needed tool/capability) — the answer the task_deferral guard's own grounding judge already accepts as honest. INSTRUMENTATION (RCA Rule 14): the blocked diagnostics name this case correctly (it was mislabeled as an artifact-write block) and primary_diagnosis is now set on every blocked-exhaustion turn (the RCA turn had an empty diagnosis because it is derived only from retry counters and guard_retry_count was 0). The two halves pair: the capability gives the agent the missing tool; the honest-blocker makes it degrade honestly when a tool is missing. Both root-caused from recorded state and TDD'd; full module suite green and the src/engine race detector clean. Both root-caused from recorded state and TDD'd; full module suite green and the src/engine race detector clean. PRE-SHIP SOAK (2026-06-13, clone mode, cloud-provider-v4-flash, production quiesced): full 38-scenario battery 38/38, all 23 behavior families grade A, 0 release-gate findings (3 stress_only log findings: one empty_finalization, two multi_step_model_call_wait — timing, not behavior). SHIPPED (2026-06-13): merged via PR #111 (develop->main, merge commit be1bccbc); tag v1.1.4 on be1bccbc; release workflow green; CI tree-reuse fired (Pre-release Validation reused the green develop push CI for tree f869e4f8 — the heavy validation steps go vet / race tests / smoke / architecture were SKIPPED, second consecutive release validating the tree-reuse machinery); published live — assets incl. SHA256SUMS, the darwin-arm64 binary reports 1.1.4 on go1.26.4 (clean, no -dev), /releases/latest resolves FlowForge v1.1.4 (prerelease=false); site release-sync dispatch succeeded (pipeline-owned deploy). DEFERRED (justified, in roadmap.json): injection-output-cap-fail-loud (oversized model/tool OUTPUT can be scored as blocked and dropped silently) and guard-retry-count-accuracy-for-judge-mediated-retries (the counter miscount whose downstream empty-diagnosis symptom is already fixed).",
+  "targetWindow": "Behavioral point release; formal cut after pre-ship soak per docs/testing/release-procedure.md",
+  "lastUpdated": "2026-06-13T16:50:00Z",
+  "releasedAt": "2026-06-13T16:46:49Z",
+  "updateSource": "PRs #107 (email read_inbox, live-verified) and #108 (honest-blocker) merged to develop 2026-06-13; promoted via PR #111 and tag v1.1.4 shipped 2026-06-13; release workflow green with CI tree-reuse",
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "workstreams": [
+    {
+      "id": "v114-behavioral",
+      "status": "complete",
+      "name": "Email capability + honest degradation",
+      "owner": "maintainer",
+      "posture": "on-track",
+      "summary": "The two halves of the production 'blocked' RCA: the read_inbox capability gives the agent the missing tool; the honest-blocker escape valve makes it degrade honestly when a tool is missing.",
+      "progress": 100,
+      "itemIds": [
+        "email-read-inbox-capability",
+        "honest-blocker-escape-valve"
+      ],
+      "evidence": []
+    }
+  ],
+  "evidence": [
+    {
+      "id": "v114-live-email-verify",
+      "label": "read_inbox live-verified against a real Proton Bridge (5 messages, read-only, BODY.PEEK)",
+      "kind": "manual-check",
+      "status": "complete",
+      "href": "internal/mailruntime/inbox_read_live_verify_test.go"
+    },
+    {
+      "id": "v114-pipeline-race",
+      "label": "src/engine green under -race (honest-blocker guard/retry change)",
+      "kind": "test",
+      "status": "complete",
+      "href": "src/engine/post_success_retry_policy_test.go"
+    }
+  ],
+  "scope": {
+    "required": [
+      {
+        "id": "email-read-inbox-capability",
+        "title": "Read-only inbox-summarize capability (read_inbox tool)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "mail.Service.ListRecent (read-only BODY.PEEK, inbound mail SINCE date scope, bounded full bodies) plus the read_inbox EmailInboxTool (InboxReader interface, days/limit defaults 10/25, cap 100), registered only when inbound mail email is configured via the same mailruntime.ConfigFromCore resolution as the email channel. The shared FETCH-response parse loop was extracted so the inbound poll path is behavior-preserved. Live-verified end to end against a Proton Bridge.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "v114-behavioral",
+        "dependsOn": [],
+        "evidence": [
+          "internal/mail/inbox_read.go ListRecent; internal/agent/tools/email_inbox.go; internal/daemon/daemon.go registration",
+          "internal/agent/tools/email_inbox_test.go; internal/mail/inbox_read_test.go; gated internal/mailruntime/inbox_read_live_verify_test.go",
+          "PR #107"
+        ]
+      },
+      {
+        "id": "honest-blocker-escape-valve",
+        "title": "Honest-blocker escape valve for introspection-only task_deferral exhaustion",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "blockedOutcomeForGuardExhaustion recognizes the introspection-only task_deferral exhaustion (RCA turn 696abbc9: 6 attempts, all task_deferral-upheld, then the canned fallback) and returns an honest limitation answer instead of the canned no-confident-answer fallback. The blocked diagnostics name the case correctly and primary_diagnosis is set on every blocked-exhaustion turn (the empty-diagnosis symptom was downstream of the guard_retry_count=0 miscount).",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "v114-behavioral",
+        "dependsOn": [],
+        "evidence": [
+          "src/engine/post_success_retry_policy.go (guardExhaustionIsIntrospectionOnlyTaskDeferral + branch); src/engine/pipeline_stages.go primary_diagnosis",
+          "src/engine/post_success_retry_policy_test.go::TestBlockedOutcomeForGuardExhaustion_IntrospectionOnlyTaskDeferral (RED without the branch)",
+          "PR #108; production state.db turn 696abbc9"
+        ]
+      }
+    ],
+    "stretch": [],
+    "planned": [],
+    "deferred": [
+      {
+        "id": "injection-output-cap-fail-loud",
+        "title": "Make oversized injection-output handling fail loud, not silently drop",
+        "kind": "bug-fix",
+        "status": "deferred",
+        "summary": "The v1.1.3 DoS cap's ScanOutput path can score a legitimately-large model/tool output as blocked, and the blocked-output callers can drop it with an empty result — a fail-loud gap flagged by the security review. Harden the output path separately (higher/separate output cap and/or a visible 'output withheld' event).",
+        "owner": "maintainer",
+        "priority": "medium",
+        "dependsOn": [],
+        "evidence": [
+          "roadmap.json#injection-output-cap-fail-loud"
+        ]
+      },
+      {
+        "id": "guard-retry-count-accuracy-for-judge-mediated-retries",
+        "title": "Count grounding-judge-mediated guard retries in guard_retry_count",
+        "kind": "chore",
+        "status": "deferred",
+        "summary": "Judge-mediated task_deferral retries do not increment guard_retry_count (RCA turn 696abbc9: 6 attempts, guard_retry_count=0). The downstream empty-diagnosis symptom is already fixed (the honest-blocker path sets primary_diagnosis), but the counter itself is still inaccurate for RCA; fix needs care to not double-count across the two retry mechanisms.",
+        "owner": "maintainer",
+        "priority": "low",
+        "dependsOn": [],
+        "evidence": [
+          "roadmap.json#guard-retry-count-accuracy-for-judge-mediated-retries"
+        ]
+      }
+    ],
+    "outOfScope": []
+  }
+}

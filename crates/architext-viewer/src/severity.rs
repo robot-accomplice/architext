@@ -36,7 +36,10 @@ pub fn sensitivity_color_var(level: Option<&str>) -> &'static str {
 pub fn release_tone_color_var(tone: crate::release_truth::Tone) -> &'static str {
     use crate::release_truth::Tone;
     match tone {
-        Tone::Healthy => "var(--accent)",
+        // --accent-base (the literal), NOT var(--accent): release/path cards set
+        // `style="--accent: <this>"`, so var(--accent) here would make
+        // `--accent: var(--accent)` — a self-reference cycle that drops the color.
+        Tone::Healthy => "var(--accent-base)",
         Tone::Progressing => "var(--sev-medium)",
         Tone::Blocked => "var(--sev-critical)",
         Tone::Inactive => "var(--dim)",

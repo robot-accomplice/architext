@@ -4,6 +4,8 @@ pub mod config_write;
 pub mod data;
 pub mod data_events;
 pub mod doctor;
+pub mod file_preview;
+pub mod node_git;
 pub mod notes;
 pub mod plan;
 pub mod release_plans;

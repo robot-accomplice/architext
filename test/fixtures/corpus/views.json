@@ -1,0 +1,877 @@
+{
+  "views": [
+    {
+      "id": "system-map",
+      "name": "FlowForge System Map",
+      "type": "system-map",
+      "summary": "High-level map of operators, first-party surfaces, adapters, runtime services, persistence, external providers, and release validation.",
+      "lanes": [
+        {
+          "id": "people-and-clients",
+          "name": "People and Client Surfaces",
+          "nodeIds": [
+            "operator",
+            "cli",
+            "tui",
+            "web-dashboard",
+            "external-api-client"
+          ]
+        },
+        {
+          "id": "transport-adapters",
+          "name": "Transport and Control Adapters",
+          "nodeIds": [
+            "api-server",
+            "websocket-control-plane",
+            "external-channel-adapters"
+          ]
+        },
+        {
+          "id": "runtime-core",
+          "name": "Runtime Core",
+          "nodeIds": [
+            "daemon-runtime",
+            "unified-pipeline",
+            "agency-service",
+            "scheduler"
+          ]
+        },
+        {
+          "id": "capability-services",
+          "name": "Capability Services",
+          "nodeIds": [
+            "llm-service",
+            "memory-system",
+            "knowledge-base-service",
+            "skill-plugin-system",
+            "mcp-system",
+            "media-services",
+            "mail-service",
+            "wallet-service",
+            "config-keystore",
+            "observability-system"
+          ]
+        },
+        {
+          "id": "state-and-external",
+          "name": "State and External Dependencies",
+          "nodeIds": [
+            "sql-store",
+            "external-model-providers",
+            "local-model-provider",
+            "os-service-manager",
+            "test-release-harness"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "agent-turn-flow",
+      "name": "Agent Turn Flow",
+      "type": "flow-explorer",
+      "summary": "Shows how conversational input moves from surfaces/adapters into the unified pipeline, through memory/tools/models, and back to the user.",
+      "lanes": [
+        {
+          "id": "entry",
+          "name": "Entry",
+          "nodeIds": [
+            "operator",
+            "cli",
+            "tui",
+            "web-dashboard",
+            "websocket-control-plane",
+            "external-channel-adapters"
+          ]
+        },
+        {
+          "id": "factory",
+          "name": "Factory",
+          "nodeIds": [
+            "unified-pipeline"
+          ]
+        },
+        {
+          "id": "context-and-tools",
+          "name": "Context and Tools",
+          "nodeIds": [
+            "memory-system",
+            "knowledge-base-service",
+            "skill-plugin-system",
+            "mcp-system",
+            "sql-store"
+          ]
+        },
+        {
+          "id": "inference-and-output",
+          "name": "Inference and Output",
+          "nodeIds": [
+            "llm-service",
+            "external-model-providers",
+            "local-model-provider",
+            "observability-system"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-context-flowforge",
+      "name": "FlowForge C4 Context",
+      "type": "c4-context",
+      "summary": "Shows FlowForge as the local-first software system boundary, the people/API clients that use it, and model-provider dependencies outside the system.",
+      "lanes": [
+        {
+          "id": "people-and-external-clients",
+          "name": "People and External Clients",
+          "nodeIds": [
+            "operator",
+            "external-api-client"
+          ]
+        },
+        {
+          "id": "system-boundary",
+          "name": "FlowForge System",
+          "nodeIds": [
+            "flowforge-platform"
+          ]
+        },
+        {
+          "id": "external-runtime-dependencies",
+          "name": "External Runtime Dependencies",
+          "nodeIds": [
+            "external-model-providers",
+            "local-model-provider"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-container-local-runtime",
+      "name": "Local Runtime Containers",
+      "type": "c4-container",
+      "summary": "Shows local CLI and TUI access to the daemon, pipeline, state store, and configuration boundary.",
+      "lanes": [
+        {
+          "id": "operator",
+          "name": "Operator",
+          "nodeIds": [
+            "operator"
+          ]
+        },
+        {
+          "id": "local-surfaces",
+          "name": "Local Surfaces",
+          "nodeIds": [
+            "cli",
+            "tui"
+          ]
+        },
+        {
+          "id": "runtime-core",
+          "name": "Runtime Core",
+          "nodeIds": [
+            "daemon-runtime",
+            "unified-pipeline"
+          ]
+        },
+        {
+          "id": "local-state",
+          "name": "Local State",
+          "nodeIds": [
+            "sql-store",
+            "config-keystore"
+          ]
+        }
+      ],
+      "scopeNodeId": "flowforge-platform"
+    },
+    {
+      "id": "c4-container-dashboard-control",
+      "name": "Dashboard Control Containers",
+      "type": "c4-container",
+      "summary": "Shows the dashboard websocket topic and control command seam used by the first-party browser UI.",
+      "lanes": [
+        {
+          "id": "browser-client",
+          "name": "Browser Client",
+          "nodeIds": [
+            "web-dashboard"
+          ]
+        },
+        {
+          "id": "dashboard-control-plane",
+          "name": "Dashboard Control Plane",
+          "nodeIds": [
+            "websocket-control-plane"
+          ]
+        },
+        {
+          "id": "runtime-collaborators",
+          "name": "Runtime Collaborators",
+          "nodeIds": [
+            "unified-pipeline",
+            "scheduler"
+          ]
+        },
+        {
+          "id": "state-and-config",
+          "name": "State and Config",
+          "nodeIds": [
+            "sql-store",
+            "config-keystore"
+          ]
+        }
+      ],
+      "scopeNodeId": "flowforge-platform"
+    },
+    {
+      "id": "c4-container-public-api",
+      "name": "Public API Containers",
+      "type": "c4-container",
+      "summary": "Shows externally addressable API routes, dashboard API access, and API server runtime collaborators.",
+      "lanes": [
+        {
+          "id": "api-clients",
+          "name": "API Clients",
+          "nodeIds": [
+            "web-dashboard",
+            "external-api-client"
+          ]
+        },
+        {
+          "id": "api-boundary",
+          "name": "API Boundary",
+          "nodeIds": [
+            "api-server"
+          ]
+        },
+        {
+          "id": "runtime-collaborators",
+          "name": "Runtime Collaborators",
+          "nodeIds": [
+            "websocket-control-plane",
+            "unified-pipeline",
+            "llm-service",
+            "observability-system"
+          ]
+        },
+        {
+          "id": "state",
+          "name": "State",
+          "nodeIds": [
+            "sql-store"
+          ]
+        }
+      ],
+      "scopeNodeId": "flowforge-platform"
+    },
+    {
+      "id": "c4-component-unified-pipeline-entry-and-policy",
+      "name": "Unified Pipeline Component Scope: Entry and Policy",
+      "type": "c4-component",
+      "summary": "Drills into the unified pipeline request-to-response components and their runtime collaborators. Focused on Entry and Policy; generated by architext sync without changing architecture facts.",
+      "lanes": [
+        {
+          "id": "entry-and-policy",
+          "name": "Entry and Policy",
+          "nodeIds": [
+            "pipeline-ingress",
+            "turn-policy-engine"
+          ]
+        }
+      ],
+      "scopeNodeId": "unified-pipeline"
+    },
+    {
+      "id": "c4-component-unified-pipeline-context-tools-and-models",
+      "name": "Unified Pipeline Component Scope: Context and Tools",
+      "type": "c4-component",
+      "summary": "Drills into the unified pipeline request-to-response components and their runtime collaborators. Focused on Context and Tools; generated by architext sync without changing architecture facts.",
+      "lanes": [
+        {
+          "id": "context-and-tools",
+          "name": "Context and Tools",
+          "nodeIds": [
+            "context-builder",
+            "tool-evidence-engine"
+          ]
+        }
+      ],
+      "scopeNodeId": "unified-pipeline"
+    },
+    {
+      "id": "c4-component-unified-pipeline-finalization",
+      "name": "Unified Pipeline Component Scope: Finalization",
+      "type": "c4-component",
+      "summary": "Drills into the unified pipeline request-to-response components and their runtime collaborators. Focused on Finalization; generated by architext sync without changing architecture facts.",
+      "lanes": [
+        {
+          "id": "finalization",
+          "name": "Finalization",
+          "nodeIds": [
+            "guard-verifier-stage",
+            "post-turn-stage"
+          ]
+        }
+      ],
+      "scopeNodeId": "unified-pipeline"
+    },
+    {
+      "id": "c4-component-unified-pipeline-state-and-telemetry",
+      "name": "Unified Pipeline Component Scope: State and Telemetry",
+      "type": "c4-component",
+      "summary": "Drills into the unified pipeline request-to-response components and their runtime collaborators. Focused on State and Telemetry; generated by architext sync without changing architecture facts.",
+      "lanes": [
+        {
+          "id": "state-and-telemetry",
+          "name": "State and Telemetry",
+          "nodeIds": [
+            "pipeline-ingress",
+            "post-turn-stage",
+            "trace-recorder"
+          ]
+        }
+      ],
+      "scopeNodeId": "unified-pipeline"
+    },
+    {
+      "id": "c4-component-dashboard-control",
+      "name": "Dashboard Control Component Scope",
+      "type": "c4-component",
+      "summary": "Drills into dashboard websocket state and mutation components without treating REST as an internal control bus.",
+      "lanes": [
+        {
+          "id": "websocket-components",
+          "name": "Websocket Components",
+          "nodeIds": [
+            "ws-topic-producers",
+            "ws-control-dispatcher",
+            "dashboard-ws-client"
+          ]
+        }
+      ],
+      "scopeNodeId": "websocket-control-plane"
+    },
+    {
+      "id": "c4-component-agency-autonomy",
+      "name": "Agency and Autonomy Component Scope",
+      "type": "c4-component",
+      "summary": "Drills into runtime-owned agency/autonomy policy, execution, audit, and confirmation boundaries.",
+      "lanes": [
+        {
+          "id": "agency-policy",
+          "name": "Agency Policy",
+          "nodeIds": [
+            "agency-policy-engine"
+          ]
+        },
+        {
+          "id": "agency-execution",
+          "name": "Agency Execution",
+          "nodeIds": [
+            "agency-executor-component"
+          ]
+        },
+        {
+          "id": "agency-evidence",
+          "name": "Agency Evidence",
+          "nodeIds": [
+            "agency-audit-log"
+          ]
+        }
+      ],
+      "scopeNodeId": "agency-service"
+    },
+    {
+      "id": "c4-component-media-services-media-surfaces",
+      "name": "Voice Camera and Media Component Scope: Media Surfaces",
+      "type": "c4-component",
+      "summary": "Drills into media device selection, STT, TTS, camera capture, and vision preprocessing as pipeline input/output mechanisms. Focused on Media Surfaces; generated by architext sync without changing architecture facts.",
+      "lanes": [
+        {
+          "id": "media-surfaces",
+          "name": "Media Surfaces",
+          "nodeIds": [
+            "dashboard-ws-client",
+            "cli-service-adapters"
+          ]
+        },
+        {
+          "id": "media-runtime",
+          "name": "Media Runtime",
+          "nodeIds": [
+            "media-device-inventory"
+          ]
+        }
+      ],
+      "scopeNodeId": "media-services"
+    },
+    {
+      "id": "c4-component-media-services-media-runtime",
+      "name": "Voice Camera and Media Component Scope: Media Runtime",
+      "type": "c4-component",
+      "summary": "Drills into media device selection, STT, TTS, camera capture, and vision preprocessing as pipeline input/output mechanisms. Focused on Media Runtime; generated by architext sync without changing architecture facts.",
+      "lanes": [
+        {
+          "id": "media-runtime",
+          "name": "Media Runtime",
+          "nodeIds": [
+            "media-device-inventory",
+            "stt-service",
+            "tts-service",
+            "camera-capture-service"
+          ]
+        }
+      ],
+      "scopeNodeId": "media-services"
+    },
+    {
+      "id": "c4-component-media-services-vision-and-turn",
+      "name": "Voice Camera and Media Component Scope: Vision and Turn",
+      "type": "c4-component",
+      "summary": "Drills into media device selection, STT, TTS, camera capture, and vision preprocessing as pipeline input/output mechanisms. Focused on Vision and Turn; generated by architext sync without changing architecture facts.",
+      "lanes": [
+        {
+          "id": "vision-and-turn",
+          "name": "Vision and Turn",
+          "nodeIds": [
+            "vision-preprocessor",
+            "camera-capture-service",
+            "pipeline-ingress"
+          ]
+        }
+      ],
+      "scopeNodeId": "media-services"
+    },
+    {
+      "id": "c4-component-media-services-media-state",
+      "name": "Voice Camera and Media Component Scope: State and Evidence",
+      "type": "c4-component",
+      "summary": "Drills into media device selection, STT, TTS, camera capture, and vision preprocessing as pipeline input/output mechanisms. Focused on State and Evidence; generated by architext sync without changing architecture facts.",
+      "lanes": [
+        {
+          "id": "media-state",
+          "name": "Media State",
+          "nodeIds": [
+            "media-device-inventory",
+            "config-loader",
+            "trace-recorder"
+          ]
+        }
+      ],
+      "scopeNodeId": "media-services"
+    },
+    {
+      "id": "c4-component-llm-service",
+      "name": "LLM Service Component Scope",
+      "type": "c4-component",
+      "summary": "Drills into model routing, request sanitization, provider circuit state, local/cloud providers, and benchmark attribution.",
+      "lanes": [
+        {
+          "id": "llm-runtime",
+          "name": "LLM Runtime",
+          "nodeIds": [
+            "llm-route-selector",
+            "llm-request-sanitizer",
+            "llm-provider-circuit"
+          ]
+        },
+        {
+          "id": "benchmarks",
+          "name": "Benchmarks",
+          "nodeIds": [
+            "scorecard-reporter"
+          ]
+        }
+      ],
+      "scopeNodeId": "llm-service"
+    },
+    {
+      "id": "c4-component-release-validation",
+      "name": "Release Validation Component Scope",
+      "type": "c4-component",
+      "summary": "Drills into the release validation harness, hydrated test clone, scorecards, behavior soaks, and manual evidence loop.",
+      "lanes": [
+        {
+          "id": "release-validation",
+          "name": "Release Validation",
+          "nodeIds": [
+            "test-release-harness",
+            "hydrated-test-clone",
+            "scorecard-reporter"
+          ]
+        }
+      ],
+      "scopeNodeId": "test-release-harness"
+    },
+    {
+      "id": "dataflow-sensitive",
+      "name": "Sensitive Data Flow",
+      "type": "dataflow",
+      "summary": "Highlights where sensitive content, secrets, memory, media, mail, billing account data, and telemetry move through the runtime.",
+      "lanes": [
+        {
+          "id": "input-and-consent",
+          "name": "Input and Consent",
+          "nodeIds": [
+            "operator",
+            "web-dashboard",
+            "cli",
+            "tui",
+            "external-channel-adapters"
+          ]
+        },
+        {
+          "id": "policy-and-runtime",
+          "name": "Policy and Runtime",
+          "nodeIds": [
+            "config-keystore",
+            "agency-service",
+            "unified-pipeline",
+            "daemon-runtime"
+          ]
+        },
+        {
+          "id": "sensitive-services",
+          "name": "Sensitive Services",
+          "nodeIds": [
+            "memory-system",
+            "media-services",
+            "mail-service",
+            "wallet-service",
+            "mcp-system"
+          ]
+        },
+        {
+          "id": "persistence-and-egress",
+          "name": "Persistence and Egress",
+          "nodeIds": [
+            "sql-store",
+            "llm-service",
+            "external-model-providers",
+            "local-model-provider",
+            "observability-system"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "deployment-local",
+      "name": "Local Deployment Topology",
+      "type": "deployment",
+      "summary": "Shows local process/service deployment and external dependencies for a typical FlowForge install.",
+      "lanes": [
+        {
+          "id": "operator-host",
+          "name": "Operator Host",
+          "nodeIds": [
+            "operator",
+            "cli",
+            "tui",
+            "web-dashboard",
+            "daemon-runtime",
+            "sql-store"
+          ]
+        },
+        {
+          "id": "host-services",
+          "name": "Host Services",
+          "nodeIds": [
+            "os-service-manager",
+            "local-model-provider",
+            "media-services"
+          ]
+        },
+        {
+          "id": "network-services",
+          "name": "Network Services",
+          "nodeIds": [
+            "external-model-providers",
+            "external-channel-adapters",
+            "mail-service"
+          ]
+        },
+        {
+          "id": "validation",
+          "name": "Validation",
+          "nodeIds": [
+            "test-release-harness",
+            "observability-system"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "risk-overlay",
+      "name": "Release Risk Overlay",
+      "type": "risk-overlay",
+      "summary": "Groups the main architectural risks that must stay visible during v1.1.0 release closure.",
+      "lanes": [
+        {
+          "id": "boundary-risks",
+          "name": "Boundary Risks",
+          "nodeIds": [
+            "api-server",
+            "websocket-control-plane",
+            "external-channel-adapters",
+            "cli",
+            "tui"
+          ]
+        },
+        {
+          "id": "runtime-risks",
+          "name": "Runtime Risks",
+          "nodeIds": [
+            "unified-pipeline",
+            "llm-service",
+            "scheduler",
+            "agency-service",
+            "observability-system"
+          ]
+        },
+        {
+          "id": "data-risks",
+          "name": "Data Risks",
+          "nodeIds": [
+            "sql-store",
+            "memory-system",
+            "config-keystore",
+            "mail-service",
+            "media-services",
+            "wallet-service"
+          ]
+        },
+        {
+          "id": "release-risks",
+          "name": "Release Risks",
+          "nodeIds": [
+            "test-release-harness",
+            "external-model-providers",
+            "local-model-provider",
+            "os-service-manager"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "release-gate-flow",
+      "name": "Release Gate Flow",
+      "type": "sequence",
+      "summary": "Release readiness requires architecture/docs alignment, isolated automated gates, live manual drills, local and the cloud provider behavior soaks, and release collateral updates.",
+      "lanes": [
+        {
+          "id": "planning",
+          "name": "Planning and Architecture",
+          "nodeIds": [
+            "operator",
+            "test-release-harness",
+            "knowledge-base-service"
+          ]
+        },
+        {
+          "id": "automated",
+          "name": "Automated Gates",
+          "nodeIds": [
+            "sql-store",
+            "unified-pipeline",
+            "llm-service",
+            "observability-system"
+          ]
+        },
+        {
+          "id": "manual",
+          "name": "Manual Gates",
+          "nodeIds": [
+            "web-dashboard",
+            "cli",
+            "tui",
+            "media-services",
+            "mail-service",
+            "os-service-manager"
+          ]
+        },
+        {
+          "id": "evidence",
+          "name": "Evidence and Collateral",
+          "nodeIds": [
+            "test-release-harness",
+            "observability-system"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-cli",
+      "name": "CLI Component Scope",
+      "type": "c4-component",
+      "summary": "Drills into the local CLI process boundary and its direct application-service adapters.",
+      "scopeNodeId": "cli",
+      "lanes": [
+        {
+          "id": "cli-process",
+          "name": "CLI Process",
+          "nodeIds": [
+            "cli-command-router",
+            "cli-service-adapters"
+          ]
+        },
+        {
+          "id": "runtime-collaborators",
+          "name": "Runtime Collaborators",
+          "nodeIds": [
+            "config-loader",
+            "secret-store"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-tui",
+      "name": "TUI Component Scope",
+      "type": "c4-component",
+      "summary": "Drills into the local TUI process and terminal chat rendering lifecycle.",
+      "scopeNodeId": "tui",
+      "lanes": [
+        {
+          "id": "terminal-runtime",
+          "name": "Terminal Runtime",
+          "nodeIds": [
+            "tui-session-runtime",
+            "tui-renderer"
+          ]
+        },
+        {
+          "id": "runtime-collaborators",
+          "name": "Runtime Collaborators",
+          "nodeIds": [
+            "config-loader"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-daemon-runtime",
+      "name": "Daemon Runtime Component Scope",
+      "type": "c4-component",
+      "summary": "Drills into daemon lifecycle, subsystem coordination, and background workers.",
+      "scopeNodeId": "daemon-runtime",
+      "lanes": [
+        {
+          "id": "daemon-lifecycle",
+          "name": "Daemon Lifecycle",
+          "nodeIds": [
+            "daemon-service-control",
+            "daemon-subsystem-manager",
+            "daemon-background-workers"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-config-keystore",
+      "name": "Config and Keystore Component Scope",
+      "type": "c4-component",
+      "summary": "Drills into runtime configuration loading and encrypted secret storage.",
+      "scopeNodeId": "config-keystore",
+      "lanes": [
+        {
+          "id": "configuration",
+          "name": "Configuration",
+          "nodeIds": [
+            "config-loader"
+          ]
+        },
+        {
+          "id": "secrets",
+          "name": "Secrets",
+          "nodeIds": [
+            "secret-store"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-web-dashboard",
+      "name": "Web Dashboard Component Scope",
+      "type": "c4-component",
+      "summary": "Drills into dashboard state derived from websocket topics and approved control commands.",
+      "scopeNodeId": "web-dashboard",
+      "lanes": [
+        {
+          "id": "browser-state",
+          "name": "Browser State",
+          "nodeIds": [
+            "dashboard-spa-state",
+            "dashboard-ws-client"
+          ]
+        },
+        {
+          "id": "runtime-events",
+          "name": "Runtime Events",
+          "nodeIds": [
+            "ws-topic-producers",
+            "ws-control-dispatcher"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-scheduler",
+      "name": "Scheduler Component Scope",
+      "type": "c4-component",
+      "summary": "Drills into cron dispatch and heartbeat task execution without moving business behavior into scheduler code.",
+      "scopeNodeId": "scheduler",
+      "lanes": [
+        {
+          "id": "schedule-runtime",
+          "name": "Schedule Runtime",
+          "nodeIds": [
+            "cron-dispatcher",
+            "heartbeat-runner"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-api-server",
+      "name": "API Server Component Scope",
+      "type": "c4-component",
+      "summary": "Drills into external API adapters and websocket upgrade/control seams.",
+      "scopeNodeId": "api-server",
+      "lanes": [
+        {
+          "id": "http-boundary",
+          "name": "HTTP Boundary",
+          "nodeIds": [
+            "api-public-routes",
+            "api-ws-upgrader"
+          ]
+        },
+        {
+          "id": "websocket-control",
+          "name": "Websocket Control",
+          "nodeIds": [
+            "ws-topic-producers",
+            "ws-control-dispatcher"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "c4-component-observability-system",
+      "name": "Observability Component Scope",
+      "type": "c4-component",
+      "summary": "Drills into trace recording and runtime metrics reporting.",
+      "scopeNodeId": "observability-system",
+      "lanes": [
+        {
+          "id": "diagnostics",
+          "name": "Diagnostics",
+          "nodeIds": [
+            "trace-recorder",
+            "metrics-reporter"
+          ]
+        }
+      ]
+    }
+  ]
+}

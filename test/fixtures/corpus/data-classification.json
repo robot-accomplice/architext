@@ -1,0 +1,70 @@
+{
+  "classes": [
+    {
+      "id": "operator-input",
+      "name": "Operator input and conversation content",
+      "sensitivity": "high",
+      "handling": "Treat prompts, channel messages, transcripts, and assistant responses as user data. Persist only through session/message stores or explicit artifact paths; never leak across channel scopes without consent."
+    },
+    {
+      "id": "runtime-config",
+      "name": "Runtime configuration",
+      "sensitivity": "high",
+      "handling": "Configuration controls model order, channels, workspace paths, agency/autonomy, and runtime behavior. Mutations must use central config/policy seams with validation and audit for authority-bearing settings."
+    },
+    {
+      "id": "secrets",
+      "name": "Provider and integration secrets",
+      "sensitivity": "critical",
+      "handling": "API keys, channel tokens, billing account-adjacent secrets, and mail credentials must remain in keystore or explicit secret storage. UI and logs must not echo secret values."
+    },
+    {
+      "id": "memory-records",
+      "name": "Agent memory records",
+      "sensitivity": "high",
+      "handling": "Working, episodic, semantic, and indexed memory can contain private user context. Ingest, retrieval, curation, and repair must be scoped to the configured store and isolated during tests."
+    },
+    {
+      "id": "tool-artifacts",
+      "name": "Tool outputs and file artifacts",
+      "sensitivity": "high",
+      "handling": "Tool results, artifact proofs, file writes, and workspace observations require typed evidence. Claims about artifacts must be backed by matching tool or filesystem proof."
+    },
+    {
+      "id": "telemetry",
+      "name": "Telemetry, traces, logs, and scorecards",
+      "sensitivity": "medium",
+      "handling": "Operational telemetry should include model route, latency breakdown, stage health, retries, and failures while avoiding secret leakage. It supports diagnostics, user transparency, and release gates."
+    },
+    {
+      "id": "scheduler-state",
+      "name": "Scheduler and cron state",
+      "sensitivity": "medium",
+      "handling": "Cron definitions, leases, due executions, failures, and notifications are durable operational data. Scheduler business logic must remain centralized and must not bypass pipeline behavior."
+    },
+    {
+      "id": "media-capture",
+      "name": "Voice, audio, image, and camera media",
+      "sensitivity": "critical",
+      "handling": "Captured media requires explicit permission, provenance, retention policy, and canonical multimodal message parts. STT, TTS, camera policy, and media interpretation belong in runtime services."
+    },
+    {
+      "id": "mail-content",
+      "name": "Mail and calendar-adjacent content",
+      "sensitivity": "critical",
+      "handling": "Email bodies, headers, mailbox metadata, outbound mail targets, and bridge credentials require explicit operator configuration and careful logging redaction."
+    },
+    {
+      "id": "wallet-data",
+      "name": "Billing account and financial state",
+      "sensitivity": "critical",
+      "handling": "Billing account addresses, balances, metered-billing/payment metadata, and transaction-adjacent data require conservative display, confirmation, and audit boundaries."
+    },
+    {
+      "id": "public-metadata",
+      "name": "Public documentation and catalog metadata",
+      "sensitivity": "low",
+      "handling": "Public docs, skill/plugin catalog metadata, themes, and non-secret release metadata may be cached and rendered broadly, but source integrity still matters."
+    }
+  ]
+}

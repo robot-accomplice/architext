@@ -1,0 +1,1098 @@
+{
+  "id": "v1-3-0",
+  "version": "1.3.0",
+  "name": "v1.3.0 local LLM hosting + Models page, compaction engine, audit + soak infra",
+  "status": "planned",
+  "posture": "on-track",
+  "targetWindow": "Planning crystallized 2026-06-17 from the approved brainstorm sketch; work not yet started. Audit-first, dependency-ordered (Phase 0 open -> Phase 3 validate/close). No firm target date set.",
+  "lastUpdated": "2026-06-18T00:00:00Z",
+  "updateSource": "Crystallized from the parked v1.3.0 brainstorm sketch (/tmp/artifact after v1.2.0 shipped; operator-approved scope 2026-06-17. No theme: chunky-and-complete, selected by priority + readiness.",
+  "summary": "Feature-tier release (minor, not a patch): promote the v1.2.0 bundled llama.cpp sidecar from embeddings-only to a first-class local LLM host, and stand up a dedicated Models page (model config decomposed out of monolithic Settings, local-host management UI, ModelHub discover/compat/download/SHA-pin/install/activate flow, BYO-GGUF-URL path) that manages embedded AND external local backends as first-class peers (additive: external llama.cpp/Embedded Runtime support is NOT removed). Alongside: an intelligent parallel compaction engine (wheat/chaff off the critical path -> persistence + runtime context reduction), the long-planned execution-grounded real coding benchmark, a post-v1.2.0 wholesale benchmark re-run (now also exercising the local-host route), per-use-case model recommendations turning benchmark scores into a decision (up to 3 local + 3 cloud for coding/general-assistant/chatbot, deterministic over quant/qual/latency, additive and routing-neutral), a fresh cycle-opening triple-lens code audit, soak infrastructure (orchestration harness + gate-on-resolution + the answer-fidelity correct-answer-survival inverse-soak), two contained correctness fixes (per-turn retry-cost ceiling, verifier evidence recovery on TOTOF-collapse), and a full-scale product-knowledge pack refresh (all versions, source-backed, current). Also folds in the SelfHealing: a framework-native, deterministic maintenance/repair subsystem (modeled on RunHygiene, no LLM/no authority negotiation, idempotent) that supersedes the subagent-delegation framing and generalizes self-heal across DATABASE (5 hygiene coverage gaps + 3 recurring sources, with source fixes), WORKSPACE, CONFIGURATION, PLUGINS, SKILLS, and SECURITY (sensitive domains report-and-propose only); per the v1.3.0+ charter the tail domains may extend past v1.3.0.",
+  "scope": {
+    "required": [
+      {
+        "id": "full-codebase-triple-lens-audit-v130",
+        "title": "Cycle-opening fresh triple-lens audit (architectural mandates + clean-code + clean-architecture)",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Phase 0 opener. The v1.2.0 triple-lens audit is complete/consumed, so this is a NEW pass (not a reopen) that produces a remediation batch (R) folded into Phase 1. Repeats the cycle-opening audit discipline.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-triple-lens-audit",
+        "dependsOn": [],
+        "evidence": [
+          "roadmap: full-codebase-triple-lens-audit (v1.2.0, complete)"
+        ]
+      },
+      {
+        "id": "release-soak-orchestration-harness",
+        "title": "Release-soak orchestration harness (runs/serializes/routes/gates/scorecards the suite)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Phase 0 validation substrate. One command runs the whole behavioral soak suite. Built to host the answer-fidelity correct-answer-survival inverse-soak as a registered suite, not a one-off.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-soak-infrastructure",
+        "dependsOn": [],
+        "evidence": [
+          "scripts/run-agent-behavior-soak.py"
+        ]
+      },
+      {
+        "id": "soak-gate-on-resolution-not-severity-tier",
+        "title": "Gate on resolution of every soak failure, not the severity tier",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Phase 0. Release gates on RCA-to-resolution of EVERY behavioral soak failure; the attribution_only/stress_only tier routes priority, not permission to ship.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-soak-infrastructure",
+        "dependsOn": [
+          "release-soak-orchestration-harness"
+        ],
+        "evidence": []
+      },
+      {
+        "id": "answer-fidelity-audit-v121",
+        "title": "Answer-fidelity correct-answer-survival adversarial inverse-soak (v1.3.0 remainder)",
+        "kind": "test",
+        "status": "in-progress",
+        "summary": "Only the regression-guard remainder: the audit + ~20 fixes shipped in v1.2.0 (commit b92792af, 38/38). This adds the inverse-soak (feed conditions where the model produces a CORRECT answer a guard/recovery/finalize might wrongly degrade, assert it survives) + leftover direct-stage content_head instrumentation. Hosted by the soak harness.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-soak-infrastructure",
+        "dependsOn": [
+          "release-soak-orchestration-harness"
+        ],
+        "evidence": [
+          "v1.2.0 commit b92792af (audit + fixes shipped)",
+          "INSTRUMENTATION HALF DONE 2026-06-19 (commits 6f0d938a, a45dcd92): the leftover direct-stage content_head instrumentation is in place. The assembled-prompt capture now records ContextKind (history vs topic_summary vs memory), and the direct-path guard application records a guard_content_rewrite turn-diagnostics event (content_head before/after + fired guards) whenever the guard chain alters a direct-path answer. This is the DETECTION FOUNDATION the inverse-soak needs: a guard/finalize degrading a CORRECT answer is now provable from recorded state. REMAINING (soak-window): the correct-answer-survival inverse-soak RUNNER, a thin runner over run-agent-behavior-soak.py (same pattern as run-adversarial-soak.py: reuse managed-server + send_message) driven by a CURATED correct-answer-survival scenario set derived from the v1.2.0 audit defects and the false-capability-denial case, asserting a correct model answer survives guard/recovery/finalize. It registers in run-release-soak-suite.py (the suite doc already anticipates it) and must be LIVE-validated in the pre-release soak window (minimize-soak-runs). Writing scenarios blind risks non-reproducing cases (false confidence), so it is built and validated as soak prep, not now."
+        ]
+      },
+      {
+        "id": "per-turn-retry-cost-ceiling",
+        "title": "Per-turn retry-cost ceiling: bound guard/verifier/react retry token spend, fail-closed",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Phase 1 contained fix. Bounds the token spend of retry cycles per turn and fails closed on breach (Rule 7 / cost sensitivity).",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-contained-fixes",
+        "dependsOn": [],
+        "evidence": []
+      },
+      {
+        "id": "verifier-evidence-recovery-totof-collapse",
+        "title": "Deliver gathered tool evidence on verifier coverage failure (TOTOF-collapse)",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Phase 1 contained fix. When verifier coverage fails, the TOTOF-collapse currently blinds the recovery; deliver the already-gathered tool evidence instead of discarding it.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-contained-fixes",
+        "dependsOn": [],
+        "evidence": []
+      },
+      {
+        "id": "embedded-llamacpp-local-llm-host",
+        "title": "Promote the bundled llama.cpp sidecar to a first-class local LLM host",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Phase 1 backend. Extend the v1.2.0 embeddings-only sidecar to serve chat generation as a first-class local router provider; extend supervisor health/validation for generation. Reuses proc.Supervisor + SHA-pin + OnHealthy-bind substrate.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-local-llm-hosting",
+        "dependsOn": [],
+        "evidence": [
+          "internal/daemon/embedder_sidecar.go",
+          "internal/llm/embedder_sidecar.go",
+          "DONE 2026-06-18: un-gated the bundled chat host AND built a GROUNDED local-model concierge (operator-chosen design: a model helps the user pick a hardware-suitable model, grounded by deterministic facts not guesswork). internal/llm/chat_catalog.go: curated RAM-tiered catalog of clean-license (Apache-2.0/MIT) Q4_K_M instruct GGUFs (local-model-a-1.5B floor / Phi-3.5-mini / local-model-a-7B / local-model-a-14B), each a REAL pin (commit revision + Git-LFS content SHA256) resolved from HF via the method validated against the known-good embed-model pin; ID+accessors; SelectChatModel(RAM)/FloorChatModel(); BundledChatGGUF=floor. flowforge setup installs the always-runnable FLOOR as a bootstrap. Two agent tools (internal/agent/tools/local_model_advisor.go): recommend_local_model (read-only: detected RAM/CPU + catalog fit + best pick) and set_local_model (config-write, user-directed, catalog-constrained) via canonical core.SetLocalChatHostModel (src/core/config_local_chat_host.go) which load-merge-writes to avoid ApplyConfigPatch top-level-merge clobbering [models]. New OperationConfigWrite class in semantics.go (read-only recommend, progress-making set). Off until enabled (existing installs unaffected); switch effective on restart, model auto-downloads+SHA-verifies. Tests: chat_catalog_test, local_model_advisor_test (classification + grounded recommend + apply round-trip + nil/invalid guards), config_local_chat_host_test (preserves primary/fallbacks), setup_test. Follow-up (not built): proactive first-run nudge so the agent offers the upgrade unprompted (currently user asks; tool descriptions steer).",
+          "DONE 2026-06-18: built the proactive first-run nudge (the deferred follow-up). internal/daemon/local_model_onboarding.go: when the chat host is enabled, still on the FLOOR bootstrap, and detected RAM supports a strictly-better catalog model, it injects one-time prompt guidance steering the agent to proactively offer the upgrade (set_local_model id). Fires ONCE via a runtime_settings flag (local_model_onboarding_nudged), checked first so post-nudge cost is one key lookup; silent if disabled/already-upgraded/RAM-undetected/already-shown. Injected via new PromptConfig.OnboardingGuidance -> \"## Onboarding\" section (daemon_adapters_context.go, non-subagent turns only). Tests: pure decision matrix, fire-once integration, silent-when-upgraded, prompt-section render. Known minor edge: the once flag is global, so in the rare case a non-operator turn lands first it could see the single nudge; acceptable (fires once, first post-install turn is the operator). Small-model tool-use weakness on pure-floor installs is an inherent hardware limit, not addressed by design (operator-confirmed).",
+          "THESIS PROVEN END-TO-END 2026-06-18/19 (Embedded Runtime down, no cloud): a full agent turn completed generated by the bundled chat host (response model=bundled-chat/bundled-local; log llm=bundled-chat/local-model-a-1.5B provider=bundled-chat) with the bundled embedder sidecar holding the semantic tier. Validated as a SOAK (scripts/run-local-sidecar-soak.sh) under sustained + concurrent pressure: PASS, no Embedded Runtime/cloud/n-gram fallback, no sidecar collapse. A suspected embedder crash-loop under chat-host coexistence was disproved (orphaned llama-server :11435 port contention from prior runs, not a defect). Surfaced + fixed a real regression: ownsTerminal() routed non-TTY daemon logs to the LogDir, hiding operational logs from captured-serve consumers (461b5f39, TTY-gated)."
+        ]
+      },
+      {
+        "id": "models-management-page",
+        "title": "Dedicated Models page: local execution UI + ModelHub access + Settings decomposition",
+        "kind": "feature",
+        "status": "planned",
+        "summary": "Phase 2 surface. Model config moves OUT of monolithic Settings into a focused Models page (struct-driven invariant preserved); local-host management UI; ModelHub discover->compat-gate->download->SHA-pin->install->activate flow + BYO-GGUF-URL. ADDITIVE: external local backends (external llama.cpp, Embedded Runtime) stay first-class peers. Gets its own UI/UX design pass. STALE-CARD FIX folded in (2026-06-17): the live Settings embedding card still shows Embedded Runtime framing + no sidecar state despite the bundled sidecar being the live engine (EffectiveEmbeddingEngine=bundled; EmbedderSidecarState available) — rework the card to show effective engine + live sidecar state, drop Embedded Runtime copy.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-local-llm-hosting",
+        "dependsOn": [
+          "embedded-llamacpp-local-llm-host"
+        ],
+        "evidence": [
+          "internal/api ws topics + dashboard SPA Settings page",
+          "DESIGN TOOLING 2026-06-19 (operator): when the design cycle starts, use https://assistant.example.com/design as the design surface rather than hand-rolling mockups. Still planned; needs a visual-design pass with the operator before implementation.",
+          "SCOPE 2026-06-19 (operator): the ModelHub catalog is promoted from future to THIS release — the Models page ships with a live browse + install surface (search HF GGUF models, hardware-filter to fit RAM, SHA256-verified download into the bundled runtime), alongside Local runtime (hero), Routing chain, Comparison & recommendations, and Providers & health. Mission: migrate ALL model management out of the monolithic Settings + Prompt Performance into one dedicated Models nav page. DESIGN PACKET built for assistant.example.com/design (working artifacts, uncommitted): tmp-models-page-mockup.html (grounded first-draft in the dashboard ai-purple aesthetic), tmp-models-page-design-brief.md, and per-screen screenshots, bundled as tmp-models-page-packet.zip. Next: assistant.example.com/design refinement, then implement the #models route in the dashboard SPA.",
+          "PRE-RELEASE GAPS to close before the Models page ships (honest gaps from the 2026-06-19 full-UI screenshot capture, recorded per operator). The capture covered all 15 views + every tab (44 screens) but did NOT cover: (1) the Help dialog and the Add-Sub-Agent modal (Playwright selector timeouts that pass); (2) drill-in DETAIL screens - session detail and turn-detail forensics; (3) action MODALS - New Session, Edit (agent/job), Add Model. ACTIONS before release: (a) extend the capture script to drill into a session row + a turn + open these modals, fix the help/add-subagent selectors, and re-run the safe clone once to complete the screenshot packet; (b) ensure the new Models page design + the model surfaces migrated out of Settings/Prompt-Performance/Context/Observability explicitly handle their modal + detail states (e.g. Add Model, edit routing, per-turn model forensics). These are design/coverage gaps for the Models page work, not standalone product blockers, but must be closed before the page ships."
+        ]
+      },
+      {
+        "id": "intelligent-parallel-compaction-engine",
+        "title": "Intelligent parallel compaction engine (off-critical-path wheat/chaff sift)",
+        "kind": "architecture",
+        "status": "in-progress",
+        "summary": "Phase 2. Sift chaff from wheat OFF the critical path, routing the wheat to long-term persistence AND runtime context reduction. Correctness-critical (compression = correctness); validated via the soak harness.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-compaction-engine",
+        "dependsOn": [
+          "release-soak-orchestration-harness"
+        ],
+        "evidence": [
+          "BUILT 2026-06-18 (cutover soak-gated per operator): engine core internal/compaction (structured wheat/chaff spine + optional cheap-model chaff pass + fact-preservation proof with self-repair -> MODEL-INDEPENDENT load-bearing guarantee, proven over 300 randomized cases + hostile summarizer); async runner off the critical path (same bgWorker as IngestTurn) producing per-session digests; session_digests storage; gated consumption seam + core.Compaction.UseDigest flag DEFAULT OFF (gate-off byte-for-byte today). Dual-route = compaction(runtime) + consolidation(persistence). LIVE cutover (wiring the digest into the agent ContextBuilder + flipping the flag) is the post-soak step — engine produces digests now so quality can be soak-evaluated. ChaffSummarizer nil (structured-only, deterministic)."
+        ]
+      },
+      {
+        "id": "real-coding-benchmark-execution-grounded",
+        "title": "Execution-grounded real coding capability benchmark",
+        "kind": "feature",
+        "status": "in-progress",
+        "summary": "Phase 1 (parallel). Build the long-planned execution-grounded coding benchmark. Feeds the coding use-case of the model-recommendations feature.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-benchmarking",
+        "dependsOn": [],
+        "evidence": [
+          "BUILT + LIVE 2026-06-18: execution-grounded coding benchmark — 3 toolchain-decided axes (compile gate + randomized property/fuzz oracle vs in-process reference over N=200 seeded inputs + gofmt/vet), NO LLM-judge/self-report, sandboxed. All 5 CODING matrix rows wired to assignments (legacy reverse_string heuristic retired -> one scoring path); score flows matrix->RunCodingBenchmark->scorecard->UseCaseCoding recommendation. Headline: randomized unicode oracle catches a byte-reversal that passes fixed ASCII cases. The benchmark OVERHAUL gating the wholesale re-run. Follow-on: multi-language (the platform-only now), F4 multi-turn coverage.",
+          "VERIFIED 2026-06-18 closeout sweep: internal/llm + internal/modelbench green; benchmark overhaul live (the platform). Multi-language is a roadmap follow-on, not a completion gate.",
+          "REOPENED 2026-06-19 (operator: coding benchmark still not done): the execution-grounded HARNESS is built+wired+tested (exercise_scoring.go:44 -> RunCodingBenchmark: compile gate + property/fuzz oracle vs in-process reference + gofmt/vet; 5 CODING prompts name assignments). But the realized improvement is NOT done: (1) the 6 assignments are trivial intro string funcs (reverse_string/to_upper/count_vowels/digit_sum/dedup_runes/sort_chars) -- a sound harness over a weak task set; (2) it has NEVER been run, so coding scores are still hand-authored folklore in exercise_baselines.go; (3) the cloud provider (the primary) has no baseline at all, and the priors reference stale models (local-model-a, local-model-a, gemma3:13b, mixtral:8x7b). Remaining: representative/harder coding tasks + a real run (purge stale + the cloud provider rerun) to replace folklore with measured data."
+        ]
+      },
+      {
+        "id": "model-recommendations-by-usecase",
+        "title": "Per-use-case model recommendations (up to 3 local + 3 cloud) from benchmark quant/qual/latency",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Turns benchmark output into a decision: up to 3 local + 3 cloud recs per use-case (coding / general-assistant / chatbot), via a deterministic ranking over existing per-(model,intent) AvgQuality + qualitative grade + AvgLatencyMs aggregates (Rule 6: code answers, not the model). ADDITIVE and routing-neutral (the dynamic router is unchanged); honest 'up to three' via a min-evidence threshold. Surfaces both terminal (CLI/scorecard) and the Models page. Precursor: confirm quantitative vs qualitative are independent signals before combining.",
+        "source": "roadmap",
+        "priority": "medium",
+        "workstreamId": "v130-benchmarking",
+        "dependsOn": [
+          "post-v1-2-0-wholesale-benchmark-rerun",
+          "real-coding-benchmark-execution-grounded"
+        ],
+        "evidence": [
+          "internal/db/exercise_repo.go",
+          "internal/modelbench/grade.go",
+          "cmd/models/models_scorecard.go"
+        ]
+      },
+      {
+        "id": "knowledge-base-pack-full-refresh",
+        "title": "Full-scale product-knowledge pack refresh (all versions, source-backed, current)",
+        "kind": "documentation",
+        "status": "complete",
+        "summary": "Ground-up refresh of docs/product-knowledge (manifest + source docs): all versions, all surfaces, current to v1.3.0. Proven necessary — the pack has been an afterthought until now, so there are likely sizeable coverage gaps; the refresh AUDITS coverage against the full product surface to surface gaps, then fills them (not a touch-up). Distinct from the per-release incremental checklist update. Preserves source_backed authority.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-knowledge-pack-refresh",
+        "dependsOn": [],
+        "evidence": [
+          "docs/product-knowledge/manifest.json",
+          "DONE 2026-06-18: coverage-audited (was ~0/8 of the v1.3.0 net-new surface) then filled. Manifest -> v1.3.0 (22 sources). New source-backed wiki docs: SelfHealing-Maintenance-And-Repair, Local-Models-And-Hosting, Operator-Identity-And-Authority (CLI inventory from real --help). Updated Home/Voice/Agency/Interfaces/README; scrubbed Duncan-persona residue; restamped v1.1.0. Honored source_backed authority + gating discipline (compaction/in-progress-fixes/data-gated proactive-recall NOT documented as live; bundled chat host documented per shipped behavior). Flag: v1.3.0 release-notes source pending (release-time artifact).",
+          "VERIFIED 2026-06-18 closeout sweep: source-backed docs refresh complete; architext validate green; no behavioral-soak dependency."
+        ]
+      },
+      {
+        "id": "operator-channel-authority-recognition",
+        "title": "Recognize the operator's own channel as operator/creator authority (not Peer)",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Behavioral now-item (operator-reported 2026-06-17). Over Chat Connector the agent treats the operator as PEER, hobbling authority-gated tool use. RCA: trusted_sender_ids=[] + no automatic operator-channel recognition -> session falls to default Peer authority. Fix: recognize the operator's own configured channel/identity as operator/creator-level by design (ties to RBAC), not a manual trusted_sender_ids footgun.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-authority-correctness",
+        "dependsOn": [],
+        "evidence": [
+          "internal/agent/loop_dispatch.go",
+          "src/core/security_claim.go",
+          "internal/channel/chat-connector.go"
+        ]
+      },
+      {
+        "id": "agent-tool-use-consistency-rca",
+        "title": "Confirm + close out agent tool-use inconsistency (suspected downstream of operator authority)",
+        "kind": "bug-fix",
+        "status": "in-progress",
+        "summary": "Answer-fidelity/false-incapacity defect (operator 2026-06-17, RCA from prod turn_diagnostic_events: 881 tool_call_blocked, all reason_code=tool_not_selected; the per-turn embedding-pruned surface excludes tools the model legitimately calls, e.g. list_directory). RECONCILED in two stages, both via the design's Expanded() widening valve (widen, not bypass; the surface still SHAPES). STAGE 1 false-capability-denial-guard-suppression (commit 12b46f54): the WORST manifestation (starvation -> false permanent refusal) fixed on the capability-falsehood retry path + grounding denials vs the FULL surface. STAGE 2 GENERAL CASE (code-complete): a plain tool_not_selected block of a REAL registered tool (no capability-falsehood guard firing) on a light+expandable envelope now triggers an Expanded() widening retry instead of leaving the model hard-blocked. Cross-layer wiring: blockToolNotOnSurface records OffSurfaceRealToolBlocked on the shared Session ONLY when l.tools.Get(name)!=nil (real tool; unknown/spurious calls keep the plain block + available-tools enumeration); the guard-retry loop (retryWithGuardsDetailed widenForToolNotSelected hook) reads that one-shot signal and, when no guard requested a retry, widens via Expanded().applyToolPolicy and re-runs so the next surface includes the tool. Reuses the Stage-1 machinery; mutually exclusive with the capability-falsehood widen (guard-fired vs no-guard branches) so no double-widen. Rule-14: turn_envelope_widened_for_tool_not_selected (blocked tools + from/to weight). Full/non-expandable envelopes do NOT widen. RED-first proven at both the agent-loop signal seam and the pipeline retry seam. Status stays in-progress: soak-validated at release per gate-on-resolution (hot-path).",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-authority-correctness",
+        "dependsOn": [
+          "operator-channel-authority-recognition"
+        ],
+        "evidence": [
+          "internal/agent/loop_act_guards.go (blockToolNotOnSurface records real-tool off-surface signal; unknown tools excluded)",
+          "internal/session/session.go (NoteOffSurfaceRealToolBlocked/OffSurfaceRealToolBlockedTools/ConsumeOffSurfaceRealToolBlocked cross-layer signal)",
+          "src/engine/pipeline_stages_envelope.go (widenEnvelopeForToolNotSelected: Expanded() widen + Rule-14 turn_envelope_widened_for_tool_not_selected)",
+          "src/engine/guard_retry.go (retryWithGuardsDetailed widenForToolNotSelected no-guard widen+retry hook)",
+          "internal/agent/loop_act_guards_tool_not_selected_test.go, src/engine/tool_not_selected_widen_test.go (RED-first)",
+          "state.db turn_diagnostic_events",
+          "CODE-COMPLETE, CONFIRMATION SOAK-GATED 2026-06-18 closeout: the fix is in + unit-green (loop_act_guards off-surface signal; pipeline widen-for-tool-not-selected envelope + guard-retry hook; tests pass in internal/agent + src/engine). Root cause (operator channel mis-attributed as Peer, narrowing the tool surface) is fixed by operator-channel-authority-recognition (complete). What remains is empirical CONFIRMATION that the inconsistency no longer reproduces, which needs recorded turn_diagnostic_events from a POST-FIX live/soak run on the operator host (pre-fix prod rows show the old behavior and cannot confirm resolution). Bucketed with the behavioral-soak-gated items; not closeable from code alone."
+        ]
+      },
+      {
+        "id": "aligned-letter-grade-rendering",
+        "title": "Letter grades: dedicated +/- channel that never shifts letter alignment",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Centralized grade formatter (modelbench.SplitGrade/FormatGradeAligned): letter in a fixed column, +/- in a dedicated adjacent channel one cell over, so letters always line up. Apply across all letter-grade displays (the platform model commands + the Python behavioral soak). Keep grade coloring.",
+        "source": "roadmap",
+        "priority": "medium",
+        "workstreamId": "v130-benchmarking",
+        "dependsOn": [],
+        "evidence": [
+          "cmd/models/models_comparison.go:217",
+          "scripts/run-agent-behavior-soak.py:4354"
+        ]
+      },
+      {
+        "id": "operator-authority-terminology",
+        "title": "Use 'Operator' ubiquitously for the top human authority (rename from 'Creator')",
+        "kind": "chore",
+        "status": "complete",
+        "summary": "Rename top human authority Creator->Operator ubiquitously (too biblical + creator!=operator). NOT a blind replace: config already has Operator AND Creator strings distinct from the runtime enum (External<Peer<SelfGenerated<Creator). Trace the full config<->enum vocabulary, rename enum/String/config-defaults/schema/docs/UI, with backward-compat for existing 'Creator' configs. Reconciles the operator-identity grant (currently AuthorityCreator).",
+        "source": "roadmap",
+        "priority": "medium",
+        "workstreamId": "v130-authority-correctness",
+        "dependsOn": [],
+        "evidence": [
+          "src/core/types.go",
+          "src/configstate/schema.ts:54-56"
+        ]
+      },
+      {
+        "id": "audit-rem-keystore-machine-id",
+        "title": "Keystore machine-ID: fail loud on RNG error + propagate write errors (C2, security)",
+        "summary": "AUDIT C2 (security now-item, decision-free): src/core/keystore.go createMachineID returns an all-zero machine ID on RNG failure (predictable keystore passphrase) and silently drops MkdirAll/WriteFile errors (a dropped write loses all stored secrets next run). Fail loud on RNG error; propagate write errors.",
+        "kind": "bug-fix",
+        "status": "complete",
+        "priority": "high",
+        "dependsOn": [],
+        "evidence": [
+          "src/core/keystore.go:170,174,176"
+        ],
+        "source": "roadmap"
+      },
+      {
+        "id": "audit-rem-wasm-fabrication",
+        "title": "WASM Execute fabricates success / subsystem unwired (C1) — wire or remove",
+        "summary": "AUDIT C1 (fail-loud/no-fabrication; DECISION NEEDED): internal/agent/wasm.go Execute discards the instantiated module and returns hardcoded 'WASM execution completed'; NewWasmRuntime has zero production callers (dead). Decide: wire to invoke the export, or remove the subsystem (explicit not-implemented interim). Also M2 dropped marshal err, L3 page-size literal.",
+        "kind": "bug-fix",
+        "status": "complete",
+        "priority": "high",
+        "dependsOn": [],
+        "evidence": [
+          "internal/agent/wasm.go:180-185,157,147"
+        ],
+        "source": "roadmap"
+      },
+      {
+        "id": "audit-rem-offpipeline-grounding-judge",
+        "title": "Document/marker the grounding-judge off-pipeline inference caller (A1)",
+        "summary": "AUDIT A1 (mandate): pipeline/validation_judge.ts:134 is a default-on, behavior-affecting direct llm.Complete NOT in the off-pipeline exemption registry and lacking the APPROVED OFF-PIPELINE LLM CALLER marker. Add to ARCHITECTURE.md + ARCHITECTURE_RULES.md registry + marker (defensible forgive-only adjudicator), or reconsider. Same class: re-verify turnstate's off-pipeline caller (CA1).",
+        "kind": "architecture",
+        "status": "complete",
+        "priority": "high",
+        "dependsOn": [],
+        "evidence": [
+          "src/engine/validation_judge.ts:134 (APPROVED OFF-PIPELINE LLM CALLER marker on the single j.llm.Complete call at line 139)",
+          "ARCHITECTURE.md:232 + ARCHITECTURE_RULES.md:723 (GroundingJudge.Adjudicate registered under Guard adjudication: default-on, forgive-only, behavior-affecting)",
+          "internal/api/architecture_boundaries_test.go (TestArchitecture_DirectLLMCallersAreMarked enforces the call-site marker; TestArchitecture_DocsStaySynchronizedOnOffPipelineExemptions requires GroundingJudge.Adjudicate in BOTH docs)",
+          "VERIFIED 2026-06-18: already remediated in commit ca10f7a3 (grounding-judge off-pipeline marker A1); reconciled to complete after confirming both enforcing tests pass and exactly one marked caller exists. CA1 re-verify: turnstate.Analyze is registered (ARCHITECTURE.md Diagnostic analysis) + marked (turnstate/state.go:214) and covered by the same whole-internal/ scan, so no unmarked off-pipeline caller remains."
+        ],
+        "source": "roadmap"
+      },
+      {
+        "id": "audit-rem-cleancode-batch",
+        "title": "Audit clean-code remediation batch (silent errors, dup, magic literals, voice)",
+        "summary": "AUDIT decision-free clean-code batch (fix-all-findings): H2 daemon_handlers.go:167 silent SendReply error; H3 baseline-lookup Index-vs-LastIndex latent bug (exercise_baselines.go); H4-H8 duplication (inbound pollers, heartbeat loop, config/personality loaders, metascore argmax) + per-provider timeout literals (client.go:130/136/138); Finding-2 failure_presenter.go:114,123 first-person 'I'->platform 'we'; M1/M3 swallowed errors; M4-M10 dup + magic literals; L1-L5. Full list in docs/plans/v1.3.0-audit-findings.md.",
+        "kind": "chore",
+        "status": "complete",
+        "priority": "medium",
+        "dependsOn": [],
+        "evidence": [
+          "docs/plans/v1.3.0-audit-findings.md"
+        ],
+        "source": "roadmap"
+      },
+      {
+        "id": "audit-rem-architecture-moves",
+        "title": "Audit architecture remediation (layer/boundary moves + dead-planner decision)",
+        "summary": "AUDIT architecture findings (operator: ALL this cycle). DONE: H1 dead-planner removed; CA3 modelstate split; A1 grounding-judge off-pipeline marker + registry + fitness test. REMAINING: CA1 turnstate orchestration->pipeline; CA2 CLI->db decoupling (11 cmd pkgs); CA4 *state presentation relocation; CA5 api/daemon god-package containment; decouple-core-from-nethttp (separate item). All large refactors.",
+        "kind": "architecture",
+        "status": "complete",
+        "priority": "medium",
+        "dependsOn": [],
+        "evidence": [
+          "docs/plans/v1.3.0-audit-findings.md",
+          "CA1 DONE 2026-06-19 (commit 3df1082d): moved off-pipeline turn-analysis inference out of turnstate (a persistence package) into pipeline.AnalyzeRecordedTurn (the guarded-path package). turnstate.Analyze keeps its signature + DB reads, builds pipeline.TurnData, and delegates; AnalysisResult aliased to the moved pipeline type; RecommendationsFromTips moved with the orchestration; the off-pipeline LLM-caller registry in ARCHITECTURE.md + ARCHITECTURE_RULES.md repointed at pipeline.AnalyzeRecordedTurn. Build, turnstate/pipeline/routes tests, and all TestArchitecture fitness tests green; vet clean. Remaining CA moves (CA2 CLI->db direct-read removals, *state presentation relocation, api/daemon god-package containment) tracked in docs/plans/v1.3.0-audit-findings.md.",
+          "CA2 IN PROGRESS (incremental, operator-chosen 2026-06-19). Step 1: cmdutil.OpenStore / OpenStoreOptional added as the single CLI store-lifecycle chokepoint (commit 465a4357). Steps 2-3: converted cmd/billing account, cmd/traces, cmd/schedule, cmd/channels off their per-command store openers (commits 465a4357, 5b23972a) -- billing account+channels now no longer import internal/db at all; self-opened db.Open sites 30 -> 26. cmd/operatorcmd (cfg-param, no stat-check) and cmd/tuicmd (open-or-create for the local runtime) were deliberately left: divergent semantics the shared helpers would change/break, flagged for a bespoke pass. REMAINING: cmd/media (3), cmd/skills (2), cmd/models (8), cmd/agent (6), cmd/admin (9) sites, then operatorcmd/tuicmd bespoke. CA3 (db->net/http via modelstate), CA4 (*state presentation relocation), CA5 (api/daemon god-package containment) still planned.",
+          "CA2 steps 1-4 DONE (commits 465a4357, 5b23972a, 8c8dc397). Two shared lifecycle helpers in cmdutil: OpenStore/OpenStoreOptional (read) + OpenRuntimeStore (open-or-create runtime boot). Converted off self-opened stores: billing account, traces, schedule, channels, media (voice/camera/video), tuicmd, skills. billing account/channels/media now import zero internal/db. tuicmd (earlier deferred) cleared via OpenRuntimeStore. Self-opened db.Open sites 30 -> 21. REMAINING (step 5, the big three + operatorcmd, ~21 sites): cmd/models (8), cmd/agent (6), cmd/admin (9), cmd/operatorcmd (1) -- several use bare db.Open(cfg.Database.Path) with create-on-missing, so each needs per-site read-vs-create classification (not mechanical swap).",
+          "CA2 COMPLETE (step 5: cmd/agent, operatorcmd, admin, models; commits 4f6f98c9, 3e600932, 44a203e1, 4a1ae250). All cmd/* store-opening now routes through the cmdutil chokepoint: OpenStore / OpenStoreOptional (read), OpenStoreWithConfig / OpenStoreOptionalWithConfig (read + resolved config, dedupes the store+config opener several packages reimplemented incl. agent/agents.go == admin/admin.go), OpenStoreFromConfig (open from a received cfg, for internal helpers), OpenRuntimeStore (open-or-create for writers/runtime boot). Self-opened db.Open across cmd/ went 30 -> 1; the sole remainder is admin/self-healing.go whose os.Stat is load-bearing (disk_usage_mb + custom not-found reporting). billing account/channels/media/operatorcmd now import zero internal/db. Behavior unification: empty-config-path falls back to the default DB everywhere (was per-command bespoke errors); per-domain 'X database not found' messages became the accurate generic 'state database not found'; read commands (operator/check/reset/recommend/comparison) no longer silently create an empty DB on a missing state.db. Full build + all 14 cmd packages green. Remaining CA moves: CA3 (db->net/http via modelstate), CA4 (*state presentation relocation), CA5 (api/daemon god-package containment).",
+          "CA3 ALREADY DONE (verify-confirmed 2026-06-19, commit 23286e3c 'split live sampler out so it isn't in the value type'). internal/modelstate/snapshot.go is now a pure value type (encoding/json + strings only); the live Embedded Runtime HTTP sampler moved to the sibling internal/modelsampler. go list -deps flowforge/internal/db no longer contains net/http. No new work needed. Remaining CA moves: CA4 (*state presentation relocation), CA5 (api/daemon god-package containment).",
+          "CA4 DONE 2026-06-19 (commit addd934c): renamed the 5 presentation packages breakerstate/providerstate/statsstate/routingstate/statusstate -> *view. They do live API presentation over an llm.Service (no persistence) but were named like the persistence *state packages. Suffix state->view resolves the mislabeling; kept at internal/ top level (cmd imports two, so relocating under internal/api would add a cmd->api dependency). Pure rename; go vet + build + affected tests green; current testing docs updated.",
+          "CA5 ASSESSED 2026-06-19 (NOT a mechanical pass; needs decomposition + a sequencing decision). Findings: daemon (35 files / 13.5k LOC / 49 types) and api (44 distinct internal imports) are broad god-packages BUT already split by responsibility with every file <=500 LOC (no monolith). daemon is NOT wiring-only: it hosts runtime business logic (agency loop daemon_agency.go, heartbeats, pollers, standing-block, tool-pruning adapter) alongside legitimate composition-root wiring (build/phases/subsystems/adapters). api is largely a composition root (server_routes + ws_control_* + topic builders; high import count inherent to mounting all routes/topics) with no injected-interface seam. CA5 work = (a) extract daemon runtime loops (agency, heartbeats/pollers, standing-block) into dedicated packages so daemon trends to wiring-only; (b) introduce api service interfaces to contain the 44-import coupling. RECOMMENDATION: sequence into the next cycle, not pre-release. Justification (Rule 16): highest blast-radius packages (daemon=live runtime lifecycle, api=every endpoint); this is structural debt, not a behavioral defect (they work correctly); file-cap already respected so no monolith emergency; a large untested decomposition on a branch gated by the behavioral soak adds release risk the quality bar should avoid. Awaiting operator sequencing call (do-now vs next-cycle).",
+          "COMPLETE 2026-06-19: CA1-CA4 landed; CA5 sequenced to next cycle (operator-approved), roadmapped as ca5-daemon-api-godpackage-containment in roadmap.json with sub-items + justified deferral. No remaining in-scope v1.3.0 work."
+        ],
+        "source": "roadmap"
+      },
+      {
+        "id": "capture-operational-logs-not-terminal",
+        "title": "Capture operational logs instead of barfing them onto the user terminal",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Handled/operational logs corrupt the user terminal + progress UIs. PARTIAL DONE: downgraded the NoEscalate measured-provider-failure ERROR->Debug (service_complete.go) -- it's returned to the caller, was spamming stderr/progress. REMAINING: route operational/runtime logs to a file/sink so the terminal shows only intentional output (logging.go writes to os.Stderr ConsoleWriter); audit other handled-error ERROR/console sites.",
+        "source": "roadmap",
+        "priority": "medium",
+        "workstreamId": "v130-output-hygiene",
+        "dependsOn": [],
+        "evidence": [
+          "internal/llm/service_complete.go:275",
+          "src/core/logging.go"
+        ]
+      },
+      {
+        "id": "decouple-core-from-nethttp",
+        "title": "Decouple src/core from net/http (CA3 follow-up)",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "db still imports net/http via core (httpdoer/oauth/theme_assets) after the modelstate split; hoist those out so db net/http cone -> 0.",
+        "source": "roadmap",
+        "priority": "medium",
+        "workstreamId": "v130-audit-remediation",
+        "dependsOn": [],
+        "evidence": [
+          "src/core/httpdoer.go",
+          "src/core/oauth.go",
+          "src/core/theme_assets.go",
+          "DONE 2026-06-18: HTTPDoer->internal/httpx, OAuth PKCE->internal/oauth, theme http.Get->themestate (core takes injected URLFetcher); core net/http cone 0, db net/http cone 0 (was 205/262); forcing-function arch tests TestArchitecture_CoreDoesNotDependOnNetHTTP + DBNetHTTPConeIsEmpty. Pure relocation, full suite green.",
+          "VERIFIED 2026-06-18 closeout sweep: arch tests TestArchitecture_CoreDoesNotDependOnNetHTTP + DBNetHTTPConeIsEmpty PASS; build+vet clean. Pure deterministic relocation."
+        ]
+      },
+      {
+        "id": "false-capability-denial-guard-suppression",
+        "title": "False capability-denial ships (HARD guard retry suppressed + widening valve jammed)",
+        "kind": "bug-fix",
+        "status": "in-progress",
+        "summary": "Answer-fidelity/false-incapacity defect (operator 2026-06-18, code-confirmed). 'clean up the workspace' got a FALSE permanent-authority refusal on a 4-tool lightweight surface; next turn had 15 tools + self-corrected. Chain: DEFECT C turn_policy down-classifies the short substantive request to a 4-tool surface (turn_policy.go:130) -> list-open-tasks blocked tool_not_selected -> the built-in Expanded() widening valve (turn_policy.go:212) would fix it -> DEFECT A suppresses that HARD NARRATED_DELEGATION guard's corrective retry because successful_tools>=1 + 'narrative-only' (post_success_retry_policy.go/guard_retry.go) -> starved surface -> false refusal -> DEFECT B the lexical capability-denial guard (guards_truthfulness_capability.go) can't match the novel phrasing. FIX: (A) gate suppression-after-progress on violation CLASS — never suppress HARD capability/authority/delegation falsehoods; (B) ground capability denials vs the ACTUAL+FULL surface via the semantic signal, never report a per-turn light surface as a permanent boundary; (C) tool_not_selected on a needed tool triggers Expanded()/escalation; don't down-classify short substantive tasks. RED-first repro mandatory; Rule-14 records retry-vs-suppress reason. OUT OF SCOPE: honest verified 'I paused for your call' deferrals stay allowed. SOAK-GATED (hot-path behavioral; sequences with the behavioral cluster).",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-authority-correctness",
+        "dependsOn": [],
+        "evidence": [
+          "src/engine/post_success_retry_policy_decision.go (Defect A: decideGuardRetryAfterProgress never suppresses capability/authority/delegation-falsehood class; retryReasonIsCapabilityOrAuthorityFalsehood)",
+          "src/engine/guards_truthfulness_capability.go (Defect B: checkCapabilityDenialAgainstFullSurface grounds vs full surface, driven by semantic NARRATED_DELEGATION/CAPABILITY_DENIAL; honest verified pause exempt)",
+          "src/engine/guards_truthfulness_execution.go (wires the new full-surface capability check into ExecutionTruthGuard)",
+          "src/engine/guard_context.go + pipeline_guard_context.go (GuardContext.FullToolNames = selected band + catalog names)",
+          "internal/session/session.go + internal/daemon/daemon_adapters_toolpruning.go + daemon_adapters_capability.go (catalogToolNames carried structurally for full-surface grounding)",
+          "src/engine/pipeline_stages_envelope.go (Defect C: widenEnvelopeForCapabilityRetryFunc widens light envelope via Expanded() before retry; Rule-14 turn_envelope_widened_for_capability_retry event)",
+          "src/engine/guard_retry.go (prepareRetry hook on the guard-retry loop) + pipeline_stages_inference.go + post_success_retry_policy.go (capability-falsehood class added to guard-exhaustion fail-closed wiring)",
+          "src/engine/false_capability_denial_test.go (RED-first repro at the suppression-decision seam + Defect B/C + honest-verified-pause out-of-scope guard)",
+          "state.db session 8faa17de turn 97f03864",
+          "soak-gated: code-complete; release gate is behavioral-soak resolution"
+        ]
+      },
+      {
+        "id": "cli-error-design-language",
+        "title": "Command errors render in the CLI design language (red, standalone)",
+        "status": "complete",
+        "summary": "the CLI framework printed the Error line plain, butted against prior output, then usage. Operator: make the Error line red with a blank line before and after, as a design-language standard whenever a command errors. Centralized in cmd/root.go: the CLI framework error+usage silenced on rootCmd; Execute uses ExecuteC + renderCommandError (theme.CLIError + blank line before/after); usage still follows. Respects --color/--theme.",
+        "evidence": [
+          "cmd/root.go (renderCommandError; SilenceErrors/SilenceUsage on rootCmd; ExecuteC in Execute)",
+          "cmd/render_command_error_test.go (stands-alone + red-when-color-enabled)",
+          "DONE 2026-06-19: verified by running a real failing command (blank line, red Error, blank line, usage). Systemic -- every command inherits it."
+        ],
+        "kind": "feature",
+        "dependsOn": []
+      },
+      {
+        "id": "local-only-sidecar-core-functionality-soak",
+        "title": "Local-only core-functionality soak (bundled sidecars, no Embedded Runtime, no cloud)",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Operator job: prove uninstall-Embedded Runtime-and-still-run-locally as a SOAK, not a point test (must keep working consistently + not collapse under pressure). scripts/run-local-sidecar-soak.sh boots a fully-local instance (bundled embedder + bundled chat host, primary=bundled-chat, Embedded Runtime required down, no cloud), then drives sustained sequential turns + a concurrent burst across separate sessions, gating on core functionality: every turn via bundled-chat, embedder holds the semantic tier (bounded binds/fallbacks), no crash-loop. just local-sidecar-soak. Distinct from the cloud provider soak-suite (which needs Embedded Runtime for its embedder runner).",
+        "evidence": [
+          "scripts/run-local-sidecar-soak.sh",
+          "justfile (local-sidecar-soak target)",
+          "VERIFIED PASS 2026-06-19: turns seen=5/5 ok(bundled-chat)=5 failed=0 non-local-route=0; embedder binds=1 fallbacks=0; no collapse."
+        ],
+        "dependsOn": []
+      }
+    ],
+    "planned": [
+      {
+        "id": "self-healing-framework-native-charter",
+        "title": "SelfHealing = framework-native deterministic maintenance subsystem (NOT subagent delegation)",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "ARCHITECTURE (operator 2026-06-18, SUPERSEDES the 'self-healing orchestrates via subagent delegation' framing). THESIS: fundamental maintenance must be framework-native deterministic the platform, not LLM-driven/authority-gated/refusable delegation. Model: internal/db/hygiene.go RunHygiene on the maintenance heartbeat — generalize to every domain. WHY NOT DELEGATION (explicit non-goal): authority-gated (blocked at peer trust — the false-incapacity authority over-generalization), non-deterministic (can refuse/confabulate/stall), costly (inference on rule-based work), demonstrably failed (agent spawned 125 dead 'workspace-cleanup' pending tasks trying to delegate ONE cleanup it couldn't authorize). The self-healing NEVER routes fundamental upkeep through delegation. ARCH: one subsystem, deterministic per-domain repairers (pure the platform, idempotent, typed sub-report) aggregated into one MaintenanceReport (extends HygieneReport); runs on the maintenance loop AND on-demand (full/single-domain) + report/dry-run mode; runs with SYSTEM authority BY CONSTRUCTION (framework code, not a user-channel action) — DECOUPLES the self-healing from the subagent-spawn-authority defect (that fix is still needed for user-facing delegation but is NO LONGER a prerequisite for maintenance). JUDGMENT ESCALATION (bounded/rare): most maintenance is rule-based + needs no LLM; ONLY genuinely-ambiguous cases (is this file a user's working file or detritus?) may make a NARROW grounding-judge-style call that PROPOSES/quarantines only, never auto-destructive, never a subagent. SAFETY: risk-tiered defaults (low-risk DB/index may auto-apply; WORKSPACE/CONFIG/PLUGINS/SKILLS/SECURITY default report-only/propose until enabled); destructive=quarantine-first/reversible (extend mechanic_quarantine; files move-to-quarantine; DB backup-then-mutate + integrity check; single-writer/quiesced — state.db corrupted once under contention); Rule-14 what/why/reversal; report distinguishes auto-applied vs proposed. ACCEPTANCE: single framework entry point runs all enabled deterministic domain repairers -> one MaintenanceReport (DB+workspace+config+plugins+skills+security), NO dependency on subagent spawning or LLM for rule-based passes; each repairer RED-first + typed counters + quarantine/reversal + report-only default for sensitive domains; any LLM judgment is bounded/propose-only/off the rule-decidable critical path.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-self-healing-subsystem",
+        "dependsOn": [
+          "self-healing-db-hygiene-coverage-gaps"
+        ],
+        "evidence": [
+          "internal/db/hygiene.go (RunHygiene proof model)",
+          "internal/daemon/daemon_heartbeats.go",
+          "supersedes: agent-self-repair-tool delegation framing (v1.2.0)",
+          "SHELL LANDED 2026-06-18: internal/self-healing DomainRepairer contract + RiskTier (AutoApply/ProposeOnly) + unified SelfHealingReport (Applied/Proposed/Errors, Rule-14 Action.Reversal) + RunSelfHealing (single tier-safety choke point, full/single-domain, report/apply) + SYSTEM authority by construction. database (auto) + config (propose) domains absorbed, behavior preserved; CLI + heartbeat re-wired through it. Architext self-healing-subsystem node added. Workspace/plugins/skills/security domains plug into this next.",
+          "VERIFIED 2026-06-18 closeout sweep: internal/self-healing green; shell + all 5 domains landed (db/config/workspace/plugins-skills/security); deterministic."
+        ]
+      },
+      {
+        "id": "self-healing-db-hygiene-coverage-gaps",
+        "title": "SelfHealing DB hygiene: 5 coverage gaps + 3 recurring sources (registry, recovery tables, pg residue, misclassified financial, garbage knowledge_facts)",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "DATABASE domain (the proof model; absorbs the prior coverage-gap statement). 5 gaps RunHygiene misses (origin: test/coding-exercise sessions run against prod + migration from prior Postgres 'mentat'). SEQUENCING 5->1->2,3,4. GAP 5 (DO FIRST, trust anchor): reconcileSchemaRegistry — ~21 real tables absent from the hippocampus registry (agency_decisions, turn_diagnostics*, wallet_balances, metered_billing_payments, mechanic_quarantine, lost_and_found...); cached row_count wrong (episodic_memory says 2533 vs actual 10218); register every store_snapshot table missing (mark system-owned), refresh all counts, flag neither-system-nor-agent-owned tables for gap-1. GAP 1: repairRecoveryArtifactTables — lost_and_found/_0/_1 (~4.5MB/8400 rows) match the `store_snapshot3 .recover` signature (rootpgno,pgno,nfield,id,c0..c25) from the Apr/May 2026 corruption recovery; EXPORT-to-quarantine-artifact then DROP; DDL = NEW risk class -> gate behind SIGNATURE match (not 'unregistered'), export-first, dry-run/report mode; NEVER drop legit-unregistered tables (gap-5 registers those first). GAP 2: purgeForeignIdentityResidue — 26 dead 'pg:*' identity keys from the prior Postgres (16 'pg:schema:*' describing tables that DON'T EXIST: memories, audit_findings, exploit_patterns...; one says 'check this first on session start'; a 'Test User'; stale 'pg:kv:financial_status'); HIGH/answer-fidelity (instructs the agent it has tables/data it doesn't — active hallucination source, same family as basalt-orchid); quarantine-then-delete, confirm no live reader of 'pg:*'. GAP 3: repairMisclassifiedFinancialMemories — 45 ACTIVE episodic rows classification='financial_event' with non-financial content (coding answers, capability blurbs, guard-rejection notes); detect missing financial markers, quarantine/re-tag (don't silently delete); SOURCE FIX REQUIRED: fix the memory classifier that mislabels financial_event (not just mop-up). GAP 4: repairLowQualityKnowledgeFacts — all 38 knowledge_facts are fragment triples (truncated subjects, relation almost always 'uses', chunked objects, default 0.75 confidence) from coding-exercise extraction; detect/quarantine fragment/default/dangling-source triples; SOURCE FIX REQUIRED: tighten the knowledge-fact extractor (require entity-shaped subjects / raise confidence bar). Plus 3 RECURRING SOURCES: entity-extraction validation, session-deletion referential integrity, task idempotency/lifecycle. CROSS-CUTTING: quarantine-first (extend normalizeSelfHealingQuarantineTable allowlist for new targets), typed HygieneReport counters, RED-first test per pass (seed real artifact shape, assert it removes ONLY it), idempotent + bounded + SHORT write tx (contended; corrupted once under long writes), dry-run for the DDL pass. GUARDRAIL (2026-06-18 lesson): match artifact SIGNATURES not NAMES — the basalt-orchid cleanup over-matched the persona name 'Duncan' (an operator persona) and had to be narrowed to the fixture PAYLOAD; never touch operator/agent persona memory, real unregistered tables (register never drop), or old-but-valid memory. Rule-14: each pass records what/why to hygiene_log.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-self-healing-subsystem",
+        "dependsOn": [],
+        "evidence": [
+          "internal/db/hygiene.go:44,62",
+          "internal/db/hygiene_test.go (pass-test style)",
+          "internal/db/mechanic_quarantine.go (QuarantineRows, normalizeSelfHealingQuarantineTable)",
+          "prod state.db 2026-06-18 audit: lost_and_found*, pg:* identity keys, 45 misclassified financial_event, 38 fragment knowledge_facts",
+          "LANDED 2026-06-18: gaps 5/2/3/4 + source fixes (3B classifier gate, 4B extractor gate) in internal/db/hygiene_coverage.go + RunHygiene wiring; 7 RED-first tests green. REMAINING: gap 1 (recovery-artifact-table DDL drop, export-first + dry-run) + 3 recurring sources (entity-extraction validation, session-deletion referential integrity, task idempotency).",
+          "LANDED 2026-06-18: gap 1 (recovery-artifact .recover-signature tables, export-first JSONL artifact then DROP + dry-run mode) — ALL 5 DB hygiene gaps now complete. REMAINING for this item: the 3 recurring sources only (entity-extraction validation [partially covered by gap-4B subjectIsEntityShaped], session-deletion referential integrity, task idempotency/lifecycle).",
+          "RECURRING SOURCES DONE 2026-06-18: session-deletion cascade completed (also fixed a real bug — session_model_performance FK made DELETE FROM sessions fail outright) + repairOrphanedSessionRows; task idempotency (CreateWorkflow dedupe, the 125-dup source) + repairStaleDeadTasks; entity-extraction validation broadened to the 2nd knowledge_facts writer (StoreKnowledgeFact). ALL 5 gaps + 2 source fixes + 3 recurring sources now complete (code-complete, soak-gated).",
+          "VERIFIED 2026-06-18 closeout sweep: internal/db + internal/self-healing green (hygiene + coverage tests); deterministic over recorded data, not behavioral-soak."
+        ]
+      },
+      {
+        "id": "self-healing-workspace-repairer",
+        "title": "SelfHealing WORKSPACE repairer (new deterministic the platform, NOT subagent dispatch)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "WORKSPACE domain (NEW framework code modeled on RunHygiene; verified no existing cron/script handles it — cron_jobs empty, no workspace-hygiene.py, maintenance path is DB-only). The agent spawned 125 dead 'workspace-cleanup' delegated tasks trying to do this — the self-healing does it deterministically instead. Detect + MOVE-TO-QUARANTINE (not delete) stray scratch files, build artifacts, abandoned test fixtures, orphaned vault notes. Default report-only/propose until an action class is enabled; ambiguous file (user working file vs detritus) may use a NARROW propose-only grounding-judge call, never auto-destructive. RED-first on a seeded fixture; typed sub-report; reversible.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-self-healing-subsystem",
+        "dependsOn": [
+          "self-healing-framework-native-charter"
+        ],
+        "evidence": [
+          "operator: 125 dead workspace-cleanup pending tasks",
+          "internal/db/hygiene.go (model)",
+          "LANDED 2026-06-18: workspaceDomain (TierProposeOnly) — conservative signature-only detritus detection (.DS_Store/Thumbs.db/*~/*.swp/*.tmp...), containment-enforced, propose-only + move-to-quarantine (reversible/idempotent), shell+CLI+heartbeat wired (never auto-moves). Deferred (grounding-judge follow-up): abandoned fixtures + orphaned vault notes.",
+          "GROUNDING-JUDGE DONE 2026-06-18: bounded propose-only LLM escalation for ambiguous classes (abandoned fixtures, orphaned vault notes) — structural candidacy only (no name/codename), high-confidence-only (>=0.85), nil-degrades to mechanical-only, never auto-applies, reversible quarantine. Workspace domain functionally complete (CLI live-judge wiring is the one flagged follow-on).",
+          "CLI LIVE-JUDGE WIRED 2026-06-18: flowforge self-healing workspace now builds a live grounding judge (daemon.BuildSelfHealingWorkspaceJudgeFromConfig: minimal llm.Service from config+keystore via the new single-source llm.ProvidersFromConfig, reuses the same newSelfHealingWorkspaceJudge adapter as the heartbeat) and passes WorkspaceJudge + WorkspaceVaultRoot into both the propose and apply RunSelfHealing calls, so the interactive confirm->quarantine flow now covers the ambiguous classes (abandoned fixtures, orphaned vault notes), not just mechanical detritus. nil-degrades to mechanical-only (no providers / locked keystore); local providers classify keyless, cloud via keystore. DRY: extracted llm.ProvidersFromConfig (buildLLMService now uses it too). Tests: ProvidersFromConfig mapping+chat-host+nil, BuildSelfHealingWorkspaceJudgeFromConfig (judge with providers / nil without), parseWorkspaceVerdict fail-safe. The whole self-healing subsystem (shell + 5 domains) is now complete."
+        ]
+      },
+      {
+        "id": "self-healing-config-repairer",
+        "title": "SelfHealing CONFIGURATION repairer (drift + foreign residue + dead refs)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "CONFIGURATION domain: detect/repair config drift vs the Config struct, foreign/stale identity residue (the pg:* 'mentat' keys — overlaps DB gap-2), dead references (paths/providers/models). Reuse existing config validation. Report-only/propose default. Quarantine/reversible. RED-first + typed sub-report.",
+        "source": "roadmap",
+        "priority": "medium",
+        "workstreamId": "v130-self-healing-subsystem",
+        "dependsOn": [
+          "self-healing-framework-native-charter"
+        ],
+        "evidence": [
+          "src/core config validation",
+          "DB gap-2 pg:* residue overlap",
+          "FIRST SLICE 2026-06-18: prompt-first config-VALIDITY repair (ceiling/authority) — core.ProposedConfigRepairs (single-source detector, raw-TOML) + ApplyConfigRepairs (backup-then-write, confirmed-only) + `flowforge self-healing config-repair` CLI + heartbeat report-only. Structured for future checks (dead provider/model refs, config drift). Charter config domain = report-and-propose honored.",
+          "HARDENED 2026-06-18: config/security durable rewrites now COMMENT-PRESERVING (surgical in-place edits + re-validate + restore-from-bak safeguard, no more struct-rewrite); dead provider/model-ref detection (report-only, conservative). Config domain functionally complete.",
+          "VERIFIED 2026-06-18 closeout sweep: internal/self-healing + src/core + cmd/admin green; deterministic config domain (comment-preserving surgical edits)."
+        ]
+      },
+      {
+        "id": "self-healing-plugins-skills-repairer",
+        "title": "SelfHealing PLUGINS + SKILLS repairers (validate, retire stale, reconcile registry)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "PLUGINS: validate installed plugins (manifest/permissions/dead), reconcile registry vs installed (reuse existing plugin validators). SKILLS: validate skills (loadable/well-formed/non-conflicting), retire dead/stale learned skills (enforce config learning.stale_procedural_days / dead_skill thresholds), reconcile catalog vs installed (reuse existing skill validators). Report-only/propose default; reversible; RED-first + typed sub-reports.",
+        "source": "roadmap",
+        "priority": "medium",
+        "workstreamId": "v130-self-healing-subsystem",
+        "dependsOn": [
+          "self-healing-framework-native-charter"
+        ],
+        "evidence": [
+          "existing plugin + skill validators",
+          "LANDED 2026-06-18: pluginsSkillsDomain (TierProposeOnly) — reconciles plugin dirs vs loadable registry (pluginstate.ListInstalled; unloadable -> propose move-to-quarantine, reversible) + retires stale enabled skills past Learning.StaleProceduralDays (propose -> enabled=0, reversible). Reuses existing validators; prompt-first CLI + report-only heartbeat.",
+          "SKILL-PRIORITY RETIREMENT DONE 2026-06-18: learned_skills priced below DeadSkillPriorityThreshold + active -> propose -> reversible soft-prune (memory_state=pruned), consuming the previously-unused threshold. Domain functionally complete.",
+          "VERIFIED 2026-06-18 closeout sweep: internal/self-healing green; deterministic propose-only domain."
+        ]
+      },
+      {
+        "id": "self-healing-security-repairer",
+        "title": "SelfHealing SECURITY repairer (repair-on-approval; tighten/normalize only)",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "SECURITY domain: surface posture issues and, on operator confirmation, APPLY the safe ones (operator decision 2026-06-18: REPAIR ON APPROVAL — a TierProposeOnly domain whose confirm must actually apply, like the config domain). A security repair may ONLY NORMALIZE or TIGHTEN posture, never loosen it. Findings are classified REPAIRABLE (safe: remove blank path entries = normalize; fail a permissive sandbox closed = tighten — applied on confirm via backup-then-write) vs MANUAL (keystore health, non-absolute paths, overbroad '/' allowlists — needs operator judgment, NEVER auto-applied). Heartbeat stays report-only by the runner's risk-tiered choke point (Apply=false writes nothing). RED-first + typed sub-report distinguishing repairable vs manual.",
+        "source": "roadmap",
+        "priority": "medium",
+        "workstreamId": "v130-self-healing-subsystem",
+        "dependsOn": [
+          "self-healing-framework-native-charter"
+        ],
+        "evidence": [
+          "internal/security; keystore; sandbox config",
+          "LANDED 2026-06-18 (report-only first slice): securityDomain (TierProposeOnly) checks keystore health, protected/allowed-path drift, sandbox sanity; report-only CLI + heartbeat.",
+          "REVISED 2026-06-18 (operator: REPAIR ON APPROVAL — the report-only contract was incoherent: TierProposeOnly shell semantics = apply-on-confirm, but Repair ignored apply so confirm did nothing). core.ProposedSecurityRepairs/ApplySecurityRepairs (single-source safe-repair detector + backup-then-write, confirmed-only, validated; mirrors config_repair.go). securityDomain now classifies REPAIRABLE (normalize blank entries / tighten fail-open sandbox -> deny_on_empty_allowlist=true) vs MANUAL (keystore/non-absolute/overbroad-'/' — never auto-applied) and applies repairable ones only on Apply+Confirmed. `flowforge self-healing security` now prompts (y/N) for the repairable set, applies on confirm + reports backup path + remaining manual items; prompts nothing when only manual findings exist. Heartbeat passes ConfigPath but stays Apply=false (writes nothing). SAFETY proven: no repair loosens posture (manual overbroad allowlist preserved verbatim; sandbox only fails closed). RED-first proven at core + domain + shell layers (apply-on-confirm tests fail against the old never-applies behavior). go build/vet clean; self-healing/core/admin/daemon tests green.",
+          "VERIFIED 2026-06-18 closeout sweep: internal/self-healing + src/core + cmd/admin + internal/daemon green; build+vet clean. Deterministic (not behavioral-soak)."
+        ]
+      },
+      {
+        "id": "chat-connector-second-connector-table-codeblock",
+        "title": "Chat Connector/Second Connector formatter: wrap Markdown tables in a code block",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "SHIPPED 2026-06-18. Chat Connector MarkdownV2 / Second Connector cannot render Markdown tables; both formatters now wrap a detected table block verbatim in a ``` monospace code block (shared detection in formatter_tables.go). RED-first tests + inline-pipe negative guard; channel package green.",
+        "source": "ad-hoc",
+        "priority": "medium",
+        "workstreamId": "v130-contained-fixes",
+        "dependsOn": [],
+        "evidence": [
+          "internal/channel/formatter_chat_connector.go",
+          "internal/channel/formatter_tables.go"
+        ]
+      },
+      {
+        "id": "flowforge-monolith-session-history-bleed",
+        "title": "Monolithic-session history/recall bleed + assembled-prompt capture gap (Symptom A)",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Answer-fidelity: a stale user line (Dubai/EOR) resurfaces in an unrelated turn from a 709-msg 2-month test-contaminated monolith session (8faa17de). Verbatim recall exonerated; topical recall + raw-history replay are the live hypotheses. PREREQUISITE (Rule-14, fix first): persist a bounded, contention-aware capture of the assembled prompt (today unpersisted: request_messages is a count) so a RED repro is possible. Then live-repro to confirm vector (history vs recall vs role-attribution), then systemic fix = history/topic scoping + session hygiene that segments/ages monoliths for ALL instances (ties self-healing DB/session hygiene). No prod hand-edits; live repro needs the daemon.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-self-healing-subsystem",
+        "dependsOn": [],
+        "evidence": [
+          "~/.flowforge-dev 8faa17de (read-only)",
+          "src/engine/pipeline_stages_inference_helpers.go:58",
+          "src/engine/turn_diagnostics.go",
+          "LANDED 2026-06-18: Rule-14 prerequisite done — bounded assembled-prompt capture persisted to turn_diagnostics.request_messages_json (piggybacks existing per-turn write, 2KB/msg + 32KB/turn caps, additive nullable column). READ: SELECT request_messages_json FROM turn_diagnostics WHERE turn_id=?. REMAINING (blocked on running daemon): live-repro the Dubai/EOR bleed + read the capture to confirm history vs recall vs role-attribution, then the systemic history/topic scoping + session-monolith hygiene fix.",
+          "READ PATH 2026-06-18: `flowforge traces prompt <turn_id>` / `--session <id> --limit N` renders the captured assembled prompt (role+content, truncation/clip markers) — no raw SQL. Symptom-A repro now operator-runnable on the daemon: reproduce the bleed, run the command, read the role to prove raw-history vs recall. REMAINING: the live repro + the systemic scoping/session-hygiene fix.",
+          "FIXED 2026-06-19 (commits 0fdf9ea1 fix, 6f0d938a instrumentation). Root cause (Rule-17, RED-first): topic isolation was DEAD in production — topic tags persist only on ASSISTANT messages, user messages are always untagged (AddUserMessage->AddUserMessageWithTopic(\"\")) and chunked separately, so selectTopicContext derived currentTopic from the never-tagged latest USER message -> currentTopic always \"\" -> PartitionByTopic short-circuited -> off-topic summarization never ran -> every turn raw-replayed the full tail window; a long/dormant monolith bled stale, topically-unrelated content. Fix: propagateTurnTopics back-fills each turn topic onto its user message(s) before partitioning (read-time, copy-only, fixes existing sessions with no migration). Deterministic RED->GREEN regression (context_topic_isolation_test.go) reproduces the bleed as ContextKindHistory and asserts isolation. Rule-14: ContextKind now captured + rendered in traces prompt so a recurrence is path-classifiable (history vs topic_summary vs memory) from recorded state. Note: original contaminated session 8faa17de was production + deleted, so the repro is unit-deterministic at the assembly layer (the exact mechanism), not a replay of that session. Full agent+pipeline tests green."
+        ]
+      },
+      {
+        "id": "instruction-skill-body-returned-as-response",
+        "title": "Instruction skills return raw body as the response (skill-first) — answer-fidelity defect",
+        "kind": "bug-fix",
+        "status": "in-progress",
+        "summary": "PROVEN root cause of the 'ghola block every turn' symptom (corrects an earlier wrong Provider B model-Code-env attribution). skillAdapter.TryMatch returns an Instruction skill's markdown Body as Outcome.Content (the reply), and trySkillFirst runs it before inference for Operator turns; ghola.md (enabled) has common-word triggers (fetch/url/http/api/...) so it fires constantly and replaces the model's answer (asked to fetch Iran headlines -> dumped the ghola how-to). Violates the design north-star (preserve model cognition) + canned-responses-panic-only. FIX: instruction skills STEER the model via context injection, never returned-as-response / never short-circuit inference; tighten activation from loose substring keywords to relevance. RED-first behavioral test. Systemic (heals all instances; no prod skill hand-edits).",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-contained-fixes",
+        "dependsOn": [],
+        "evidence": [
+          "internal/daemon/daemon_adapters_execution.go:217-224",
+          "src/engine/pipeline_stages_synthesis.go:72",
+          "~/.flowforge-dev",
+          "FIXED 2026-06-18 (code-complete, soak-gated): SkillDispatch{Outcome,Guidance} contract — instruction skills steer via session.SetSkillGuidance -> PromptConfig.SkillGuidance -> ## Active Skill Guidance, fall through to inference; structured tool-chains keep short-circuit. Matcher relevance-gated (whole-word: name OR distinctive OR >=2 hits; lone common word insufficient) — Iran fetch case inert. Lexical not semantic (no embedder at matcher boundary); semantic upgrade is a follow-up. RED-first across skills/pipeline/daemon/agent. in-progress pending release-soak (hot behavioral path).",
+          "SEMANTIC ACTIVATION 2026-06-18: lexical pre-filter + embedding-semantic confirm (skills.RelevanceEmbedder injected; cosine vs skill description >= 0.62 named constant, calibration-pending; graceful nil-embedder degradation to lexical). RED-first. Activation fully upgraded per operator; threshold calibration is the remaining soak item."
+        ]
+      },
+      {
+        "id": "integration-test-buttons-noop",
+        "title": "Integration TEST buttons are no-ops — send a real round-trip test message",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Integration TEST buttons do nothing; a real test should send a test message over the configured channel that the user responds to (round-trip proof), surfacing honest success/failure. Locate the TEST handlers (integrations UI -> API -> adapter) and exercise the real path.",
+        "source": "roadmap",
+        "priority": "medium",
+        "workstreamId": "v130-contained-fixes",
+        "dependsOn": [],
+        "evidence": [
+          "internal/workspacestate/state.go (TestChannelLive: shared probe+live-send orchestration; ChannelTestSender interface; ChannelProbe gains Sent/Recipient)",
+          "internal/daemon/channel_test_send.go (channelTestSender: resolves a test recipient from config per channel + sends through the live router adapter; honest error when no recipient/adapter)",
+          "internal/api/{server_state.go,ws.go,server_routes.go} (ChannelTester plumbed into AppState + WSHandlerDeps from the daemon router)",
+          "internal/api/routes/workspace.go + internal/api/ws_control_capabilities.go (both Test entry points now do a real round-trip, report sent/recipient/note)",
+          "DONE 2026-06-18: the integration TEST button now sends a REAL round-trip message instead of re-reporting config (operator: buttons did not appear to do anything). Chat Connector/Second Connector/Signal/Email resolve a recipient from the configured allow-list/from-address; Discord/Matrix/etc honestly report no automatic test target rather than a fake success or wrong send. Send failure is reported in-band (Sent=false + note), not a 500 (fail-loud in the UI). nil sender (CLI/non-daemon) falls back to the config probe with a note. Tests: workspacestate orchestration (sends/failure-in-band/disabled/nil-fallback), daemon recipient resolution + send-through-adapter + no-adapter."
+        ]
+      },
+      {
+        "id": "agency-autonomy-governance-hardening",
+        "title": "Agency/autonomy governance hardening (read-only fails-open D1 + anti-churn budget D2 + 4)",
+        "kind": "bug-fix",
+        "status": "in-progress",
+        "summary": "Code-verified audit defects in the agency/autonomy controls that self-closure would lean on. D1 CRITICAL: read-only confinement fails OPEN for the unenumerated MCP tool surface (MakesExecutionProgress=false on OperationUnknown) -> a read-only agency action can mutate external state; fix = gate on !IsReadOnlyExploration. D2 HIGH: anti-churn parking counts only outcome='executed', so failing candidates never park and re-bill forever (v1.1.1 runaway re-arm); fix = count execution_failed. D3 risk-flags dropped before execution; D4 executor-less class can execute; D5 unvalidated scopes/action-classes; D6 audit omits risk basis (Rule 14); H1 unresolved_question candidates need relevance ranking (2829-row noise). Sequence D1+D2 -> D3+H1 -> D4/D5/D6. Gates proactive-episodic-recall.",
+        "source": "ad-hoc",
+        "priority": "high",
+        "workstreamId": "v130-authority-correctness",
+        "dependsOn": [],
+        "evidence": [
+          "internal/agent/tools/semantics.go",
+          "src/engine/readonly_tool_filter.go",
+          "internal/db/agency_repo.go:208",
+          "internal/daemon/daemon_agency.go:210",
+          "internal/agency/policy.go",
+          "PHASE 1 DONE 2026-06-18 (code-complete, soak-gated): D1 read-only confinement now fails CLOSED (both confinement sites gate on !IsReadOnlyExploration; scoped to ReadOnlyToolSurface; +read_inbox/search_flowforge_product_knowledge/request_tools read-only mappings; compose-skill RiskDangerous reclassified CapabilityInventory->ArtifactWrite, an allowlist-side fail-open found in verification). D2 ExecutedAttemptCount now counts execution_failed; hygiene_agency reconciled. RED-first, agent/pipeline/daemon/db green. REMAINING: D3 (persist risk flags through decision->execution), D6 (audit record risk basis + effective levels, Rule 14), H1 (relevance-rank candidates / per-cycle cap), D4 (executor-less class), D5 (validate scopes/action-classes).",
+          "SAFETY BAR MET 2026-06-18: D3 (risk flags persisted via basis_json + restored in agencyCandidateFromDecision) + D6 (audit basis: flags + effective autonomy/agency levels, Rule 14) + H1 (relevance/recency floor + still-open predicate + composite ranking + per-cycle cap, set-based) all code-complete RED-first. Per the audit, D1+D2+D3+H1 done = governance safe to carry proactive self-closure. BOUNDED REMAINDER (audit: can follow): D4 (queue_scheduler_job executor-less class), D5 (validate AllowedScopes/AllowedActionClasses membership), executor defensive RE-GATE from restored basis flags (D3 defense-in-depth).",
+          "HARDENING COMPLETE 2026-06-18 (code-complete, soak-gated): D4 executor-less classes degrade to propose_only (HasExecutor gate); D5 AllowedScopes/AllowedActionClasses membership validated (KnownAgencyScopes/KnownAgencyActionClasses single source); executor defensive re-gate at executeAgencyDecision (reuses Policy.Classify vs current config; refuses + records execution_refused_regate, not park-counted). All D1-D6 + H1 + re-gate done RED-first. Agency governance is now fully hardened to carry proactive self-closure."
+        ]
+      },
+      {
+        "id": "proactive-episodic-recall",
+        "title": "Proactive episodic recall + closure (life-lieutenant), via the agency controls",
+        "kind": "feature",
+        "status": "in-progress",
+        "summary": "APPROVED v1.3.0. Extend the existing agency MemoryProvider (CandidateProvider port) to emit RANKED, relevant proactive candidates — unclosed loops, dormant-contact/birthday/scheduling-pattern, vault contradictions — plus a vault provider for live note<->decision cross-ref. NO new gate: degree of self-closure is governed by the existing AgencyLevel/AutonomyLevel/AllowedActionClasses/AllowedScopes/MaxCandidateAttempts; vault edits classify as writes (ask_for_writes). Default always_ask = ranked proposals; dial up for graduated self-closure. Real work = clean ranked candidate generation (relevance+hygiene so the 2829-row unresolved_question churn doesn't swamp). DEPENDS ON agency-autonomy-governance-hardening (D1 read-only-fails-open + D2 anti-churn budget are the safety invariants self-closure leans on).",
+        "source": "roadmap",
+        "priority": "medium",
+        "workstreamId": "v130-proactive-memory",
+        "dependsOn": [
+          "agency-autonomy-governance-hardening"
+        ],
+        "evidence": [
+          "internal/agency/memory_provider.go (CandidateProvider seam)",
+          "governed by src/core/agency_config.go",
+          "gated on agency-autonomy-governance-hardening",
+          "BUILT 2026-06-18 (grounded slices, code-complete, soak-gated): on the now-hardened agency controls — (1) ranked unclosed-loops already via MemoryProvider+H1; (2) RelationshipProvider dormant-contact (relationship_memory.last_interaction, salience-ranked, observe/read-only, relationship scope opt-in); (3) VaultProvider note<->open-loop cross-ref (ObsidianVault.SearchNotes via no-cycle ports, observe/read-only, vault scope opt-in). All governed by existing AgencyLevel/AutonomyLevel/scopes/action-classes/MaxCandidateAttempts/H1-cap; propose-only under always_ask. NOT built (data-gated, see follow-up): birthday (no DOB field), scheduling-pattern (no calendar). Enhancement follow-ups: semantic candidate ranking, vault-WRITE (ask_for_writes) candidate, vault re-scan-on-interval, executor re-gate already done."
+        ]
+      },
+      {
+        "id": "config-ceiling-schema-incoherency-and-repair",
+        "title": "Config ceiling schema incoherency -> save deadlock + self-heal repair (Windows brick root cause)",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "3 contradictory schemas for security.threat_caution_ceiling (core validator {Safe,Caution,Dangerous,External,Creator}; configstate/UI {low,medium,high,critical}; actual type AuthorityLevel {External,Peer,SelfGenerated,Operator}). UI offers 'medium' -> persists -> core validation rejects forever -> every config save fails -> model changes/security changes won't persist (Windows install bricked). FIX: single-source the enum to AuthorityLevel names (+Creator alias) across core+configstate (finish Creator->Operator); + config repair/migration healing invalid persisted values (medium/low/high/critical/Creator->valid; default External) on load + via the self-healing config-repairer so installs self-heal without hand-editing TOML. Linchpin: likely root of the model-persistence symptoms.",
+        "source": "ad-hoc",
+        "priority": "high",
+        "workstreamId": "v130-self-healing-subsystem",
+        "dependsOn": [],
+        "evidence": [
+          "src/core/config_validation.go:256",
+          "src/configstate/schema.ts:53",
+          "src/core/types.go:201",
+          "FIXED 2026-06-18 (code-complete): single-source ceiling enum core.ValidThreatCautionCeilings()={External,Peer,SelfGenerated}+Creator alias shared by core validator + configstate (coherency test); NormalizeThreatCautionCeiling heals invalid/legacy values (medium/low/high/critical/Creator->External) in LoadConfigFromFile so bricked TOMLs self-heal in-memory on next start (immediate unbrick, no hand-edit). REMAINING: self-healing config-repairer durably writes the healed value back (backup-then-mutate) — the pure primitive is the seam. Also fixed a D5 regression (api/routes authority-mutation test used invalid scope email).",
+          "DURABLE WRITE-BACK DONE 2026-06-18 (operator: auto-rewrite but prompt-first): self-healing config-repair detects invalid persisted config (raw-TOML), proposes field:current->proposed, and on confirmation backs up + rewrites the TOML; heartbeat reports-only. The config-heal story is now complete (in-memory boot heal + durable prompt-first persist).",
+          "VERIFIED 2026-06-18 closeout sweep: src/core + src/configstate green (single-source ceiling enum + boot heal + durable prompt-first write-back); deterministic."
+        ]
+      },
+      {
+        "id": "logs-escape-to-user-output-tui",
+        "title": "Logs leak into user-facing output (TUI + model-fallback barf)",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Operational logs escaping into user-facing output in multiple surfaces incl. the TUI; unconfigured-model fallback barfs errors to screen. Extend capture-operational-logs-not-terminal to the TUI + inference/model-fallback error paths; user sees clean messages, raw logs/errs go to the sink.",
+        "source": "ad-hoc",
+        "priority": "high",
+        "workstreamId": "v130-output-hygiene",
+        "dependsOn": [],
+        "evidence": [
+          "operator 2026-06-18",
+          "FIXED 2026-06-18 (code-complete, soak-gated): ownsTerminal() routes TUI logs to LogDir/flowforge.log (was: tui inherited stderr console logger -> lines rendered into the viewport); model-fallback barf fixed at the TUI boundary via presentRunnerError (clean UserVisibleFailureMessage, raw to sink). Swept for other raw stdout/stderr escapes — none (TUI renders via bubbletea). CLI media return-err-to-stderr left as standard the CLI framework one-shot contract (flagged).",
+          "VERIFIED 2026-06-18 closeout sweep: src/engine failure_presenter_test + internal/daemon handlers green; deterministic terminal-ownership routing.",
+          "REFINED 2026-06-19 (surfaced by running the release soak): ownsTerminal() diverted logs to the LogDir for EVERY serve, including when stderr is a captured pipe (a service manager, serve piped/teed, the soak harness) -- stripping operational logs from every non-TTY consumer (observability regression, Rule 14) and breaking the soak bundled-sidecar-bind detection (the marker lived only in the LogDir; the harness greps stdout). Fix (461b5f39): gate file-routing on an actual TTY (stderrIsTerminal isatty); interactive serve/tui still get the clean terminal, non-TTY daemons keep logs on stderr. ownsTerminal() still governs log level. Unit-tested + proven in the harness (battery cleared the sidecar gate)."
+        ]
+      },
+      {
+        "id": "maintenance-ws-idle-timeout",
+        "title": "Maintenance read over websocket fails on idle timeout",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Maintenance fails 'received close frame ... idle timeout': the self-healing op outlives the ws idle timeout / read not kept alive. Fix maintenance ws read (keepalive/progress/deadline); surface partial/failed honestly.",
+        "source": "ad-hoc",
+        "priority": "medium",
+        "workstreamId": "v130-contained-fixes",
+        "dependsOn": [],
+        "evidence": [
+          "operator 2026-06-18",
+          "FIXED 2026-06-18 (code-complete): controlInFlight suspends the ws idle-close while a control command runs (db maintenance dispatches synchronously in the read pump, blocking inbound resets); idle protection intact for idle/dead conns; self-healing client timeout raised to 10m; result/error still delivered. RED-first; -race clean.",
+          "VERIFIED 2026-06-18 closeout sweep: internal/daemon green (-race clean per landing); deterministic ws-lifecycle fix."
+        ]
+      },
+      {
+        "id": "windows-model-resolution-persistence",
+        "title": "Model config won't persist / removed model reappears / fallback to unconfigured model",
+        "kind": "bug-fix",
+        "status": "in-progress",
+        "summary": "Primary model won't persist; removed model reappears as first; fallback routes to an unconfigured model that errors to screen. Likely downstream of the config-save deadlock (verify after that fix); if an independent defect remains, fix model persistence + ensure fallback only selects configured models.",
+        "source": "ad-hoc",
+        "priority": "high",
+        "workstreamId": "v130-contained-fixes",
+        "dependsOn": [
+          "config-ceiling-schema-incoherency-and-repair"
+        ],
+        "evidence": [
+          "operator 2026-06-18 Windows",
+          "2026-06-18: the fallback-barf portion fixed (presentRunnerError clean message). The persistence portion (primary wont save / removed model reappears) is downstream of config-ceiling-schema-incoherency-and-repair (config saves now validate after the ceiling self-heal) — needs operator Windows re-test to confirm; if an independent persistence/resolution defect remains, fix the write path + ensure fallback only selects configured models.",
+          "CODE-HARDENED 2026-06-18 (Windows re-test deferred to post-release per operator, so closed from code/recorded-state): (1) barf fixed (presentRunnerError clean message); (2) the FANOUT-to-unconfigured mechanism removed — routing now only attempts CONFIGURED routes (3 blind all-provider fanouts removed in service_complete/service_stream); no configured route -> clean classified no-model-configured error; (3) primary-wont-persist / removed-model-reappears are downstream of the config-save deadlock now fixed (config saves validate again). Unit-proven; Windows scenario confirmed post-release."
+        ]
+      },
+      {
+        "id": "embedded-runtime-toolcall-arguments-format-mismatch",
+        "title": "Embedded Runtime tool_calls arguments serialized as object but Provider A-compat endpoint wants string -> 400 breaks local tool use",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "BEHAVIORAL-CORRECTNESS / provider-compat (operator-reported 2026-06-18 Windows, code-verified). embeddedRuntimeAdapter.Qualifies(FormatEmbedded) (internal/llm/tool_message_normalization_providers.go:78) serializes assistant tool_calls via embeddedRuntimeAdapter (:189) -> embeddedRuntimeAdapter, emitting function.arguments as a JSON OBJECT (embedded-runtime NATIVE format). But FormatEmbedded is sent to the Provider A-COMPATIBLE endpoint (internal/llm/client_url.go:29 'FormatProviderA, FormatEmbedded, and all others use Provider A-compatible endpoint'), whose schema expects arguments as a STRING. Result: embedded-runtime returns 400 'json: cannot unmarshal object into the platform struct field .messages.tool_calls.function.arguments of type string' on any multi-turn turn that replays a prior tool_call -> breaks tool use for ALL embedded-runtime tool-calling models (local-model-b, local-model-a, etc.) through the framework. Same incoherency class as the config-ceiling triple-schema: two parts of the code disagree on a contract (the message normalizer's wire format vs the endpoint's). Surfaced exercising embedded-runtime/local-model-b DELEGATION:C1. FIX: align FormatEmbedded outbound tool_calls to the endpoint actually used — string arguments (Provider A format, like providerACompatibleToolCalls); if the embedded-runtime-native object-args path is dead (no native endpoint is used), remove it (don't keep a serializer that contradicts the endpoint). RED-first: a FormatEmbedded request replaying a prior tool_call serializes arguments as a STRING.",
+        "source": "ad-hoc",
+        "priority": "high",
+        "workstreamId": "v130-contained-fixes",
+        "dependsOn": [],
+        "evidence": [
+          "internal/llm/tool_message_normalization_providers.go:78,138,189 (embeddedRuntimeAdapter object args)",
+          "internal/llm/tool_message_normalization_providers.go:173 (providerACompatibleToolCalls string args)",
+          "internal/llm/client_url.go:29 (FormatEmbedded -> Provider A-compatible endpoint)",
+          "operator 2026-06-18: embedded-runtime 400 on local-model-b DELEGATION:C1",
+          "FIXED 2026-06-18 (code-complete): embeddedRuntimeAdapter returns validated STRING; object-args path removed; FormatEmbedded tool_calls now match the Provider A-compat endpoint. RED-first; llm green. (B2 embedded-runtime tool-result shape remains a tracked DRY follow-up.)",
+          "B2 ALSO FIXED 2026-06-18: embedded-runtime tool-result message shape aligned to Provider A-compat (tool_call_id). The serializer<->endpoint matrix test now guards the whole class.",
+          "VERIFIED 2026-06-18 closeout sweep: internal/llm green incl. serializer<->endpoint matrix; deterministic wire-format fix."
+        ]
+      },
+      {
+        "id": "benchmark-approach-full-audit-through-framework",
+        "title": "Full audit of the benchmarking approach — exercise models THROUGH the framework, not bypassing it",
+        "kind": "test",
+        "status": "complete",
+        "summary": "AUDIT (operator-directed 2026-06-18, folded into v1.3.0). We've made substantial changes to how agent correctness is managed; stale/incorrect/inadequate benchmarks must not present a false image of model performance. SPECIFICALLY ensure benchmarks/model-exercise run models THROUGH the real framework pipeline (config resolution, message normalization, guards, routing) — NOT via direct/bypassing LLM calls (feedback_verify_by_running_real_app: 'test it' = the REAL app via real config resolution; direct construction misses real bugs). EVIDENCE this matters: the embedded-runtime tool_calls 400 (embedded-runtime-toolcall-arguments-format-mismatch) is a real provider-compat defect that ONLY a through-framework exercise surfaces — a direct-API benchmark would miss it and over-report local-model-b AUDIT SCOPE: enumerate every benchmark/exercise/baseline path (internal/llm/exercise_baselines.go, modelbench, the exercise/eval runners, soak harness); for each, determine whether it exercises the full framework path or bypasses it; flag stale baselines, metrics that can't fail when correctness regresses (Rule 10), and coverage gaps (e.g. multi-turn tool-use, delegation, the through-framework provider-compat surface). Ties post-v1-2-0-wholesale-benchmark-rerun + real-coding-benchmark-execution-grounded + model-recommendations-by-usecase. Produce a findings report -> remediation items.",
+        "source": "ad-hoc",
+        "priority": "high",
+        "workstreamId": "v130-benchmarking",
+        "dependsOn": [],
+        "evidence": [
+          "operator 2026-06-18: audit benchmarking; exercise models THROUGH the framework",
+          "embedded-runtime-toolcall-arguments-format-mismatch (through-framework-only defect)",
+          "internal/llm/exercise_baselines.go; internal/modelbench",
+          "AUDIT RUN 2026-06-18 (read-only): CONCLUSION = benchmark/exercise paths ARE through-framework (modelbench.PipelinePromptSender -> RunWorkflow(PresetBenchmark); soaks drive the real binary; quality cap reads ACTUAL recorded tool executions so confabulation scores low not over-reports; the embedded-runtime bug WOULD surface here). FINDINGS: F1 stale CommonIntentBaselines (hand-guesses, possibly-nonexistent models); F2 scorecard read ignores git_revision/config_fingerprint (can blend pre/post-v1.2.0 rows); F3 hardcoded soak model ids (local-model-a contradicts benchmark-determined-model rule); F4 single-turn exercise under-tests multi-turn tool chains; F5 dead RunExercise bypass -> delete. PRE-WHOLESALE-RERUN: reset+re-exercise on one HEAD, add git_revision scorecard filter, regenerate/relabel baselines, pin soak models from config, delete dead RunExercise.",
+          "VERIFIED 2026-06-18 closeout: the codeable PRE-WHOLESALE-RERUN findings are already remediated — F5 dead RunExercise is gone everywhere (grep empty); F2 single-revision pin is live in db.ExerciseScorecard (CTE pins to the most-recent baseline_run git_revision, legacy no-op); F3 no hardcoded soak model id remains (local-model-a grep empty; llm.ExerciseModels(ctx, req) is request-parameterized, CLI resolves the model list). REMAINING is host-gated (needs the operator machine + model runs), so this item cannot close from code: F1 regenerate/relabel CommonIntentBaselines (still hand-authored priors in exercise_baselines.go), reset+re-exercise on one HEAD, and the wholesale re-run itself. F4 multi-turn coverage is a roadmap enhancement.",
+          "RECONCILED TO COMPLETE 2026-06-19: the audit ran and ALL codeable findings are remediated (F2 single-revision pin, F3 parameterized soak models, F5 dead RunExercise deleted). The only remaining items ride the now-DEFERRED wholesale re-run (F1 baseline regeneration) or are roadmapped (F4 multi-turn exercise coverage); with the re-run deferred out of v1.3.0, this audit item has no remaining in-scope work. Through-framework conclusion stands."
+        ]
+      },
+      {
+        "id": "audit-detect-multiple-source-of-truth-dry",
+        "title": "Strengthen audits to catch multiple-source-of-truth / DRY violations (+ sweep for existing)",
+        "kind": "test",
+        "status": "complete",
+        "summary": "AUDIT-METHODOLOGY + SWEEP (operator 2026-06-18: the config-ceiling triple-schema was 'the worst kind of DRY violation' and 'should have been found by our audits'). The full-codebase triple-lens audit (full-codebase-triple-lens-audit-v130) missed it. The same class recurs: (1) config-ceiling-schema-incoherency (3 schemas for one field); (2) embedded-runtime-toolcall format mismatch (normalizer vs endpoint contract); (3) unwired-authority-config-strings (UI enum with no consuming validator). STRENGTHEN the audit (clean-architecture/DRY lens) to DETECT multiple-sources-of-truth for one contract: every configstate knownEnums entry must have exactly ONE core validator and they must AGREE; every provider wire-format serializer must match the endpoint it targets; flag any value set / contract defined in 2+ places that can diverge. RUN the sweep now to find existing instances across config schemas + provider formats + any duplicated enums/contracts; each finding -> a fix item. Add a coherency test pattern (like the ceiling configstate<->core test) so divergence becomes unshippable.",
+        "source": "ad-hoc",
+        "priority": "high",
+        "workstreamId": "v130-triple-lens-audit",
+        "dependsOn": [],
+        "evidence": [
+          "config-ceiling-schema-incoherency-and-repair",
+          "embedded-runtime-toolcall-arguments-format-mismatch",
+          "unwired-authority-config-strings",
+          "full-codebase-triple-lens-audit-v130 (missed this class)",
+          "AUDIT RUN 2026-06-18 (read-only): found B1 embedded-runtime object-args (FIXED), C1 security.*_authority 5-way contradiction + DEAD resolver (CRITICAL -> unwired-authority-config-strings), C2/C3 model-policy enum divergence, C4 dashboard ceiling help reintroduces bricking vocab, B2 embedded-runtime tool-result shape, B3 finish-reason normalization, L1-L6 latent dup -> remediation tracked in config-contract-coherency-remediation. Delivered the reusable 3-assertion coherency-test pattern.",
+          "DELIVERED 2026-06-18: the 3 reusable coherency tests are in place (enum schema<->validator<->canonical; DB-CHECK<->the platform; serializer<->endpoint) — the methodology gap is closed; new divergences now break the build. Gap closures tracked in config-contract-coherency-remediation.",
+          "VERIFIED 2026-06-18 closeout sweep: 3 coherency forcing-function tests green (configstate enum-coherency, DB-CHECK mirror, serializer<->endpoint); methodology delivered."
+        ]
+      },
+      {
+        "id": "config-contract-coherency-remediation",
+        "title": "Single-source the divergent config/contract enums found by the DRY audit (+ coherency tests)",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Remediation of the live + latent multiple-source-of-truth findings from the DRY audit (operator: 'should have been found by our audits'). LIVE DISAGREEMENTS: C4 (HIGH) dashboard help text (api/dashboard_spa.html:8774) STILL tells operators to enter low/medium/high/critical for threat_caution_ceiling — the exact bricking vocabulary the ceiling fix eliminated; an operator following the help re-bricks. C2 (HIGH) models.policy.primary_reason_code: UI offers 6 codes, runtime acts on 3 DIFFERENT ones (profile_select.go) -> set-but-inert / valid-but-rejected. C3 (HIGH) models.policy.source: runtime writes 'persisted_policy'/'default' not in the schema -> strict UI rejects legit API responses. B3 (HIGH latent) finish/stop-reason not normalized across providers (Provider B 'max_tokens'/Provider C raw vs scorer keying on Provider A 'length') -> truncated Provider B output escapes the truncation quality penalty (cross-provider scoring bug). LATENT DUP (will drift): agency level/autonomy/notification literals re-typed in schema.ts vs core consts; session.scope_mode 3 copies (incl operator/candidates.go); models.policy.state 3 copies incl SQL CHECK; context_budget.channel_minimum schema+DDL+struct no validator; composition_policy/skill_creation_rigor/output_validation_policy enum w/ no validator; yield protocol/chain offer unimplemented values. FIX: one the platform accessor per contract referenced by knownEnums + validators + DDL + UI + help; add the 3 reusable coherency tests (schema<->validator<->typed-enum table test; DB-CHECK<->the platform-enum test; serializer<->endpoint matrix test) so divergence is unshippable. Drive help/placeholder text from the source (never hand-restate enum values).",
+        "source": "ad-hoc",
+        "priority": "high",
+        "workstreamId": "v130-triple-lens-audit",
+        "dependsOn": [],
+        "evidence": [
+          "DRY audit 2026-06-18 (read-only, code-verified)",
+          "api/dashboard_spa.html:8774 (C4 ceiling help), :8519/:8775 (authority)",
+          "internal/llm/profile_select.go (C2 reason codes), internal/llm/model_policy.go:96,108 (C3 source)",
+          "internal/llm/client_formats_unmarshal.go (B3 finish reasons)",
+          "LARGELY DONE 2026-06-18: C2/C3 model-policy reason_code/source single-sourced; C4 dashboard help corrected; B3 finish-reason canonical normalization; L1/L2/L4/L5 + models.policy.state + routing.mode single-sourced; yield narrowed to implemented. FORCING FUNCTIONS added: configstate enum-coherency test (schema<->validator<->canonical) + DB-CHECK mirror test + serializer<->endpoint provider-matrix test (would have caught the embedded-runtime bug). REMAINING: self-healing durable config write-back; the static-HTML->config-schema-endpoint dynamic wiring (durable C4); L6 fully (yield multi-protocol roadmapped).",
+          "SERIALIZER<->ENDPOINT GENERALIZED 2026-06-18: ValidAPIFormats() single source + serializerKindForFormat + format_dispatch_coherency_test asserting every format marshals to the endpoint it routes to (the marshal-dispatch coherency, beyond tool messages); matrix/normalization tests now iterate the single source.",
+          "C4 DURABLY CLOSED 2026-06-18: the dashboard authority/ceiling dropdowns hardcoded the enum vocab with a manual keep-in-sync comment (the UI offering invalid ceiling vocab was the Windows config-brick root cause). Root divergence found + fixed: configstate offered core.ValidAuthorityNames() which INCLUDES the retired Creator alias, while the SPA (correctly) did not -- so a naive dynamic-fetch would have reintroduced the alias. Added core.SettableAuthorityNames() (recognized minus legacy aliases) as the single OFFERED source; schema knownEnums + registry canonical now offer the settable set while the validator still ACCEPTS the alias (back-compat). Build-time forcing functions added: SPA authLevels==SettableAuthorityNames + ceilLevels==ValidThreatCautionCeilings (internal/api/dashboard_authority_coherency_test.go), plus the configstate alias-accepted-not-offered + generic enum-coherency guards. Drift now breaks the build, which SUPERSEDES the runtime static-HTML->config-schema dynamic-fetch (build-time catch is stronger than runtime; the literal dynamic-fetch is therefore not pursued, not silently dropped). L6 yield multi-protocol remains roadmapped (yield-multi-protocol-chain-support). Item goal (single-source divergent config/contract enums + coherency forcing functions) met. core/configstate/api/routes suites + vet green."
+        ]
+      },
+      {
+        "id": "self-hosted-favicon-purple-mascot",
+        "title": "Self-hosted dashboard favicon: purple mascot (from flowforge-site, recolored)",
+        "kind": "chore",
+        "status": "complete",
+        "summary": "The self-hosted flowforge dashboard currently has no favicon. Adopt the flowforge-site mascot mark for the self-hosted web UI but recolor it from the site GREEN (#00ff88) to flowforge PURPLE (the ai-purple default theme accent) so a self-hosted instance is visually distinct from the public website. Source the SVG from flowforge-site/public/favicon.svg (antenna + rounded head + square eyes + mouth bar + base bar; the same RobotMark is inline in flowforge-site/src/components/Navbar.tsx). Add it to the self-hosted dashboard (internal/api/dashboard_spa.html) as an inline SVG <link rel=icon> data URI or served asset. Pairs with the mascot boot-banner work (2026-06-19).",
+        "source": "ad-hoc",
+        "priority": "low",
+        "evidence": [
+          "source: flowforge-site/public/favicon.svg + src/components/Navbar.tsx RobotMark",
+          "target: internal/api/dashboard_spa.html (no favicon today)",
+          "recolor: site green #00ff88 -> flowforge ai-purple accent",
+          "DONE 2026-06-19: dashboard_spa.html favicon swapped to the site mascot mark recolored to ai-purple #c180ff (distinct from the website green). Build green; no favicon test pinned."
+        ],
+        "dependsOn": []
+      }
+    ],
+    "stretch": [],
+    "deferred": [
+      {
+        "id": "post-v1-2-0-wholesale-benchmark-rerun",
+        "title": "Wholesale model benchmark re-run on the shipped build (incl. local-host route)",
+        "kind": "test",
+        "status": "deferred",
+        "summary": "Phase 3. Re-run the full model benchmark suite against the final v1.3.0 build; now also exercises the bundled local-host route and ModelHub-installed models.",
+        "source": "roadmap",
+        "priority": "high",
+        "workstreamId": "v130-benchmarking",
+        "dependsOn": [
+          "embedded-llamacpp-local-llm-host"
+        ],
+        "evidence": [
+          "DEFERRED 2026-06-19 (operator decision): NOT doing the wholesale benchmark re-run in v1.3.0. Why: the benchmark METHODOLOGY overhaul shipped (execution-grounded coding benchmark; through-framework audit), which was the prerequisite — but a full re-run across all models is costly (host + the cloud provider time) and is not a release gate. Revisit in a future cycle if/when warranted."
+        ]
+      }
+    ],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "v130-triple-lens-audit",
+      "name": "Cycle-opening triple-lens audit + remediation",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Phase 0 fresh audit producing the remediation batch R folded into Phase 1.",
+      "progress": 0,
+      "itemIds": [
+        "full-codebase-triple-lens-audit-v130",
+        "audit-detect-multiple-source-of-truth-dry",
+        "config-contract-coherency-remediation"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "v130-soak-infrastructure",
+      "name": "Soak infrastructure (harness + gate + answer-fidelity inverse-soak)",
+      "owner": "maintainer",
+      "status": "in-progress",
+      "posture": "on-track",
+      "summary": "Phase 0/1 validation substrate everything downstream is checked against.",
+      "progress": 66,
+      "itemIds": [
+        "release-soak-orchestration-harness",
+        "soak-gate-on-resolution-not-severity-tier",
+        "answer-fidelity-audit-v121"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "v130-contained-fixes",
+      "name": "Contained correctness fixes",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Phase 1 contained fixes: per-turn retry-cost ceiling + verifier evidence recovery.",
+      "progress": 100,
+      "itemIds": [
+        "per-turn-retry-cost-ceiling",
+        "verifier-evidence-recovery-totof-collapse",
+        "chat-connector-second-connector-table-codeblock",
+        "instruction-skill-body-returned-as-response",
+        "integration-test-buttons-noop",
+        "maintenance-ws-idle-timeout",
+        "windows-model-resolution-persistence",
+        "embedded-runtime-toolcall-arguments-format-mismatch"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "v130-local-llm-hosting",
+      "name": "Local LLM hosting + Models page",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Phase 1 host backend then Phase 2 Models page (additive; external backends stay peers; own visual pass).",
+      "progress": 50,
+      "itemIds": [
+        "embedded-llamacpp-local-llm-host",
+        "models-management-page"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "v130-compaction-engine",
+      "name": "Intelligent parallel compaction engine",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Phase 2 correctness-critical compaction (persistence + runtime context reduction).",
+      "progress": 0,
+      "itemIds": [
+        "intelligent-parallel-compaction-engine"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "v130-benchmarking",
+      "name": "Benchmarking + model recommendations",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Real coding benchmark + wholesale re-run on the final build + per-use-case recommendations.",
+      "progress": 33,
+      "itemIds": [
+        "real-coding-benchmark-execution-grounded",
+        "post-v1-2-0-wholesale-benchmark-rerun",
+        "model-recommendations-by-usecase",
+        "benchmark-approach-full-audit-through-framework"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "v130-knowledge-pack-refresh",
+      "name": "Full product-knowledge pack refresh",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "All-versions, source-backed, no-stone-unturned refresh of the product-knowledge pack.",
+      "progress": 0,
+      "itemIds": [
+        "knowledge-base-pack-full-refresh"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "v130-authority-correctness",
+      "name": "Operator authority recognition + tool-use consistency",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Folded-in bug collection: recognize the operator's own channel as operator-level (fixes Peer-authority hobbling over Chat Connector) and confirm/close the downstream tool-use inconsistency from recorded state.",
+      "progress": 50,
+      "itemIds": [
+        "operator-channel-authority-recognition",
+        "agent-tool-use-consistency-rca",
+        "false-capability-denial-guard-suppression",
+        "agency-autonomy-governance-hardening"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "v130-audit-remediation",
+      "name": "Cycle-opening triple-lens audit remediation",
+      "owner": "maintainer",
+      "status": "in-progress",
+      "posture": "on-track",
+      "summary": "Remediation batch R from the v1.3.0 cycle-opening triple-lens audit (findings in docs/plans/v1.3.0-audit-findings.md): 2 CRITICAL (keystore security, WASM fabrication), architecture moves (off-pipeline grounding judge, turnstate, CLI->db coupling, *state presentation, god-packages), and a decision-free clean-code batch.",
+      "progress": 40,
+      "itemIds": [
+        "audit-rem-keystore-machine-id",
+        "audit-rem-wasm-fabrication",
+        "audit-rem-offpipeline-grounding-judge",
+        "audit-rem-cleancode-batch",
+        "audit-rem-architecture-moves",
+        "decouple-core-from-nethttp"
+      ],
+      "evidence": [
+        "docs/plans/v1.3.0-audit-findings.md"
+      ]
+    },
+    {
+      "id": "v130-output-hygiene",
+      "name": "Output hygiene (capture logs, don't pollute the terminal)",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "User-facing output discipline: operational/handled logs are captured to a sink, not barfed onto the terminal where they corrupt progress UIs and confuse users.",
+      "progress": 100,
+      "itemIds": [
+        "capture-operational-logs-not-terminal",
+        "logs-escape-to-user-output-tui"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "v130-self-healing-subsystem",
+      "name": "The SelfHealing: framework-native deterministic maintenance/repair (DB+workspace+config+plugins+skills+security)",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Charter (operator 2026-06-18): the self-healing is the single deterministic, framework-native plane for ALL maintenance/repair across 6 domains, modeled on RunHygiene (pure the platform on the maintenance heartbeat, no LLM, no authority negotiation, idempotent, unrefusable). SUPERSEDES the subagent-delegation framing. Largest workstream; sequenced DATABASE -> self-healing shell/MaintenanceReport/safety -> WORKSPACE -> CONFIG -> SKILLS/PLUGINS -> SECURITY.",
+      "progress": 90,
+      "itemIds": [
+        "self-healing-framework-native-charter",
+        "self-healing-db-hygiene-coverage-gaps",
+        "self-healing-workspace-repairer",
+        "self-healing-config-repairer",
+        "self-healing-plugins-skills-repairer",
+        "self-healing-security-repairer",
+        "flowforge-monolith-session-history-bleed",
+        "config-ceiling-schema-incoherency-and-repair"
+      ],
+      "evidence": [
+        "internal/db/hygiene.go RunHygiene (proof model)",
+        "internal/daemon/daemon_heartbeats.go maintenance heartbeat"
+      ]
+    },
+    {
+      "id": "v130-proactive-memory",
+      "name": "Proactive episodic recall + closure (life-lieutenant), governed by agency controls",
+      "owner": "maintainer",
+      "status": "planned",
+      "posture": "on-track",
+      "summary": "Extend the agency MemoryProvider with ranked proactive candidates (unclosed loops, contact/birthday/scheduling patterns, vault contradictions) + a vault provider, governed entirely by the existing agency/autonomy controls. Gated on agency-autonomy-governance-hardening (D1/D2).",
+      "progress": 0,
+      "itemIds": [
+        "proactive-episodic-recall"
+      ],
+      "evidence": [
+        "internal/agency/memory_provider.go"
+      ]
+    }
+  ],
+  "blockers": [
+    {
+      "id": "v130-blocker-behavioral-soak",
+      "title": "Pre-release behavioral soak (the cloud provider) not yet run green",
+      "severity": "high",
+      "status": "in-progress",
+      "owner": "maintainer",
+      "summary": "These items are CODE-COMPLETE but cannot be verified or closed until the release behavioral soak (just soak-suite, the cloud provider-routed, gate-on-resolution) runs green. The soak is the agent-behavior gate that proves each fix holds under real load, and is deliberately the LAST pre-release step. The earlier run surfaced and fixed a TTY log-routing regression (461b5f39) and has not been re-run to green since. Until then these are blocked-on-soak, not actively in progress.",
+      "dependency": "A green the cloud provider behavioral soak (battery + adversarial + memory-grounding + prompt-compression) with every behavioral failure resolved to a recorded-state conclusion.",
+      "nextAction": "Pre-release: restart Embedded Runtime (its embedder runner needs it up), run just soak-suite, resolve failures, then close the gated items. Also settle the two threshold calibrations (skill-activation 0.62, compaction quality).",
+      "evidenceNeeded": [
+        "Green release behavioral-soak scorecard exercising the gated behaviors"
+      ],
+      "itemIds": [
+        "false-capability-denial-guard-suppression",
+        "instruction-skill-body-returned-as-response",
+        "agency-autonomy-governance-hardening",
+        "proactive-episodic-recall",
+        "intelligent-parallel-compaction-engine",
+        "agent-tool-use-consistency-rca"
+      ]
+    },
+    {
+      "id": "v130-blocker-windows-retest",
+      "title": "Windows model-persistence retest (post-release, host-gated)",
+      "severity": "medium",
+      "status": "in-progress",
+      "owner": "operator",
+      "summary": "windows-model-resolution-persistence is code-hardened (fanout-to-unconfigured route removed; config-save deadlock fixed; clean no-model-configured error) but the original Windows symptom (primary will not persist; removed model reappears) can only be confirmed on the operator Windows host. Deferred to post-release per operator.",
+      "dependency": "Operator Windows host available for the retest.",
+      "nextAction": "Post-release: re-run the persistence scenario on Windows; if an independent defect remains, fix the write path.",
+      "evidenceNeeded": [
+        "Windows retest of primary persistence and removed-model behavior"
+      ],
+      "itemIds": [
+        "windows-model-resolution-persistence"
+      ]
+    },
+    {
+      "id": "v130-blocker-targeted-rebenchmark",
+      "title": "Targeted re-benchmark to replace purged folklore priors (pre-release, final HEAD)",
+      "severity": "medium",
+      "status": "in-progress",
+      "owner": "maintainer",
+      "summary": "The folklore CommonIntentBaselines were purged (measured-only), so the metascore router cold-starts flat-0.5 and models recommend surfaces only measured models until real data exists. The targeted re-benchmark that repopulates measured priors runs ONLY at the end (pre-release), on the FINAL HEAD, alongside the behavioral soak. Deferred to the end deliberately: HEAD is still changing via the CA architecture refactors, so benchmarking now would be superseded and waste the cloud provider cost (a premature the cloud provider run was launched 2026-06-19 and killed for this reason). This also realizes the reopened coding benchmark (the CODING matrix rows route through the execution-grounded oracle during the run).",
+      "dependency": "Final pre-release HEAD frozen (CA refactors landed); dev instance with the cloud provider key.",
+      "nextAction": "Pre-release, on the final HEAD, on the dev instance: run flowforge models exercise for the targeted set (cloud-provider/cloud-provider-v4-pro primary + bundled chat catalog local-model-a-1.5B/Phi-3.5-mini/local-model-a-7B/local-model-a-14B + the embedder), then apply DeriveIntentBaselinesFromScorecard to regenerate measured priors. Confirm the CODING row produced a real oracle score.",
+      "evidenceNeeded": [
+        "Measured ExerciseScorecard rows at the final HEAD for the targeted models, including a real CODING oracle score"
+      ],
+      "itemIds": [
+        "real-coding-benchmark-execution-grounded"
+      ]
+    }
+  ],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": []
+}

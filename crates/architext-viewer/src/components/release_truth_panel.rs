@@ -26,6 +26,7 @@
 use leptos::*;
 
 use crate::components::release_planning::ReleasePlanningEditor;
+use crate::components::release_trend_chart::ReleaseTrendChart;
 use crate::release_truth::{release_path, release_tone, MilestoneView, PathItem, ReleaseDoc};
 use crate::severity::release_tone_color_var;
 use crate::state::use_app_state;
@@ -57,13 +58,21 @@ pub fn ReleaseTruthPanel() -> impl IntoView {
     create_effect(move |_| {
         selected.get();
         planning_mode.set(false);
+        // A path-item selection from the prior release must not linger.
+        state.selected_release_item.set(None);
     });
+
+    // The historical trend chart is docked at the bottom (fixed), with the
+    // release detail scrolling independently above it. The dock is minimizable
+    // so the reader can reclaim the vertical space for the detail.
+    let history_minimized = create_rw_signal(false);
 
     view! {
         <div class="release-panel">
             // ── Selected release truth (or the planning editor) ──────────────
             // The release SELECTOR lives in the left nav (SelectorBar); this
-            // column holds only the detail for the shared selection.
+            // column holds only the detail for the shared selection, and SCROLLS
+            // independently of the fixed history dock below.
             <div class="release-panel__detail">
                 {move || {
                     let data = state.data.get();
@@ -139,6 +148,24 @@ pub fn ReleaseTruthPanel() -> impl IntoView {
                     .into_view()
                 }}
             </div>
+
+            // ── Historical trend chart — FIXED bottom dock, minimizable ──────
+            <div
+                class="release-history-dock"
+                class=("release-history-dock--min", move || history_minimized.get())
+            >
+                <div class="release-history-dock__head">
+                    <span class="overline">"RELEASE HISTORY"</span>
+                    <button
+                        class="release-history-dock__toggle mono"
+                        type="button"
+                        on:click=move |_| history_minimized.update(|v| *v = !*v)
+                    >
+                        {move || if history_minimized.get() { "▴ Show chart" } else { "▾ Hide chart" }}
+                    </button>
+                </div>
+                {move || (!history_minimized.get()).then(|| view! { <ReleaseTrendChart/> })}
+            </div>
         </div>
     }
 }
@@ -171,8 +198,8 @@ fn release_detail_view(doc: ReleaseDoc) -> impl IntoView {
                 })}
             </div>
             <div class="chip-row release-head__meta">
-                <span class="chip" style=format!("color:{status_rail}")>{status}</span>
-                <span class="chip" style=format!("color:{posture_rail}")>{posture}</span>
+                <span class="chip chip--state" style=format!("color:{status_rail}")>{status}</span>
+                <span class="chip chip--state" style=format!("color:{posture_rail}")>{posture}</span>
                 {(!target.is_empty()).then(|| view! {
                     <span class="mono chip release-head__target">{target}</span>
                 })}
@@ -207,9 +234,12 @@ fn release_detail_view(doc: ReleaseDoc) -> impl IntoView {
                                     <span class="mono release-ws__progress">{format!("{prog}%")}</span>
                                 </div>
                                 <div class="chip-row">
-                                    {w.status.map(|s| view! { <span class="chip">{s}</span> })}
+                                    {w.status.map(|s| {
+                                        let sr = release_tone_color_var(release_tone(Some(&s)));
+                                        view! { <span class="chip chip--state" style=format!("color:{sr}")>{s}</span> }
+                                    })}
                                     {w.posture.map(|p| view! {
-                                        <span class="chip" style=format!("color:{rail}")>{p}</span>
+                                        <span class="chip chip--state" style=format!("color:{rail}")>{p}</span>
                                     })}
                                     {w.owner.map(|o| view! { <span class="chip">{o}</span> })}
                                 </div>
@@ -232,12 +262,21 @@ fn milestone_step(m: MilestoneView) -> impl IntoView {
     let blocked_by = (!m.blocked_by.is_empty()).then(|| {
         format!("Blocked by: {}", m.blocked_by.join(", "))
     });
+    // The step is "active" when the selected item lives in it, so selecting a
+    // line lights up its own pill AND its parent step's pill together.
+    let sel = use_app_state().selected_release_item;
+    let item_ids: Vec<String> = m.items.iter().map(|i| i.id.clone()).collect();
+    let is_active = move || sel.get().is_some_and(|s| item_ids.contains(&s));
     view! {
-        <article class="release-path-step accent-surface" style=format!("--accent:{rail}")>
+        <article
+            class="release-path-step accent-surface"
+            class=("is-active", is_active)
+            style=format!("--accent:{rail}")
+        >
             <div class="release-path-marker mono">{m.path_number}</div>
             <div class="release-path-body">
                 <div class="release-path-coarse">
-                    <span class="chip release-path-state" style=format!("color:{rail}")>{m.line_state.clone()}</span>
+                    <span class="chip chip--state release-path-state" style=format!("color:{rail}")>{m.line_state.clone()}</span>
                     <strong class="release-path-label">{m.label.clone()}</strong>
                     <span class="release-path-desc mono">
                         {format!("{} · {} · {} items", m.timing, m.completion_text, m.item_count)}
@@ -260,6 +299,13 @@ fn milestone_step(m: MilestoneView) -> impl IntoView {
 fn path_item_line(item: PathItem) -> impl IntoView {
     // Tone keys off the item's status (blocked items already read "Blocked").
     let rail = release_tone_color_var(release_tone(item.status.as_deref()));
+    // Clicking the line selects the item (drives the inspector detail). Read the
+    // shared signal from context so the free helper stays a pure render fn.
+    let sel = use_app_state().selected_release_item;
+    let id = item.id.clone();
+    let id_active = id.clone();
+    let is_selected = move || sel.get().as_deref() == Some(id_active.as_str());
+    let on_click = move |_| sel.set(Some(id.clone()));
     let kind = item.kind.clone().unwrap_or_default();
     let status = item.status.clone().unwrap_or_else(|| "planned".to_string());
     let priority = item.priority.clone();
@@ -278,8 +324,13 @@ fn path_item_line(item: PathItem) -> impl IntoView {
     let blocked_by = item.blocked_by.clone().map(|b| format!("Blocked by: {b}"));
 
     view! {
-        <div class="release-path-line accent-surface" style=format!("--accent:{rail}")>
-            <span class="chip release-path-state" style=format!("color:{rail}")>{item.line_state.clone()}</span>
+        <div
+            class="release-path-line accent-surface"
+            class=("release-path-line--selected", is_selected)
+            style=format!("--accent:{rail}")
+            on:click=on_click
+        >
+            <span class="chip chip--state release-path-state" style=format!("color:{rail}")>{item.line_state.clone()}</span>
             <div class="release-path-line__main">
                 <strong>{item.title.clone()}</strong>
                 {item.summary.clone().map(|s| view! { <span class="release-path-line__summary">{s}</span> })}

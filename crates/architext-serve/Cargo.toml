@@ -22,6 +22,10 @@ serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 rand = "0.8"
 url = "2"
+# Server-side syntax highlighting for /api/file. Pure-Rust regex engine
+# (fancy-regex) instead of the default Oniguruma C binding, so the native
+# build needs no C toolchain.
+syntect = { version = "5", default-features = false, features = ["default-fancy"] }
 clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }

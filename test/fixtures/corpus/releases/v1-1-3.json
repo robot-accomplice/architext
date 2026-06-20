@@ -1,0 +1,223 @@
+{
+  "id": "v1-1-3",
+  "version": "1.1.3",
+  "name": "v1.1.3 injection-security + update/install + CI reuse",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Security + reliability release centered on the prompt-injection detector, the update/install path, and the CI/release machinery that ships them. SECURITY: FuzzInjectionDetector_Sanitize surfaced an unauthenticated DoS — falsified-not-dismissed (a single input froze Sanitize ~25s); root cause was unbounded NFKC normalization + many regex passes over untrusted input, and Sanitize runs on every inbound message (src/engine/pipeline_run_stages.go), so one oversized message stalled the pipeline. Fixed by capping scanned input at 256KB and treating oversized input as a threat (maximal score / full redaction) before any normalize/regex. Security review of that fix found a second pre-existing bypass: Sanitize did not decode HTML/percent entities before matching (CheckInput did), so entity-encoded injections survived sanitization unredacted and reached the model — fixed by decoding first. UPDATE: compareVersions sorted a prerelease (1.1.2-dev.<sha>) ABOVE its release, so `upgrade all` on a dev build reported up-to-date and never installed the real release (the operator hit exactly this — production stuck on 1.1.2-dev.06be37e8); the comparator is now SemVer-correct so a dev build upgrades. INSTALL: the in-app updater gained --version (install/reinstall/downgrade a specific release) to match install.sh, and install.sh now installs IN PLACE over an existing flowforge on PATH instead of hardcoding /usr/local/bin (which would shadow the self-updated binary). CI/RELEASE: the release preflight reuses CI evidence keyed on the commit git-TREE instead of the commit SHA, so a develop->main promotion merge commit (or a docs-only release artifact) no longer re-runs the full race on code-identical content — this release is the first to exercise it. TEST TRUST: a network-dependent ghola SSRF unit test (unbounded live DNS) was made bounded + injectable + fail-closed, and a class of brittle unit tests that asserted the prose of a docs markdown file was removed (behavior assertions kept; no unit test reads the doc). Every fix proven from recorded state or a reproducer and TDD'd; full module suite green + race detector clean. FORMAL TAG/PUBLISH PENDING the pre-ship behavioral soak. DEFERRED (justified, in roadmap.json): injection-output-cap-fail-loud (oversized model/tool OUTPUT can be scored as blocked and dropped silently — harden the output path separately), and the email inbox-read capability + honest-blocker escape valve (held for v1.1.4: live verification against the Proton bridge + arch docs pending).",
+  "targetWindow": "Point release; formal cut after pre-ship soak per docs/testing/release-procedure.md",
+  "lastUpdated": "2026-06-12T20:25:00Z",
+  "updateSource": "v1.1.3 SHIPPED 2026-06-12: tagged on main 9bca033e (tree 1aec2da8), release workflow green, binary reports clean 1.1.3, /releases/latest=v1.1.3, site-sync dispatched. Release preflight REUSED develop's green CI by tree (23s, race skipped) — the tree-reuse change validated itself. Targeted soak 13/13, 0 release-gate findings.",
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "workstreams": [
+    {
+      "id": "v113-security",
+      "status": "complete",
+      "name": "Injection-detector security",
+      "owner": "maintainer",
+      "posture": "on-track",
+      "summary": "Unbounded-scan DoS cap + Sanitize entity-decode bypass, both proven (fuzz + security review) and TDD'd.",
+      "progress": 100,
+      "itemIds": [
+        "injection-detector-input-cap-dos",
+        "injection-sanitize-entity-decode"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "v113-update",
+      "status": "complete",
+      "name": "Update + install path",
+      "owner": "maintainer",
+      "posture": "on-track",
+      "summary": "Prerelease version ordering so a dev build upgrades, plus specific-version install and install.sh/self-updater in-place agreement.",
+      "progress": 100,
+      "itemIds": [
+        "prerelease-version-ordering",
+        "install-version-and-inplace-agreement"
+      ],
+      "evidence": []
+    },
+    {
+      "id": "v113-ci",
+      "status": "complete",
+      "name": "CI evidence reuse + test trust",
+      "owner": "maintainer",
+      "posture": "on-track",
+      "summary": "Release preflight reuses CI evidence by commit tree, and a class of brittle non-deterministic tests (ghola live DNS, markdown-prose asserts) was removed.",
+      "progress": 100,
+      "itemIds": [
+        "ci-reuse-by-tree",
+        "test-suite-trust"
+      ],
+      "evidence": []
+    }
+  ],
+  "evidence": [
+    {
+      "id": "v113-full-suite",
+      "label": "Full module suite green + the platform race detector clean across touched packages",
+      "kind": "test",
+      "status": "complete",
+      "href": "internal/agent/injection_test.go"
+    },
+    {
+      "id": "v113-security-review",
+      "label": "go-security-reviewer pass on the injection-detector change (DoS cap sound; entity-decode bypass folded in)",
+      "kind": "document",
+      "status": "complete",
+      "href": "docs/releases/v1.1.3-release-notes.md"
+    }
+  ],
+  "scope": {
+    "required": [
+      {
+        "id": "injection-detector-input-cap-dos",
+        "title": "Bound injection-detector input to stop an unbounded-scan DoS",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "The prompt-injection detector ran NFKC normalization + many regex passes over unbounded untrusted input; Sanitize runs on every inbound message and on daemon adapter text, so one oversized crafted message stalled the pipeline ~25s — an unauthenticated DoS surfaced by FuzzInjectionDetector_Sanitize ('context deadline exceeded') and proven real by a 25s local freeze (falsified, not dismissed as flake). CheckInput/Sanitize/ScanOutput now treat input over maxInjectionScanBytes (256KB) as a threat and short-circuit (maximal ThreatScore / '[REDACTED]') before any normalize/regex; a near-cap maximally NFKC-expanding input still processes sub-second.",
+        "owner": "maintainer",
+        "priority": "critical",
+        "workstreamId": "v113-security",
+        "dependsOn": [],
+        "evidence": [
+          "internal/agent/injection.go maxInjectionScanBytes guard in CheckInput/Sanitize/ScanOutput",
+          "internal/agent/injection_test.go::TestInjectionDetector_OversizedInputRejectedAsThreat",
+          "PR #102; both injection fuzz targets clean at the CI 10s budget"
+        ]
+      },
+      {
+        "id": "injection-sanitize-entity-decode",
+        "title": "Decode HTML/percent entities in Sanitize before redaction",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "Security review of the DoS fix found a pre-existing sanitization bypass: CheckInput decoded entities before matching but Sanitize did not, so an entity-encoded injection that CheckInput flags as caution survived Sanitize unredacted and was forwarded to the model (which renders entities). Sanitize now decodes HTML/percent entities first, mirroring CheckInput.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "v113-security",
+        "dependsOn": [],
+        "evidence": [
+          "internal/agent/injection.go Sanitize decodeHTMLEntities before normalize",
+          "internal/agent/injection_test.go::TestInjectionDetector_SanitizeDecodesEntityEncodedInjection (RED without the decode)",
+          "go-security-reviewer 2026-06-12"
+        ]
+      },
+      {
+        "id": "prerelease-version-ordering",
+        "title": "Order a prerelease build below its same-base release in the updater",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "compareVersions split on '.' and string-compared '2-dev' > '2', so a prerelease sorted above its release; checkForUpdate then reported a 1.1.2-dev.<sha> build as up to date and never installed 1.1.2 (the operator's production was stuck on 1.1.2-dev.06be37e8). Per SemVer a prerelease precedes its release; the comparator now splits base from prerelease suffix and orders a '-...' build strictly below the bare release, so `upgrade` installs the real release.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "v113-update",
+        "dependsOn": [],
+        "evidence": [
+          "cmd/updatecmd/update.go compareVersions base/prerelease split",
+          "cmd/updatecmd/update_test.go::TestCompareVersionsPrereleaseOrdersBelowSameBaseRelease + TestCheckForUpdate_StampedDevBuildUpgradesToSameBaseRelease",
+          "PR #100"
+        ]
+      },
+      {
+        "id": "install-version-and-inplace-agreement",
+        "title": "Specific-version install + install.sh/self-updater agreement",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "install.sh had --version but the in-app updater could only fetch latest, and install.sh hardcoded /usr/local/bin while the self-updater replaces the binary in place at os.Executable() — so a ~/.local/bin install was shadowed and never updated (how the stuck dev binary happened). The in-app update/upgrade all gained --version (resolveTargetRelease fetches the exact tag and always installs, including reinstall/downgrade), and install.sh now installs over an existing flowforge on PATH; fresh installs still default to /usr/local/bin.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "v113-update",
+        "dependsOn": [],
+        "evidence": [
+          "cmd/updatecmd/update.go fetchReleaseByTag/resolveTargetRelease + --version flag; scripts/install.sh in-place resolution",
+          "scripts/install_repo_parity_test.go::TestInstallSurfacesAgreeOnVersionAndInPlaceUpdate",
+          "PR #103"
+        ]
+      },
+      {
+        "id": "ci-reuse-by-tree",
+        "title": "Reuse CI evidence by commit git-tree, not commit SHA",
+        "kind": "chore",
+        "status": "complete",
+        "summary": "The release preflight reused green CI evidence only for the exact tag commit SHA, but a develop->main promotion always creates a new merge-commit SHA with identical code, forcing a redundant full race re-run (v1.1.2 spent ~20m on it). The preflight now reuses a green CI run whose commit TREE is byte-identical to the tag's tree (shared scripts/ci-reuse-match.sh); a real code change yields a different tree and runs, so no false skip is possible. Release artifacts are committed on develop before promotion so they ride the tested tree. The follow-up main-push gate is roadmapped (ci-main-push-tree-reuse-gate).",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "v113-ci",
+        "dependsOn": [],
+        "evidence": [
+          ".github/workflows/release.yml ci_reuse matches .commit.tree.sha via scripts/ci-reuse-match.sh",
+          "scripts/release_workflow_contract_test.go::TestReleaseWorkflowReusesOnlyExactTreeMatchedCIEvidence",
+          "PR #99"
+        ]
+      },
+      {
+        "id": "test-suite-trust",
+        "title": "Remove markdown-coupled unit tests and fix the ghola DNS flake",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Two brittle-test problems that made CI untrustworthy. (1) Unit tests asserted the prose of docs/testing/first-party-ui-functionality-audit.md; the pure content-guards were deleted and the secondary doc-reads stripped from behavior tests (their dashboard_spa.html assertions kept), so no unit test reads the .md. (2) gholaValidateTargetURL -> isPrivateHost did an unbounded live DNS lookup, flaking the macOS race job on restricted runners; it now uses an injectable, 5s-bounded, fail-closed resolver, and the test injects a deterministic resolver.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "v113-ci",
+        "dependsOn": [],
+        "evidence": [
+          "internal/agent/tools/web.go privateHostResolver (bounded, injectable, fail-closed); internal/agent/tools/ghola_test.go",
+          "no unit test references first-party-ui-functionality-audit (grep-verified)",
+          "PR #101"
+        ]
+      }
+    ],
+    "stretch": [],
+    "planned": [],
+    "deferred": [
+      {
+        "id": "email-inbox-read-capability",
+        "title": "Read-only inbox-summarize capability (read_inbox tool)",
+        "kind": "feature",
+        "status": "deferred",
+        "summary": "Built and unit-tested this cycle (mail.Service.ListRecent read-only BODY.PEEK + date scope + bounded bodies; EmailInboxTool 'read_inbox'; registered when inbound mail email is configured) but HELD for v1.1.4: it requires live verification against the real Proton bridge (gated on the operator's bridge-connectivity investigation) and the Architext/architecture-doc update before it ships. This is the missing tool behind 'summarize my last 10 days of email'.",
+        "owner": "maintainer",
+        "priority": "high",
+        "dependsOn": [],
+        "evidence": [
+          "branch c/email-inbox-read-capability (committed, mail + tools green under -race)",
+          "memory project_email_inbox_read_capability"
+        ]
+      },
+      {
+        "id": "honest-blocker-escape-valve",
+        "title": "Convert introspection-only task_deferral exhaustion into an honest limitation response",
+        "kind": "bug-fix",
+        "status": "deferred",
+        "summary": "RCA from production state.db (turn 696abbc9): when the agent is asked to propose action on an introspection-only turn (no action tools), it narrates future actions it cannot execute, the task_deferral guard rejects every attempt, and after 6 attempts it emits the canned 'couldn't get a confident answer' fallback instead of honestly stating the limitation. Fix: an honest-blocker escape valve (emit 'I can't do X; I lack tool Z') plus two instrumentation fixes (guard_retry_count miscounted as 0; empty primary_diagnosis). Held for v1.1.4 (safety-guard change needing its own design + calibration); pairs with the email capability.",
+        "owner": "maintainer",
+        "priority": "high",
+        "dependsOn": [],
+        "evidence": [
+          "production state.db turn_diagnostics/turn_diagnostic_events turn 696abbc9 (task_deferral upheld x3 -> turn_failed)",
+          "roadmap.json#raise-weak-model-floor-honest-blocker-guard",
+          "memory project_task_deferral_exhaustion_rca"
+        ]
+      },
+      {
+        "id": "injection-output-cap-fail-loud",
+        "title": "Make oversized injection-output handling fail loud, not silently drop",
+        "kind": "bug-fix",
+        "status": "deferred",
+        "summary": "The DoS cap's ScanOutput path can score a legitimately-large model/tool output as blocked, and the blocked-output callers can drop it with an empty result — a fail-loud gap flagged by the security review. Harden the output path separately (higher/separate output cap and/or a visible 'output withheld' event); the inbound CheckInput/Sanitize cap (the real DoS surface) stays.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "dependsOn": [],
+        "evidence": [
+          "roadmap.json#injection-output-cap-fail-loud",
+          "go-security-reviewer 2026-06-12"
+        ]
+      }
+    ],
+    "outOfScope": []
+  },
+  "releasedAt": "2026-06-12T20:18:43Z"
+}

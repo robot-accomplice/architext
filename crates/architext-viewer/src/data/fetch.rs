@@ -103,11 +103,62 @@ pub async fn fetch_farm_plan(hash: &str) -> Option<Plan> {
     serde_json::from_value::<Plan>(plan_value.clone()).ok()
 }
 
+/// Poll the serve plan farm for `hash` until it warms, or `max_attempts` is
+/// reached, with a non-blocking [`gloo_timers`] delay between tries.
+///
+/// The native farm precomputes every flow×view plan in the background at startup
+/// (and re-warms on config writes), swapping the whole map in atomically — so
+/// requests MISS until the parallel precompute finishes. Polling keeps the main
+/// thread FREE while we wait (the caller shows its routing state), instead of
+/// computing the plan in-process on the UI thread, which freezes a dense diagram
+/// for the entire plan duration (the routing-perf "blocker"). The native farm is
+/// also faster than the in-process WASM path and runs off the browser thread.
+///
+/// Returns `None` only if the farm never warms the plan within the window — a
+/// genuinely non-precomputed plan — where the caller does a one-off in-process
+/// computation as a last resort.
+pub async fn fetch_farm_plan_polling(hash: &str, max_attempts: u32, delay_ms: u32) -> Option<Plan> {
+    for attempt in 0..max_attempts {
+        if let Some(plan) = fetch_farm_plan(hash).await {
+            return Some(plan);
+        }
+        if attempt + 1 < max_attempts {
+            gloo_timers::future::TimeoutFuture::new(delay_ms).await;
+        }
+    }
+    None
+}
+
 /// Fetch the live repo file list from `/api/repo-tree`. Fetched on demand by the
 /// Repo Tree surface (the file list is volatile, served `no-store`, and not part
 /// of the once-loaded manifest dataset).
 pub async fn fetch_repo_tree() -> Result<RepoTreePayload, FetchError> {
     get_json::<RepoTreePayload>("/api/repo-tree").await
+}
+
+/// Fetch a single repo file's syntax-highlighted contents from
+/// `/api/file?path=<relpath>`. Fetched on demand by the Repo Tree file-preview
+/// pane when a file row is clicked. The server reads + highlights the file
+/// (the viewer carries no highlighter); the response carries inline-styled
+/// HTML the pane renders directly.
+///
+/// `path` is percent-encoded into the query so paths with spaces or other
+/// reserved characters round-trip safely.
+pub async fn fetch_file(path: &str) -> Result<FilePreviewPayload, FetchError> {
+    let encoded = String::from(js_sys::encode_uri_component(path));
+    let url = format!("/api/file?path={encoded}");
+    get_json::<FilePreviewPayload>(&url).await
+}
+
+/// Fetch a node's git development window from `/api/node-git?paths=<csv>`. Fetched
+/// on demand when a node is selected in the inspector. Non-fatal — the window is
+/// supplementary, so any failure (or a server without the endpoint) degrades to
+/// `None` and the inspector simply omits the section. `paths` is the node's
+/// `sourcePaths` joined by commas, percent-encoded so paths round-trip safely.
+pub async fn fetch_node_git(paths: &str) -> Option<NodeGit> {
+    let encoded = String::from(js_sys::encode_uri_component(paths));
+    let url = format!("/api/node-git?paths={encoded}");
+    get_json::<NodeGit>(&url).await.ok()
 }
 
 /// Fetch the running CLI version from `/api/status` (`status.cliVersion`) for the

@@ -8,6 +8,7 @@
 //!   - GET /api/status    (collect_status → {ok, status})
 //!   - GET /api/config    (diagram config payload + field spec)
 //!   - GET /api/repo-tree (git ls-files or filesystem walk)
+//!   - GET /api/file      (single-file contents, syntax-highlighted)
 //!   - POST /api/rules        (mutation: update/delete/move/move-before)
 //!   - POST /api/notes        (mutation: update/delete + manifest bootstrap)
 //!   - POST /api/config       (mutation: write diagram config layer)
@@ -96,6 +97,8 @@ pub fn build_router(state: AppState, farm: Farm, hub: Option<WatchHub>) -> Route
         .route("/api/status", get(handlers::status::get_status))
         .route("/api/config", get(handlers::config_payload::get_config))
         .route("/api/repo-tree", get(handlers::repo_tree::get_repo_tree))
+        .route("/api/node-git", get(handlers::node_git::get_node_git))
+        .route("/api/file", get(handlers::file_preview::get_file_preview))
         // SSE live-reload stream (watch → validate → broadcast)
         .route("/api/data-events", get(handlers::data_events::get_data_events))
         // API routes — POST (mutations; guarded by security middleware)
@@ -253,8 +256,11 @@ pub async fn serve_with_schema_dir(
 
     let (listener, bound_port) = bind_listener(host, port)?;
 
-    tracing::info!("Building plan farm from {}", data_dir.display());
-    let farm = farm_state::build_farm(&data_dir);
+    // Warm the farm in the BACKGROUND so the server binds + listens immediately
+    // (a synchronous build blocked startup for seconds on large repos). Lookups
+    // miss until it's populated; the viewer falls back to in-process compute.
+    tracing::info!("Warming plan farm in the background from {}", data_dir.display());
+    let farm = farm_state::empty_farm();
 
     // Derive target_dir from data_dir: data_dir is <target>/docs/architext/data
     // so target = data_dir.parent().parent().parent().
@@ -297,6 +303,11 @@ pub async fn serve_with_schema_dir(
         }
     };
 
+    // Clone handles for the background farm warm-up before `state`/`router` take
+    // ownership of data_dir / farm.
+    let warm_farm = farm.clone();
+    let warm_data_dir = data_dir.clone();
+
     let state = AppState {
         data_dir,
         dist_dir,
@@ -308,6 +319,11 @@ pub async fn serve_with_schema_dir(
     };
 
     let router = build_router(state, farm, hub);
+
+    // Populate the farm off the async runtime (CPU-heavy synchronous work) —
+    // fire-and-forget; `refresh_farm` swaps the populated map in atomically and
+    // logs the plan count when done.
+    tokio::task::spawn_blocking(move || farm_state::refresh_farm(&warm_farm, &warm_data_dir));
 
     tracing::info!("Architext serve listening on http://{host}:{bound_port}");
 

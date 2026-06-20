@@ -1,0 +1,453 @@
+{
+  "id": "v1-0-5",
+  "version": "1.0.5",
+  "name": "FlowForge 1.0.5",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Agentic retrieval architecture: systemic redesign of the memory retrieval pipeline around a 13-layer reference architecture for agentic AI systems. Replaces the previous \"embed query → search vector DB\" approach with intent-driven routing, evidence filtering, query decomposition, structured context assembly, and post-turn reflection. Working memory now persi",
+  "targetDate": "2026-04-14",
+  "releasedAt": "2026-04-14T12:00:00.000Z",
+  "lastUpdated": "2026-04-14T12:00:00.000Z",
+  "updateSource": "docs/releases/v1.0.5-release-notes.md, CHANGELOG.md",
+  "scope": {
+    "required": [
+      {
+        "id": "r-1-0-5-phase-1-retrieval-substrate-vector-index-misnomer-fix-0",
+        "title": "approximate vector index misnomer fix",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "vector-index.go → vector_brute.go. VectorIndex → BruteForceIndex. All callers updated. The name now matches the O(n) implementation.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 1 — Retrieval Substrate section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "phase-1-retrieval-substrate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-phase-1-retrieval-substrate-vectorindex-interface-1",
+        "title": "VectorIndex interface",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "vector_index.go — abstraction over search impls. BruteForce, VectorIndex, PartitionedIndex all satisfy it.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 1 — Retrieval Substrate section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "phase-1-retrieval-substrate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-phase-1-retrieval-substrate-float32-throughout-2",
+        "title": "float32 throughout",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Embedding storage + computation switched from float64 → float32. Memory per 768-dim entry: ~6KB → ~3KB.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 1 — Retrieval Substrate section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "phase-1-retrieval-substrate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-phase-1-retrieval-substrate-bm25-scoring-3",
+        "title": "BM25 scoring",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "embedded SQL store full-text search native bm25() replaces positional rank decay. Cross-leg deduplication prevents duplicate scoring.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 1 — Retrieval Substrate section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "phase-1-retrieval-substrate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-phase-1-retrieval-substrate-adaptive-hybrid-weight-4",
+        "title": "Adaptive hybrid weight",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "FTS-vs-vector blend adapts to corpus size: 0.7 at <1K entries → 0.3 at >10K entries.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 1 — Retrieval Substrate section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "phase-1-retrieval-substrate",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-phase-2-agentic-architecture-layers-retrieval-router-0",
+        "title": "Retrieval Router",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "8",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 2 — Agentic Architecture Layers section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "phase-2-agentic-architecture-layers",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-phase-2-agentic-architecture-layers-reranker-1",
+        "title": "Reranker",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "11",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 2 — Agentic Architecture Layers section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "phase-2-agentic-architecture-layers",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-phase-2-agentic-architecture-layers-query-decomposer-2",
+        "title": "Query Decomposer",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "2",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 2 — Agentic Architecture Layers section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "phase-2-agentic-architecture-layers",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-phase-2-agentic-architecture-layers-procedural-upgrade-3",
+        "title": "Procedural Upgrade",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "5",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 2 — Agentic Architecture Layers section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "phase-2-agentic-architecture-layers",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-phase-2-agentic-architecture-layers-reflection-4",
+        "title": "Reflection",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "16",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Phase 2 — Agentic Architecture Layers section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "phase-2-agentic-architecture-layers",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-infrastructure-logging-convention-0",
+        "title": "Logging convention",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "All new code follows commit c9b3fb3 delineation: Trace=path, Debug=plumbing, Info=lifecycle, Warn=degraded, Error=broke.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Infrastructure section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "infrastructure",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-infrastructure-reranker-config-1",
+        "title": "Reranker config",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "RerankerMinScore, RerankerAuthorityBoost, RerankerRecencyPenalty, RerankerCollapseSpread in MemoryConfig with defaults.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Infrastructure section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "infrastructure",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-infrastructure-migrations-2",
+        "title": "Migrations",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "040: procedural_memory enrichment. 041: working_memory persisted_at column.",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Infrastructure section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "infrastructure",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-test-coverage-l0-0",
+        "title": "L0",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Architecture fitness (compile checks for new fields)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Test Coverage section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "test-coverage",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-test-coverage-l1-1",
+        "title": "L1",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Unit tests: router (11), reranker (10), decomposer (7), reflection (8), persistence (6), assembly (8), approximate vector index (12), hybrid search (9), partitioned (6), adaptive weight (2), collapse regression (3)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Test Coverage section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "test-coverage",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-test-coverage-l2-2",
+        "title": "L2",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Integration: retrieval pipeline end-to-end, daemon adapter, FTS union",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Test Coverage section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "test-coverage",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-test-coverage-l3-3",
+        "title": "L3",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Soak: cross-tier waste (0%), config migration, index attachment, approximate vector index 10K (skipped — known limitation)",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Test Coverage section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "test-coverage",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      },
+      {
+        "id": "r-1-0-5-test-coverage-l4-4",
+        "title": "L4",
+        "kind": "test",
+        "status": "complete",
+        "summary": "Benchmarks: BruteForce vs approximate vector index at 1K/10K, recall measurement",
+        "owner": "maintainer",
+        "priority": "medium",
+        "rationale": "Captured from the Test Coverage section of the 1.0.5 release notes.",
+        "decisionSource": "docs/releases/v1.0.5-release-notes.md",
+        "workstreamId": "test-coverage",
+        "dependsOn": [],
+        "evidence": [
+          "docs/releases/v1.0.5-release-notes.md",
+          "CHANGELOG.md"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "phase-1-retrieval-substrate",
+      "name": "Phase 1 Retrieval Substrate",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Phase 1 Retrieval Substrate scope shipped in FlowForge 1.0.5.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-5-phase-1-retrieval-substrate-vector-index-misnomer-fix-0",
+        "r-1-0-5-phase-1-retrieval-substrate-vectorindex-interface-1",
+        "r-1-0-5-phase-1-retrieval-substrate-float32-throughout-2",
+        "r-1-0-5-phase-1-retrieval-substrate-bm25-scoring-3",
+        "r-1-0-5-phase-1-retrieval-substrate-adaptive-hybrid-weight-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.5-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "phase-2-agentic-architecture-layers",
+      "name": "Phase 2 Agentic Architecture Layers",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Phase 2 Agentic Architecture Layers scope shipped in FlowForge 1.0.5.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-5-phase-2-agentic-architecture-layers-retrieval-router-0",
+        "r-1-0-5-phase-2-agentic-architecture-layers-reranker-1",
+        "r-1-0-5-phase-2-agentic-architecture-layers-query-decomposer-2",
+        "r-1-0-5-phase-2-agentic-architecture-layers-procedural-upgrade-3",
+        "r-1-0-5-phase-2-agentic-architecture-layers-reflection-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.5-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "infrastructure",
+      "name": "Infrastructure",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Infrastructure scope shipped in FlowForge 1.0.5.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-5-infrastructure-logging-convention-0",
+        "r-1-0-5-infrastructure-reranker-config-1",
+        "r-1-0-5-infrastructure-migrations-2"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.5-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    },
+    {
+      "id": "test-coverage",
+      "name": "Test Coverage",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "Test Coverage scope shipped in FlowForge 1.0.5.",
+      "progress": 100,
+      "itemIds": [
+        "r-1-0-5-test-coverage-l0-0",
+        "r-1-0-5-test-coverage-l1-1",
+        "r-1-0-5-test-coverage-l2-2",
+        "r-1-0-5-test-coverage-l3-3",
+        "r-1-0-5-test-coverage-l4-4"
+      ],
+      "evidence": [
+        "docs/releases/v1.0.5-release-notes.md",
+        "CHANGELOG.md"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [
+    {
+      "id": "release-shipped",
+      "label": "1.0.5 shipped",
+      "status": "complete",
+      "date": "2026-04-14",
+      "order": 1,
+      "itemIds": [
+        "r-1-0-5-phase-1-retrieval-substrate-vector-index-misnomer-fix-0",
+        "r-1-0-5-phase-1-retrieval-substrate-vectorindex-interface-1",
+        "r-1-0-5-phase-1-retrieval-substrate-float32-throughout-2",
+        "r-1-0-5-phase-1-retrieval-substrate-bm25-scoring-3",
+        "r-1-0-5-phase-1-retrieval-substrate-adaptive-hybrid-weight-4",
+        "r-1-0-5-phase-2-agentic-architecture-layers-retrieval-router-0",
+        "r-1-0-5-phase-2-agentic-architecture-layers-reranker-1",
+        "r-1-0-5-phase-2-agentic-architecture-layers-query-decomposer-2",
+        "r-1-0-5-phase-2-agentic-architecture-layers-procedural-upgrade-3",
+        "r-1-0-5-phase-2-agentic-architecture-layers-reflection-4",
+        "r-1-0-5-infrastructure-logging-convention-0",
+        "r-1-0-5-infrastructure-reranker-config-1",
+        "r-1-0-5-infrastructure-migrations-2",
+        "r-1-0-5-test-coverage-l0-0",
+        "r-1-0-5-test-coverage-l1-1",
+        "r-1-0-5-test-coverage-l2-2",
+        "r-1-0-5-test-coverage-l3-3",
+        "r-1-0-5-test-coverage-l4-4"
+      ]
+    }
+  ],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "release-notes",
+      "label": "1.0.5 release notes",
+      "kind": "release-note",
+      "status": "complete",
+      "href": "docs/releases/v1.0.5-release-notes.md"
+    },
+    {
+      "id": "changelog",
+      "label": "Changelog entry",
+      "kind": "document",
+      "status": "complete",
+      "href": "CHANGELOG.md"
+    }
+  ]
+}

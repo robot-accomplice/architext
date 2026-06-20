@@ -1,10 +1,12 @@
 //! Viewer chrome components — one component per file (no god-component).
 pub mod blast_radius_panel;
+pub mod c4_breadcrumb;
 pub mod canvas_panel;
 pub mod config_field;
 pub mod config_panel;
 pub mod data_risks_panel;
 pub mod release_planning;
+pub mod release_trend_chart;
 pub mod release_truth_panel;
 pub mod header;
 pub mod inspector_panel;

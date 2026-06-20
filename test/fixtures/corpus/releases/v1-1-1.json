@@ -1,0 +1,118 @@
+{
+  "id": "v1-1-1",
+  "version": "1.1.1",
+  "name": "v1.1.1 hotfix",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Hotfix for two defects proven from recorded state during the v1.1.0 release-day live incident. H1: the daemon ran half-alive after an API bind failure (recorded 'address already in use' ERR at daemon_subsystems.go:94 while channels/agency kept running and clients reached a stale dev server squatting the port) — binding is now synchronous and bind/serve failures stop the daemon. H2: the semantic response cache is removed entirely (operator decision 2026-06-11) — a cached context-bound directive answered a greeting and contaminated session state; production evidence: zero stores since 2026-04-16, tokens_saved=0 lifetime, entirely pathological hit population (stale clock served 11x), and behavioral soaks always wiped it so certified behavior was already cache-off. Removal spans pipeline stage, llm two-tier cache, semantic_cache table (migration 065, verified against a copy of production data), eviction task, cached guard preset, and admin/stats surfaces (wire shapes retained, truthfully zero). In-flight request dedup retained. Completes the advisory-pipeline ADR's cache-removal mandate. Deferred (justified): dashboard cache-panel + wire-key removal is a frontend contract change shipping with the next flowforge-site/web-UI minor, not an ASAP hotfix. SOAK COMPLETE (2026-06-11): first full-suite run after the harness ruler fixes (typographic-hyphen folding in anchor checks; MCP-namespaced tool recognition — both proven by replaying recorded failing turns) is 38/38, all 23 families grade A, 0 release-gate findings. OPEN OPERATOR DECISION: the production 'unresolved: hello' working-memory junk (1 unresolved_question + 131 derivative rows driving a 60s agency loop) has NO product repair surface — self-healing --repair does not cover working_memory classes; cleanup requires an explicitly authorized surgical DB repair (backup prepared) or waits for the agent-self-repair roadmap feature, which now lists this as repair class #3. SCOPE EXPANDED (operator decision 2026-06-11): the v1.1.2 systemic agency fix folded into v1.1.1 — ad-hoc production surgery rejected in favor of a shipped fix that heals the entire user base; the open operator decision on manual cleanup is CLOSED (production self-heals via the same path). FINAL EVIDENCE (2026-06-11): 38/38 all-A on 4eb8da5e — the HEAD carrying H1 (bind fail-loud), H2 (cache removal), H3 (systemic agency fix), harness ruler fixes, and B15 (substance-based echo detection with B4-projection provenance exemption; two more recorded echo variants locked verbatim: title-only and markdown-reference-only). geopolitical_sitrep 6/6 isolated post-B15. SHIPPED (2026-06-11): tag v1.1.1 on 244150d0; release workflow green first run (all 5 platforms, publish, self-evaluation); verified live — 18 assets, checksum spot-verified, binary reports 1.1.1 on go1.26.4, /releases/latest resolves v1.1.1; site release-sync succeeded.",
+  "targetWindow": "ASAP same-day hotfix ceremony per docs/testing/release-procedure.md",
+  "lastUpdated": "2026-06-11T11:30:00Z",
+  "updateSource": "v1.1.1 SHIPPED and verified live (2026-06-11)",
+  "scope": {
+    "required": [
+      {
+        "id": "api-bind-fail-loud",
+        "title": "Daemon fails loud on API bind/serve failure instead of running half-alive",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "api.Listen binds synchronously; bind failure logs FATAL, reports SevCritical to the error bus, cancels the daemon. A post-bind server termination follows the same contract. Locks the 2026-06-11 split-brain incident class.",
+        "owner": "maintainer",
+        "priority": "critical",
+        "workstreamId": "release-gates",
+        "dependsOn": [],
+        "evidence": [
+          "internal/api/listen_test.go (bind-conflict synchronous error, graceful shutdown)",
+          "recorded incident: launchd.err.log 10:54:11 bind ERR + portless half-alive daemon"
+        ]
+      },
+      {
+        "id": "semantic-cache-removal",
+        "title": "Remove the semantic response cache entirely",
+        "kind": "architecture",
+        "status": "complete",
+        "summary": "Pipeline cache stage, llm two-tier cache, semantic_cache table (migration 065), eviction task, cached guard preset, BypassCache intent metadata, and CacheConfig response-cache fields removed; prompt-compression config retained; no_cache request field inert for wire compat; stats surfaces report zero truthfully.",
+        "owner": "maintainer",
+        "priority": "critical",
+        "workstreamId": "release-gates",
+        "dependsOn": [],
+        "evidence": [
+          "production data: 0 stores since 2026-04-16, tokens_saved=0, pathological hit population",
+          "migration 065 verified against production-data copy",
+          "full the unit-test suite ./... 60 ok / 0 FAIL post-removal"
+        ]
+      },
+      {
+        "id": "agency-attempt-budget",
+        "title": "Agency candidate cooldown + attempt budget + parking, hygiene churn repair, periodic hygiene distribution",
+        "kind": "feature",
+        "status": "complete",
+        "summary": "Systemic fix for the runaway agency loop (operator directive: ad-hoc fixes need a systemic pairing reaching the user base). Service-level decision history gate (cooldown / budget / parking with one operator notification), RunHygiene agency-churn repair class (signature-based), and RunHygiene wired into the daily maintenance heartbeat so all repair classes reach every install automatically. The manual production surgery became unnecessary: production self-heals through the same shipped path as every other install.",
+        "owner": "maintainer",
+        "priority": "critical",
+        "workstreamId": "release-gates",
+        "dependsOn": [],
+        "evidence": [
+          "recorded production pathology: 23,015 decisions for one junk candidate; 1,226 per stuck scheduler candidate",
+          "internal/daemon/agency_budget_integration_test.go (real-store drill: parks once, zero audit growth on skip)",
+          "internal/db/hygiene_test.go::TestRunHygiene_RepairAgencyChurnArtifacts (seeded with production shape)",
+          "internal/schedule/tasks_test.go::TestMaintenanceLoopTask_RunsHygieneOnInterval"
+        ]
+      }
+    ],
+    "stretch": [],
+    "planned": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "release-gates",
+      "status": "in-progress",
+      "name": "Release gates",
+      "owner": "maintainer",
+      "posture": "on-track",
+      "summary": "Hotfix gate work: bind-fail-loud + semantic-cache removal, full gates, behavioral soak, ceremony.",
+      "progress": 92,
+      "itemIds": [
+        "api-bind-fail-loud",
+        "semantic-cache-removal",
+        "agency-attempt-budget"
+      ],
+      "evidence": []
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "hotfix-unit-suite",
+      "label": "Full unit suite green after cache removal (60 ok / 0 FAIL)",
+      "kind": "test",
+      "status": "complete",
+      "href": "/tmp/artifact"
+    },
+    {
+      "id": "migration-realdata-check",
+      "label": "Migration 065 verified against a copy of production state.db",
+      "kind": "test",
+      "status": "complete",
+      "href": "internal/db/migrations/065_drop_semantic_cache.sql"
+    },
+    {
+      "id": "v111-final-soak",
+      "label": "Final pre-ship behavioral soak on hotfix HEAD: 38/38, all 23 families grade A, 0 release-gate findings",
+      "kind": "test",
+      "status": "complete",
+      "href": "/tmp/artifact"
+    },
+    {
+      "id": "v111-final-soak-b15",
+      "label": "Final authoritative pre-ship soak on release HEAD 4eb8da5e (H3 systemic agency fix + B15 substance-based echo detection): 38/38, all families grade A, 0 release-gate findings",
+      "kind": "test",
+      "status": "complete",
+      "href": "/tmp/artifact"
+    }
+  ],
+  "releasedAt": "2026-06-11T11:22:00Z"
+}

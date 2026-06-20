@@ -1,0 +1,63 @@
+{
+  "id": "v1-1-6",
+  "version": "1.1.6",
+  "name": "v1.1.6 voice-runtime upgrade hotfix",
+  "status": "completed",
+  "posture": "shipped",
+  "summary": "Patch hotfix for a single upgrade-path defect: voice runtime silently failed to refresh on upgrade/update all with 'Warning: ... unsafe archive path \"./\"' — latent on every upgrade since v1.1.0, surfaced by an operator on the 1.1.4->1.1.5 upgrade. The voice-piper archive carries a './' root entry (the conventional first tar record); extractTarGz pre-skipped it but the two voice extractors (extractVoiceRuntimeTarGz, extractVoiceRuntimeZip) passed it into the shared safeArchiveTarget, which rejected '.' as unsafe — one extract loop diverged. SYSTEMIC FIX: the archive-root rule now lives once in safeArchiveTarget (reports the harmless root entry as skip; still rejects absolute/'..'/prefix-escape); all three extract loops consume the single rule and extractTarGz's divergent special-case is removed, so the inconsistency that caused the bug cannot recur. TDD RED (TestExtractVoiceRuntimeTarGz_RootEntry failed with the exact production error) -> GREEN; traversal-rejection tests unchanged; cmd/updatecmd green under -race; build green. No agent-runtime surface touched (cmd/updatecmd CLI only), so no behavioral soak is applicable (justified). The self-update domain unification into a testable src/update.Updater (merging the extract loops) remains tracked for v1.2.0. SHIPPED (2026-06-14): promoted via PR #124 (develop->main, merge f7bdc362), tag v1.1.6; release workflow green, CI tree-reuse fired (4th consecutive release; Pre-release Validation reused develop CI for tree 3a176c26); published live — clean 1.1.6 binary, SHA256SUMS present, /releases/latest resolves v1.1.6 (prerelease=false), site release-sync dispatched. END-TO-END proof: the published voice-piper bundle's first tar entry is './' (the exact root that failed) and the fixed code extracts it (TDD RED->GREEN on that exact error). No behavioral soak applicable (CLI upgrade path only; agent runtime byte-identical to v1.1.5).",
+  "targetWindow": "ASAP hotfix ceremony per docs/testing/release-procedure.md",
+  "lastUpdated": "2026-06-14T15:15:00Z",
+  "releasedAt": "2026-06-14T15:10:42Z",
+  "updateSource": "Hotfix branched from develop (v1.1.5); operator-surfaced on the 1.1.4->1.1.5 upgrade; promoted via #124 and tag v1.1.6 shipped 2026-06-14",
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "workstreams": [
+    {
+      "id": "v116-voice-extract",
+      "status": "complete",
+      "name": "Voice-runtime archive-root extraction fix",
+      "owner": "maintainer",
+      "posture": "on-track",
+      "summary": "Unify the archive-root entry rule in safeArchiveTarget so all three extract loops handle the './' root consistently.",
+      "progress": 100,
+      "itemIds": [
+        "voice-runtime-extract-root-entry"
+      ],
+      "evidence": []
+    }
+  ],
+  "evidence": [
+    {
+      "id": "v116-extract-tdd",
+      "label": "TestExtractVoiceRuntimeTarGz_RootEntry RED (unsafe archive path \"./\") -> GREEN; traversal-rejection + product-knowledge-root tests unchanged; cmd/updatecmd green under -race",
+      "kind": "test",
+      "status": "complete",
+      "href": "cmd/updatecmd/extract_test.go"
+    }
+  ],
+  "scope": {
+    "required": [
+      {
+        "id": "voice-runtime-extract-root-entry",
+        "title": "Voice runtime refreshes on upgrade (archive './' root entry no longer rejected)",
+        "kind": "bug-fix",
+        "status": "complete",
+        "summary": "safeArchiveTarget reports the harmless archive root entry ('.'/'./') as a skip instead of rejecting it as unsafe; all three extract loops (skills/product-knowledge extractTarGz, voice tar, voice zip) consume the single rule and extractTarGz's divergent special-case is removed. Voice-runtime refresh works again on every platform; path-traversal rejection unchanged.",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "v116-voice-extract",
+        "dependsOn": [],
+        "evidence": [
+          "cmd/updatecmd/update.go safeArchiveTarget + extractTarGz/extractVoiceRuntimeTarGz/extractVoiceRuntimeZip",
+          "cmd/updatecmd/extract_test.go::TestExtractVoiceRuntimeTarGz_RootEntry (RED -> GREEN), TestExtractVoiceRuntimeTarGz_TraversalStillRejected",
+          "regression R-116-1"
+        ]
+      }
+    ],
+    "stretch": [],
+    "planned": [],
+    "deferred": [],
+    "outOfScope": []
+  }
+}
