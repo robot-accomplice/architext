@@ -13,7 +13,9 @@ use crate::route_geometry::segment_intersects_rect;
 
 /// Geometry tolerance. Coordinates are pixel-scale, so `f64::EPSILON` is far too
 /// tight after arithmetic; `1e-6` separates "equal" from "different" cleanly.
-const EPS: f64 = 1e-6;
+pub(crate) const EPS: f64 = 1e-6;
+
+pub mod select;
 
 /// A node surface (face), carrying an outward unit normal.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
