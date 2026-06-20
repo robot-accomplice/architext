@@ -206,6 +206,7 @@ jobs:
         shell: bash
         env:
           DRY: ${{ needs.resolve.outputs.dry_run }}
+          VERSION: ${{ needs.resolve.outputs.version }}
           # Auth precedence: a granular NPM_TOKEN secret is the reliable path for
           # the first publish of the five brand-new package names. If the secret
           # is unset this is empty and we fall back to OIDC trusted publishing
@@ -225,15 +226,41 @@ jobs:
           if [ -z "${NODE_AUTH_TOKEN:-}" ] && [ -n "${NPM_CONFIG_USERCONFIG:-}" ]; then
             sed -i '/:_authToken=/d' "$NPM_CONFIG_USERCONFIG" 2>/dev/null || true
           fi
+
+          # Idempotent, re-runnable publish: a real publish (dry_run=false) skips
+          # any package whose exact version is already on the registry, and treats
+          # a publish that fails *because the version now exists* as success. So if
+          # a run dies partway through the six packages, simply re-running it
+          # completes the set instead of 403-ing on the ones already up. Dry-runs
+          # always pack every package (never skip) so the validation is complete.
+          publish_one() {
+            local name="$1" workdir="$2"
+            if [ "$DRY" != "true" ] && npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "  already published: $name@$VERSION — skipping"
+              return 0
+            fi
+            if ( cd "$workdir" && npm publish $flags ); then
+              return 0
+            fi
+            # Tolerate a race: the version may have landed between the check above
+            # and this publish (e.g. a retried network call).
+            if [ "$DRY" != "true" ] && npm view "$name@$VERSION" version >/dev/null 2>&1; then
+              echo "  $name@$VERSION is now on the registry — treating as published"
+              return 0
+            fi
+            echo "::error::publish failed for $name@$VERSION" >&2
+            return 1
+          }
+
           # Binary packages FIRST so the launcher's optionalDependencies resolve.
           for key in darwin-arm64 darwin-x64 linux-x64 linux-arm64 win32-x64; do
             echo "::group::publish @robotaccomplice/architext-$key"
-            ( cd "dist-binaries/$key" && npm publish $flags )
+            publish_one "@robotaccomplice/architext-$key" "dist-binaries/$key"
             echo "::endgroup::"
           done
           # Launcher (main package) LAST.
           echo "::group::publish @robotaccomplice/architext"
-          npm publish $flags
+          publish_one "@robotaccomplice/architext" "."
           echo "::endgroup::"
 
       - name: Smoke-test the published native CLI
