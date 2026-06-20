@@ -333,12 +333,14 @@ const SIDE_OF: [Side; 4] = [Side::Left, Side::Right, Side::Top, Side::Bottom];
 /// (`sides[ei] = Some`) are spread across each surface (co-monotone order, even
 /// slots) and rebuilt from their slotted mounts; edges with `sides[ei] = None`
 /// use `detour[ei]` (their Component-2 route). Still monotone everywhere.
-fn build_slotted_with_sides(
+/// The default per-surface mount order: each surface's edges sorted by the
+/// opposite endpoint's tangent position ([`opposite_rank`]), tie-broken by edge
+/// index. This is the starting order the slot-order repair then permutes.
+fn default_surface_order(
     nodes: &[Rect],
     edges: &[Edge],
     sides: &[Option<(Side, Side)>],
-    detour: &[Vec<Point>],
-) -> Vec<Vec<Point>> {
+) -> HashMap<(usize, u8), Vec<usize>> {
     let mut surface: HashMap<(usize, u8), Vec<usize>> = HashMap::new();
     for (ei, e) in edges.iter().enumerate() {
         if let Some((sa, sb)) = sides[ei] {
@@ -346,24 +348,51 @@ fn build_slotted_with_sides(
             surface.entry((e.b, sb.index())).or_default().push(ei);
         }
     }
-    let mut mount_a: Vec<Option<Point>> = vec![None; edges.len()];
-    let mut mount_b: Vec<Option<Point>> = vec![None; edges.len()];
-    // Fan-order fraction of the e.a-end slot (co-monotone by target), used to
-    // stagger a C's jog channel so the fan's Cs nest instead of sharing a channel.
-    let mut frac_a: Vec<f64> = vec![0.5; edges.len()];
-    let mut keys: Vec<(usize, u8)> = surface.keys().copied().collect();
-    keys.sort_unstable();
-    for k in keys {
-        let mut group = surface.remove(&k).unwrap();
-        let (node_idx, side_idx) = k;
+    for (k, group) in surface.iter_mut() {
+        let (node_idx, side_idx) = *k;
         let side = SIDE_OF[side_idx as usize];
-        let rect = &nodes[node_idx];
         group.sort_by(|&i, &j| {
             opposite_rank(nodes, edges[i], node_idx, side)
                 .partial_cmp(&opposite_rank(nodes, edges[j], node_idx, side))
                 .unwrap_or(Ordering::Equal)
                 .then(i.cmp(&j))
         });
+    }
+    surface
+}
+
+fn build_slotted_with_sides(
+    nodes: &[Rect],
+    edges: &[Edge],
+    sides: &[Option<(Side, Side)>],
+    detour: &[Vec<Point>],
+) -> Vec<Vec<Point>> {
+    let order = default_surface_order(nodes, edges, sides);
+    build_slotted_with_order(nodes, edges, sides, detour, &order)
+}
+
+/// Build slotted routes from an EXPLICIT per-surface mount order (slot = position
+/// in each surface's `Vec`). [`build_slotted_with_sides`] is the default-order
+/// wrapper; the slot-order repair calls this with permuted orders.
+fn build_slotted_with_order(
+    nodes: &[Rect],
+    edges: &[Edge],
+    sides: &[Option<(Side, Side)>],
+    detour: &[Vec<Point>],
+    order: &HashMap<(usize, u8), Vec<usize>>,
+) -> Vec<Vec<Point>> {
+    let mut mount_a: Vec<Option<Point>> = vec![None; edges.len()];
+    let mut mount_b: Vec<Option<Point>> = vec![None; edges.len()];
+    // Fan-order fraction of the e.a-end slot (co-monotone by target), used to
+    // stagger a C's jog channel so the fan's Cs nest instead of sharing a channel.
+    let mut frac_a: Vec<f64> = vec![0.5; edges.len()];
+    let mut keys: Vec<(usize, u8)> = order.keys().copied().collect();
+    keys.sort_unstable();
+    for k in keys {
+        let group = &order[&k];
+        let (node_idx, side_idx) = k;
+        let side = SIDE_OF[side_idx as usize];
+        let rect = &nodes[node_idx];
         let count = group.len();
         for (slot, &ei) in group.iter().enumerate() {
             let frac = (slot as f64 + 1.0) / (count as f64 + 1.0);
@@ -633,6 +662,42 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
             for (k, &ei) in group.iter().enumerate() {
                 sides[ei] = orig[k];
             }
+        }
+    }
+
+    // Phase 3: MOUNT-ORDER repair (lane nesting). A bundle of edges sharing a
+    // surface crosses when its slot order doesn't nest with the partner surface's
+    // order — `opposite_rank` ties (same opposite node) fall back to edge index,
+    // which is geometry-blind. Adjacent-swap local search over each surface's slot
+    // order, keeping a swap only when the weighted total drops. Provably
+    // non-increasing; shape is untouched (slots only), so it never adds a bend.
+    let mut order = default_surface_order(nodes, edges, &sides);
+    routes = build_slotted_with_order(nodes, edges, &sides, &detour, &order);
+    best = weighted_total(&routes);
+    for _ in 0..MAX_ROUNDS {
+        let mut improved = false;
+        let mut keys: Vec<(usize, u8)> = order.keys().copied().collect();
+        keys.sort_unstable();
+        for k in keys {
+            let n = order[&k].len();
+            if n < 2 {
+                continue;
+            }
+            for s in 0..n - 1 {
+                order.get_mut(&k).unwrap().swap(s, s + 1);
+                let trial = build_slotted_with_order(nodes, edges, &sides, &detour, &order);
+                let cost = weighted_total(&trial);
+                if cost < best {
+                    best = cost;
+                    routes = trial;
+                    improved = true;
+                } else {
+                    order.get_mut(&k).unwrap().swap(s, s + 1); // revert
+                }
+            }
+        }
+        if !improved {
+            break;
         }
     }
 
