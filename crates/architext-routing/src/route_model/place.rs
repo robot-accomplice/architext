@@ -510,6 +510,47 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
             break;
         }
     }
+
+    // Phase 2: reciprocal-pair symmetry. A pair a→b / b→a routed with MISMATCHED
+    // shapes (e.g. one toggled to C, its return left an L) crosses. Try forcing
+    // every edge between the same node-pair onto the facing surfaces (so they run
+    // parallel, same shape) and keep it if the weighted total drops.
+    let mut by_pair: HashMap<(usize, usize), Vec<usize>> = HashMap::new();
+    for (ei, e) in edges.iter().enumerate() {
+        if sides[ei].is_some() {
+            by_pair.entry((e.a.min(e.b), e.a.max(e.b))).or_default().push(ei);
+        }
+    }
+    let mut pair_keys: Vec<(usize, usize)> = by_pair.keys().copied().collect();
+    pair_keys.sort_unstable();
+    for pk in pair_keys {
+        let group = &by_pair[&pk];
+        if group.len() < 2 {
+            continue; // need ≥2 edges between the pair (a reciprocal/multi bundle)
+        }
+        let orig: Vec<Option<(Side, Side)>> = group.iter().map(|&ei| sides[ei]).collect();
+        let mut changed = false;
+        for &ei in group {
+            if c_sides[ei].is_some() && c_sides[ei] != sides[ei] {
+                sides[ei] = c_sides[ei];
+                changed = true;
+            }
+        }
+        if !changed {
+            continue;
+        }
+        let trial = build_slotted_with_sides(nodes, edges, &sides, &detour);
+        let cost = weighted_total(&trial);
+        if cost < best {
+            best = cost;
+            routes = trial;
+        } else {
+            for (k, &ei) in group.iter().enumerate() {
+                sides[ei] = orig[k];
+            }
+        }
+    }
+
     routes
 }
 

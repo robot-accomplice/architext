@@ -24,7 +24,7 @@ use crate::plan_diagram::{plan_diagram, plan_diagram_with_stats, ExtraNodeRect};
 use crate::route_diagnostics::DiagMetrics;
 use crate::route_geometry::route_length;
 use crate::route_model::bend_score;
-use crate::route_model::place::{route_all_coordinated, route_all_slotted, Edge};
+use crate::route_model::place::{route_all_coordinated, Edge};
 use crate::route_model::select::polyline_crossings;
 use crate::plan_request::{
     build_flow_plan_request,
@@ -360,7 +360,7 @@ pub fn model_geometry(
                 })
             })
             .collect();
-        let routes = route_all_slotted(&nodes_v, &edges);
+        let routes = route_all_coordinated(&nodes_v, &edges);
         out.push(ModelGeometry {
             flow_id: flow.id.clone(),
             view_id: view.id.clone(),
