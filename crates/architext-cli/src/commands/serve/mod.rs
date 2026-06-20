@@ -336,7 +336,15 @@ fn serve_foreground(target: &Path, opts: &ParsedArgs) {
     }
 
     let data_dir = data_dir_for(target);
-    let farm = farm_state::build_farm(&data_dir);
+    // Build an EMPTY farm so the server binds and prints its URL immediately; the
+    // CPU-heavy plan precompute runs in the background (see spawn_blocking below).
+    // Previously this called build_farm(), which precomputes every flow×view plan
+    // synchronously right here — so `architext serve` on a large corpus sat
+    // silently for a long time before printing "Open". The viewer polls the farm
+    // and shows its own progress overlay while it warms.
+    let farm = farm_state::empty_farm();
+    let warm_farm = farm.clone();
+    let warm_data_dir = data_dir.clone();
     let schema_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .parent()
         .and_then(|p| p.parent())
@@ -374,6 +382,11 @@ fn serve_foreground(target: &Path, opts: &ParsedArgs) {
             }
         };
         let router = build_router(app_state, farm, hub);
+
+        // Warm the plan farm off the async runtime (CPU-heavy, synchronous work);
+        // fire-and-forget — refresh_farm atomically swaps in the populated map and
+        // the viewer polls until its diagrams are ready.
+        tokio::task::spawn_blocking(move || farm_state::refresh_farm(&warm_farm, &warm_data_dir));
 
         // tokio requires the std listener to be non-blocking before from_std.
         listener.set_nonblocking(true).expect("set_nonblocking");
