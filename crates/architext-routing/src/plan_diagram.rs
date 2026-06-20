@@ -35,6 +35,9 @@ use crate::route_edges::orchestration::{
 use crate::route_ports::SideAnchors;
 use crate::route_geometry::rects_overlap;
 use crate::route_labels::{estimated_label_box, LabelBox, LabelRelationship};
+use crate::route_diagnostics::{
+    diagnose_planned_routes, DiagMetrics, DiagOptions, DiagPlan, DiagRelationship,
+};
 
 // ---------------------------------------------------------------------------
 // Input wire shape
@@ -512,7 +515,9 @@ pub fn plan_diagram(input: &PlanDiagramInput) -> Plan {
 /// Same as [`plan_diagram`] but also returns the deterministic planner work
 /// counters ([`CorpusPlanStats`]). Used by the perf ratchet; the WASM/native
 /// bridge uses the stats-free [`plan_diagram`].
-pub fn plan_diagram_with_stats(input: &PlanDiagramInput) -> (Plan, CorpusPlanStats) {
+pub fn plan_diagram_with_stats(
+    input: &PlanDiagramInput,
+) -> (Plan, CorpusPlanStats, Option<DiagMetrics>) {
     let node_width = input.node_width;
     let node_height = input.node_height;
     let lane_width = input.lane_width;
@@ -749,6 +754,45 @@ pub fn plan_diagram_with_stats(input: &PlanDiagramInput) -> (Plan, CorpusPlanSta
 
     // Assemble the Plan wire shape
     // Convert planned_routes to IndexMap<String, Route> for the Plan struct
+    // Net-new: optional diagnostics sweep, gated on input.diagnostics. Computed
+    // from the real RouteData this plan produced, so a consumer (e.g. the score
+    // harness) gets β/crossings/length/doglegs from the same routes the viewer
+    // renders. Plan's wire shape is unchanged — diagnostics ride alongside the
+    // Plan in the return tuple, never inside it (zero parity risk). Computed here,
+    // before node_rects/visible_node_ids are moved into Plan below.
+    let diagnostics: Option<DiagMetrics> = if input.diagnostics {
+        let diag_relationships: Vec<DiagRelationship> = input
+            .relationships
+            .iter()
+            .map(|r| DiagRelationship {
+                id: r.id.clone(),
+                from: r.from.clone(),
+                to: r.to.clone(),
+                display_index: Some(r.display_index as f64),
+                kind: r.kind.clone(),
+                return_of: r.return_of.clone(),
+                outcome: r.outcome.clone(),
+                relationship_type: r.relationship_type.clone(),
+                step_id: r.step_id.clone(),
+                flow_id: r.flow_id.clone(),
+                preferred_start_side: r.preferred_start_side.clone(),
+                preferred_end_side: r.preferred_end_side.clone(),
+            })
+            .collect();
+        let diag_plan = DiagPlan {
+            routes: &routed_edges,
+            node_rects: &node_rects,
+            visible_node_ids: &visible_node_ids,
+            lane_index_by_node: &lane_index_by_node,
+            row_index_by_node: &row_index_by_node,
+            canvas_width,
+            canvas_height,
+        };
+        Some(diagnose_planned_routes(&diag_plan, &diag_relationships, &DiagOptions::default()).metrics)
+    } else {
+        None
+    };
+
     let routes_map: IndexMap<String, Route> = planned_routes
         .into_iter()
         .filter_map(|(k, v)| {
@@ -785,7 +829,7 @@ pub fn plan_diagram_with_stats(input: &PlanDiagramInput) -> (Plan, CorpusPlanSta
             .filter_map(|w| serde_json::from_value(w).ok())
             .collect(),
     };
-    (plan, plan_stats)
+    (plan, plan_stats, diagnostics)
 }
 
 // ---------------------------------------------------------------------------
