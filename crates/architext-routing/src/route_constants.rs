@@ -165,6 +165,13 @@ pub const MIN_LEGIBLE_GAP: f64 = ARROWHEAD_WIDTH * MIN_LEGIBLE_GAP_ARROWHEADS;
 pub const MOUNT_MAX_ITERS: u32 = 8;
 pub const RECIPROCAL_PARALLEL_OFFSET: f64 = 12.0;
 
+/// Bend score for a route that reverses heading (a dogleg / "Z"), per the
+/// deterministic-model score β: β(r) = bends(r) if monotone, else this penalty.
+/// A monotone "C" (2 clean bends) scores 2; a reversing "Z" scores this. Large
+/// enough that any single reversal dominates a realistic clean bend total, so a
+/// routing with any dogleg loses on the β term. See ROUTING_DETERMINISTIC_MODEL.md.
+pub const REVERSAL_BEND_PENALTY: f64 = 99.0;
+
 // ---------------------------------------------------------------------------
 // Bridge constants
 // ---------------------------------------------------------------------------

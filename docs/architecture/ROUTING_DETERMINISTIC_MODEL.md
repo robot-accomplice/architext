@@ -45,14 +45,27 @@ deterministic procedure** (pseudocode) and **§4 why it is deterministic.**
   (`first_dir · n_{sA} > 0`, `last_dir · n_{sB} < 0`).
 
 ### Objectives (Q) — minimize, strict lexicographic priority
-1. **Q1 — bends** `bends(r)`: number of turns. straight `=0`, L `=1`,
-   staircase `≥2`.
+1. **Q1 — bend score** `β(r)`: a **shape-weighted** score, *not* a raw turn count
+   (maintainer, 2026-06-20). Two routes with the same number of turns are not
+   equal — a clean turn and a doubling-back turn score very differently:
+
+   | shape | turns | monotone? | `β` |
+   |---|---|---|---|
+   | straight | 0 | yes | **0** |
+   | L | 1 | yes | **1** |
+   | C | 2 | **yes** (clean, never doubles back) | **2** |
+   | Z | 2 | **no** (reverses heading) | **99** = `REVERSAL_BEND_PENALTY` |
+
+   General rule: `β(r) = bends(r)` if `monotone(r)`, else `REVERSAL_BEND_PENALTY`.
+   So `C` and `Z` tie on count (2) but separate on `β` (2 vs 99). `99` is a named
+   constant, never a literal (project rule 3).
 2. **Q2 — crossings** `crossings(r)`: intersections with other routes.
 3. **Q3 — length** `length(r)`: Manhattan length.
 
-**Priority law:** `Q1 ≻ Q2 ≻ Q3`, lexicographic, no slack. **Bend count is the
-highest-cost element — an extra bend always loses**, even to crossings and
-always to length (maintainer, confirmed 2026-06-20). Consequences:
+**Priority law:** `Q1 ≻ Q2 ≻ Q3`, lexicographic, no slack. **The bend score is the
+highest-cost element — an extra clean bend always loses**, even to crossings and
+always to length (maintainer, confirmed 2026-06-20); a *reversal* bend loses
+catastrophically (β jumps to 99). Consequences:
 - a straight/L is taken **even when it crosses**, over any extra-bend route with
   fewer or zero crossings;
 - more distance is *always* accepted to remove a bend;
@@ -60,7 +73,11 @@ always to length (maintainer, confirmed 2026-06-20). Consequences:
   exists, is a failure — including *inside* the forced regime, where a low-bend
   circumnavigation beats a shorter high-bend wiggle.
 
-The full order is therefore fixed: `bends`, then `crossings`, then `length`,
+This folds the old separate `doglegs` term into `β`: a doubling-back route is
+simply one whose `β = 99`. The model never *emits* one (H2); the score still
+*represents* one, so a baselined dogleg loses decisively.
+
+The full order is therefore fixed: `β`, then `crossings`, then `length`,
 then `(displayIndex, relationshipId)` for determinism.
 
 ### Determinism (D)
@@ -130,12 +147,15 @@ and blocked-L all make `feasible = false` for that surface pair.
 
 ### 2.5 Cost and order
 ```
-c(r) = ( bends(r), crossings(r), length(r) )  ∈  ℤ≥0 × ℤ≥0 × ℝ≥0
+c(r) = ( β(r), crossings(r), length(r) )  ∈  ℤ≥0 × ℤ≥0 × ℝ≥0
+β(r) = bends(r)             if monotone(r)
+       REVERSAL_BEND_PENALTY  otherwise        # = 99
 ```
 compared **lexicographically**. Among feasible candidates the selected route is
 `argmin_lex c(r)`, ties broken by `(displayIndex, relationshipId)` — a total
-order on distinct edges. The bends-first position *is* the formal statement of
-"distance is always preferred to a greater number of bends."
+order on distinct edges. The `β`-first position *is* the formal statement of
+"distance is always preferred to a greater number of bends," and the
+reversal penalty is what makes a `Z` (β=99) lose to a `C` (β=2) at equal count.
 
 ---
 
@@ -225,13 +245,16 @@ win — with the eyes used only to confirm the verdict, never to discover it.
 The aggregate of the per-route cost (§2.5):
 
 ```
-S(D) = ( Σ doglegs(r),  Σ bends(r),  Σ crossings(r),  Σ length(r) )   over routes r of diagram D
+S(D) = ( Σ β(r),  Σ crossings(r),  Σ length(r) )   over routes r of diagram D
 ```
-- `Σ doglegs` is a **hard prefix**: any `Σ doglegs > 0` is a *constraint
-  violation* (a fail), not merely a worse score. The model must yield `0`.
-- the remaining triple compares **lexicographically** (`bends ≻ crossings ≻
-  length`) — the diagram-level image of the per-route law. Minimizing `Σ bends`
-  inherently minimizes staircasing, so the score needs no separate staircase term.
+compared **lexicographically** (`β ≻ crossings ≻ length`).
+- `β` already encodes the dogleg as a 99 penalty, so there is no separate hard
+  `doglegs` prefix in the score — a single reversal pushes `Σ β` past any
+  realistic clean total, so a routing with *any* dogleg loses on the first term.
+- the model's hard constraint H2 (never emit a reversal) means its output always
+  has `Σ β = Σ bends`; only a *baseline* (current engine) pays the 99s.
+- Minimizing `Σ β` inherently minimizes both reversals (99 each) and staircasing
+  (each clean bend +1), so the score needs no separate staircase term.
 
 ### Procedure
 1. **Baseline.** Score every known diagram (routing-corpus *and* FlowForge) under

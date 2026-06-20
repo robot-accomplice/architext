@@ -20,7 +20,8 @@ use rayon::prelude::*;
 use std::path::Path;
 
 use crate::diagram_config::DiagramConfig;
-use crate::plan_diagram::{plan_diagram, ExtraNodeRect};
+use crate::plan_diagram::{plan_diagram, plan_diagram_with_stats, ExtraNodeRect};
+use crate::route_diagnostics::DiagMetrics;
 use crate::plan_request::{
     build_flow_plan_request,
     types::{Flow, FlowsFile, View, ViewsFile},
@@ -169,6 +170,43 @@ pub fn warm_flow_plans(
         }
     });
     Ok(warmed.load(Ordering::Relaxed))
+}
+
+/// Score every (flow, view) pair through the REAL plan path with diagnostics on,
+/// returning the deterministic-model metrics (β/crossings/length/doglegs) per
+/// pair. This is the score-baseline harness (ROUTING_DETERMINISTIC_MODEL.md §5):
+/// it runs the same `plan_diagram` the viewer/farm use, but flips `diagnostics`
+/// so per-route shape costs are computed from the rendered `RouteData`. Works on
+/// any corpus (routing-corpus AND FlowForge) because it uses the full plan path,
+/// not the minimal corpus-fitness reimplementation.
+pub fn score_flow_plans(
+    data_dir: &Path,
+    diagram_config: &DiagramConfig,
+) -> Result<Vec<(String, String, DiagMetrics)>, String> {
+    let (flows, views) = load_flows_and_views(data_dir)?;
+    let flow_view_type_set: std::collections::HashSet<&str> =
+        flow_view_types().iter().copied().collect();
+    let layout_config = diagram_config.layout.to_layout_config();
+    let pairs: Vec<(&View, &Flow)> = views
+        .iter()
+        .filter(|v| flow_view_type_set.contains(v.view_type.as_str()))
+        .flat_map(|v| {
+            flows
+                .iter()
+                .filter(move |f| flow_compatible_with_view(f, v))
+                .map(move |f| (v, f))
+        })
+        .collect();
+    let mut out = Vec::with_capacity(pairs.len());
+    for (view, flow) in pairs {
+        let mut req = build_flow_plan_request(view, flow, Some(&layout_config), "orthogonal");
+        req.plan_diagram_input.diagnostics = true;
+        let (_plan, _stats, diag) = plan_diagram_with_stats(&req.plan_diagram_input);
+        if let Some(metrics) = diag {
+            out.push((flow.id.clone(), view.id.clone(), metrics));
+        }
+    }
+    Ok(out)
 }
 
 fn build_farm_entry(view: &View, flow: &Flow, layout_config: &LayoutConfig) -> Result<FarmEntry, String> {
