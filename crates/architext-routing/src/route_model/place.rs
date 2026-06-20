@@ -11,10 +11,11 @@
 //! loop's purpose now is the clean/fallback COUNT and the clean edges' β.
 
 use std::cmp::Ordering;
+use std::collections::HashMap;
 
-use super::bend_score;
 use super::component2::monotone_detour;
 use super::select::{best_clean_route, polyline_crossings, side_center_mounts, Candidate};
+use super::{bend_score, build_path_01, clears, Side};
 use crate::model::{Point, Rect};
 use crate::route_geometry::route_length;
 
@@ -109,32 +110,138 @@ fn forced_detour(a: &Rect, b: &Rect, obstacles: &[Rect], placed: &[Vec<Point>]) 
     best.map(|(_, p)| p)
 }
 
+/// A routed edge plus the surfaces it mounts (`Some` ⇒ a clean Component-1 route;
+/// `None` ⇒ a Component-2 detour, whose mounts are chosen internally).
+#[derive(Debug, Clone)]
+pub struct RoutedEdge {
+    pub route: Vec<Point>,
+    pub sides: Option<(Side, Side)>,
+}
+
+/// Obstacles for an edge = all node rects except its two endpoints.
+fn obstacles_for(nodes: &[Rect], a: usize, b: usize) -> Vec<Rect> {
+    nodes
+        .iter()
+        .enumerate()
+        .filter(|(j, _)| *j != a && *j != b)
+        .map(|(_, r)| r.clone())
+        .collect()
+}
+
+/// Route every edge, capturing the chosen surfaces. Component 1 (clean) when
+/// possible, else Component 2 (forced monotone detour). Always monotone.
+pub fn route_all_sided(nodes: &[Rect], edges: &[Edge]) -> Vec<RoutedEdge> {
+    let mut placed: Vec<Vec<Point>> = Vec::new();
+    let mut out: Vec<RoutedEdge> = Vec::with_capacity(edges.len());
+    for e in edges {
+        let a = &nodes[e.a];
+        let b = &nodes[e.b];
+        let obstacles = obstacles_for(nodes, e.a, e.b);
+        let routed = match best_clean_route(a, b, &obstacles, &placed) {
+            Some(c) => RoutedEdge { route: c.points, sides: Some((c.side_a, c.side_b)) },
+            None => RoutedEdge {
+                route: forced_detour(a, b, &obstacles, &placed).unwrap_or_default(),
+                sides: None,
+            },
+        };
+        if !routed.route.is_empty() {
+            placed.push(routed.route.clone());
+        }
+        out.push(routed);
+    }
+    out
+}
+
 /// Route EVERY edge: Component 1 (clean 0/1-bend) when possible, else Component 2
 /// (forced monotone detour). Every route is monotone — the output has **zero
 /// doglegs by construction**. Returns one polyline per edge (empty only if even a
 /// monotone detour is impossible, which a layered diagram does not produce).
 pub fn route_all(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> {
-    let mut placed: Vec<Vec<Point>> = Vec::new();
-    let mut out: Vec<Vec<Point>> = Vec::with_capacity(edges.len());
-    for e in edges {
-        let a = &nodes[e.a];
-        let b = &nodes[e.b];
-        let obstacles: Vec<Rect> = nodes
-            .iter()
-            .enumerate()
-            .filter(|(j, _)| *j != e.a && *j != e.b)
-            .map(|(_, r)| r.clone())
-            .collect();
-        let route = best_clean_route(a, b, &obstacles, &placed)
-            .map(|c| c.points)
-            .or_else(|| forced_detour(a, b, &obstacles, &placed));
-        let route = route.unwrap_or_default();
-        if !route.is_empty() {
-            placed.push(route.clone());
-        }
-        out.push(route);
+    route_all_sided(nodes, edges).into_iter().map(|r| r.route).collect()
+}
+
+/// Opposite endpoint's centre coordinate along the surface tangent — the
+/// co-monotone ordering key for slot assignment. Vertical surfaces (L/R) order by
+/// the opposite node's y; horizontal surfaces (T/B) by its x.
+fn opposite_rank(nodes: &[Rect], e: Edge, node_idx: usize, side: Side) -> f64 {
+    let opp = if e.a == node_idx { e.b } else { e.a };
+    let r = &nodes[opp];
+    if side.is_horizontal() {
+        r.y + r.height / 2.0
+    } else {
+        r.x + r.width / 2.0
     }
-    out
+}
+
+/// Like [`route_all`], but parallel edges sharing a surface are spread across it
+/// instead of overlapping at the centre. Per surface, edges are ordered by their
+/// opposite endpoint (co-monotone, to minimise intra-bundle crossings) and given
+/// evenly-spaced mount slots; each clean route is rebuilt from its slotted mounts
+/// (falling back to the centre route if a slot breaks feasibility). Component-2
+/// detours are left as-is. Still monotone everywhere — zero doglegs.
+pub fn route_all_slotted(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> {
+    let routed = route_all_sided(nodes, edges);
+
+    // Group clean edges by the surface each end mounts: (node, side.index) -> edges.
+    let mut surface: HashMap<(usize, u8), Vec<usize>> = HashMap::new();
+    for (ei, e) in edges.iter().enumerate() {
+        if let Some((sa, sb)) = routed[ei].sides {
+            surface.entry((e.a, sa.index())).or_default().push(ei);
+            surface.entry((e.b, sb.index())).or_default().push(ei);
+        }
+    }
+
+    let side_of = |idx: u8| match idx {
+        0 => Side::Left,
+        1 => Side::Right,
+        2 => Side::Top,
+        _ => Side::Bottom,
+    };
+    let mut mount_a: Vec<Option<Point>> = vec![None; edges.len()];
+    let mut mount_b: Vec<Option<Point>> = vec![None; edges.len()];
+
+    // Deterministic surface order so slot assignment is reproducible.
+    let mut keys: Vec<(usize, u8)> = surface.keys().copied().collect();
+    keys.sort_unstable();
+    for k in keys {
+        let mut group = surface.remove(&k).unwrap();
+        let (node_idx, side_idx) = k;
+        let side = side_of(side_idx);
+        let rect = &nodes[node_idx];
+        group.sort_by(|&i, &j| {
+            opposite_rank(nodes, edges[i], node_idx, side)
+                .partial_cmp(&opposite_rank(nodes, edges[j], node_idx, side))
+                .unwrap_or(Ordering::Equal)
+                .then(i.cmp(&j))
+        });
+        let count = group.len();
+        for (slot, &ei) in group.iter().enumerate() {
+            let frac = (slot as f64 + 1.0) / (count as f64 + 1.0);
+            let pt = side.mount_at(rect, frac);
+            if edges[ei].a == node_idx {
+                mount_a[ei] = Some(pt);
+            } else {
+                mount_b[ei] = Some(pt);
+            }
+        }
+    }
+
+    // Rebuild clean edges from slotted mounts; keep detours as-is.
+    edges
+        .iter()
+        .enumerate()
+        .map(|(ei, e)| match routed[ei].sides {
+            Some((sa, sb)) => {
+                let pa = mount_a[ei].clone().unwrap_or_else(|| sa.mount_at(&nodes[e.a], 0.5));
+                let pb = mount_b[ei].clone().unwrap_or_else(|| sb.mount_at(&nodes[e.b], 0.5));
+                let obstacles = obstacles_for(nodes, e.a, e.b);
+                build_path_01(sa, &pa, sb, &pb)
+                    .filter(|pts| clears(pts, &obstacles))
+                    .unwrap_or_else(|| routed[ei].route.clone())
+            }
+            None => routed[ei].route.clone(),
+        })
+        .collect()
 }
 
 #[cfg(test)]
@@ -193,6 +300,21 @@ mod tests {
             assert!(!r.is_empty(), "every edge is routed");
             assert!(monotone(r), "every route is monotone — zero doglegs");
         }
+    }
+
+    #[test]
+    fn parallel_edges_get_distinct_slots() {
+        // Two parallel A→B edges must not collapse onto the same centre route —
+        // slotting spreads them across the shared surfaces.
+        let nodes = vec![rect(0.0, 0.0), rect(300.0, 0.0)];
+        let edges = vec![Edge { a: 0, b: 1 }, Edge { a: 0, b: 1 }];
+        let routes = route_all_slotted(&nodes, &edges);
+        assert_eq!(routes.len(), 2);
+        for r in &routes {
+            assert!(!r.is_empty());
+            assert!(monotone(r));
+        }
+        assert_ne!(routes[0], routes[1], "parallel edges land on distinct slots");
     }
 
     #[test]

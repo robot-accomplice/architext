@@ -44,6 +44,27 @@ impl Side {
     pub fn is_horizontal(self) -> bool {
         matches!(self, Side::Left | Side::Right)
     }
+
+    /// Deterministic order key: L < R < T < B.
+    pub fn index(self) -> u8 {
+        match self {
+            Side::Left => 0,
+            Side::Right => 1,
+            Side::Top => 2,
+            Side::Bottom => 3,
+        }
+    }
+
+    /// Mount point at fraction `frac ∈ [0,1]` along this surface of `rect`. The
+    /// tangent axis is y for Left/Right, x for Top/Bottom; `0.5` is the centre.
+    pub fn mount_at(self, rect: &Rect, frac: f64) -> Point {
+        match self {
+            Side::Left => Point { x: rect.x, y: rect.y + rect.height * frac },
+            Side::Right => Point { x: rect.x + rect.width, y: rect.y + rect.height * frac },
+            Side::Top => Point { x: rect.x + rect.width * frac, y: rect.y },
+            Side::Bottom => Point { x: rect.x + rect.width * frac, y: rect.y + rect.height },
+        }
+    }
 }
 
 /// JS-style sign: `0` maps to `0` (not `+0`).

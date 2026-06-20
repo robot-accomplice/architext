@@ -12,25 +12,13 @@ use super::{bend_score, build_path_01, clears, Side, EPS};
 use crate::model::{Point, Rect};
 use crate::route_geometry::route_length;
 
-/// Deterministic side order for tie-breaking: L < R < T < B.
-fn side_rank(s: Side) -> u8 {
-    match s {
-        Side::Left => 0,
-        Side::Right => 1,
-        Side::Top => 2,
-        Side::Bottom => 3,
-    }
-}
-
-/// The four side-centre mount candidates for a rect, in `side_rank` order.
+/// The four side-centre mount candidates for a rect, in `Side::index` order.
 pub fn side_center_mounts(rect: &Rect) -> [(Side, Point); 4] {
-    let cx = rect.x + rect.width / 2.0;
-    let cy = rect.y + rect.height / 2.0;
     [
-        (Side::Left, Point { x: rect.x, y: cy }),
-        (Side::Right, Point { x: rect.x + rect.width, y: cy }),
-        (Side::Top, Point { x: cx, y: rect.y }),
-        (Side::Bottom, Point { x: cx, y: rect.y + rect.height }),
+        (Side::Left, Side::Left.mount_at(rect, 0.5)),
+        (Side::Right, Side::Right.mount_at(rect, 0.5)),
+        (Side::Top, Side::Top.mount_at(rect, 0.5)),
+        (Side::Bottom, Side::Bottom.mount_at(rect, 0.5)),
     ]
 }
 
@@ -120,8 +108,8 @@ pub fn best_clean_route(
             .unwrap_or(Ordering::Equal)
             .then(cx.1.cmp(&cy.1))
             .then(cx.2.partial_cmp(&cy.2).unwrap_or(Ordering::Equal))
-            .then(side_rank(x.side_a).cmp(&side_rank(y.side_a)))
-            .then(side_rank(x.side_b).cmp(&side_rank(y.side_b)))
+            .then(x.side_a.index().cmp(&y.side_a.index()))
+            .then(x.side_b.index().cmp(&y.side_b.index()))
     })
 }
 
