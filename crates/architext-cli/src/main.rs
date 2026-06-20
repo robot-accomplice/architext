@@ -101,8 +101,15 @@ fn main() {
         return;
     }
 
-    // `update`: self-update the native binary from GitHub releases (no target).
-    if opts.command == "update" {
+    // `update` (and `upgrade`): self-update the native binary from GitHub
+    // releases (no target). `upgrade` was previously an alias for `sync`; it now
+    // means "upgrade the binary", which is what users expect.
+    if opts.command == "update" || opts.command == "upgrade" {
+        if opts.command == "upgrade" {
+            eprintln!(
+                "note: `upgrade` now updates the architext binary; use `architext sync` to install or migrate project data."
+            );
+        }
         commands::update::run(version);
         return;
     }
@@ -127,7 +134,7 @@ fn main() {
         "build" => commands::build::run(&target, &opts.out),
         "clean" => commands::clean::run(&target, opts.node_modules, opts.dry_run),
 
-        "sync" | "install" | "upgrade" | "migrate" => {
+        "sync" | "install" | "migrate" => {
             commands::sync::run(&target, &opts, version);
         }
         "serve" => commands::serve::run(&target, &opts, version),

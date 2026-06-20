@@ -221,17 +221,14 @@ npm run architext:clean
 
 Those root scripts call the global `architext` CLI with `.` as the target path.
 
-Install explicitly:
+Install or update project data explicitly:
 
 ```sh
 architext sync
 ```
 
-Upgrade explicitly:
-
-```sh
-architext sync
-```
+(`architext upgrade` no longer means `sync`; it updates the architext binary.
+Use `architext sync` for project data.)
 
 Run non-interactively:
 
