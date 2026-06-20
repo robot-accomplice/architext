@@ -15,6 +15,52 @@ deterministic procedure** (pseudocode) and **§4 why it is deterministic.**
 
 ---
 
+## 0. Ubiquitous language — the shape taxonomy (READ FIRST, NON-NEGOTIABLE)
+
+Confirmed by the maintainer 2026-06-20 ("exactly right"). **Line shape — not bend
+count — classifies a route.** Get this wrong and every downstream cost is wrong.
+
+**Anatomy of a two-bend route.** Three segments: two **end segments**, each hung
+off one end of a **middle (conjoining) segment**. The middle segment is the
+shape's **axis** — the single straight reference line that orients both end
+segments. An *axis* requires a shared reference point/line; the two end segments
+**share no point with each other**, so there is no axis *between* them. Only the
+middle segment is an axis. (Therefore the two end segments pointing opposite ways
+is **not** a "reversal on an axis" — there is no shared axis to reverse on.)
+
+**The ladder.** Cost is a property of shape:
+
+| shape | segments | structure | `β` |
+|---|---|---|---|
+| **straight** | 1 | — | **0** |
+| **L** | 2 | two perpendicular segments, one bend | **1** |
+| **C** | 3 | two end segments on the **SAME side** of the middle segment: `[` `]` `∩` `∪` | **2** |
+| **Z / staircase** | 3+ | end segments on **OPPOSITE sides** of the middle segment: `_|ˉ` | **99** = `Z_PENALTY` |
+| **dogleg** | — | the line **doubles back over itself** (retraces / folds onto its own path) | **1e9** = `DOGLEG_PENALTY` |
+
+**The rules that keep getting violated:**
+
+1. **A C connects two *like-facing* surfaces** — two easterly, two westerly, two
+   northerly (`∩`), or two southerly (`∪`). Its two end segments are parallel and
+   non-contiguous, both on the same side of the middle segment. A C may span the
+   same plane or different planes.
+2. **A C between two *facing* surfaces is impossible.** Two facing surfaces,
+   offset, produce a **Z** (`_|ˉ`) — the two end segments land on opposite sides of
+   the conjoining segment. Aligned facing surfaces produce a straight or an L.
+   A "jog" between facing surfaces is therefore an **unjustifiable Z (99)**, never
+   a C.
+3. **Bend count does not classify a shape.** A C and a Z both have two bends. The
+   discriminator is *which side of the middle segment the end segments sit on*
+   (same → C, opposite → Z).
+4. **A clean C is never a dogleg**, in any of its four orientations, even though
+   its two end segments point opposite — they share no axis, and the line never
+   folds over itself. A **dogleg** is the line physically doubling back over
+   itself; it is **not** defined by coordinate-axis sign reversal.
+5. **Minimum stem.** Every route travels straight off a surface for at least
+   `MIN_SURFACE_STEM` before its first bend — no bending right at the wall.
+
+---
+
 ## 1. Problem statement
 
 ### Given
