@@ -8,12 +8,24 @@
 //! Component 2 yet — those build on these primitives.
 
 use crate::model::{Point, Rect};
-use crate::route_constants::REVERSAL_BEND_PENALTY;
 use crate::route_geometry::segment_intersects_rect;
 
 /// Geometry tolerance. Coordinates are pixel-scale, so `f64::EPSILON` is far too
 /// tight after arithmetic; `1e-6` separates "equal" from "different" cleanly.
 pub(crate) const EPS: f64 = 1e-6;
+
+/// The most bends a *clean* shape may have: a C (the monotone 2-bend jog). The
+/// shape ladder is straight 0, L 1, C 2.
+pub(crate) const MAX_CLEAN_BENDS: usize = 2;
+
+/// A Z formation / staircase — monotone, but with more bends than a C (≥3). Never
+/// acceptable, because distance is always preferred to a 3rd bend.
+pub(crate) const Z_PENALTY: f64 = 99.0;
+
+/// A dogleg — a line that doubles back over itself (reverses heading on an axis).
+/// Categorically forbidden: priced so far past every other shape that no trade of
+/// crossings or length can ever justify one.
+pub(crate) const DOGLEG_PENALTY: f64 = 1_000_000_000.0;
 
 pub mod component2;
 pub mod place;
@@ -123,13 +135,19 @@ pub fn bends(points: &[Point]) -> usize {
     count
 }
 
-/// §2.5 — the bend score β: `bends` if monotone, else `REVERSAL_BEND_PENALTY`.
-/// A clean C (2 monotone bends) scores 2; a reversing Z scores 99.
+/// §2.5 — the bend score β (the shape ladder): straight 0, L 1, C 2, then two
+/// distinct failure tiers. A **dogleg** (the line doubles back over itself — a
+/// reversal, caught by `!monotone`) scores [`DOGLEG_PENALTY`] (1e9): categorically
+/// forbidden. A **Z formation / staircase** (monotone but ≥3 bends) scores
+/// [`Z_PENALTY`] (99): never acceptable, but not the catastrophe a dogleg is.
 pub fn bend_score(points: &[Point]) -> f64 {
-    if monotone(points) {
-        bends(points) as f64
+    let b = bends(points);
+    if !monotone(points) {
+        DOGLEG_PENALTY
+    } else if b <= MAX_CLEAN_BENDS {
+        b as f64
     } else {
-        REVERSAL_BEND_PENALTY
+        Z_PENALTY
     }
 }
 
@@ -240,19 +258,25 @@ mod tests {
     }
 
     #[test]
-    fn bend_score_separates_c_from_z() {
-        // C: monotone 2-bend → 2
+    fn bend_score_ladder_straight_l_c_z_dogleg() {
+        // straight 0, L 1, C 2 — the clean shapes
+        assert_eq!(bend_score(&[p(0.0, 0.0), p(10.0, 0.0)]), 0.0); // straight
+        assert_eq!(bend_score(&[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 5.0)]), 1.0); // L
         assert_eq!(
             bend_score(&[p(0.0, 0.0), p(5.0, 0.0), p(5.0, 5.0), p(10.0, 5.0)]),
             2.0
-        );
-        // Z: reversing 2-bend → REVERSAL_BEND_PENALTY (99)
-        assert_eq!(
-            bend_score(&[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(3.0, 10.0)]),
-            REVERSAL_BEND_PENALTY
-        );
-        assert_eq!(bend_score(&[p(0.0, 0.0), p(10.0, 0.0)]), 0.0); // straight
-        assert_eq!(bend_score(&[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 5.0)]), 1.0); // L
+        ); // C: monotone 2-bend
+        // Z / STAIRCASE: monotone, ≥3 bends → 99 (never acceptable, distance is
+        // always preferred to a 3rd bend).
+        let staircase = [p(0.0, 0.0), p(5.0, 0.0), p(5.0, 5.0), p(10.0, 5.0), p(10.0, 10.0)];
+        assert!(monotone(&staircase) && bends(&staircase) == 3);
+        assert_eq!(bend_score(&staircase), Z_PENALTY);
+        // DOGLEG: a line that doubles back over itself (reverses on x) → 1e9,
+        // catastrophically worse than a Z so no trade can ever justify one.
+        let dogleg = [p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(3.0, 10.0)];
+        assert!(!monotone(&dogleg));
+        assert_eq!(bend_score(&dogleg), DOGLEG_PENALTY);
+        assert!(DOGLEG_PENALTY > Z_PENALTY * 1_000_000.0);
     }
 
     #[test]

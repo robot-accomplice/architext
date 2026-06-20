@@ -53,12 +53,22 @@ deterministic procedure** (pseudocode) and **§4 why it is deterministic.**
    |---|---|---|---|
    | straight | 0 | yes | **0** |
    | L | 1 | yes | **1** |
-   | C | 2 | **yes** (clean, never doubles back) | **2** |
-   | Z | 2 | **no** (reverses heading) | **99** = `REVERSAL_BEND_PENALTY` |
+   | C | 2 | **yes** (clean jog, never doubles back) | **2** |
+   | Z / staircase | ≥3 | **yes** (monotone, but too many bends) | **99** = `Z_PENALTY` |
+   | dogleg | ≥1 | **no** (doubles back over itself) | **1e9** = `DOGLEG_PENALTY` |
 
-   General rule: `β(r) = bends(r)` if `monotone(r)`, else `REVERSAL_BEND_PENALTY`.
-   So `C` and `Z` tie on count (2) but separate on `β` (2 vs 99). `99` is a named
-   constant, never a literal (project rule 3).
+   General rule — two distinct failure tiers above the clean ladder:
+   ```
+   β(r) = bends(r)        if monotone(r) ∧ bends(r) ≤ 2     # straight 0, L 1, C 2
+        = Z_PENALTY  (99) if monotone(r) ∧ bends(r) ≥ 3     # Z / staircase
+        = DOGLEG_PENALTY (1e9) if ¬monotone(r)              # dogleg (doubles back)
+   ```
+   A C (2 clean turns) is the most a route may bend. A **Z / staircase** (monotone,
+   ≥3 turns) is never acceptable — distance is always preferred to a 3rd bend — and
+   has *always* cost 99. A **dogleg** (the line reverses heading and doubles back
+   over itself) is catastrophic: priced at 1e9, orders of magnitude past a Z, so no
+   trade of crossings or length can ever buy one. Both are named constants, never
+   literals (project rule 3).
 2. **Q2 — crossings** `crossings(r)`: intersections with other routes.
 3. **Q3 — length** `length(r)`: Manhattan length.
 
@@ -70,9 +80,9 @@ forcing Cs scored β 138→243, crossings 18→98, worse on both — strict bend
 made the L-router law-optimal at 138/18). The maintainer ruled that in dense fans
 a clean C reads better than a crossed L. The clean-shape cost is therefore now
 **weighted, not lexicographic**: `cost = W_b·bends + W_x·crossings + W_len·length`
-(dogleg/reversal still a hard exclusion at `REVERSAL_BEND_PENALTY`=99). A C beats
-an L when `W_b < Δcrossings · W_x`. The text below is the **superseded** strict
-order, kept for provenance.
+(a Z/staircase still scores 99; a dogleg/reversal is a hard exclusion at
+`DOGLEG_PENALTY`=1e9). A C beats an L when `W_b < Δcrossings · W_x`. The text below
+is the **superseded** strict order, kept for provenance.
 
 **Superseded strict priority law:** `Q1 ≻ Q2 ≻ Q3`, lexicographic, no slack. **The
 bend score was the highest-cost element — an extra clean bend always loses**,
@@ -86,8 +96,8 @@ catastrophically (β jumps to 99). Consequences (of the superseded order):
   circumnavigation beats a shorter high-bend wiggle.
 
 This folds the old separate `doglegs` term into `β`: a doubling-back route is
-simply one whose `β = 99`. The model never *emits* one (H2); the score still
-*represents* one, so a baselined dogleg loses decisively.
+simply one whose `β = 1e9` (`DOGLEG_PENALTY`). The model never *emits* one (H2);
+the score still *represents* one, so a baselined dogleg loses by a billion.
 
 The full order is therefore fixed: `β`, then `crossings`, then `length`,
 then `(displayIndex, relationshipId)` for determinism.
@@ -104,10 +114,13 @@ identical output. No randomness; every ordering used is a fixed total order.
 |---|---|---|---|
 | straight | 0 | yes | preferred |
 | L | 1 | yes | preferred |
-| staircase | ≥2 | **yes** | forced-only; minimized |
-| **dogleg** | ≥2 | **no** | **excluded by H2 — never produced, not ranked** |
+| C | 2 | yes | preferred (the most a clean route may bend) |
+| Z / staircase | ≥3 | **yes** | β = 99; never acceptable, avoided/minimized |
+| **dogleg** | ≥1 | **no** | **β = 1e9; excluded by H2 — never produced** |
 
-A dogleg is not a high-cost option; it fails H2, so it is never a candidate.
+A dogleg is not a high-cost option; it fails H2, so it is never a candidate. A
+Z/staircase is monotone (so H2 admits it) but priced at 99, so the search avoids
+it wherever a straight/L/C exists.
 
 ---
 
@@ -160,9 +173,9 @@ and blocked-L all make `feasible = false` for that surface pair.
 ### 2.5 Cost and order (WEIGHTED — LAW REVISION 2026-06-20)
 Per-route **shape cost** β (the shape ladder, not a raw bend count):
 ```
-β(r) = bends(r)             if monotone(r)
-       REVERSAL_BEND_PENALTY  otherwise        # = 99
-     ⇒ straight 0, L 1, C 2, staircase k, Z(reversal) 99
+β(r) = bends(r)              if monotone(r) ∧ bends(r) ≤ 2   # straight 0, L 1, C 2
+       Z_PENALTY      (99)   if monotone(r) ∧ bends(r) ≥ 3   # Z / staircase
+       DOGLEG_PENALTY (1e9)  if ¬monotone(r)                 # dogleg (doubles back)
 ```
 **Weighted cost** (crossings can outweigh a bend):
 ```
@@ -173,7 +186,8 @@ cost(D)  = W_BEND·Σβ  + W_CROSS·crossings(D)  + W_LEN·Σlength      (diagra
   `W_LEN≈0`** (`place.rs`). Keep this block in sync with the constants.
 - Consequence: a `C` (β=2) beats an `L` (β=1) when it removes more than
   `W_BEND/W_CROSS = 1/3` crossing per fan edge — i.e. a `k`-edge fan→C wins when
-  it removes `> k/3` crossings. The dogleg still loses outright (β=99 dominates).
+  it removes `> k/3` crossings. A Z/staircase (β=99) and a dogleg (β=1e9) both
+  lose outright — no crossings/length trade reaches them.
 - Selection = `argmin` weighted cost; ties `(displayIndex, relationshipId)`.
 
 > **Superseded:** the strict lexicographic order `(β ≻ crossings ≻ length)`. It
@@ -196,7 +210,10 @@ route_all(V, E):
                                                  # then (displayIndex, relationshipId)
         r = component1(e, O, placed)             # clean straight / L
         if r is None:
-            r = component2(e, O, placed)         # forced monotone staircase
+            r = component2(e, O, placed)         # forced monotone detour: a clean
+                                                 # L/C circumnavigation is preferred
+                                                 # (β≤2); a ≥3-bend staircase (β=99)
+                                                 # only if the field forces it
         require monotone(r) ∧ clears(r, O)       # H2, H3 — always, asserted
         placed[e] = r
     return placed
