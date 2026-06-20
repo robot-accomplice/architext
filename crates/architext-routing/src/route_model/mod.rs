@@ -15,6 +15,7 @@ use crate::route_geometry::segment_intersects_rect;
 /// tight after arithmetic; `1e-6` separates "equal" from "different" cleanly.
 pub(crate) const EPS: f64 = 1e-6;
 
+pub mod place;
 pub mod select;
 
 /// A node surface (face), carrying an outward unit normal.
