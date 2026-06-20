@@ -10,7 +10,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 1,
-      "length": 4331.2
+      "length": 4331.2,
+      "bendScore": 117.0
     },
     "bundle-coaligned": {
       "routes": 8,
@@ -22,7 +23,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 2,
-      "length": 3653.4
+      "length": 3653.4,
+      "bendScore": 211.0
     },
     "bundle-return-gutter": {
       "routes": 8,
@@ -34,7 +36,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 4063.2857142857147
+      "length": 4063.2857142857147,
+      "bendScore": 15.0
     },
     "coaligned-multibundle-surfaceselect": {
       "routes": 8,
@@ -46,7 +49,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 3896.0
+      "length": 3896.0,
+      "bendScore": 12.0
     },
     "fan-coaligned-selfcross": {
       "routes": 7,
@@ -58,7 +62,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 2798.0
+      "length": 2798.0,
+      "bendScore": 10.0
     },
     "fan-max-systemmap": {
       "routes": 10,
@@ -70,7 +75,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 5921.0
+      "length": 5921.0,
+      "bendScore": 21.0
     },
     "fan-parallel-bundle": {
       "routes": 10,
@@ -82,7 +88,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 4020.0
+      "length": 4020.0,
+      "bendScore": 20.0
     },
     "fan-quad-reciprocal": {
       "routes": 8,
@@ -94,7 +101,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 2170.0
+      "length": 2170.0,
+      "bendScore": 10.0
     },
     "feature-showcase": {
       "routes": 8,
@@ -106,7 +114,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 1369.0
+      "length": 1369.0,
+      "bendScore": 6.0
     },
     "hub-fan-dense": {
       "routes": 18,
@@ -118,7 +127,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 11487.999999999998
+      "length": 11487.999999999998,
+      "bendScore": 28.0
     },
     "pair-chain-linear": {
       "routes": 6,
@@ -130,7 +140,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 2982.0
+      "length": 2982.0,
+      "bendScore": 10.0
     },
     "pair-chain-short": {
       "routes": 6,
@@ -142,7 +153,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 3498.0000000000005
+      "length": 3498.0000000000005,
+      "bendScore": 6.0
     },
     "pair-fan-basic": {
       "routes": 7,
@@ -154,7 +166,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 3789.0
+      "length": 3789.0,
+      "bendScore": 14.0
     },
     "pair-fan-compact": {
       "routes": 8,
@@ -166,7 +179,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 4464.0
+      "length": 4464.0,
+      "bendScore": 16.0
     },
     "pair-minimal": {
       "routes": 4,
@@ -178,7 +192,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 2308.0
+      "length": 2308.0,
+      "bendScore": 8.0
     },
     "pair-single-multiedge": {
       "routes": 5,
@@ -190,7 +205,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 1058.0
+      "length": 1058.0,
+      "bendScore": 8.0
     }
   },
   "perf": {
