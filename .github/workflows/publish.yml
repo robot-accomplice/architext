@@ -281,6 +281,30 @@ jobs:
           ( cd release-assets && sha256sum architext-* > SHA256SUMS )
           gh release upload "${{ needs.resolve.outputs.tag }}" release-assets/* --clobber --repo "${{ github.repository }}"
 
+      # Notify the roboticus-site repo so it re-syncs Architext's release data.
+      # The built-in GITHUB_TOKEN is scoped to this repo and cannot dispatch
+      # cross-repo, so this uses a maintainer-provided PAT with dispatch rights on
+      # roboticus-site. Skips gracefully (does not fail the release) if unset.
+      - name: Notify roboticus-site of the release
+        if: ${{ needs.resolve.outputs.dry_run == 'false' && github.event_name == 'release' }}
+        env:
+          DISPATCH_TOKEN: ${{ secrets.ROBOTICUS_SITE_DISPATCH_TOKEN }}
+          VERSION: ${{ needs.resolve.outputs.version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${DISPATCH_TOKEN:-}" ]; then
+            echo "ROBOTICUS_SITE_DISPATCH_TOKEN not set; skipping roboticus-site notification." >&2
+            exit 0
+          fi
+          curl -fsSL -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer ${DISPATCH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            https://api.github.com/repos/robot-accomplice/roboticus-site/dispatches \
+            -d "{\"event_type\":\"architext-release\",\"client_payload\":{\"version\":\"${VERSION}\"}}"
+          echo "Dispatched architext-release (${VERSION}) to roboticus-site."
+
       - name: Smoke-test the published native CLI
         if: ${{ needs.resolve.outputs.dry_run == 'false' }}
         shell: bash
