@@ -157,17 +157,29 @@ and blocked-L all make `feasible = false` for that surface pair.
 - `crossings(r) = intra(r) + inter(r, placed)`. The inversion formula optimizes
   the intra term only; it is never a substitute for the inter term.
 
-### 2.5 Cost and order
+### 2.5 Cost and order (WEIGHTED — LAW REVISION 2026-06-20)
+Per-route **shape cost** β (the shape ladder, not a raw bend count):
 ```
-c(r) = ( β(r), crossings(r), length(r) )  ∈  ℤ≥0 × ℤ≥0 × ℝ≥0
 β(r) = bends(r)             if monotone(r)
        REVERSAL_BEND_PENALTY  otherwise        # = 99
+     ⇒ straight 0, L 1, C 2, staircase k, Z(reversal) 99
 ```
-compared **lexicographically**. Among feasible candidates the selected route is
-`argmin_lex c(r)`, ties broken by `(displayIndex, relationshipId)` — a total
-order on distinct edges. The `β`-first position *is* the formal statement of
-"distance is always preferred to a greater number of bends," and the
-reversal penalty is what makes a `Z` (β=99) lose to a `C` (β=2) at equal count.
+**Weighted cost** (crossings can outweigh a bend):
+```
+cost(r)  = W_BEND·β(r) + W_CROSS·crossings(r) + W_LEN·length(r)
+cost(D)  = W_BEND·Σβ  + W_CROSS·crossings(D)  + W_LEN·Σlength      (diagram total)
+```
+- Current weights (UNDER CALIBRATION on FlowForge): **`W_BEND=1`, `W_CROSS=3`,
+  `W_LEN≈0`** (`place.rs`). Keep this block in sync with the constants.
+- Consequence: a `C` (β=2) beats an `L` (β=1) when it removes more than
+  `W_BEND/W_CROSS = 1/3` crossing per fan edge — i.e. a `k`-edge fan→C wins when
+  it removes `> k/3` crossings. The dogleg still loses outright (β=99 dominates).
+- Selection = `argmin` weighted cost; ties `(displayIndex, relationshipId)`.
+
+> **Superseded:** the strict lexicographic order `(β ≻ crossings ≻ length)`. It
+> made the all-L router law-optimal at FlowForge β 138 / crossings 18, but the
+> fan crossings were then irreducible (removing them needs a C's extra bend the
+> order forbids). The maintainer revised the law to weighted; see §1.
 
 ---
 
@@ -257,16 +269,18 @@ win — with the eyes used only to confirm the verdict, never to discover it.
 The aggregate of the per-route cost (§2.5):
 
 ```
-S(D) = ( Σ β(r),  Σ crossings(r),  Σ length(r) )   over routes r of diagram D
+S(D) = W_BEND·Σ β(r) + W_CROSS·crossings(D) + W_LEN·Σ length(r)   (weighted, §2.5)
+     reported as the tuple (Σβ, crossings, Σlength) so each term stays visible.
 ```
-compared **lexicographically** (`β ≻ crossings ≻ length`).
-- `β` already encodes the dogleg as a 99 penalty, so there is no separate hard
-  `doglegs` prefix in the score — a single reversal pushes `Σ β` past any
-  realistic clean total, so a routing with *any* dogleg loses on the first term.
+- `β` encodes the dogleg as a 99 penalty, so a routing with *any* reversal has its
+  `Σβ` blown past any realistic clean total — doglegs lose regardless of weights.
 - the model's hard constraint H2 (never emit a reversal) means its output always
   has `Σ β = Σ bends`; only a *baseline* (current engine) pays the 99s.
-- Minimizing `Σ β` inherently minimizes both reversals (99 each) and staircasing
-  (each clean bend +1), so the score needs no separate staircase term.
+- **Measured (FlowForge, current engine → model):** all-L `route_all_slotted`
+  scores `(β 138, crossings 18)`; the coordinated per-fan router at `W_CROSS=3`
+  scores `(β 145, crossings 12)` — fewer crossings for a small β rise, the
+  weighted-law tradeoff. Engine baseline `(β 1064, crossings 28, doglegs 9)`.
+  `W_CROSS` is under calibration: higher → fewer crossings, more C-bends.
 
 ### Procedure
 1. **Baseline.** Score every known diagram (routing-corpus *and* FlowForge) under

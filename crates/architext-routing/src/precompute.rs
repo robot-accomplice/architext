@@ -24,7 +24,7 @@ use crate::plan_diagram::{plan_diagram, plan_diagram_with_stats, ExtraNodeRect};
 use crate::route_diagnostics::DiagMetrics;
 use crate::route_geometry::route_length;
 use crate::route_model::bend_score;
-use crate::route_model::place::{route_all_slotted, Edge};
+use crate::route_model::place::{route_all_coordinated, route_all_slotted, Edge};
 use crate::route_model::select::polyline_crossings;
 use crate::plan_request::{
     build_flow_plan_request,
@@ -282,7 +282,7 @@ pub fn score_model_vs_engine(
             })
             .collect();
 
-        let routes = route_all_slotted(&nodes, &edges);
+        let routes = route_all_coordinated(&nodes, &edges);
         let model_unrouted = routes.iter().filter(|r| r.is_empty()).count();
         let model_beta: f64 = routes.iter().map(|r| bend_score(r)).sum();
         let model_length: f64 = routes.iter().map(|r| route_length(r)).sum();

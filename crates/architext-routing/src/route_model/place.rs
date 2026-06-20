@@ -384,7 +384,7 @@ fn build_slotted_with_sides(
 /// beats an L (1 bend) when the L would cross ≥2 placed routes. A dogleg still
 /// loses outright (`bend_score` returns `REVERSAL_BEND_PENALTY`). Tunable.
 const W_BEND: f64 = 1.0;
-const W_CROSS: f64 = 1.0;
+const W_CROSS: f64 = 3.0;
 
 /// Weighted cost of a route against the already-placed routes.
 fn weighted_cost(route: &[Point], placed: &[Vec<Point>]) -> f64 {
@@ -446,6 +446,71 @@ pub fn route_all_weighted(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> {
     let sides: Vec<Option<(Side, Side)>> = routed.iter().map(|r| r.sides).collect();
     let detour: Vec<Vec<Point>> = routed.iter().map(|r| r.route.clone()).collect();
     build_slotted_with_sides(nodes, edges, &sides, &detour)
+}
+
+/// Weighted total cost of a routing: `W_BEND·Σ shape-cost + W_CROSS·crossings`.
+fn weighted_total(routes: &[Vec<Point>]) -> f64 {
+    let shape: f64 = routes.iter().map(|r| bend_score(r)).sum();
+    W_BEND * shape + W_CROSS * (total_crossings(routes) as f64)
+}
+
+/// Coordinated per-fan router (the non-myopic L/C choice). Start from the all-L
+/// routing; group each node's edges into fans by the facing source side; then for
+/// each fan toggle ALL its edges to the facing-C shape as a unit, rebuild the
+/// whole diagram, and keep the toggle only if it lowers the weighted total. A
+/// fan's C's therefore nest together (decided as one), avoiding the per-edge
+/// greedy's myopia. Deterministic and bounded; always monotone — zero doglegs.
+pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> {
+    let l_routed = route_all_sided(nodes, edges);
+    let c_routed = route_all_facing_sided(nodes, edges);
+    let l_sides: Vec<Option<(Side, Side)>> = l_routed.iter().map(|r| r.sides).collect();
+    let c_sides: Vec<Option<(Side, Side)>> = c_routed.iter().map(|r| r.sides).collect();
+    let detour: Vec<Vec<Point>> = l_routed.iter().map(|r| r.route.clone()).collect();
+
+    // Fan groups: a node's edges sharing the same facing source side.
+    let mut fans: HashMap<(usize, u8), Vec<usize>> = HashMap::new();
+    for (ei, e) in edges.iter().enumerate() {
+        if l_sides[ei].is_some() {
+            let fs = facing_pair(&nodes[e.a], &nodes[e.b]).0.index();
+            fans.entry((e.a, fs)).or_default().push(ei);
+        }
+    }
+    let mut fan_keys: Vec<(usize, u8)> = fans.keys().copied().collect();
+    fan_keys.sort_unstable();
+
+    let mut sides = l_sides.clone();
+    let mut routes = build_slotted_with_sides(nodes, edges, &sides, &detour);
+    let mut best = weighted_total(&routes);
+
+    const MAX_ROUNDS: usize = 3;
+    for _ in 0..MAX_ROUNDS {
+        let mut improved = false;
+        for fk in &fan_keys {
+            let members = &fans[fk];
+            if members.len() < 2 {
+                continue; // a lone edge keeps its L (a fan needs ≥2)
+            }
+            // toggle the whole fan to C
+            for &ei in members {
+                sides[ei] = c_sides[ei];
+            }
+            let trial = build_slotted_with_sides(nodes, edges, &sides, &detour);
+            let cost = weighted_total(&trial);
+            if cost < best {
+                best = cost;
+                routes = trial;
+                improved = true;
+            } else {
+                for &ei in members {
+                    sides[ei] = l_sides[ei]; // revert
+                }
+            }
+        }
+        if !improved {
+            break;
+        }
+    }
+    routes
 }
 
 /// Total strictly-interior crossings across all route pairs.
@@ -633,6 +698,33 @@ mod tests {
         for r in &route_all_fan(&nodes, &edges) {
             assert!(!r.is_empty(), "every edge routed");
             assert!(monotone(r), "fan routes stay dogleg-free");
+        }
+    }
+
+    #[test]
+    fn coordinated_never_worse_than_all_l_and_monotone() {
+        // The coordinated router starts from all-L and only keeps fan→C toggles
+        // that lower the weighted total, so it is never worse than route_all_slotted
+        // and stays dogleg-free.
+        let nodes = vec![
+            rect(0.0, 200.0),
+            rect(400.0, 0.0),
+            rect(400.0, 150.0),
+            rect(400.0, 300.0),
+            rect(400.0, 450.0),
+        ];
+        let edges = vec![
+            Edge { a: 0, b: 1 },
+            Edge { a: 0, b: 2 },
+            Edge { a: 0, b: 3 },
+            Edge { a: 0, b: 4 },
+        ];
+        let coord = route_all_coordinated(&nodes, &edges);
+        let base = route_all_slotted(&nodes, &edges);
+        assert!(weighted_total(&coord) <= weighted_total(&base), "coordinated never worse");
+        for r in &coord {
+            assert!(!r.is_empty());
+            assert!(monotone(r), "still dogleg-free");
         }
     }
 
