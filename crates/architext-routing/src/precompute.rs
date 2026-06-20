@@ -131,6 +131,46 @@ pub fn enumerate_flow_plan_requests(
     entries.into_iter().collect()
 }
 
+/// Streaming variant of [`enumerate_flow_plan_requests`]: publishes each plan via
+/// `on_entry` the instant it is computed, instead of collecting them all first.
+/// This lets the serve farm light up diagrams incrementally during warm-up, so
+/// the first diagram a viewer opens is ready after its own plan computes rather
+/// than after the entire corpus has warmed (which can be tens of seconds on a
+/// dense repo). Returns the number of plans warmed.
+#[cfg(feature = "native")]
+pub fn warm_flow_plans(
+    data_dir: &Path,
+    diagram_config: &DiagramConfig,
+    on_entry: impl Fn(FarmEntry) + Sync,
+) -> Result<usize, String> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let (flows, views) = load_flows_and_views(data_dir)?;
+    let flow_view_type_set: std::collections::HashSet<&str> =
+        flow_view_types().iter().copied().collect();
+    let layout_config = diagram_config.layout.to_layout_config();
+
+    let pairs: Vec<(&View, &Flow)> = views
+        .iter()
+        .filter(|v| flow_view_type_set.contains(v.view_type.as_str()))
+        .flat_map(|v| {
+            flows
+                .iter()
+                .filter(move |f| flow_compatible_with_view(f, v))
+                .map(move |f| (v, f))
+        })
+        .collect();
+
+    let warmed = AtomicUsize::new(0);
+    pairs.par_iter().for_each(|(view, flow)| {
+        if let Ok(entry) = build_farm_entry(view, flow, &layout_config) {
+            on_entry(entry);
+            warmed.fetch_add(1, Ordering::Relaxed);
+        }
+    });
+    Ok(warmed.load(Ordering::Relaxed))
+}
+
 fn build_farm_entry(view: &View, flow: &Flow, layout_config: &LayoutConfig) -> Result<FarmEntry, String> {
     let req = build_flow_plan_request(view, flow, Some(layout_config), "orthogonal");
 
@@ -327,6 +367,31 @@ mod tests {
             // key must be valid JSON
             serde_json::from_str::<serde_json::Value>(&entry.key)
                 .unwrap_or_else(|e| panic!("key for {}@{} is not valid JSON: {e}", entry.flow_id, entry.view_id));
+        }
+    }
+
+    // warm_flow_plans publishes each plan via the callback as it is computed
+    // (incremental farm warm-up), and produces the same plan set as the batch
+    // enumerate — just delivered one at a time instead of all at once.
+    #[cfg(feature = "native")]
+    #[test]
+    fn warm_flow_plans_streams_each_plan() {
+        let data_dir = corpus_data_dir();
+        if !data_dir.exists() {
+            return;
+        }
+        let config = resolve_diagram_config_defaults();
+        let collected = std::sync::Mutex::new(Vec::new());
+        let count = warm_flow_plans(&data_dir, &config, |entry| {
+            collected.lock().unwrap().push(entry.hash.clone());
+        })
+        .expect("warm_flow_plans");
+        let collected = collected.into_inner().unwrap();
+        assert_eq!(count, collected.len(), "callback fires once per warmed plan");
+        let batch = enumerate_flow_plan_requests(&data_dir, &config).expect("enumerate");
+        assert_eq!(count, batch.len(), "warm produces the same plan count as enumerate");
+        for h in &collected {
+            assert_eq!(h.len(), 64, "hash must be 64-char hex");
         }
     }
 }

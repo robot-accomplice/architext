@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, RwLock};
 
 use architext_routing::diagram_config::resolve_diagram_config_defaults;
-use architext_routing::precompute::enumerate_flow_plan_requests;
+use architext_routing::precompute::warm_flow_plans;
 
 /// Per-plan entry stored in the farm.
 #[derive(Clone)]
@@ -44,25 +44,29 @@ pub fn empty_farm() -> Farm {
     Arc::new(RwLock::new(HashMap::new()))
 }
 
-/// (Re)populate the farm from `data_dir`.  Swaps in the new map atomically.
+/// (Re)populate the farm from `data_dir`. Inserts each plan into the live farm
+/// the moment it is computed, so the viewer (which polls the farm) gets a HIT for
+/// the diagram it opened as soon as that one plan is ready — instead of waiting
+/// for the entire corpus to finish warming. Plan hashes are config-keyed, so a
+/// later config re-warm inserts new hashes without disturbing in-flight reads
+/// (the superseded entries are simply no longer requested).
 pub fn refresh_farm(farm: &Farm, data_dir: &Path) {
     let config = resolve_diagram_config_defaults();
-    match enumerate_flow_plan_requests(data_dir, &config) {
-        Ok(entries) => {
-            let mut map = HashMap::new();
-            for entry in entries {
-                map.insert(entry.hash, PlanEntry { plan_json: entry.plan_json });
-            }
-            let count = map.len();
-            *farm.write().expect("farm write lock") = map;
+    let result = warm_flow_plans(data_dir, &config, |entry| {
+        if let Ok(mut map) = farm.write() {
+            map.insert(entry.hash, PlanEntry { plan_json: entry.plan_json });
+        }
+    });
+    match result {
+        Ok(count) => {
             // One line per refresh — fires once at startup and once per explicit
             // config write, NOT on data-watch events (the farm is deliberately
             // not wired to the watch hub, so it can't loop the way the legacy
             // Node farm did when its refresh was bound to every watcher event).
-            tracing::info!("plan farm: precomputed {count} diagram plan(s)");
+            tracing::info!("plan farm: warmed {count} diagram plan(s) incrementally");
         }
         Err(err) => {
-            tracing::warn!("plan farm enumeration failed: {err}");
+            tracing::warn!("plan farm warm failed: {err}");
             // Leave the farm as-is on error.
         }
     }
