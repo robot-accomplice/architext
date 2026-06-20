@@ -27,6 +27,11 @@ pub(crate) const Z_PENALTY: f64 = 99.0;
 /// crossings or length can ever justify one.
 pub(crate) const DOGLEG_PENALTY: f64 = 1_000_000_000.0;
 
+/// Minimum straight run a route must travel off a surface before its first bend
+/// (no bending right at the wall), and the gap an arch crossbar leaves past the
+/// obstacles it clears. Maintainer rule, 2026-06-20.
+pub(crate) const MIN_SURFACE_STEM: f64 = 16.0;
+
 pub mod component2;
 pub mod place;
 pub mod select;
@@ -115,39 +120,119 @@ pub fn monotone(points: &[Point]) -> bool {
     true
 }
 
-/// Number of bends (direction changes) in a polyline. Degenerate zero-length
-/// segments are ignored. straight → 0, L → 1, staircase/Z (2 turns) → 2.
-pub fn bends(points: &[Point]) -> usize {
-    let mut count = 0usize;
-    let mut prev: Option<(i32, i32)> = None;
-    for w in points.windows(2) {
-        let dir = (sgn(w[1].x - w[0].x), sgn(w[1].y - w[0].y));
-        if dir == (0, 0) {
-            continue;
+/// The **corners** of a polyline: endpoints plus every turning point, with
+/// collinear/degenerate intermediate points removed. A straight has 2 corners, an
+/// L 3, a C/Z 4, a staircase ≥5. `corners.len() - 2` is the bend count.
+pub fn corners(points: &[Point]) -> Vec<Point> {
+    let mut out: Vec<Point> = Vec::with_capacity(points.len());
+    for p in points {
+        match out.last() {
+            Some(last) if (last.x - p.x).abs() < EPS && (last.y - p.y).abs() < EPS => {}
+            _ => out.push(p.clone()),
         }
-        if let Some(p) = prev {
-            if dir != p {
-                count += 1;
-            }
-        }
-        prev = Some(dir);
     }
-    count
+    // drop interior points that don't turn (collinear with both neighbours)
+    let mut i = 1;
+    while out.len() >= 3 && i < out.len() - 1 {
+        let a = &out[i - 1];
+        let b = &out[i];
+        let c = &out[i + 1];
+        let d1 = (sgn(b.x - a.x), sgn(b.y - a.y));
+        let d2 = (sgn(c.x - b.x), sgn(c.y - b.y));
+        if d1 == d2 {
+            out.remove(i);
+        } else {
+            i += 1;
+        }
+    }
+    out
 }
 
-/// §2.5 — the bend score β (the shape ladder): straight 0, L 1, C 2, then two
-/// distinct failure tiers. A **dogleg** (the line doubles back over itself — a
-/// reversal, caught by `!monotone`) scores [`DOGLEG_PENALTY`] (1e9): categorically
-/// forbidden. A **Z formation / staircase** (monotone but ≥3 bends) scores
-/// [`Z_PENALTY`] (99): never acceptable, but not the catastrophe a dogleg is.
-pub fn bend_score(points: &[Point]) -> f64 {
-    let b = bends(points);
-    if !monotone(points) {
-        DOGLEG_PENALTY
-    } else if b <= MAX_CLEAN_BENDS {
-        b as f64
+/// Number of bends (direction changes) in a polyline. straight → 0, L → 1,
+/// C/Z → 2, staircase → ≥3.
+pub fn bends(points: &[Point]) -> usize {
+    corners(points).len().saturating_sub(2)
+}
+
+/// Whether two collinear axis-aligned segments **overlap** (share more than a
+/// single point on the same line) — the geometric signature of a line lying over
+/// itself.
+fn segments_overlap(a0: &Point, a1: &Point, b0: &Point, b1: &Point) -> bool {
+    let a_horiz = (a0.y - a1.y).abs() < EPS;
+    let b_horiz = (b0.y - b1.y).abs() < EPS;
+    if a_horiz != b_horiz {
+        return false; // perpendicular — cannot overlap collinearly
+    }
+    if a_horiz {
+        if (a0.y - b0.y).abs() >= EPS {
+            return false; // different horizontal lines
+        }
+        let (alo, ahi) = (a0.x.min(a1.x), a0.x.max(a1.x));
+        let (blo, bhi) = (b0.x.min(b1.x), b0.x.max(b1.x));
+        alo.max(blo) + EPS < ahi.min(bhi)
     } else {
-        Z_PENALTY
+        if (a0.x - b0.x).abs() >= EPS {
+            return false;
+        }
+        let (alo, ahi) = (a0.y.min(a1.y), a0.y.max(a1.y));
+        let (blo, bhi) = (b0.y.min(b1.y), b0.y.max(b1.y));
+        alo.max(blo) + EPS < ahi.min(bhi)
+    }
+}
+
+/// §0 — a polyline is a **dogleg** iff it doubles back **over itself**: two of its
+/// segments are collinear and overlap, i.e. the line is drawn on top of a part of
+/// itself. This is the literal "doubles back over itself" — NOT a coordinate-axis
+/// sign reversal (a clean C reverses heading on a free direction yet never folds
+/// over itself, so it is never a dogleg).
+pub fn doubles_back(points: &[Point]) -> bool {
+    let c = corners(points);
+    if c.len() < 3 {
+        return false;
+    }
+    for i in 0..c.len() - 1 {
+        for j in (i + 1)..c.len() - 1 {
+            if segments_overlap(&c[i], &c[i + 1], &c[j], &c[j + 1]) {
+                return true;
+            }
+        }
+    }
+    false
+}
+
+/// §0 — is a **two-bend** route a **C** (`true`) or a **Z** (`false`)? Decided by
+/// which side of the **middle (conjoining) segment** the two end segments sit:
+/// **same side → C** (`[ ] ∩ ∪`, two like-facing surfaces); **opposite sides → Z**
+/// (`_|ˉ`, the jog between two facing surfaces). `c` must be the 4-corner form.
+fn two_bend_is_c(c: &[Point]) -> bool {
+    debug_assert_eq!(c.len(), 4);
+    let (a, p1, p2, b) = (&c[0], &c[1], &c[2], &c[3]);
+    if (p1.y - p2.y).abs() < EPS {
+        // middle segment horizontal at y = p1.y: same side ⇔ A and B both above or
+        // both below it.
+        sgn(a.y - p1.y) == sgn(b.y - p2.y)
+    } else {
+        // middle segment vertical at x = p1.x.
+        sgn(a.x - p1.x) == sgn(b.x - p2.x)
+    }
+}
+
+/// §2.5 — the bend score β (the §0 shape ladder). **Shape, not bend count.**
+/// A **dogleg** (the line folds over itself, [`doubles_back`]) scores
+/// [`DOGLEG_PENALTY`] (1e9). Otherwise by shape: straight 0, L 1; a two-bend route
+/// is a **C** (2) when its end segments sit on the **same side** of the middle
+/// segment, else a **Z** ([`Z_PENALTY`], 99); any route with ≥3 bends is a
+/// **staircase** (also [`Z_PENALTY`], 99).
+pub fn bend_score(points: &[Point]) -> f64 {
+    if doubles_back(points) {
+        return DOGLEG_PENALTY;
+    }
+    let c = corners(points);
+    match c.len() {
+        0 | 1 | 2 => 0.0,                                      // straight
+        3 => 1.0,                                              // L
+        4 if two_bend_is_c(&c) => MAX_CLEAN_BENDS as f64,      // C
+        _ => Z_PENALTY,                                        // Z / staircase
     }
 }
 
@@ -211,6 +296,71 @@ pub fn build_path_01(side_a: Side, p_a: &Point, side_b: Side, p_b: &Point) -> Op
     }
 }
 
+/// Build a **C arch** between two **like-facing** mounts (both on `side`). Both
+/// stems leave along `side`'s outward normal to a shared crossbar placed `stem`
+/// beyond every obstacle in the span, then return — `∩` (both Top), `∪` (both
+/// Bottom), `[` (both Left), `]` (both Right). Four points, two bends, end
+/// segments on the **same side** of the crossbar ⇒ a C by §0. Returns `None` only
+/// for a degenerate (coincident) mount pair.
+pub fn build_arch(
+    side: Side,
+    p_a: &Point,
+    p_b: &Point,
+    obstacles: &[Rect],
+    stem: f64,
+) -> Option<Vec<Point>> {
+    if (p_a.x - p_b.x).abs() < EPS && (p_a.y - p_b.y).abs() < EPS {
+        return None;
+    }
+    if side.is_horizontal() {
+        // Left/Right: horizontal stems, vertical crossbar at x = cx. Span on y.
+        let (lo, hi) = (p_a.y.min(p_b.y), p_a.y.max(p_b.y));
+        let spanning = |r: &Rect| r.y < hi + EPS && r.y + r.height > lo - EPS;
+        let cx = if side == Side::Right {
+            let mut m = p_a.x.max(p_b.x);
+            for r in obstacles.iter().filter(|r| spanning(r)) {
+                m = m.max(r.x + r.width);
+            }
+            m + stem
+        } else {
+            let mut m = p_a.x.min(p_b.x);
+            for r in obstacles.iter().filter(|r| spanning(r)) {
+                m = m.min(r.x);
+            }
+            m - stem
+        };
+        Some(vec![
+            p_a.clone(),
+            Point { x: cx, y: p_a.y },
+            Point { x: cx, y: p_b.y },
+            p_b.clone(),
+        ])
+    } else {
+        // Top/Bottom: vertical stems, horizontal crossbar at y = cy. Span on x.
+        let (lo, hi) = (p_a.x.min(p_b.x), p_a.x.max(p_b.x));
+        let spanning = |r: &Rect| r.x < hi + EPS && r.x + r.width > lo - EPS;
+        let cy = if side == Side::Bottom {
+            let mut m = p_a.y.max(p_b.y);
+            for r in obstacles.iter().filter(|r| spanning(r)) {
+                m = m.max(r.y + r.height);
+            }
+            m + stem
+        } else {
+            let mut m = p_a.y.min(p_b.y);
+            for r in obstacles.iter().filter(|r| spanning(r)) {
+                m = m.min(r.y);
+            }
+            m - stem
+        };
+        Some(vec![
+            p_a.clone(),
+            Point { x: p_a.x, y: cy },
+            Point { x: p_b.x, y: cy },
+            p_b.clone(),
+        ])
+    }
+}
+
 /// §H3 — the polyline clears the obstacle field: no segment crosses any rect in
 /// `obstacles`. The caller passes obstacles **already excluding** the two
 /// endpoint nodes (whose own faces the route legitimately touches).
@@ -254,27 +404,44 @@ mod tests {
         assert_eq!(
             bends(&[p(0.0, 0.0), p(5.0, 0.0), p(5.0, 5.0), p(10.0, 5.0)]),
             2
-        ); // staircase
+        ); // C or Z — two bends
     }
 
     #[test]
-    fn bend_score_ladder_straight_l_c_z_dogleg() {
-        // straight 0, L 1, C 2 — the clean shapes
-        assert_eq!(bend_score(&[p(0.0, 0.0), p(10.0, 0.0)]), 0.0); // straight
-        assert_eq!(bend_score(&[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 5.0)]), 1.0); // L
-        assert_eq!(
-            bend_score(&[p(0.0, 0.0), p(5.0, 0.0), p(5.0, 5.0), p(10.0, 5.0)]),
-            2.0
-        ); // C: monotone 2-bend
-        // Z / STAIRCASE: monotone, ≥3 bends → 99 (never acceptable, distance is
-        // always preferred to a 3rd bend).
+    fn bend_score_is_about_shape_not_bend_count() {
+        // straight 0, L 1
+        assert_eq!(bend_score(&[p(0.0, 0.0), p(10.0, 0.0)]), 0.0);
+        assert_eq!(bend_score(&[p(0.0, 0.0), p(10.0, 0.0), p(10.0, 5.0)]), 1.0);
+
+        // C (bracket "]"): right → down → left. Middle segment is the vertical at
+        // x=10; BOTH ends (x=0 and x=3) sit LEFT of it → same side → C → 2.
+        let c_bracket = [p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(3.0, 10.0)];
+        assert_eq!(bends(&c_bracket), 2);
+        assert!(!doubles_back(&c_bracket));
+        assert_eq!(bend_score(&c_bracket), 2.0);
+
+        // C (arch "∩"): up → over → down between two surfaces on the same plane.
+        // Middle is the horizontal at y=80; BOTH ends (y=104) sit below → same side.
+        let c_arch = [p(458.0, 104.0), p(458.0, 80.0), p(878.0, 80.0), p(878.0, 104.0)];
+        assert_eq!(bend_score(&c_arch), 2.0);
+
+        // Z (the facing-surface jog "_|ˉ"): right → down → right. SAME bend count as
+        // a C (2), but the ends sit on OPPOSITE sides of the middle vertical (x=0
+        // left, x=20 right) → Z → 99. This is the case bend-count alone gets wrong.
+        let z_jog = [p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(20.0, 10.0)];
+        assert_eq!(bends(&z_jog), 2);
+        assert!(!doubles_back(&z_jog));
+        assert_eq!(bend_score(&z_jog), Z_PENALTY);
+
+        // Staircase: ≥3 bends → Z tier → 99.
         let staircase = [p(0.0, 0.0), p(5.0, 0.0), p(5.0, 5.0), p(10.0, 5.0), p(10.0, 10.0)];
-        assert!(monotone(&staircase) && bends(&staircase) == 3);
+        assert_eq!(bends(&staircase), 3);
         assert_eq!(bend_score(&staircase), Z_PENALTY);
-        // DOGLEG: a line that doubles back over itself (reverses on x) → 1e9,
-        // catastrophically worse than a Z so no trade can ever justify one.
-        let dogleg = [p(0.0, 0.0), p(10.0, 0.0), p(10.0, 10.0), p(3.0, 10.0)];
-        assert!(!monotone(&dogleg));
+
+        // DOGLEG: the line doubles back OVER ITSELF — right to x=10 then back left
+        // along the same y=0 line, overlapping itself → 1e9.
+        let dogleg = [p(0.0, 0.0), p(10.0, 0.0), p(5.0, 0.0)];
+        assert!(doubles_back(&dogleg));
         assert_eq!(bend_score(&dogleg), DOGLEG_PENALTY);
         assert!(DOGLEG_PENALTY > Z_PENALTY * 1_000_000.0);
     }

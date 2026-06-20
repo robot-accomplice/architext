@@ -17,7 +17,7 @@ use super::component2::monotone_detour;
 use super::select::{
     best_clean_route, clean_candidates, polyline_crossings, side_center_mounts, Candidate,
 };
-use super::{bend_score, build_path_01, clears, Side};
+use super::{bend_score, build_path_01, clears, Side, MIN_SURFACE_STEM};
 use crate::model::{Point, Rect};
 use crate::route_geometry::route_length;
 
@@ -196,18 +196,31 @@ fn is_facing(sa: Side, sb: Side) -> bool {
     (na.0 + nb.0).abs() < f64::EPSILON && (na.1 + nb.1).abs() < f64::EPSILON
 }
 
+/// Clamp a jog channel so both stems (`a→channel` and `channel→b`) are at least
+/// [`MIN_SURFACE_STEM`]. If the surfaces are too close to fit two stems, jog at
+/// the midpoint (best effort — still monotone, never a dogleg).
+fn clamp_jog(raw: f64, a: f64, b: f64) -> f64 {
+    let lo = a.min(b);
+    let hi = a.max(b);
+    if hi - lo <= 2.0 * MIN_SURFACE_STEM {
+        return (lo + hi) / 2.0;
+    }
+    raw.clamp(lo + MIN_SURFACE_STEM, hi - MIN_SURFACE_STEM)
+}
+
 /// Monotone C (2-bend jog) between two facing mounts, jogging at the given
 /// channel (x for a horizontal facing pair, y for a vertical one). Monotone iff
 /// the channel lies between the endpoints — caller ensures that — so never a
 /// dogleg. `frac` staggers the jog by fan order so the Cs nest instead of sharing
-/// one channel.
+/// one channel; the channel is then clamped so both stems clear
+/// [`MIN_SURFACE_STEM`] (no bending right at the surface).
 fn build_c(sa: Side, pa: &Point, pb: &Point, frac: f64) -> Vec<Point> {
     // Nesting: the jog channel moves toward the source as the fan order grows
     // (nearest target jogs nearest the target, farthest jogs nearest the source),
     // so the Cs nest instead of crossing — hence `1 - frac`, not `frac`.
     let t = 1.0 - frac;
     if sa.is_horizontal() {
-        let jog_x = pa.x + (pb.x - pa.x) * t;
+        let jog_x = clamp_jog(pa.x + (pb.x - pa.x) * t, pa.x, pb.x);
         vec![
             pa.clone(),
             Point { x: jog_x, y: pa.y },
@@ -215,7 +228,7 @@ fn build_c(sa: Side, pa: &Point, pb: &Point, frac: f64) -> Vec<Point> {
             pb.clone(),
         ]
     } else {
-        let jog_y = pa.y + (pb.y - pa.y) * t;
+        let jog_y = clamp_jog(pa.y + (pb.y - pa.y) * t, pa.y, pb.y);
         vec![
             pa.clone(),
             Point { x: pa.x, y: jog_y },
@@ -804,9 +817,10 @@ mod tests {
     }
 
     #[test]
-    fn route_all_uses_component2_when_both_ls_blocked() {
-        // A→B offset, two blocker nodes kill both clean Ls; route_all must still
-        // route it (via Component 2) with a monotone ≥2-bend path, not a dogleg.
+    fn route_all_arches_when_both_ls_blocked() {
+        // A→B offset, two blocker nodes kill both clean Ls. The clean answer is now
+        // a C arch over/around the blockers (§0) — a valid shape that never doubles
+        // back over itself, not a Component-2 staircase.
         let nodes = vec![
             Rect { x: 0.0, y: 0.0, width: 100.0, height: 50.0 }, // A
             Rect { x: 500.0, y: 200.0, width: 100.0, height: 50.0 }, // B
@@ -816,13 +830,15 @@ mod tests {
         let edges = vec![Edge { a: 0, b: 1 }];
         let routes = route_all(&nodes, &edges);
         assert!(!routes[0].is_empty());
-        assert!(monotone(&routes[0]));
+        assert!(!crate::route_model::doubles_back(&routes[0]));
     }
 
     #[test]
-    fn a_node_walling_off_the_target_forces_fallback() {
-        // A and B aligned, but a third node spans the entire corridor between
-        // them AND extends far above/below, so no clean straight or L clears it.
+    fn a_wall_on_the_direct_path_is_cleared_by_an_arch() {
+        // A and B aligned, but a third node spans the entire corridor between them
+        // AND extends far above/below. No straight or single L clears it — but a C
+        // arch goes around (over the top or under), so place_clean finds a CLEAN
+        // route (§0), not a Component-2 fallback.
         let nodes = vec![
             rect(0.0, 200.0),
             rect(600.0, 200.0),
@@ -831,7 +847,8 @@ mod tests {
         ];
         let edges = vec![Edge { a: 0, b: 1 }];
         let p = place_clean(&nodes, &edges);
-        assert_eq!(p.fallback_count, 1, "walled-off edge must fall to Component 2");
-        assert!(p.routes[0].is_none());
+        assert_eq!(p.fallback_count, 0, "an arch clears the wall — no fallback needed");
+        let route = p.routes[0].as_ref().expect("clean arch route");
+        assert!(!crate::route_model::doubles_back(route));
     }
 }
