@@ -1,6 +1,6 @@
 {
   "name": "@robotaccomplice/architext",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "description": "Local JSON-backed architecture and dataflow viewer for engineering teams and LLM-maintained architecture maps. Rust-native CLI + WASM viewer.",
   "type": "module",
   "engines": {
@@ -44,11 +44,11 @@
     "access": "public"
   },
   "optionalDependencies": {
-    "@robotaccomplice/architext-darwin-arm64": "1.7.0",
-    "@robotaccomplice/architext-darwin-x64": "1.7.0",
-    "@robotaccomplice/architext-linux-x64": "1.7.0",
-    "@robotaccomplice/architext-linux-arm64": "1.7.0",
-    "@robotaccomplice/architext-win32-x64": "1.7.0"
+    "@robotaccomplice/architext-darwin-arm64": "1.7.1",
+    "@robotaccomplice/architext-darwin-x64": "1.7.1",
+    "@robotaccomplice/architext-linux-x64": "1.7.1",
+    "@robotaccomplice/architext-linux-arm64": "1.7.1",
+    "@robotaccomplice/architext-win32-x64": "1.7.1"
   },
   "devDependencies": {
     "playwright": "^1.60.0"
