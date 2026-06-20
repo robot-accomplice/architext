@@ -2,12 +2,13 @@
   "id": "v1-7-1",
   "version": "1.7.1",
   "name": "Architext 1.7.1 Serve Startup Fix",
-  "status": "implementing",
-  "posture": "on-track",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Patch release: architext serve binds and opens its URL immediately instead of blocking on the full plan-farm precompute, so a large corpus no longer makes the CLI appear frozen during startup.",
   "targetDate": "2026-06-20",
-  "lastUpdated": "2026-06-20T00:00:00.000Z",
-  "updateSource": "Patch release prep: ships the serve non-blocking farm-warm fix (PR #225). Measured time-to-reachable on a 15-flow x 30-view corpus: 96,316 ms -> 91 ms.",
+  "releasedAt": "2026-06-20T08:17:00.506Z",
+  "lastUpdated": "2026-06-20T08:17:00.506Z",
+  "updateSource": "Shipped to npm 2026-06-20. All six packages published at 1.7.1 and verified live (npm install -g @robotaccomplice/architext@1.7.1 resolves the platform binary; architext --version -> 1.7.1). Ships the serve non-blocking farm-warm fix (PR #225): time-to-reachable on a 15-flow x 30-view corpus 96,316 ms -> 91 ms.",
   "scope": {
     "required": [
       {
