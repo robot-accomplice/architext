@@ -278,9 +278,28 @@ S(D) = W_BEND·Σ β(r) + W_CROSS·crossings(D) + W_LEN·Σ length(r)   (weighte
   has `Σ β = Σ bends`; only a *baseline* (current engine) pays the 99s.
 - **Measured (FlowForge, current engine → model):** all-L `route_all_slotted`
   scores `(β 138, crossings 18)`; the coordinated per-fan router at `W_CROSS=3`
-  scores `(β 145, crossings 12)` — fewer crossings for a small β rise, the
-  weighted-law tradeoff. Engine baseline `(β 1064, crossings 28, doglegs 9)`.
-  `W_CROSS` is under calibration: higher → fewer crossings, more C-bends.
+  scores `(β 145, crossings 12)`; adding the **reciprocal-pair symmetry pass**
+  (force a→b / b→a onto the same facing surfaces so they run parallel) reaches
+  `(β 149, crossings 10)`. Engine baseline `(β 1064, crossings 28, doglegs 9)`.
+  The model leads the engine NET decisively: crossings 28→10, β 1064→149,
+  doglegs 9→0. `W_CROSS` is under calibration: higher → fewer crossings, more
+  C-bends.
+- **Surface-assignment tier is exhausted.** Six mechanisms were tried and
+  measured: single-edge re-selection, pairwise joint repair, k-way crossing-
+  cluster flip (2ᵏ over {L, C}), per-fan toggle, reciprocal symmetry, and the
+  pre-existing co-monotone slot ordering (`opposite_rank`). Only the fan toggle
+  (18→12) and reciprocal symmetry (12→10) found gains; the rest are local minima.
+- **Residual `crossings = 10` is one tradeoff, not a defect everywhere.** It
+  concentrates in `interactive-turn / agent-turn-flow` (6), where the engine
+  scores `(β 28, crossings 0)` and the model `(β 17, crossings 6)`. The engine
+  buys 0 crossings by **spending bends** (β 28 vs 17 — staircases, not doglegs);
+  under `W_CROSS=3` that is `28` vs the model's `17 + 3·6 = 35`, so the engine
+  wins *this one flow*. The model's whole {L, C} candidate space cannot reach
+  the engine's routing because it never generates the higher-bend monotone
+  staircases that dodge *other routes* (route-aware channel routing). Whether to
+  close it is a **crossings-vs-bends judgment for the live-UI review** (step 5):
+  6 clean crossings vs a staircase-heavy β-28 routing. The law was explicitly
+  made amendable for exactly this kind of visual call.
 
 ### Procedure
 1. **Baseline.** Score every known diagram (routing-corpus *and* FlowForge) under
