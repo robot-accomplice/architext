@@ -355,29 +355,62 @@ pub fn distribute_surface_mount_units(
             member_indices: Vec<usize>,
             opposite_center: f64,
         }
+        let opp_center_of = |ep: &SurfaceEndpointDesc| -> f64 {
+            let opposite_node =
+                if ep.endpoint_index == 0 { &ep.relationship.to } else { &ep.relationship.from };
+            input
+                .node_rects
+                .get(opposite_node)
+                .map(|mr| {
+                    if axis == "y" { mr.rect.y + mr.rect.height / 2.0 } else { mr.rect.x + mr.rect.width / 2.0 }
+                })
+                .unwrap_or(0.0)
+        };
         let mut units: Vec<UnitDesc> = Vec::new();
         for member_indices in by_node_pair.values() {
-            let is_reciprocal = member_indices.len() == 2 && {
-                let ep0 = &endpoints[member_indices[0]];
-                let ep1 = &endpoints[member_indices[1]];
-                ep0.relationship.from == ep1.relationship.to
-                    && ep0.relationship.to == ep1.relationship.from
-            };
-            if is_reciprocal {
-                let ep0 = &endpoints[member_indices[0]];
-                let opposite_node = if ep0.endpoint_index == 0 { &ep0.relationship.to } else { &ep0.relationship.from };
-                let opp_center = input.node_rects.get(opposite_node).map(|mr| {
-                    if axis == "y" { mr.rect.y + mr.rect.height / 2.0 } else { mr.rect.x + mr.rect.width / 2.0 }
-                }).unwrap_or(0.0);
-                units.push(UnitDesc { member_indices: member_indices.clone(), opposite_center: opp_center });
-            } else {
-                for &i in member_indices {
-                    let ep = &endpoints[i];
-                    let opposite_node = if ep.endpoint_index == 0 { &ep.relationship.to } else { &ep.relationship.from };
-                    let opp_center = input.node_rects.get(opposite_node).map(|mr| {
-                        if axis == "y" { mr.rect.y + mr.rect.height / 2.0 } else { mr.rect.x + mr.rect.width / 2.0 }
-                    }).unwrap_or(0.0);
-                    units.push(UnitDesc { member_indices: vec![i], opposite_center: opp_center });
+            // Greedily pair reciprocal members (a->b with b->a) into rigid units.
+            // The JS engine paired only the lone exactly-2 case, so MULTIPLE
+            // reciprocal pairs between the same two nodes degraded to lone units
+            // that fight the even-spread (the surface point-distribution defect).
+            // Pairing each a->b with its b->a keeps each pair parallel at the
+            // reciprocal offset and spreads the PAIRS — intentional divergence
+            // from JS (re-baselined).
+            let mut used = vec![false; member_indices.len()];
+            for a in 0..member_indices.len() {
+                if used[a] {
+                    continue;
+                }
+                let ia = member_indices[a];
+                let epa = &endpoints[ia];
+                let mut partner: Option<usize> = None;
+                for b in (a + 1)..member_indices.len() {
+                    if used[b] {
+                        continue;
+                    }
+                    let epb = &endpoints[member_indices[b]];
+                    if epa.relationship.from == epb.relationship.to
+                        && epa.relationship.to == epb.relationship.from
+                    {
+                        partner = Some(b);
+                        break;
+                    }
+                }
+                match partner {
+                    Some(b) => {
+                        used[a] = true;
+                        used[b] = true;
+                        units.push(UnitDesc {
+                            member_indices: vec![ia, member_indices[b]],
+                            opposite_center: opp_center_of(epa),
+                        });
+                    }
+                    None => {
+                        used[a] = true;
+                        units.push(UnitDesc {
+                            member_indices: vec![ia],
+                            opposite_center: opp_center_of(epa),
+                        });
+                    }
                 }
             }
         }
