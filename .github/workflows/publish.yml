@@ -270,7 +270,22 @@ jobs:
           set -euo pipefail
           prefix="$(mktemp -d)"
           target="$(mktemp -d)"
-          npm install -g --prefix "$prefix" "@robotaccomplice/architext@${{ needs.resolve.outputs.version }}"
+          ver="${{ needs.resolve.outputs.version }}"
+          # Wait for the just-published version to be visible on the registry read
+          # path before installing. A package's tarball lands immediately but its
+          # package document propagates with a short delay, so installing right
+          # after publish races it and 404s (ETARGET). Poll the launcher AND the
+          # binary this runner installs (linux-x64) up to ~5 min. This is a smoke
+          # timing guard only — the publish has already succeeded by this point.
+          for i in $(seq 1 30); do
+            if npm view "@robotaccomplice/architext@$ver" version >/dev/null 2>&1 \
+               && npm view "@robotaccomplice/architext-linux-x64@$ver" version >/dev/null 2>&1; then
+              break
+            fi
+            echo "waiting for npm to surface $ver ($i/30)..."
+            sleep 10
+          done
+          npm install -g --prefix "$prefix" "@robotaccomplice/architext@$ver"
           "$prefix/bin/architext" --version
           "$prefix/bin/architext" sync "$target" --yes --branch none
           "$prefix/bin/architext" validate "$target"
