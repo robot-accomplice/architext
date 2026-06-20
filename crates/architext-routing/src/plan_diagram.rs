@@ -504,6 +504,55 @@ fn place_label(
 // plan_diagram — main entry point
 // ---------------------------------------------------------------------------
 
+/// REVIEW HOOK: replace each routed edge's geometry with the deterministic
+/// model's polyline (`route_all_coordinated`). Nodes are indexed in
+/// `node_rects` insertion order; edges are built from the relationships whose
+/// both endpoints are present, in relationship order, and routed as one coordinated
+/// set (the model needs the whole set for fans/crossings). Each result is fed back
+/// through [`route_with_points`] so `d`/`samples`/`bounds`/`bends` rebuild
+/// faithfully while style + pass-through fields are preserved. Edges the model
+/// can't place (missing endpoint) keep their engine route.
+fn apply_model_routes(
+    input: &RouteEdgesInput,
+    routed: &mut IndexMap<String, crate::route_edges::types::RouteData>,
+) {
+    use crate::route_edges::helpers::route_with_points;
+    use crate::route_model::place::{route_all_coordinated, Edge};
+    use std::collections::HashMap;
+
+    let node_ids: Vec<&String> = input.node_rects.keys().collect();
+    let idx: HashMap<&str, usize> = node_ids
+        .iter()
+        .enumerate()
+        .map(|(i, &id)| (id.as_str(), i))
+        .collect();
+    let rects: Vec<Rect> = node_ids
+        .iter()
+        .map(|&id| input.node_rects[id].rect.clone())
+        .collect();
+
+    let mut edges: Vec<Edge> = Vec::new();
+    let mut edge_rel_ids: Vec<String> = Vec::new();
+    for rel in &input.relationships {
+        if let (Some(&a), Some(&b)) = (idx.get(rel.from.as_str()), idx.get(rel.to.as_str())) {
+            edges.push(Edge { a, b });
+            edge_rel_ids.push(rel.id.clone());
+        }
+    }
+
+    let model_routes = route_all_coordinated(&rects, &edges);
+    for (i, rel_id) in edge_rel_ids.iter().enumerate() {
+        let pts = &model_routes[i];
+        if pts.len() < 2 {
+            continue; // model produced nothing usable — keep the engine route
+        }
+        if let Some(existing) = routed.get(rel_id) {
+            let rebuilt = route_with_points(existing, pts.clone(), None);
+            routed.insert(rel_id.clone(), rebuilt);
+        }
+    }
+}
+
 /// Port of JS `planDiagram(input)`.
 ///
 /// Computes the full planned diagram: node rects, routes, label boxes, and
@@ -642,7 +691,16 @@ pub fn plan_diagram_with_stats(
         grid_route_max_expansions: 3000,
     };
 
-    let (routed_edges, plan_stats) = route_edges_with_stats(&route_edges_input);
+    let (mut routed_edges, plan_stats) = route_edges_with_stats(&route_edges_input);
+
+    // REVIEW HOOK (post-cutover, net-new): when `ARCHITEXT_ROUTING_MODEL` is set,
+    // overwrite each route's geometry with the deterministic model's polyline so
+    // the live viewer renders the model's routing instead of the engine's. Off by
+    // default → zero parity impact; used only to serve the FlowForge corpus for a
+    // visual verdict. Labels/markers downstream re-derive from the new geometry.
+    if std::env::var("ARCHITEXT_ROUTING_MODEL").is_ok() {
+        apply_model_routes(&route_edges_input, &mut routed_edges);
+    }
 
     // Build relationships-by-id map
     let relationships_by_id: IndexMap<String, &RelationshipInput> =
