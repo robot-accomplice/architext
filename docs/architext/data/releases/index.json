@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-6-3",
+  "currentReleaseId": "v1-7-0",
   "releases": [
     {
       "id": "v1-1-2",
@@ -511,22 +511,44 @@
       "id": "v1-7-0",
       "version": "1.7.0",
       "name": "Architext 1.7.0 Rust Rewrite (Zero Node)",
-      "status": "implementing",
-      "posture": "on-track",
+      "status": "completed",
+      "posture": "shipped",
       "targetWindow": "After 1.6.3 (1.6.x exhausted)",
-      "lastUpdated": "2026-06-19T00:00:00.000Z",
+      "lastUpdated": "2026-06-20T00:00:00.000Z",
       "summary": "Reimplement the entire product in Rust with NO Node dependency surviving — runtime AND build. One Rust routing core (native + WASM); validation, serve layer, and lifecycle ported; AND the React/Vite viewer rewritten as a Rust → WASM UI (Leptos/Dioxus/Yew, no JSX/Vite/npm) reusing the engine directly and implementing the Stitch design language. Native installers are the Node-free default; npm is an opt-in compatibility bridge only. Minor release: JSON data contract and CLI surface preserved exactly, proven by a byte-parity migration gate and a validation conformance corpus. Migration tooling (parity harness, ajv conformance, JS tests) is transitional and deleted with the JS code.",
       "counts": {
         "features": 5,
         "bugFixes": 0,
         "workstreams": 5,
         "blockers": 0,
-        "complete": 10,
-        "inProgress": 1,
-        "planned": 2,
+        "complete": 11,
+        "inProgress": 0,
+        "planned": 0,
         "stretch": 0
       },
-      "file": "v1-7-0.json"
+      "file": "v1-7-0.json",
+      "releasedAt": "2026-06-20T07:06:41.767Z"
+    },
+    {
+      "id": "v1-7-1",
+      "version": "1.7.1",
+      "name": "Architext 1.7.1 Serve Startup Fix",
+      "status": "implementing",
+      "posture": "on-track",
+      "targetDate": "2026-06-20",
+      "lastUpdated": "2026-06-20T00:00:00.000Z",
+      "summary": "Patch release: architext serve binds and opens its URL immediately instead of blocking on the full plan-farm precompute, so a large corpus no longer makes the CLI appear frozen during startup.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 1,
+        "workstreams": 1,
+        "blockers": 0,
+        "complete": 1,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-7-1.json"
     }
   ]
 }

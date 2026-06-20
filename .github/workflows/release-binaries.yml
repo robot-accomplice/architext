@@ -77,7 +77,7 @@ jobs:
           cp "target/${{ matrix.rust_target }}/release/${{ matrix.bin }}" "staged/${{ matrix.target_key }}/${{ matrix.bin }}"
 
       - name: Upload binary artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: architext-binary-${{ matrix.target_key }}
           path: staged/${{ matrix.target_key }}/${{ matrix.bin }}
@@ -103,7 +103,7 @@ jobs:
         run: trunk build --release
 
       - name: Upload viewer dist artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: architext-viewer-dist
           path: crates/architext-viewer/dist
@@ -149,13 +149,13 @@ jobs:
           node-version: 20
 
       - name: Download native binary
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: architext-binary-${{ matrix.target_key }}
           path: bin-stage
 
       - name: Download viewer dist
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v5
         with:
           name: architext-viewer-dist
           path: crates/architext-viewer/dist
