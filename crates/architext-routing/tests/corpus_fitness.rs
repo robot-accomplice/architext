@@ -81,6 +81,7 @@ struct FlowMetrics {
     close_parallel_runs: usize,
     shared_segments: i64,
     repeated_crossings: i64,
+    doglegs: usize,
 }
 
 impl FlowMetrics {
@@ -94,6 +95,7 @@ impl FlowMetrics {
             "closeParallelRuns": self.close_parallel_runs,
             "sharedSegments": self.shared_segments,
             "repeatedCrossings": self.repeated_crossings,
+            "doglegs": self.doglegs,
         })
     }
 }
@@ -313,6 +315,7 @@ fn plan_corpus_flow(flow: &CorpusFlow, views: &[View]) -> (FlowMetrics, FlowPerf
         routes: diag.metrics.routes,
         bends: diag.metrics.bends,
         crossings: total_crossings,
+        doglegs: diag.metrics.doglegs,
         pair_internal_crossings: diag.metrics.pair_internal_crossings,
         lane_order_violations: diag.metrics.lane_order_violations,
         close_parallel_runs: diag.metrics.close_parallel_runs,
@@ -399,6 +402,7 @@ fn corpus_fitness_and_perf_hold_the_frozen_baseline() {
             "routes",
             "bends",
             "crossings",
+            "doglegs",
             "pairInternalCrossings",
             "laneOrderViolations",
             "closeParallelRuns",
