@@ -1,0 +1,87 @@
+{
+  "id": "v1-7-2",
+  "version": "1.7.2",
+  "name": "Architext 1.7.2 Native Install + Self-Update",
+  "status": "implementing",
+  "posture": "on-track",
+  "summary": "Native install + self-update release: a shell installer and an architext update/upgrade command download checksum-verified binaries from GitHub releases, so npm becomes an optional bridge users can leave. Releases now attach per-platform binaries plus SHA256SUMS, and an Architext release notifies the roboticus-site repository to re-sync.",
+  "targetDate": "2026-06-20",
+  "lastUpdated": "2026-06-20T00:00:00.000Z",
+  "updateSource": "Release prep: ships the native install + self-update off-ramp from npm (PR #229) and the roboticus-site release dispatch (PR #230). install.sh + architext update/upgrade verified end-to-end against the backfilled v1.7.1 assets.",
+  "scope": {
+    "required": [
+      {
+        "id": "native-self-update",
+        "title": "Native installer + architext update/upgrade",
+        "kind": "feature",
+        "summary": "install.sh (curl|sh) detects the platform, downloads the latest release binary, verifies its SHA-256, and installs to ~/.local/bin with no npm/Node. architext update (and the repurposed upgrade) self-updates the native binary from GitHub releases (download, checksum-verify, atomic in-place replace); a npm-managed install is migrated to a native one with off-ramp instructions instead of being overwritten. --check-updates reports availability. upgrade is no longer a sync alias.",
+        "evidence": ["pr-229"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "off-npm-distribution",
+        "dependsOn": []
+      },
+      {
+        "id": "release-asset-delivery",
+        "title": "Attach native binaries + checksums to releases",
+        "kind": "feature",
+        "summary": "The publish pipeline attaches the five per-platform binaries and a SHA256SUMS manifest to every GitHub release, giving the installer and architext update a verifiable download source independent of npm. The v1.7.1 release was backfilled so the installer works immediately.",
+        "evidence": ["pr-229"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "off-npm-distribution",
+        "dependsOn": []
+      },
+      {
+        "id": "serve-version-display",
+        "title": "Viewer header shows the product version",
+        "kind": "bug-fix",
+        "summary": "The serve layer built AppState.cli_version from CARGO_PKG_VERSION (the crate's 0.0.0), so the viewer header read 'Architext / 0.0.0'. Use ARCHITEXT_VERSION (stamped from package.json by build.rs), matching architext --version.",
+        "evidence": ["pr-229"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "off-npm-distribution",
+        "dependsOn": []
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "off-npm-distribution",
+      "name": "Off-npm native distribution",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Make native install + self-update first-class so npm becomes a transitional bridge, with a comfortable off-ramp for existing users.",
+      "progress": 100,
+      "itemIds": ["native-self-update", "release-asset-delivery", "serve-version-display"],
+      "evidence": ["pr-229", "pr-230"]
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "pr-229",
+      "label": "PR #229 native installer + architext update (off-ramp from npm)",
+      "href": "https://github.com/robot-accomplice/architext/pull/229",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-230",
+      "label": "PR #230 notify roboticus-site on release (repository_dispatch)",
+      "href": "https://github.com/robot-accomplice/architext/pull/230",
+      "kind": "document",
+      "status": "complete"
+    }
+  ]
+}

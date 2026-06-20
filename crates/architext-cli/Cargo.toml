@@ -14,6 +14,9 @@ architext-serve = { path = "../architext-serve" }
 axum = { version = "0.7", features = ["http1", "http2", "tokio"] }
 serde_json = { version = "1" }
 sha2 = { version = "0.10" }
+# Minimal blocking HTTP client for `architext update` (download release binary +
+# checksums from GitHub). rustls TLS so there is no system OpenSSL dependency.
+ureq = { version = "2", default-features = false, features = ["tls", "gzip"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "signal", "net", "time"] }
 
 [target.'cfg(unix)'.dependencies]

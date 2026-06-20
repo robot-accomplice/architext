@@ -50,6 +50,7 @@ pub struct ParsedArgs {
 const KNOWN_COMMANDS: &[&str] = &[
     "install", "upgrade", "sync", "migrate", "doctor", "status", "serve",
     "validate", "build", "prompt", "skill", "clean", "explain", "help", "version",
+    "update",
 ];
 
 fn assert_serve_command(command: &str, arg: &str) -> Result<(), String> {

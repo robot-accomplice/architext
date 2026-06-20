@@ -78,10 +78,10 @@ fn main() {
 
     let version = package_version();
 
-    // JS: if (options.checkUpdates) { … } — not in this slice (side-effecting)
+    // --check-updates: report whether a newer native release is available.
     if opts.check_updates {
-        eprintln!("--check-updates is not yet implemented in the Rust CLI");
-        process::exit(1);
+        commands::update::check(version);
+        return;
     }
 
     // JS: if (options.command === "version") { console.log(version); return; }
@@ -98,6 +98,19 @@ fn main() {
 
     if opts.command == "explain" {
         commands::explain::run(&opts.topic);
+        return;
+    }
+
+    // `update` (and `upgrade`): self-update the native binary from GitHub
+    // releases (no target). `upgrade` was previously an alias for `sync`; it now
+    // means "upgrade the binary", which is what users expect.
+    if opts.command == "update" || opts.command == "upgrade" {
+        if opts.command == "upgrade" {
+            eprintln!(
+                "note: `upgrade` now updates the architext binary; use `architext sync` to install or migrate project data."
+            );
+        }
+        commands::update::run(version);
         return;
     }
 
@@ -121,7 +134,7 @@ fn main() {
         "build" => commands::build::run(&target, &opts.out),
         "clean" => commands::clean::run(&target, opts.node_modules, opts.dry_run),
 
-        "sync" | "install" | "upgrade" | "migrate" => {
+        "sync" | "install" | "migrate" => {
             commands::sync::run(&target, &opts, version);
         }
         "serve" => commands::serve::run(&target, &opts, version),

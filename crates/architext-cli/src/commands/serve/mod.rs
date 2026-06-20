@@ -358,7 +358,7 @@ fn serve_foreground(target: &Path, opts: &ParsedArgs) {
         dist_dir,
         mutation_token: Arc::new(generate_mutation_token()),
         target_dir: target.to_path_buf(),
-        cli_version: Arc::new(env!("CARGO_PKG_VERSION").to_string()),
+        cli_version: Arc::new(env!("ARCHITEXT_VERSION").to_string()),
         schema_dir,
         write_lock: write_txn::new_write_lock(),
     };
