@@ -162,6 +162,141 @@ pub fn route_all(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> {
     route_all_sided(nodes, edges).into_iter().map(|r| r.route).collect()
 }
 
+/// The nesting surface pair for `from → to`, chosen so that a whole fan to a
+/// column nests crossing-free (the coordinated fan rule). Cross-lane offset edges
+/// take `from`'s horizontal face + `to`'s vertical face (a perpendicular L that
+/// shares the horizontal face across the fan); same-row edges go straight; same
+/// (vertical) lane uses the vertical faces. Trades length for nesting (crossings
+/// ≻ length).
+fn facing_pair(from: &Rect, to: &Rect) -> (Side, Side) {
+    let fcx = from.x + from.width / 2.0;
+    let fcy = from.y + from.height / 2.0;
+    let tcx = to.x + to.width / 2.0;
+    let tcy = to.y + to.height / 2.0;
+    let dx = tcx - fcx;
+    let dy = tcy - fcy;
+    let cross_lane = dx.abs() > from.width;
+    let same_row = dy.abs() <= from.height;
+    let _ = same_row;
+    if cross_lane {
+        // Cross-lane: horizontal FACING pair. The builder makes a straight when
+        // collinear, else a C (monotone jog) — keeping the whole fan on these two
+        // faces so it nests, instead of relocating to a crossing-prone L.
+        if dx >= 0.0 { (Side::Right, Side::Left) } else { (Side::Left, Side::Right) }
+    } else {
+        // Same (vertical) lane: vertical FACING pair (straight or vertical C).
+        if dy >= 0.0 { (Side::Bottom, Side::Top) } else { (Side::Top, Side::Bottom) }
+    }
+}
+
+/// True when two faces directly face each other (opposite outward normals).
+fn is_facing(sa: Side, sb: Side) -> bool {
+    let na = sa.normal();
+    let nb = sb.normal();
+    (na.0 + nb.0).abs() < f64::EPSILON && (na.1 + nb.1).abs() < f64::EPSILON
+}
+
+/// Monotone C (2-bend jog) between two facing mounts, jogging at the given
+/// channel (x for a horizontal facing pair, y for a vertical one). Monotone iff
+/// the channel lies between the endpoints — caller ensures that — so never a
+/// dogleg. `frac` staggers the jog by fan order so the Cs nest instead of sharing
+/// one channel.
+fn build_c(sa: Side, pa: &Point, pb: &Point, frac: f64) -> Vec<Point> {
+    if sa.is_horizontal() {
+        let jog_x = pa.x + (pb.x - pa.x) * frac;
+        vec![
+            pa.clone(),
+            Point { x: jog_x, y: pa.y },
+            Point { x: jog_x, y: pb.y },
+            pb.clone(),
+        ]
+    } else {
+        let jog_y = pa.y + (pb.y - pa.y) * frac;
+        vec![
+            pa.clone(),
+            Point { x: pa.x, y: jog_y },
+            Point { x: pb.x, y: jog_y },
+            pb.clone(),
+        ]
+    }
+}
+
+/// Build a clean shape between two mounts on the given surfaces: straight/L via
+/// [`build_path_01`], else — if the surfaces face each other — a monotone C
+/// (jog) staggered by `frac`. Returns the first that clears `obstacles`.
+fn build_l_or_c(
+    sa: Side,
+    pa: &Point,
+    sb: Side,
+    pb: &Point,
+    frac: f64,
+    obstacles: &[Rect],
+) -> Option<Vec<Point>> {
+    if let Some(pts) = build_path_01(sa, pa, sb, pb) {
+        if clears(&pts, obstacles) {
+            return Some(pts);
+        }
+    }
+    if is_facing(sa, sb) {
+        let c = build_c(sa, pa, pb, frac);
+        if clears(&c, obstacles) {
+            return Some(c);
+        }
+    }
+    None
+}
+
+/// Route every edge preferring the [`facing_pair`] nesting surfaces (the
+/// coordinated fan rule): straight/L when available, else a C (jog) on those same
+/// facing surfaces. Falls back to [`best_clean_route`], then Component 2. Always
+/// monotone — zero doglegs.
+pub fn route_all_facing_sided(nodes: &[Rect], edges: &[Edge]) -> Vec<RoutedEdge> {
+    let mut placed: Vec<Vec<Point>> = Vec::new();
+    let mut out: Vec<RoutedEdge> = Vec::with_capacity(edges.len());
+    for e in edges {
+        let a = &nodes[e.a];
+        let b = &nodes[e.b];
+        let obstacles = obstacles_for(nodes, e.a, e.b);
+        let (sa, sb) = facing_pair(a, b);
+        let pa = sa.mount_at(a, 0.5);
+        let pb = sb.mount_at(b, 0.5);
+        let facing = build_l_or_c(sa, &pa, sb, &pb, 0.5, &obstacles);
+        let routed = match facing {
+            Some(pts) => RoutedEdge { route: pts, sides: Some((sa, sb)) },
+            None => match best_clean_route(a, b, &obstacles, &placed) {
+                Some(c) => RoutedEdge { route: c.points, sides: Some((c.side_a, c.side_b)) },
+                None => RoutedEdge {
+                    route: forced_detour(a, b, &obstacles, &placed).unwrap_or_default(),
+                    sides: None,
+                },
+            },
+        };
+        if !routed.route.is_empty() {
+            placed.push(routed.route.clone());
+        }
+        out.push(routed);
+    }
+    out
+}
+
+/// Fan router using facing surfaces with C (jog) shapes for offset-facing pairs.
+///
+/// MEASURED on FlowForge (2026-06-20): β 138→243, crossings 18→98 — DECISIVELY
+/// WORSE. A C is 2 bends vs an L's 1, and the locked law is `bends ≻ crossings`
+/// (an extra bend always loses, even to crossings). So an available 1-bend L
+/// always beats a 2-bend C regardless of crossings: the L-based `route_all_slotted`
+/// (138/18) is law-optimal, and the fan's remaining crossings are the mandated
+/// price of bends-first — they CANNOT be removed with Cs without violating the
+/// law. The C shape is therefore correct only where NO L exists (the rung between
+/// L and the Component-2 staircase), never as a crossing-reducer. Kept as a
+/// tested building block; not a default path.
+pub fn route_all_fan(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> {
+    let routed = route_all_facing_sided(nodes, edges);
+    let sides: Vec<Option<(Side, Side)>> = routed.iter().map(|r| r.sides).collect();
+    let detour: Vec<Vec<Point>> = routed.iter().map(|r| r.route.clone()).collect();
+    build_slotted_with_sides(nodes, edges, &sides, &detour)
+}
+
 /// Opposite endpoint's centre coordinate along the surface tangent — the
 /// co-monotone ordering key for slot assignment. Vertical surfaces (L/R) order by
 /// the opposite node's y; horizontal surfaces (T/B) by its x.
@@ -196,6 +331,9 @@ fn build_slotted_with_sides(
     }
     let mut mount_a: Vec<Option<Point>> = vec![None; edges.len()];
     let mut mount_b: Vec<Option<Point>> = vec![None; edges.len()];
+    // Fan-order fraction of the e.a-end slot (co-monotone by target), used to
+    // stagger a C's jog channel so the fan's Cs nest instead of sharing a channel.
+    let mut frac_a: Vec<f64> = vec![0.5; edges.len()];
     let mut keys: Vec<(usize, u8)> = surface.keys().copied().collect();
     keys.sort_unstable();
     for k in keys {
@@ -215,6 +353,7 @@ fn build_slotted_with_sides(
             let pt = side.mount_at(rect, frac);
             if edges[ei].a == node_idx {
                 mount_a[ei] = Some(pt);
+                frac_a[ei] = frac;
             } else {
                 mount_b[ei] = Some(pt);
             }
@@ -228,8 +367,7 @@ fn build_slotted_with_sides(
                 let pa = mount_a[ei].clone().unwrap_or_else(|| sa.mount_at(&nodes[e.a], 0.5));
                 let pb = mount_b[ei].clone().unwrap_or_else(|| sb.mount_at(&nodes[e.b], 0.5));
                 let obstacles = obstacles_for(nodes, e.a, e.b);
-                build_path_01(sa, &pa, sb, &pb)
-                    .filter(|pts| clears(pts, &obstacles))
+                build_l_or_c(sa, &pa, sb, &pb, frac_a[ei], &obstacles)
                     .unwrap_or_else(|| detour[ei].clone())
             }
             None => detour[ei].clone(),
@@ -330,7 +468,7 @@ pub fn route_all_slotted_min_crossings(nodes: &[Rect], edges: &[Edge]) -> Vec<Ve
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::route_model::{bend_score, monotone};
+    use crate::route_model::{bend_score, bends, monotone};
 
     fn rect(x: f64, y: f64) -> Rect {
         Rect { x, y, width: 100.0, height: 50.0 }
@@ -398,6 +536,39 @@ mod tests {
             assert!(monotone(r));
         }
         assert_ne!(routes[0], routes[1], "parallel edges land on distinct slots");
+    }
+
+    #[test]
+    fn fan_router_routes_everything_monotone() {
+        // The fan/C router must route every edge and stay dogleg-free (every route
+        // monotone), whatever shapes it picks. (Whether C beats L is geometry-
+        // dependent — a straddling fan nests better as Ls, an all-one-side fan as
+        // Cs — so crossings are not asserted here; that is the coordinated choice.)
+        let nodes = vec![
+            rect(0.0, 200.0),
+            rect(400.0, 0.0),
+            rect(400.0, 150.0),
+            rect(400.0, 300.0),
+            rect(400.0, 450.0),
+        ];
+        let edges = vec![
+            Edge { a: 0, b: 1 },
+            Edge { a: 0, b: 2 },
+            Edge { a: 0, b: 3 },
+            Edge { a: 0, b: 4 },
+        ];
+        for r in &route_all_fan(&nodes, &edges) {
+            assert!(!r.is_empty(), "every edge routed");
+            assert!(monotone(r), "fan routes stay dogleg-free");
+        }
+    }
+
+    #[test]
+    fn build_c_is_monotone() {
+        // A C jog between facing mounts never doubles back.
+        let c = build_c(Side::Right, &Point { x: 0.0, y: 0.0 }, &Point { x: 100.0, y: 60.0 }, 0.5);
+        assert!(monotone(&c));
+        assert_eq!(bends(&c), 2, "a C has exactly 2 bends");
     }
 
     #[test]
