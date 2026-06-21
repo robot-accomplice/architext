@@ -562,6 +562,19 @@ fn apply_model_routes(
             routed.insert(rel_id.clone(), rebuilt);
         }
     }
+    // HOP pass: route_with_points emits a plain `d`. Rebuild each rendered (flow-
+    // participant) route's `d` with line-jump hops against the OTHER rendered routes
+    // (what the engine does via render_orthogonal_route), so crossings read as
+    // bridges instead of ambiguous intersections. Scoped to the model-routed set —
+    // the only edges shown in a flow view — so a route never hops a hidden line.
+    use crate::route_edges::helpers::render_orthogonal_route;
+    let hop_ids: Vec<String> =
+        edge_rel_ids.iter().filter(|id| routed.contains_key(*id)).cloned().collect();
+    let hop_routes: Vec<_> = hop_ids.iter().map(|id| routed[id].clone()).collect();
+    for (i, id) in hop_ids.iter().enumerate() {
+        let rebuilt = render_orthogonal_route(&hop_routes[i], &hop_routes, i);
+        routed.insert(id.clone(), rebuilt);
+    }
 }
 
 /// Port of JS `planDiagram(input)`.
