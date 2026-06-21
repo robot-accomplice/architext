@@ -457,37 +457,54 @@ fn build_slotted_with_order(
         let e = edges[ei];
         let (ra, rb) = (&nodes[e.a], &nodes[e.b]);
         let obstacles = obstacles_for(nodes, e.a, e.b);
-        let (qa, qb) = if sa.is_horizontal() {
-            if (pa.y - pb.y).abs() < EPS {
-                continue; // already straight
-            }
-            let lo = ra.y.max(rb.y) + MIN_SURFACE_STEM;
-            let hi = (ra.y + ra.height).min(rb.y + rb.height) - MIN_SURFACE_STEM;
-            if lo > hi {
-                continue; // surfaces don't overlap enough to straighten into
-            }
-            let c = pa.y.clamp(lo, hi);
-            (Point { x: pa.x, y: c }, Point { x: pb.x, y: c })
+        let horiz = sa.is_horizontal();
+        if (horiz && (pa.y - pb.y).abs() < EPS) || (!horiz && (pa.x - pb.x).abs() < EPS) {
+            continue; // already straight
+        }
+        let (lo, hi) = if horiz {
+            (ra.y.max(rb.y) + MIN_SURFACE_STEM, (ra.y + ra.height).min(rb.y + rb.height) - MIN_SURFACE_STEM)
         } else {
-            if (pa.x - pb.x).abs() < EPS {
-                continue;
-            }
-            let lo = ra.x.max(rb.x) + MIN_SURFACE_STEM;
-            let hi = (ra.x + ra.width).min(rb.x + rb.width) - MIN_SURFACE_STEM;
-            if lo > hi {
-                continue;
-            }
-            let c = pa.x.clamp(lo, hi);
-            (Point { x: c, y: pa.y }, Point { x: c, y: pb.y })
+            (ra.x.max(rb.x) + MIN_SURFACE_STEM, (ra.x + ra.width).min(rb.x + rb.width) - MIN_SURFACE_STEM)
         };
-        if !clears(&[qa.clone(), qb.clone()], &obstacles) {
-            continue;
+        if lo > hi {
+            continue; // surfaces don't overlap enough to straighten into
         }
-        if coincides(&mount_a, &mount_b, ei, e.a, &qa) || coincides(&mount_a, &mount_b, ei, e.b, &qb) {
-            continue;
+        // Try several common coordinates — EITHER end's tangent, then the midpoint —
+        // and take the first that clears O and coincides with no sibling mount. The
+        // old code tried only `pa`'s tangent, so a facing pair left a tiny Z jog
+        // whenever that one coordinate was already taken even though the other end's
+        // was free. A straight is strictly better than a Z.
+        //
+        // PHASE 2 (track model, dev): the extra candidates only run on the DIRECT
+        // path (greedy mount-order disabled). With greedy still on, straightening
+        // more aggressively pushes the greedy search to a different optimum (+1
+        // crossing on FlowForge), so production keeps the single-candidate behavior
+        // until the direct assignment is ready to REPLACE greedy wholesale.
+        let direct = std::env::var("ARCHITEXT_NO_GREEDY_ORDER").is_ok();
+        let raw: &[f64] = if !direct {
+            if horiz { &[pa.y] } else { &[pa.x] }
+        } else if horiz {
+            &[pa.y, pb.y, (pa.y + pb.y) / 2.0]
+        } else {
+            &[pa.x, pb.x, (pa.x + pb.x) / 2.0]
+        };
+        for &cand in raw {
+            let c = cand.clamp(lo, hi);
+            let (qa, qb) = if horiz {
+                (Point { x: pa.x, y: c }, Point { x: pb.x, y: c })
+            } else {
+                (Point { x: c, y: pa.y }, Point { x: c, y: pb.y })
+            };
+            if !clears(&[qa.clone(), qb.clone()], &obstacles) {
+                continue;
+            }
+            if coincides(&mount_a, &mount_b, ei, e.a, &qa) || coincides(&mount_a, &mount_b, ei, e.b, &qb) {
+                continue;
+            }
+            mount_a[ei] = Some(qa);
+            mount_b[ei] = Some(qb);
+            break;
         }
-        mount_a[ei] = Some(qa);
-        mount_b[ei] = Some(qb);
     }
 
     let mut routes: Vec<Vec<Point>> = edges
@@ -969,7 +986,10 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
     let mut order = default_surface_order(nodes, edges, &sides);
     routes = build_slotted_with_order(nodes, edges, &sides, &detour, &order);
     best = weighted_total(&routes);
-    for _ in 0..MAX_ROUNDS {
+    // PHASE 2 A/B (temporary): ARCHITEXT_NO_GREEDY_ORDER skips the greedy mount-order
+    // search to measure what direct track assignment must match-or-beat.
+    let greedy_rounds = if std::env::var("ARCHITEXT_NO_GREEDY_ORDER").is_ok() { 0 } else { MAX_ROUNDS };
+    for _ in 0..greedy_rounds {
         let mut improved = false;
         let mut keys: Vec<(usize, u8)> = order.keys().copied().collect();
         keys.sort_unstable();
@@ -1012,7 +1032,7 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
             g.swap(pi, pj);
         }
     };
-    for _ in 0..MAX_ROUNDS {
+    for _ in 0..greedy_rounds {
         let mut improved = false;
         for ei in 0..edges.len() {
             for ej in (ei + 1)..edges.len() {
