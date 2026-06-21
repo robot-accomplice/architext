@@ -355,6 +355,12 @@ pub fn model_geometry(
 
     let mut out = Vec::with_capacity(pairs.len());
     for (view, flow) in pairs {
+        #[cfg(feature = "native")]
+        if std::env::var("ARCHITEXT_ROUTE_TIMING").is_ok() {
+            use std::io::Write;
+            eprintln!("[pair-begin  ] {:>28} / {:<18}", flow.id, view.id);
+            let _ = std::io::stderr().flush();
+        }
         let req = build_flow_plan_request(view, flow, Some(&layout_config), "orthogonal");
         let (plan, _stats, _diag) = plan_diagram_with_stats(&req.plan_diagram_input);
         // Obstacle set = flow PARTICIPANTS only (nodes referenced by a routed edge).
@@ -385,7 +391,27 @@ pub fn model_geometry(
                 })
             })
             .collect();
+        // RCA instrumentation (opt-in): per-flow routing wall-clock so a slow flow
+        // is identifiable, not just "the corpus is slow". Native only (Instant).
+        #[cfg(feature = "native")]
+        if std::env::var("ARCHITEXT_ROUTE_TIMING").is_ok() {
+            use std::io::Write;
+            eprintln!("[route-start ] {:>28} / {:<18} edges={}", flow.id, view.id, edges.len());
+            let _ = std::io::stderr().flush();
+        }
+        #[cfg(feature = "native")]
+        let _t0 = std::time::Instant::now();
         let routes = route_all_coordinated(&nodes_v, &edges);
+        #[cfg(feature = "native")]
+        if std::env::var("ARCHITEXT_ROUTE_TIMING").is_ok() {
+            eprintln!(
+                "[route-timing] {:>28} / {:<18} edges={:<3} {:?}",
+                flow.id,
+                view.id,
+                edges.len(),
+                _t0.elapsed()
+            );
+        }
         out.push(ModelGeometry {
             flow_id: flow.id.clone(),
             view_id: view.id.clone(),

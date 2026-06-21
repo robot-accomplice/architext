@@ -504,12 +504,19 @@ fn build_slotted_with_order(
             None => detour[ei].clone(),
         })
         .collect();
-    // Hard no-overlap rule, two levers (both shape-preserving): nest arches whose
-    // free MIDDLE channels collide, then slide a mount along its face to free any
-    // legs whose PINNED channels collide.
-    separate_channels(&mut routes);
-    separate_leg_channels(nodes, edges, &mut routes);
     routes
+}
+
+/// Hard no-overlap rule, two shape-preserving levers: nest arches whose free
+/// MIDDLE channels collide, then slide a mount along its face to free any legs
+/// whose PINNED channels collide. This is deterministic post-processing — it does
+/// NOT change β and only converts an interlocked overlap into a permitted crossing,
+/// so it runs ONCE on the final routing, never inside the mount-order optimizer
+/// loop (each call scans O(E²) segment pairs; running it per trial made heavy flows
+/// take minutes).
+pub(crate) fn separate_all_channels(nodes: &[Rect], edges: &[Edge], routes: &mut [Vec<Point>]) {
+    separate_channels(routes);
+    separate_leg_channels(nodes, edges, routes);
 }
 
 /// Clean-shape cost weights (LAW REVISION 2026-06-20: crossings can outweigh a
@@ -1041,6 +1048,9 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
         }
     }
 
+    // Hard no-overlap rule: applied ONCE on the chosen routing (shape-preserving),
+    // not inside the mount-order optimizer above.
+    separate_all_channels(nodes, edges, &mut routes);
     routes
 }
 
@@ -1313,7 +1323,8 @@ mod tests {
         let edges = vec![Edge { a: 0, b: 2 }, Edge { a: 1, b: 3 }];
         let sides = vec![Some((Side::Bottom, Side::Left)), Some((Side::Top, Side::Left))];
         let detour = vec![Vec::new(), Vec::new()];
-        let routes = build_slotted_with_sides(&nodes, &edges, &sides, &detour);
+        let mut routes = build_slotted_with_sides(&nodes, &edges, &sides, &detour);
+        separate_all_channels(&nodes, &edges, &mut routes);
         for r in &routes {
             assert!(!r.is_empty(), "both Ls build");
             assert!(!crate::route_model::doubles_back(r), "shape preserved (no dogleg)");
@@ -1397,7 +1408,8 @@ mod tests {
         let edges = vec![Edge { a: 0, b: 1 }, Edge { a: 2, b: 3 }];
         let sides = vec![Some((Side::Top, Side::Top)), Some((Side::Top, Side::Top))];
         let detour = vec![Vec::new(), Vec::new()];
-        let routes = build_slotted_with_sides(&nodes, &edges, &sides, &detour);
+        let mut routes = build_slotted_with_sides(&nodes, &edges, &sides, &detour);
+        separate_all_channels(&nodes, &edges, &mut routes);
         for r in &routes {
             assert!(!r.is_empty(), "both arches build");
             assert!(!crate::route_model::doubles_back(r), "shape preserved (no dogleg)");
