@@ -1045,7 +1045,7 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
 }
 
 /// Total strictly-interior crossings across all route pairs.
-fn total_crossings(routes: &[Vec<Point>]) -> usize {
+pub(crate) fn total_crossings(routes: &[Vec<Point>]) -> usize {
     let mut n = 0usize;
     for i in 0..routes.len() {
         for j in (i + 1)..routes.len() {

@@ -32,6 +32,7 @@ pub(crate) const DOGLEG_PENALTY: f64 = 1_000_000_000.0;
 /// obstacles it clears. Maintainer rule, 2026-06-20.
 pub(crate) const MIN_SURFACE_STEM: f64 = 16.0;
 
+pub mod audit;
 pub mod component2;
 pub mod place;
 pub mod select;
