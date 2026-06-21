@@ -504,9 +504,11 @@ fn build_slotted_with_order(
             None => detour[ei].clone(),
         })
         .collect();
-    // Hard no-overlap rule: nest any arches that ended up sharing a channel onto
-    // distinct, concentric channels (shape-preserving — only the free middle moves).
+    // Hard no-overlap rule, two levers (both shape-preserving): nest arches whose
+    // free MIDDLE channels collide, then slide a mount along its face to free any
+    // legs whose PINNED channels collide.
     separate_channels(&mut routes);
+    separate_leg_channels(nodes, edges, &mut routes);
     routes
 }
 
@@ -731,6 +733,118 @@ fn separate_channels(routes: &mut [Vec<Point>]) {
             if k > 0 {
                 off += out * CHANNEL_GAP;
                 reseat_middle(&mut routes[*ri], m.horiz, off);
+            }
+        }
+    }
+}
+
+/// A leg = the segment incident to a mount. Unlike an arch's interior middle, a
+/// leg's channel is PINNED to its mount slot, so it can only be freed by sliding
+/// the mount ALONG its face. This records where the mount may slide.
+struct Leg {
+    ri: usize,       // route index
+    mount_i: usize,  // polyline index of the mount end of the leg
+    corner_i: usize, // polyline index of the leg's other end (the corner)
+    vertical: bool,  // leg runs vertically (mount on a top/bottom face) → slide x
+    lo: f64,         // face span the mount may slide within
+    hi: f64,
+}
+
+fn collect_legs(nodes: &[Rect], edges: &[Edge], routes: &[Vec<Point>]) -> Vec<Leg> {
+    let mut legs = Vec::new();
+    let mut push = |ri: usize, mi: usize, ci: usize, node: &Rect, out: &mut Vec<Leg>| {
+        let (m, c) = (&routes[ri][mi], &routes[ri][ci]);
+        if (m.x - c.x).abs() < EPS && (m.y - c.y).abs() >= EPS {
+            out.push(Leg { ri, mount_i: mi, corner_i: ci, vertical: true, lo: node.x, hi: node.x + node.width });
+        } else if (m.y - c.y).abs() < EPS && (m.x - c.x).abs() >= EPS {
+            out.push(Leg { ri, mount_i: mi, corner_i: ci, vertical: false, lo: node.y, hi: node.y + node.height });
+        }
+    };
+    for (ri, r) in routes.iter().enumerate() {
+        if r.len() < 3 {
+            continue; // a 2-point straight has no corner to absorb a slide
+        }
+        let e = edges[ri];
+        push(ri, 0, 1, &nodes[e.a], &mut legs);
+        let last = r.len() - 1;
+        push(ri, last, last - 1, &nodes[e.b], &mut legs);
+    }
+    legs
+}
+
+fn leg_channel(routes: &[Vec<Point>], leg: &Leg) -> f64 {
+    let m = &routes[leg.ri][leg.mount_i];
+    if leg.vertical { m.x } else { m.y }
+}
+
+/// Shape-preserving LEG channel separation — the pinned-channel companion to
+/// [`separate_channels`]. Two legs sharing a channel (collinear AND overlapping)
+/// can't be freed by an interior shift, so slide ONE mount along its face by a
+/// [`CHANNEL_GAP`]: the leg moves to a clear parallel channel and its perpendicular
+/// stem absorbs the shift, so a clean L stays an L (no new bend). GUARDED: a slide
+/// is kept only if it strictly lowers `total_overlaps` without adding a crossing,
+/// and only if the moved mount stays on its face — so it can never regress. This is
+/// the deterministic seed of the track model's slot-side channel ownership.
+fn separate_leg_channels(nodes: &[Rect], edges: &[Edge], routes: &mut [Vec<Point>]) {
+    let mut base_ov = total_overlaps(routes);
+    if base_ov == 0 {
+        return;
+    }
+    let legs = collect_legs(nodes, edges, routes);
+    let seg = |routes: &[Vec<Point>], l: &Leg| (routes[l.ri][l.mount_i].clone(), routes[l.ri][l.corner_i].clone());
+    // Apply a leg's slide in place, returning the saved endpoints for revert.
+    let apply = |routes: &mut [Vec<Point>], l: &Leg, next: f64| -> (Point, Point) {
+        let saved = (routes[l.ri][l.mount_i].clone(), routes[l.ri][l.corner_i].clone());
+        if l.vertical {
+            routes[l.ri][l.mount_i].x = next;
+            routes[l.ri][l.corner_i].x = next;
+        } else {
+            routes[l.ri][l.mount_i].y = next;
+            routes[l.ri][l.corner_i].y = next;
+        }
+        saved
+    };
+    for i in 0..legs.len() {
+        for j in (i + 1)..legs.len() {
+            if legs[i].ri == legs[j].ri {
+                continue;
+            }
+            let (a0, a1) = seg(routes, &legs[i]);
+            let (b0, b1) = seg(routes, &legs[j]);
+            if !crate::route_model::segments_overlap(&a0, &a1, &b0, &b1) {
+                continue;
+            }
+            // Try sliding either leg by ±CHANNEL_GAP and KEEP the candidate that
+            // minimises (overlaps, crossings) lexicographically — an overlap is
+            // strictly worse than a crossing (lines may meet orthogonally but never
+            // share a channel), so converting this overlap into a clean orthogonal
+            // crossing is the correct, shape-preserving resolution when the routes
+            // are interlocked. Shape is untouched (only the mount slides along its
+            // face), so no bend is ever added.
+            let mut best: Option<(usize, usize, f64)> = None; // (ov, cr, next) for the chosen leg
+            let mut best_leg: Option<&Leg> = None;
+            for li in [&legs[i], &legs[j]] {
+                for &d in &[CHANNEL_GAP, -CHANNEL_GAP] {
+                    let next = leg_channel(routes, li) + d;
+                    if next < li.lo + EPS || next > li.hi - EPS {
+                        continue; // would slide off the face
+                    }
+                    let saved = apply(routes, li, next);
+                    let (ov, cr) = (total_overlaps(routes), total_crossings(routes));
+                    routes[li.ri][li.mount_i] = saved.0;
+                    routes[li.ri][li.corner_i] = saved.1;
+                    if ov < base_ov && best.is_none_or(|(bo, bc, _)| (ov, cr) < (bo, bc)) {
+                        best = Some((ov, cr, next));
+                        best_leg = Some(li);
+                    }
+                }
+            }
+            if let (Some((ov, _, next)), Some(li)) = (best, best_leg) {
+                apply(routes, li, next);
+                base_ov = ov;
+            }
+            if base_ov == 0 {
+                return;
             }
         }
     }
@@ -1177,6 +1291,45 @@ mod tests {
         for r in &repaired_routes {
             assert!(monotone(r), "still zero doglegs after repair");
         }
+    }
+
+    #[test]
+    fn two_legs_in_a_shared_gutter_own_distinct_channels() {
+        // Two L routes whose vertical LEGS land in the same x-channel and overlap in
+        // y — the FlowForge interactive-turn/system-map residual. U→R1 drops down the
+        // gutter past the midline; Lo→R2 climbs the SAME gutter past it, so the legs
+        // share x=260 over y[100,250]. A leg's channel is PINNED to its mount slot, so
+        // separation slides a mount ALONG its face (the perpendicular stem absorbs the
+        // shift) — still a clean L, no new bend. These routes are INTERLOCKED (their
+        // corners swap vertical order), so the only legal resolution is to convert the
+        // forbidden overlap into a PERMITTED orthogonal crossing (lines may meet
+        // orthogonally, but never share a channel).
+        let nodes = vec![
+            Rect { x: 200.0, y: 0.0, width: 120.0, height: 50.0 },   // U  bottom face y=50, x[200,320]
+            Rect { x: 200.0, y: 300.0, width: 120.0, height: 50.0 }, // Lo top face y=300, x[200,320]
+            Rect { x: 500.0, y: 225.0, width: 120.0, height: 50.0 }, // R1 left mount y=250 (below mid)
+            Rect { x: 500.0, y: 75.0, width: 120.0, height: 50.0 },  // R2 left mount y=100 (above mid)
+        ];
+        let edges = vec![Edge { a: 0, b: 2 }, Edge { a: 1, b: 3 }];
+        let sides = vec![Some((Side::Bottom, Side::Left)), Some((Side::Top, Side::Left))];
+        let detour = vec![Vec::new(), Vec::new()];
+        let routes = build_slotted_with_sides(&nodes, &edges, &sides, &detour);
+        for r in &routes {
+            assert!(!r.is_empty(), "both Ls build");
+            assert!(!crate::route_model::doubles_back(r), "shape preserved (no dogleg)");
+            assert_eq!(crate::route_model::bends(r), 1, "still a clean L");
+        }
+        assert_eq!(
+            total_overlaps(&routes),
+            0,
+            "two legs must not share a gutter channel; routes = {:?}",
+            routes
+        );
+        assert!(
+            total_crossings(&routes) <= 1,
+            "an interlocked overlap resolves to at most ONE permitted orthogonal crossing; routes = {:?}",
+            routes
+        );
     }
 
     #[test]
