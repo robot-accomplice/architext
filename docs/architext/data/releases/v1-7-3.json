@@ -2,12 +2,13 @@
   "id": "v1-7-3",
   "version": "1.7.3",
   "name": "Architext 1.7.3 Diagram Fidelity + Distribution (routing-model groundwork)",
-  "status": "implementing",
-  "posture": "release-candidate",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Patch release. User-facing: sequence diagrams now follow the UML standard, the Sequence-mode flow-selection papercut and an overline-tracking drift are fixed, a Homebrew formula installs the native binary, and the serve plan farm warms incrementally so the first diagram appears fast. Under the hood, a from-scratch deterministic Rust routing model lands behind the ARCHITEXT_ROUTING_MODEL review flag (default routing is unchanged — still the engine): a locked shape law, a permanent forbidden-artifact gate, and crossings cut 28 -> 21, beating the engine on bend cost (beta 174 vs 1338) at equal crossings. That model is groundwork toward a future default switch, not a default change in 1.7.3.",
   "targetDate": "2026-06-21",
-  "lastUpdated": "2026-06-21T19:00:00.000Z",
-  "updateSource": "All scope merged to develop (PRs #234 serve-warm, #235 Homebrew, #238 routing model + sequence/viewer fidelity + clippy, #239 this Release Truth, #240 version bump), each green on verify-rust + package. NOT yet shipped — release-candidate pending the develop -> main merge (#241) + just github-release. Validation: routing 525 lib tests, viewer 127, forbidden-artifact corpus gate 1/1, corpus_fitness ratchet 1/1, native validator pass. The deterministic router is opt-in via ARCHITEXT_ROUTING_MODEL; default rendering is the engine, so this release carries no default routing change.",
+  "releasedAt": "2026-06-21T19:35:13.000Z",
+  "lastUpdated": "2026-06-21T19:40:00.000Z",
+  "updateSource": "Shipped to npm 2026-06-21. Cut via develop -> main (#241) + just github-release; publish.yml fully green (release gate, publish binaries+launcher, attach binaries + SHA256SUMS, roboticus-site dispatch, published-CLI smoke all passed). Verified live against the registry: launcher @robotaccomplice/architext 1.7.3 with dist-tag latest=1.7.3, all five per-platform binary packages at 1.7.3, and the GitHub release carries the five binaries + SHA256SUMS. The deterministic router ships opt-in behind ARCHITEXT_ROUTING_MODEL; default rendering remains the engine, so this release carries no default routing change.",
   "scope": {
     "required": [
       {
