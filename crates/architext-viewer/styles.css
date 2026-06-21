@@ -1222,7 +1222,7 @@ button.c4-breadcrumb__crumb:hover {
 .flow-parked-label {
   font-family: var(--font-mono);
   font-size: var(--overline-size);
-  letter-spacing: 0.12em;
+  letter-spacing: var(--overline-tracking);
   text-transform: uppercase;
   fill: var(--dim);
   text-anchor: start;
@@ -1772,7 +1772,7 @@ button.c4-breadcrumb__crumb:hover {
   font-family: var(--font-mono);
   font-size: var(--overline-size);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--overline-tracking);
 }
 .repo-file-preview__path {
   color: var(--ink);
@@ -1917,7 +1917,7 @@ button.c4-breadcrumb__crumb:hover {
   color: var(--dim);
   font-size: var(--overline-size);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--overline-tracking);
   border-bottom: 1px solid var(--line);
   cursor: default;
 }
