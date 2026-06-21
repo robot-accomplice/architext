@@ -47,10 +47,16 @@ const PARTICIPANT_CARD_HALF_WIDTH: f64 = 58.0;
 const FRAME_X_INSET: f64 = 8.0;
 /// Frame width shrink (`- 16`, i.e. `8` per side).
 const FRAME_WIDTH_INSET: f64 = 16.0;
-/// Frame top lift above the first bracketed row (`- 30`).
+/// Frame top lift above the first bracketed row (`- 30`). Kept at 30 so the first
+/// bracketed row's action label (drawn 17px above its line, ~9px ascent → ~26px up)
+/// stays inside the fragment border.
 const FRAME_Y_LIFT: f64 = 30.0;
-/// Frame bottom extension below the last bracketed row (`+ 34`).
-const FRAME_HEIGHT_TAIL: f64 = 34.0;
+/// Frame bottom extension below the last bracketed row. Reduced from the JS port's
+/// `34` to `18` so two SEQUENTIAL fragments (last row of one, first row of the next,
+/// `row_height` = 56 apart) no longer overlap: `lift + tail = 48 < 56` leaves an 8px
+/// gap between adjacent fragment borders. UML combined fragments are disjoint, not
+/// overlapping (design > JS parity — the `34` produced an 8px border collision).
+const FRAME_HEIGHT_TAIL: f64 = 18.0;
 /// Activation-bar fixed width (`width="10"`).
 const ACTIVATION_BAR_WIDTH: f64 = 10.0;
 /// Activation-bar x nudge per depth level (`depth * 8`).
@@ -745,10 +751,11 @@ mod tests {
         // x = 28 + 0*146 + 8 = 36 ; width = (2-0+1)*146 - 16 = 422.
         assert_eq!(f.x, 28.0 + 8.0);
         assert_eq!(f.width, 3.0 * 146.0 - 16.0);
-        // y = yForStep(0) - 30 = 54 ; height = yForStep(1) - y + 34 = 140 - 54 + 34 = 120
-        // (origin-independent: the MESSAGE_START_Y term cancels in the height).
+        // y = yForStep(0) - 30 = 54 ; height = yForStep(1) - y + 18 = 140 - 54 + 18 = 104
+        // (origin-independent: the MESSAGE_START_Y term cancels in the height). Tail is
+        // 18 (not 34) so sequential fragments don't overlap — see FRAME_HEIGHT_TAIL.
         assert_eq!(f.y, 84.0 - 30.0);
-        assert_eq!(f.height, (84.0 + 56.0) - (84.0 - 30.0) + 34.0);
+        assert_eq!(f.height, (84.0 + 56.0) - (84.0 - 30.0) + 18.0);
     }
 
     #[test]

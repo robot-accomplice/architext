@@ -155,20 +155,48 @@ fn SeqLifeline(line: Lifeline) -> impl IntoView {
     }
 }
 
+/// Operator-tab pentagon height + folded-corner cut (UML interaction-operator label).
+const FRAME_TAB_HEIGHT: f64 = 18.0;
+const FRAME_TAB_CUT: f64 = 6.0;
+/// Approx mono glyph advance at 10px, for sizing the tab to the operator text.
+const FRAME_TAB_CHAR_W: f64 = 6.2;
+/// Horizontal padding inside the operator tab.
+const FRAME_TAB_PAD: f64 = 14.0;
+
 #[component]
 fn SeqFrame(frame: FrameBox) -> impl IntoView {
-    let label = if frame.label.is_empty() {
-        frame.frame_type.clone()
-    } else {
-        format!("{}: {}", frame.frame_type, frame.label)
-    };
+    let op = frame.frame_type.clone();
+    let label = frame.label.clone();
+    let has_label = !label.is_empty();
+    // UML operator tab: a pentagon with a folded bottom-right corner, sized to the
+    // operator text, at the fragment's top-left. The operator sits inside it; the
+    // fragment guard/title renders to its right.
+    let tab_w = (op.chars().count() as f64) * FRAME_TAB_CHAR_W + FRAME_TAB_PAD;
+    let (x, y) = (frame.x, frame.y);
+    let tab_d = format!(
+        "M {x} {y} H {right} V {fold_y} L {fold_x} {bottom} H {x} Z",
+        right = x + tab_w,
+        fold_y = y + FRAME_TAB_HEIGHT - FRAME_TAB_CUT,
+        fold_x = x + tab_w - FRAME_TAB_CUT,
+        bottom = y + FRAME_TAB_HEIGHT,
+    );
+    let op_cx = x + tab_w / 2.0;
+    let text_y = y + 12.5;
+    // Guard/title is RIGHT-aligned to the fragment's right edge: the first bracketed
+    // message's action label sits centre-left in the top band, so anchoring the title
+    // to the right keeps the two from overprinting.
+    let label_x = x + frame.width - 8.0;
     view! {
         <g class=format!("sequence-frame sequence-frame--{}", frame.frame_type)>
             <rect
                 class="sequence-frame__box"
                 x=frame.x y=frame.y width=frame.width height=frame.height rx="3"
             ></rect>
-            <text class="sequence-frame__label" x=frame.x + 8.0 y=frame.y + 14.0>{label}</text>
+            <path class="sequence-frame__tab" d=tab_d></path>
+            <text class="sequence-frame__op" x=op_cx y=text_y>{op}</text>
+            {has_label.then(|| view! {
+                <text class="sequence-frame__label" x=label_x y=text_y>{label}</text>
+            })}
         </g>
     }
 }

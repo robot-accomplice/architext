@@ -1538,20 +1538,41 @@ button.c4-breadcrumb__crumb:hover {
   opacity: 0.85;
 }
 
-/* Frames (alt/loop/par/opt/transaction) — a thin border + a mono label chip. */
+/* Combined fragments (alt/loop/par/opt/transaction). UML: the fragment border is
+   a SOLID rectangle (NOT dashed — dashing is reserved for return/async messages and
+   lifelines) with a pentagon operator tab in the top-left corner. */
 .sequence-frame__box {
   fill: none;
   stroke: var(--accent);
   stroke-width: 1;
-  stroke-dasharray: 4 3;
   opacity: 0.6;
 }
+/* The pentagon operator tab (folded bottom-right corner) — filled so it sits over
+   the box's top-left corner, the canonical UML interaction-operator label holder. */
+.sequence-frame__tab {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 1;
+  opacity: 0.9;
+}
+.sequence-frame__op {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  fill: var(--accent);
+  text-anchor: middle;
+  pointer-events: none;
+}
+/* The fragment guard/title, right-aligned to the fragment's right edge (clear of
+   the first bracketed message's centre-left action label). */
 .sequence-frame__label {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.04em;
   fill: var(--accent);
   opacity: 0.85;
+  text-anchor: end;
   pointer-events: none;
 }
 
