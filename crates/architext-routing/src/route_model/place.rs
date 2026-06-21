@@ -714,6 +714,50 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
         }
     }
 
+    // Phase 3b: JOINT pair-swap (mirror the paired surfaces). A reciprocal /
+    // multi-edge bundle between two surfaces nests only when BOTH surfaces' slot
+    // orders move together — a single-surface swap can't reach it (a local min).
+    // For each edge pair, swap their relative order in EVERY surface they share at
+    // once (keeping the two surfaces mirrored), and keep it when the weighted total
+    // drops. Maintainer: order paired surfaces jointly, mirrored, to minimize
+    // crossings. Shape is untouched (slots only) — never adds a bend.
+    for _ in 0..MAX_ROUNDS {
+        let mut improved = false;
+        for ei in 0..edges.len() {
+            for ej in (ei + 1)..edges.len() {
+                let shared: Vec<(usize, u8)> = order
+                    .iter()
+                    .filter(|(_, g)| g.contains(&ei) && g.contains(&ej))
+                    .map(|(k, _)| *k)
+                    .collect();
+                if shared.is_empty() {
+                    continue;
+                }
+                let swap_pair = |order: &mut HashMap<(usize, u8), Vec<usize>>| {
+                    for k in &shared {
+                        let g = order.get_mut(k).unwrap();
+                        let pi = g.iter().position(|&x| x == ei).unwrap();
+                        let pj = g.iter().position(|&x| x == ej).unwrap();
+                        g.swap(pi, pj);
+                    }
+                };
+                swap_pair(&mut order);
+                let trial = build_slotted_with_order(nodes, edges, &sides, &detour, &order);
+                let cost = weighted_total(&trial);
+                if cost < best {
+                    best = cost;
+                    routes = trial;
+                    improved = true;
+                } else {
+                    swap_pair(&mut order); // revert
+                }
+            }
+        }
+        if !improved {
+            break;
+        }
+    }
+
     routes
 }
 
