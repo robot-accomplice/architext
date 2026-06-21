@@ -714,13 +714,22 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
         }
     }
 
-    // Phase 3b: JOINT pair-swap (mirror the paired surfaces). A reciprocal /
-    // multi-edge bundle between two surfaces nests only when BOTH surfaces' slot
-    // orders move together — a single-surface swap can't reach it (a local min).
-    // For each edge pair, swap their relative order in EVERY surface they share at
-    // once (keeping the two surfaces mirrored), and keep it when the weighted total
-    // drops. Maintainer: order paired surfaces jointly, mirrored, to minimize
-    // crossings. Shape is untouched (slots only) — never adds a bend.
+    // Phase 3b: JOINT pair-swap (track nesting). A reciprocal / multi-edge bundle
+    // between two surfaces nests only when both surfaces' slot orders move together
+    // — but the right "mirror" can be the SAME order (facing surfaces) or the
+    // REVERSED order (like-facing ∩/∪ arches between a left and a right node, the
+    // outermost track spanning unified-leftmost ↔ sql-rightmost). So for each edge
+    // pair we try swapping their order on EACH shared surface alone (reaches the
+    // reversed mirror) and on ALL shared at once (the same-order mirror), keeping
+    // whichever lowers the weighted total. Slots only — never adds a bend.
+    let swap_in = |order: &mut HashMap<(usize, u8), Vec<usize>>, ks: &[(usize, u8)], ei: usize, ej: usize| {
+        for k in ks {
+            let g = order.get_mut(k).unwrap();
+            let pi = g.iter().position(|&x| x == ei).unwrap();
+            let pj = g.iter().position(|&x| x == ej).unwrap();
+            g.swap(pi, pj);
+        }
+    };
     for _ in 0..MAX_ROUNDS {
         let mut improved = false;
         for ei in 0..edges.len() {
@@ -733,23 +742,22 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
                 if shared.is_empty() {
                     continue;
                 }
-                let swap_pair = |order: &mut HashMap<(usize, u8), Vec<usize>>| {
-                    for k in &shared {
-                        let g = order.get_mut(k).unwrap();
-                        let pi = g.iter().position(|&x| x == ei).unwrap();
-                        let pj = g.iter().position(|&x| x == ej).unwrap();
-                        g.swap(pi, pj);
+                // candidate moves: each shared surface alone, then all together.
+                let mut moves: Vec<Vec<(usize, u8)>> = shared.iter().map(|k| vec![*k]).collect();
+                if shared.len() > 1 {
+                    moves.push(shared.clone());
+                }
+                for mv in moves {
+                    swap_in(&mut order, &mv, ei, ej);
+                    let trial = build_slotted_with_order(nodes, edges, &sides, &detour, &order);
+                    let cost = weighted_total(&trial);
+                    if cost < best {
+                        best = cost;
+                        routes = trial;
+                        improved = true;
+                        break;
                     }
-                };
-                swap_pair(&mut order);
-                let trial = build_slotted_with_order(nodes, edges, &sides, &detour, &order);
-                let cost = weighted_total(&trial);
-                if cost < best {
-                    best = cost;
-                    routes = trial;
-                    improved = true;
-                } else {
-                    swap_pair(&mut order); // revert
+                    swap_in(&mut order, &mv, ei, ej); // revert
                 }
             }
         }
