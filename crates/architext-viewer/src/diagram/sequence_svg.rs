@@ -89,6 +89,18 @@ pub fn SequenceSvg(
                 >
                     <path d="M 0 0 L 10 5 L 0 10 z" class="flow-arrowhead"></path>
                 </marker>
+                // OPEN (stick) arrowhead for RETURN/async messages — the UML
+                // convention (filled head = synchronous call, open head = reply/async).
+                <marker
+                    id="sequence-arrowhead-open"
+                    viewBox="0 0 10 10"
+                    refX="9" refY="5"
+                    markerWidth="9" markerHeight="9"
+                    markerUnits="userSpaceOnUse"
+                    orient="auto-start-reverse"
+                >
+                    <path d="M 0 0 L 10 5 L 0 10" class="sequence-arrowhead-open"></path>
+                </marker>
                 // Clip the body layers to below the participant header band so a
                 // first-row action label can't bleed up behind the header cards.
                 <clipPath id="sequence-body-clip">
@@ -143,20 +155,48 @@ fn SeqLifeline(line: Lifeline) -> impl IntoView {
     }
 }
 
+/// Operator-tab pentagon height + folded-corner cut (UML interaction-operator label).
+const FRAME_TAB_HEIGHT: f64 = 18.0;
+const FRAME_TAB_CUT: f64 = 6.0;
+/// Approx mono glyph advance at 10px, for sizing the tab to the operator text.
+const FRAME_TAB_CHAR_W: f64 = 6.2;
+/// Horizontal padding inside the operator tab.
+const FRAME_TAB_PAD: f64 = 14.0;
+
 #[component]
 fn SeqFrame(frame: FrameBox) -> impl IntoView {
-    let label = if frame.label.is_empty() {
-        frame.frame_type.clone()
-    } else {
-        format!("{}: {}", frame.frame_type, frame.label)
-    };
+    let op = frame.frame_type.clone();
+    let label = frame.label.clone();
+    let has_label = !label.is_empty();
+    // UML operator tab: a pentagon with a folded bottom-right corner, sized to the
+    // operator text, at the fragment's top-left. The operator sits inside it; the
+    // fragment guard/title renders to its right.
+    let tab_w = (op.chars().count() as f64) * FRAME_TAB_CHAR_W + FRAME_TAB_PAD;
+    let (x, y) = (frame.x, frame.y);
+    let tab_d = format!(
+        "M {x} {y} H {right} V {fold_y} L {fold_x} {bottom} H {x} Z",
+        right = x + tab_w,
+        fold_y = y + FRAME_TAB_HEIGHT - FRAME_TAB_CUT,
+        fold_x = x + tab_w - FRAME_TAB_CUT,
+        bottom = y + FRAME_TAB_HEIGHT,
+    );
+    let op_cx = x + tab_w / 2.0;
+    let text_y = y + 12.5;
+    // Guard/title is RIGHT-aligned to the fragment's right edge: the first bracketed
+    // message's action label sits centre-left in the top band, so anchoring the title
+    // to the right keeps the two from overprinting.
+    let label_x = x + frame.width - 8.0;
     view! {
         <g class=format!("sequence-frame sequence-frame--{}", frame.frame_type)>
             <rect
                 class="sequence-frame__box"
                 x=frame.x y=frame.y width=frame.width height=frame.height rx="3"
             ></rect>
-            <text class="sequence-frame__label" x=frame.x + 8.0 y=frame.y + 14.0>{label}</text>
+            <path class="sequence-frame__tab" d=tab_d></path>
+            <text class="sequence-frame__op" x=op_cx y=text_y>{op}</text>
+            {has_label.then(|| view! {
+                <text class="sequence-frame__label" x=label_x y=text_y>{label}</text>
+            })}
         </g>
     }
 }
@@ -190,6 +230,11 @@ fn SeqMessage(
         }
     };
     let line_class = format!("sequence-line sequence-line--{}", kind.css_suffix());
+    // UML: filled head for a synchronous call, OPEN head for a return/async reply.
+    let marker_end = match kind {
+        MessageKind::Return | MessageKind::Async => "url(#sequence-arrowhead-open)",
+        _ => "url(#sequence-arrowhead)",
+    };
     let action_text = truncate_action(&action);
     let step_id_for_click = step_id.clone();
 
@@ -206,7 +251,7 @@ fn SeqMessage(
             h = loop_h,
         );
         view! {
-            <path class=line_class.clone() d=d fill="none" marker-end="url(#sequence-arrowhead)"></path>
+            <path class=line_class.clone() d=d fill="none" marker-end=marker_end></path>
         }
         .into_view()
     } else {
@@ -214,7 +259,7 @@ fn SeqMessage(
             <line
                 class=line_class.clone()
                 x1=from_x y1=y x2=to_x y2=y
-                marker-end="url(#sequence-arrowhead)"
+                marker-end=marker_end
             ></line>
         }
         .into_view()

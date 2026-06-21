@@ -1072,18 +1072,11 @@ button.c4-breadcrumb__crumb:hover {
      never thin to sub-pixel and vanish when fit zooms out. */
   vector-effect: non-scaling-stroke;
 }
-.flow-edge--async {
-  stroke-dasharray: 6 4;
-  opacity: 0.85;
-}
-.flow-edge--return {
-  stroke-dasharray: 2 3;
-  opacity: 0.7;
-}
-.flow-edge--decision {
-  stroke-dasharray: 4 3;
-  opacity: 0.8;
-}
+/* Flow connectors are uniformly SOLID. Step semantics (async/return/decision/…)
+   are conveyed by the numbered step markers/iconography, NOT by line style — the
+   dashed/faded edge-kind treatment is a SEQUENCE-diagram device and was carried
+   over here by mistake (DESIGN.md specifies no flow-edge dashing, and the flow
+   legend does not document it). Kept the --active selection state below. */
 .flow-arrowhead {
   fill: var(--edge);
   stroke: var(--edge);
@@ -1229,7 +1222,7 @@ button.c4-breadcrumb__crumb:hover {
 .flow-parked-label {
   font-family: var(--font-mono);
   font-size: var(--overline-size);
-  letter-spacing: 0.12em;
+  letter-spacing: var(--overline-tracking);
   text-transform: uppercase;
   fill: var(--dim);
   text-anchor: start;
@@ -1497,6 +1490,14 @@ button.c4-breadcrumb__crumb:hover {
   opacity: 0.6;
   vector-effect: non-scaling-stroke;
 }
+/* Open (stick) arrowhead for return/async replies — UML: filled head = sync call,
+   open head = reply. No fill; stroke only. */
+.sequence-arrowhead-open {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
 .sequence-line {
   stroke: var(--edge);
   stroke-width: 1.5;
@@ -1537,20 +1538,41 @@ button.c4-breadcrumb__crumb:hover {
   opacity: 0.85;
 }
 
-/* Frames (alt/loop/par/opt/transaction) — a thin border + a mono label chip. */
+/* Combined fragments (alt/loop/par/opt/transaction). UML: the fragment border is
+   a SOLID rectangle (NOT dashed — dashing is reserved for return/async messages and
+   lifelines) with a pentagon operator tab in the top-left corner. */
 .sequence-frame__box {
   fill: none;
   stroke: var(--accent);
   stroke-width: 1;
-  stroke-dasharray: 4 3;
   opacity: 0.6;
 }
+/* The pentagon operator tab (folded bottom-right corner) — filled so it sits over
+   the box's top-left corner, the canonical UML interaction-operator label holder. */
+.sequence-frame__tab {
+  fill: var(--surface);
+  stroke: var(--accent);
+  stroke-width: 1;
+  opacity: 0.9;
+}
+.sequence-frame__op {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  fill: var(--accent);
+  text-anchor: middle;
+  pointer-events: none;
+}
+/* The fragment guard/title, right-aligned to the fragment's right edge (clear of
+   the first bracketed message's centre-left action label). */
 .sequence-frame__label {
   font-family: var(--font-mono);
   font-size: 10px;
   letter-spacing: 0.04em;
   fill: var(--accent);
   opacity: 0.85;
+  text-anchor: end;
   pointer-events: none;
 }
 
@@ -1750,7 +1772,7 @@ button.c4-breadcrumb__crumb:hover {
   font-family: var(--font-mono);
   font-size: var(--overline-size);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--overline-tracking);
 }
 .repo-file-preview__path {
   color: var(--ink);
@@ -1895,7 +1917,7 @@ button.c4-breadcrumb__crumb:hover {
   color: var(--dim);
   font-size: var(--overline-size);
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: var(--overline-tracking);
   border-bottom: 1px solid var(--line);
   cursor: default;
 }

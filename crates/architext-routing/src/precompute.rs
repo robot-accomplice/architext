@@ -20,7 +20,12 @@ use rayon::prelude::*;
 use std::path::Path;
 
 use crate::diagram_config::DiagramConfig;
-use crate::plan_diagram::{plan_diagram, ExtraNodeRect};
+use crate::plan_diagram::{plan_diagram, plan_diagram_with_stats, ExtraNodeRect};
+use crate::route_diagnostics::DiagMetrics;
+use crate::route_geometry::route_length;
+use crate::route_model::bend_score;
+use crate::route_model::place::{route_all_coordinated, total_overlaps, Edge};
+use crate::route_model::select::polyline_crossings;
 use crate::plan_request::{
     build_flow_plan_request,
     types::{Flow, FlowsFile, View, ViewsFile},
@@ -129,6 +134,294 @@ pub fn enumerate_flow_plan_requests(
 
     // Return in insertion order (rayon par_iter preserves index-mapped collect order)
     entries.into_iter().collect()
+}
+
+/// Streaming variant of [`enumerate_flow_plan_requests`]: publishes each plan via
+/// `on_entry` the instant it is computed, instead of collecting them all first.
+/// This lets the serve farm light up diagrams incrementally during warm-up, so
+/// the first diagram a viewer opens is ready after its own plan computes rather
+/// than after the entire corpus has warmed (which can be tens of seconds on a
+/// dense repo). Returns the number of plans warmed.
+#[cfg(feature = "native")]
+pub fn warm_flow_plans(
+    data_dir: &Path,
+    diagram_config: &DiagramConfig,
+    on_entry: impl Fn(FarmEntry) + Sync,
+) -> Result<usize, String> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let (flows, views) = load_flows_and_views(data_dir)?;
+    let flow_view_type_set: std::collections::HashSet<&str> =
+        flow_view_types().iter().copied().collect();
+    let layout_config = diagram_config.layout.to_layout_config();
+
+    let pairs: Vec<(&View, &Flow)> = views
+        .iter()
+        .filter(|v| flow_view_type_set.contains(v.view_type.as_str()))
+        .flat_map(|v| {
+            flows
+                .iter()
+                .filter(move |f| flow_compatible_with_view(f, v))
+                .map(move |f| (v, f))
+        })
+        .collect();
+
+    let warmed = AtomicUsize::new(0);
+    pairs.par_iter().for_each(|(view, flow)| {
+        if let Ok(entry) = build_farm_entry(view, flow, &layout_config) {
+            on_entry(entry);
+            warmed.fetch_add(1, Ordering::Relaxed);
+        }
+    });
+    Ok(warmed.load(Ordering::Relaxed))
+}
+
+/// Score every (flow, view) pair through the REAL plan path with diagnostics on,
+/// returning the deterministic-model metrics (β/crossings/length/doglegs) per
+/// pair. This is the score-baseline harness (ROUTING_DETERMINISTIC_MODEL.md §5):
+/// it runs the same `plan_diagram` the viewer/farm use, but flips `diagnostics`
+/// so per-route shape costs are computed from the rendered `RouteData`. Works on
+/// any corpus (routing-corpus AND FlowForge) because it uses the full plan path,
+/// not the minimal corpus-fitness reimplementation.
+pub fn score_flow_plans(
+    data_dir: &Path,
+    diagram_config: &DiagramConfig,
+) -> Result<Vec<(String, String, DiagMetrics)>, String> {
+    let (flows, views) = load_flows_and_views(data_dir)?;
+    let flow_view_type_set: std::collections::HashSet<&str> =
+        flow_view_types().iter().copied().collect();
+    let layout_config = diagram_config.layout.to_layout_config();
+    let pairs: Vec<(&View, &Flow)> = views
+        .iter()
+        .filter(|v| flow_view_type_set.contains(v.view_type.as_str()))
+        .flat_map(|v| {
+            flows
+                .iter()
+                .filter(move |f| flow_compatible_with_view(f, v))
+                .map(move |f| (v, f))
+        })
+        .collect();
+    let mut out = Vec::with_capacity(pairs.len());
+    for (view, flow) in pairs {
+        let mut req = build_flow_plan_request(view, flow, Some(&layout_config), "orthogonal");
+        req.plan_diagram_input.diagnostics = true;
+        let (_plan, _stats, diag) = plan_diagram_with_stats(&req.plan_diagram_input);
+        if let Some(metrics) = diag {
+            out.push((flow.id.clone(), view.id.clone(), metrics));
+        }
+    }
+    Ok(out)
+}
+
+/// Head-to-head score for one (flow, view): the current engine vs the
+/// deterministic model, on the **same** node layout.
+pub struct ScorePair {
+    pub flow_id: String,
+    pub view_id: String,
+    /// Current-engine diagnostics (β via `bend_score`-equivalent, crossings, length).
+    pub engine: DiagMetrics,
+    pub model_beta: f64,
+    pub model_crossings: usize,
+    pub model_length: f64,
+    /// Pairs of route segments sharing a channel (collinear overlap) — the hard
+    /// no-overlap rule's violation count; should be 0.
+    pub model_overlaps: usize,
+    /// Edges the model could not route even with a monotone detour (should be 0).
+    pub model_unrouted: usize,
+}
+
+/// Score the deterministic model (`route_all`) against the current engine on
+/// every (flow, view) pair, using the SAME node layout the plan produced. This
+/// is ROUTING_DETERMINISTIC_MODEL.md §5 step 2-3: run the model on the baseline's
+/// scenarios and compare S = (β, crossings, length). The model is dogleg-free by
+/// construction, so its β carries no `REVERSAL_BEND_PENALTY` terms.
+///
+/// Caveat: mounts are side-centres, so parallel edges sharing a surface overlap
+/// (inflating model crossings/length) until mount-slot spreading lands — but β,
+/// the headline dogleg term, is already meaningful.
+pub fn score_model_vs_engine(
+    data_dir: &Path,
+    diagram_config: &DiagramConfig,
+) -> Result<Vec<ScorePair>, String> {
+    let (flows, views) = load_flows_and_views(data_dir)?;
+    let flow_view_type_set: std::collections::HashSet<&str> =
+        flow_view_types().iter().copied().collect();
+    let layout_config = diagram_config.layout.to_layout_config();
+    let pairs: Vec<(&View, &Flow)> = views
+        .iter()
+        .filter(|v| flow_view_type_set.contains(v.view_type.as_str()))
+        .flat_map(|v| {
+            flows
+                .iter()
+                .filter(move |f| flow_compatible_with_view(f, v))
+                .map(move |f| (v, f))
+        })
+        .collect();
+
+    let mut out = Vec::with_capacity(pairs.len());
+    for (view, flow) in pairs {
+        let mut req = build_flow_plan_request(view, flow, Some(&layout_config), "orthogonal");
+        req.plan_diagram_input.diagnostics = true;
+        let (plan, _stats, diag) = plan_diagram_with_stats(&req.plan_diagram_input);
+        let engine = match diag {
+            Some(m) => m,
+            None => continue,
+        };
+
+        // Build the model's node/edge view from flow PARTICIPANTS only (nodes
+        // referenced by a routed edge) — hidden/parked nodes are not obstacles.
+        let mut node_ids: Vec<String> = Vec::new();
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for r in &req.plan_diagram_input.relationships {
+            for id in [r.from.as_str(), r.to.as_str()] {
+                if plan.node_rects.contains_key(id) && seen.insert(id) {
+                    node_ids.push(id.to_string());
+                }
+            }
+        }
+        let index_of: std::collections::HashMap<&str, usize> =
+            node_ids.iter().enumerate().map(|(i, k)| (k.as_str(), i)).collect();
+        let nodes: Vec<crate::model::Rect> =
+            node_ids.iter().map(|k| plan.node_rects[k].clone()).collect();
+        let edges: Vec<Edge> = req
+            .plan_diagram_input
+            .relationships
+            .iter()
+            .filter_map(|r| {
+                let a = *index_of.get(r.from.as_str())?;
+                let b = *index_of.get(r.to.as_str())?;
+                Some(Edge { a, b })
+            })
+            .collect();
+
+        let routes = route_all_coordinated(&nodes, &edges);
+        let model_unrouted = routes.iter().filter(|r| r.is_empty()).count();
+        let model_beta: f64 = routes.iter().map(|r| bend_score(r)).sum();
+        let model_length: f64 = routes.iter().map(|r| route_length(r)).sum();
+        let mut model_crossings = 0usize;
+        for i in 0..routes.len() {
+            for j in (i + 1)..routes.len() {
+                model_crossings += polyline_crossings(&routes[i], &routes[j]);
+            }
+        }
+
+        out.push(ScorePair {
+            flow_id: flow.id.clone(),
+            view_id: view.id.clone(),
+            engine,
+            model_beta,
+            model_crossings,
+            model_length,
+            model_overlaps: total_overlaps(&routes),
+            model_unrouted,
+        });
+    }
+    Ok(out)
+}
+
+/// Geometry of one (flow, view) routed by the deterministic model: node rects
+/// (with ids) and one polyline per edge. For standalone SVG rendering / visual
+/// review without touching the production plan path.
+pub struct ModelGeometry {
+    pub flow_id: String,
+    pub view_id: String,
+    pub canvas_width: f64,
+    pub canvas_height: f64,
+    pub nodes: Vec<(String, crate::model::Rect)>,
+    pub routes: Vec<Vec<crate::model::Point>>,
+}
+
+/// Route every (flow, view) with the deterministic model and return geometry for
+/// rendering. Same node layout as the current engine; routes from
+/// `route_all_slotted`.
+pub fn model_geometry(
+    data_dir: &Path,
+    diagram_config: &DiagramConfig,
+) -> Result<Vec<ModelGeometry>, String> {
+    let (flows, views) = load_flows_and_views(data_dir)?;
+    let flow_view_type_set: std::collections::HashSet<&str> =
+        flow_view_types().iter().copied().collect();
+    let layout_config = diagram_config.layout.to_layout_config();
+    let pairs: Vec<(&View, &Flow)> = views
+        .iter()
+        .filter(|v| flow_view_type_set.contains(v.view_type.as_str()))
+        .flat_map(|v| {
+            flows
+                .iter()
+                .filter(move |f| flow_compatible_with_view(f, v))
+                .map(move |f| (v, f))
+        })
+        .collect();
+
+    let mut out = Vec::with_capacity(pairs.len());
+    for (view, flow) in pairs {
+        #[cfg(feature = "native")]
+        if std::env::var("ARCHITEXT_ROUTE_TIMING").is_ok() {
+            use std::io::Write;
+            eprintln!("[pair-begin  ] {:>28} / {:<18}", flow.id, view.id);
+            let _ = std::io::stderr().flush();
+        }
+        let req = build_flow_plan_request(view, flow, Some(&layout_config), "orthogonal");
+        let (plan, _stats, _diag) = plan_diagram_with_stats(&req.plan_diagram_input);
+        // Obstacle set = flow PARTICIPANTS only (nodes referenced by a routed edge).
+        // Nodes hidden/parked in this flow are NOT obstacles — routes bulldoze
+        // straight through where they sit (maintainer: avoiding nodes that aren't
+        // shown is wrong).
+        let mut node_ids: Vec<String> = Vec::new();
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for r in &req.plan_diagram_input.relationships {
+            for id in [r.from.as_str(), r.to.as_str()] {
+                if plan.node_rects.contains_key(id) && seen.insert(id) {
+                    node_ids.push(id.to_string());
+                }
+            }
+        }
+        let index_of: std::collections::HashMap<&str, usize> =
+            node_ids.iter().enumerate().map(|(i, k)| (k.as_str(), i)).collect();
+        let nodes_v: Vec<crate::model::Rect> =
+            node_ids.iter().map(|k| plan.node_rects[k].clone()).collect();
+        let edges: Vec<Edge> = req
+            .plan_diagram_input
+            .relationships
+            .iter()
+            .filter_map(|r| {
+                Some(Edge {
+                    a: *index_of.get(r.from.as_str())?,
+                    b: *index_of.get(r.to.as_str())?,
+                })
+            })
+            .collect();
+        // RCA instrumentation (opt-in): per-flow routing wall-clock so a slow flow
+        // is identifiable, not just "the corpus is slow". Native only (Instant).
+        #[cfg(feature = "native")]
+        if std::env::var("ARCHITEXT_ROUTE_TIMING").is_ok() {
+            use std::io::Write;
+            eprintln!("[route-start ] {:>28} / {:<18} edges={}", flow.id, view.id, edges.len());
+            let _ = std::io::stderr().flush();
+        }
+        #[cfg(feature = "native")]
+        let _t0 = std::time::Instant::now();
+        let routes = route_all_coordinated(&nodes_v, &edges);
+        #[cfg(feature = "native")]
+        if std::env::var("ARCHITEXT_ROUTE_TIMING").is_ok() {
+            eprintln!(
+                "[route-timing] {:>28} / {:<18} edges={:<3} {:?}",
+                flow.id,
+                view.id,
+                edges.len(),
+                _t0.elapsed()
+            );
+        }
+        out.push(ModelGeometry {
+            flow_id: flow.id.clone(),
+            view_id: view.id.clone(),
+            canvas_width: plan.canvas_width,
+            canvas_height: plan.canvas_height,
+            nodes: node_ids.into_iter().zip(nodes_v).collect(),
+            routes,
+        });
+    }
+    Ok(out)
 }
 
 fn build_farm_entry(view: &View, flow: &Flow, layout_config: &LayoutConfig) -> Result<FarmEntry, String> {
@@ -293,6 +586,55 @@ mod tests {
         crate_root.join("..").join("..").join("docs").join("architext").join("data")
     }
 
+    fn flowforge_fixture_dir() -> PathBuf {
+        // The in-repo FlowForge corpus the deterministic model is reviewed against.
+        let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        crate_root.join("..").join("..").join("test").join("fixtures").join("corpus")
+    }
+
+    /// Permanent forbidden-artifact GATE: the deterministic model must produce ZERO
+    /// §0-forbidden artifacts (dogleg, Z/staircase, non-orthogonal, unrouted,
+    /// min-stem, channel overlap) on every (flow, view) of the FlowForge corpus, and
+    /// every route must be a legal straight/L/C. This is an INVARIANT — it asserts
+    /// the hard rules, NOT incidental β/crossing counts (which the planned track
+    /// refactor will change), so it guards correctness through optimization.
+    ///
+    /// `#[ignore]`d because routing the whole corpus in a debug build is slow
+    /// (>60s); run it as a release/CI gate: `cargo test --release -- --ignored
+    /// flowforge_corpus_has_no_forbidden_artifacts`, or use the `audit_model`
+    /// binary (same check, ~2s in release).
+    #[test]
+    #[ignore = "slow in debug; release/CI gate — see audit_model binary"]
+    fn flowforge_corpus_has_no_forbidden_artifacts() {
+        use crate::route_model::audit::audit_routes;
+        let data_dir = flowforge_fixture_dir();
+        if !data_dir.exists() {
+            return; // skip where the fixture isn't checked out
+        }
+        let config = resolve_diagram_config_defaults();
+        let geoms = model_geometry(&data_dir, &config).expect("model_geometry");
+        assert!(!geoms.is_empty(), "corpus produced at least one (flow, view)");
+        for g in &geoms {
+            let a = audit_routes(&g.routes);
+            assert!(
+                a.is_clean(),
+                "{} / {}: forbidden artifacts present: {:?}",
+                g.flow_id,
+                g.view_id,
+                a
+            );
+            let legal = a.straight + a.ells + a.cees;
+            assert_eq!(
+                legal,
+                g.routes.len(),
+                "{} / {}: {} route(s) are not a legal straight/L/C",
+                g.flow_id,
+                g.view_id,
+                g.routes.len() - legal
+            );
+        }
+    }
+
     #[test]
     fn enumerate_produces_16_entries() {
         let data_dir = corpus_data_dir();
@@ -327,6 +669,31 @@ mod tests {
             // key must be valid JSON
             serde_json::from_str::<serde_json::Value>(&entry.key)
                 .unwrap_or_else(|e| panic!("key for {}@{} is not valid JSON: {e}", entry.flow_id, entry.view_id));
+        }
+    }
+
+    // warm_flow_plans publishes each plan via the callback as it is computed
+    // (incremental farm warm-up), and produces the same plan set as the batch
+    // enumerate — just delivered one at a time instead of all at once.
+    #[cfg(feature = "native")]
+    #[test]
+    fn warm_flow_plans_streams_each_plan() {
+        let data_dir = corpus_data_dir();
+        if !data_dir.exists() {
+            return;
+        }
+        let config = resolve_diagram_config_defaults();
+        let collected = std::sync::Mutex::new(Vec::new());
+        let count = warm_flow_plans(&data_dir, &config, |entry| {
+            collected.lock().unwrap().push(entry.hash.clone());
+        })
+        .expect("warm_flow_plans");
+        let collected = collected.into_inner().unwrap();
+        assert_eq!(count, collected.len(), "callback fires once per warmed plan");
+        let batch = enumerate_flow_plan_requests(&data_dir, &config).expect("enumerate");
+        assert_eq!(count, batch.len(), "warm produces the same plan count as enumerate");
+        for h in &collected {
+            assert_eq!(h.len(), 64, "hash must be 64-char hex");
         }
     }
 }

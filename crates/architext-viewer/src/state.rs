@@ -225,12 +225,14 @@ impl AppState {
             };
             self.view_idx.set(view);
         } else if mode.projects_flows() {
-            // Sequence: the view is fixed by the mode (the `sequence` view);
-            // resolve the flow to the first one compatible with it.
+            // Sequence: the view is fixed by the mode (the `sequence` view); keep the
+            // CURRENT flow if it's compatible (so switching into Sequence mode doesn't
+            // silently jump back to the first flow), else fall back to the first.
+            let current_flow = self.flow_idx.get_untracked();
             let view = selection::default_view_for_mode(&data.views, mode);
             self.view_idx.set(view);
             let flow = view.and_then(|v| {
-                selection::default_flow_for_view(&data.views, &data.flows, v, None)
+                selection::default_flow_for_view(&data.views, &data.flows, v, current_flow)
             });
             self.flow_idx.set(flow);
         } else {

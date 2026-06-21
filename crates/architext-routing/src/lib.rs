@@ -22,6 +22,7 @@ pub mod route_style;
 pub mod route_edges;
 pub mod route_mount_model;
 pub mod route_diagnostics;
+pub mod route_model;
 pub mod plan_diagram;
 pub mod wasm;
 pub mod plan_request;

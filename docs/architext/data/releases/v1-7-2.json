@@ -2,12 +2,13 @@
   "id": "v1-7-2",
   "version": "1.7.2",
   "name": "Architext 1.7.2 Native Install + Self-Update",
-  "status": "implementing",
-  "posture": "on-track",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Native install + self-update release: a shell installer and an architext update/upgrade command download checksum-verified binaries from GitHub releases, so npm becomes an optional bridge users can leave. Releases now attach per-platform binaries plus SHA256SUMS, and an Architext release notifies the roboticus-site repository to re-sync.",
   "targetDate": "2026-06-20",
-  "lastUpdated": "2026-06-20T00:00:00.000Z",
-  "updateSource": "Release prep: ships the native install + self-update off-ramp from npm (PR #229) and the roboticus-site release dispatch (PR #230). install.sh + architext update/upgrade verified end-to-end against the backfilled v1.7.1 assets.",
+  "releasedAt": "2026-06-20T09:44:45.176Z",
+  "lastUpdated": "2026-06-20T09:44:45.176Z",
+  "updateSource": "Shipped to npm 2026-06-20. All six packages published at 1.7.2 and verified live; the release attaches the per-platform binaries + SHA256SUMS, and the roboticus-site release dispatch fired successfully (first live cross-repo trigger). The shipped 1.7.2 binary's update and --check-updates work against the live release API. Ships the native install + self-update off-ramp from npm (PR #229) and the dispatch (PR #230). First fully-green release run (the propagation-tolerant smoke held).",
   "scope": {
     "required": [
       {

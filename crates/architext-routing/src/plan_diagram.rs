@@ -35,6 +35,9 @@ use crate::route_edges::orchestration::{
 use crate::route_ports::SideAnchors;
 use crate::route_geometry::rects_overlap;
 use crate::route_labels::{estimated_label_box, LabelBox, LabelRelationship};
+use crate::route_diagnostics::{
+    diagnose_planned_routes, DiagMetrics, DiagOptions, DiagPlan, DiagRelationship,
+};
 
 // ---------------------------------------------------------------------------
 // Input wire shape
@@ -501,6 +504,79 @@ fn place_label(
 // plan_diagram — main entry point
 // ---------------------------------------------------------------------------
 
+/// REVIEW HOOK: replace each routed edge's geometry with the deterministic
+/// model's polyline (`route_all_coordinated`). Nodes are indexed in
+/// `node_rects` insertion order; edges are built from the relationships whose
+/// both endpoints are present, in relationship order, and routed as one coordinated
+/// set (the model needs the whole set for fans/crossings). Each result is fed back
+/// through [`route_with_points`] so `d`/`samples`/`bounds`/`bends` rebuild
+/// faithfully while style + pass-through fields are preserved. Edges the model
+/// can't place (missing endpoint) keep their engine route.
+fn apply_model_routes(
+    input: &RouteEdgesInput,
+    routed: &mut IndexMap<String, crate::route_edges::types::RouteData>,
+) {
+    use crate::route_edges::helpers::route_with_points;
+    use crate::route_model::place::{route_all_coordinated, Edge};
+    use std::collections::{HashMap, HashSet};
+
+    // Obstacle set = flow PARTICIPANTS only (nodes referenced by a routed edge).
+    // Nodes hidden/parked in this flow are NOT obstacles — routes bulldoze straight
+    // through where they sit (maintainer: avoiding nodes that aren't shown is wrong).
+    let mut node_ids: Vec<&str> = Vec::new();
+    let mut seen: HashSet<&str> = HashSet::new();
+    for rel in &input.relationships {
+        for id in [rel.from.as_str(), rel.to.as_str()] {
+            if input.node_rects.contains_key(id) && seen.insert(id) {
+                node_ids.push(id);
+            }
+        }
+    }
+    let idx: HashMap<&str, usize> = node_ids
+        .iter()
+        .enumerate()
+        .map(|(i, &id)| (id, i))
+        .collect();
+    let rects: Vec<Rect> = node_ids
+        .iter()
+        .map(|&id| input.node_rects[id].rect.clone())
+        .collect();
+
+    let mut edges: Vec<Edge> = Vec::new();
+    let mut edge_rel_ids: Vec<String> = Vec::new();
+    for rel in &input.relationships {
+        if let (Some(&a), Some(&b)) = (idx.get(rel.from.as_str()), idx.get(rel.to.as_str())) {
+            edges.push(Edge { a, b });
+            edge_rel_ids.push(rel.id.clone());
+        }
+    }
+
+    let model_routes = route_all_coordinated(&rects, &edges);
+    for (i, rel_id) in edge_rel_ids.iter().enumerate() {
+        let pts = &model_routes[i];
+        if pts.len() < 2 {
+            continue; // model produced nothing usable — keep the engine route
+        }
+        if let Some(existing) = routed.get(rel_id) {
+            let rebuilt = route_with_points(existing, pts.clone(), None);
+            routed.insert(rel_id.clone(), rebuilt);
+        }
+    }
+    // HOP pass: route_with_points emits a plain `d`. Rebuild each rendered (flow-
+    // participant) route's `d` with line-jump hops against the OTHER rendered routes
+    // (what the engine does via render_orthogonal_route), so crossings read as
+    // bridges instead of ambiguous intersections. Scoped to the model-routed set —
+    // the only edges shown in a flow view — so a route never hops a hidden line.
+    use crate::route_edges::helpers::render_orthogonal_route;
+    let hop_ids: Vec<String> =
+        edge_rel_ids.iter().filter(|id| routed.contains_key(*id)).cloned().collect();
+    let hop_routes: Vec<_> = hop_ids.iter().map(|id| routed[id].clone()).collect();
+    for (i, id) in hop_ids.iter().enumerate() {
+        let rebuilt = render_orthogonal_route(&hop_routes[i], &hop_routes, i);
+        routed.insert(id.clone(), rebuilt);
+    }
+}
+
 /// Port of JS `planDiagram(input)`.
 ///
 /// Computes the full planned diagram: node rects, routes, label boxes, and
@@ -512,7 +588,9 @@ pub fn plan_diagram(input: &PlanDiagramInput) -> Plan {
 /// Same as [`plan_diagram`] but also returns the deterministic planner work
 /// counters ([`CorpusPlanStats`]). Used by the perf ratchet; the WASM/native
 /// bridge uses the stats-free [`plan_diagram`].
-pub fn plan_diagram_with_stats(input: &PlanDiagramInput) -> (Plan, CorpusPlanStats) {
+pub fn plan_diagram_with_stats(
+    input: &PlanDiagramInput,
+) -> (Plan, CorpusPlanStats, Option<DiagMetrics>) {
     let node_width = input.node_width;
     let node_height = input.node_height;
     let lane_width = input.lane_width;
@@ -637,7 +715,16 @@ pub fn plan_diagram_with_stats(input: &PlanDiagramInput) -> (Plan, CorpusPlanSta
         grid_route_max_expansions: 3000,
     };
 
-    let (routed_edges, plan_stats) = route_edges_with_stats(&route_edges_input);
+    let (mut routed_edges, plan_stats) = route_edges_with_stats(&route_edges_input);
+
+    // REVIEW HOOK (post-cutover, net-new): when `ARCHITEXT_ROUTING_MODEL` is set,
+    // overwrite each route's geometry with the deterministic model's polyline so
+    // the live viewer renders the model's routing instead of the engine's. Off by
+    // default → zero parity impact; used only to serve the FlowForge corpus for a
+    // visual verdict. Labels/markers downstream re-derive from the new geometry.
+    if std::env::var("ARCHITEXT_ROUTING_MODEL").is_ok() {
+        apply_model_routes(&route_edges_input, &mut routed_edges);
+    }
 
     // Build relationships-by-id map
     let relationships_by_id: IndexMap<String, &RelationshipInput> =
@@ -749,6 +836,45 @@ pub fn plan_diagram_with_stats(input: &PlanDiagramInput) -> (Plan, CorpusPlanSta
 
     // Assemble the Plan wire shape
     // Convert planned_routes to IndexMap<String, Route> for the Plan struct
+    // Net-new: optional diagnostics sweep, gated on input.diagnostics. Computed
+    // from the real RouteData this plan produced, so a consumer (e.g. the score
+    // harness) gets β/crossings/length/doglegs from the same routes the viewer
+    // renders. Plan's wire shape is unchanged — diagnostics ride alongside the
+    // Plan in the return tuple, never inside it (zero parity risk). Computed here,
+    // before node_rects/visible_node_ids are moved into Plan below.
+    let diagnostics: Option<DiagMetrics> = if input.diagnostics {
+        let diag_relationships: Vec<DiagRelationship> = input
+            .relationships
+            .iter()
+            .map(|r| DiagRelationship {
+                id: r.id.clone(),
+                from: r.from.clone(),
+                to: r.to.clone(),
+                display_index: Some(r.display_index as f64),
+                kind: r.kind.clone(),
+                return_of: r.return_of.clone(),
+                outcome: r.outcome.clone(),
+                relationship_type: r.relationship_type.clone(),
+                step_id: r.step_id.clone(),
+                flow_id: r.flow_id.clone(),
+                preferred_start_side: r.preferred_start_side.clone(),
+                preferred_end_side: r.preferred_end_side.clone(),
+            })
+            .collect();
+        let diag_plan = DiagPlan {
+            routes: &routed_edges,
+            node_rects: &node_rects,
+            visible_node_ids: &visible_node_ids,
+            lane_index_by_node: &lane_index_by_node,
+            row_index_by_node: &row_index_by_node,
+            canvas_width,
+            canvas_height,
+        };
+        Some(diagnose_planned_routes(&diag_plan, &diag_relationships, &DiagOptions::default()).metrics)
+    } else {
+        None
+    };
+
     let routes_map: IndexMap<String, Route> = planned_routes
         .into_iter()
         .filter_map(|(k, v)| {
@@ -785,7 +911,7 @@ pub fn plan_diagram_with_stats(input: &PlanDiagramInput) -> (Plan, CorpusPlanSta
             .filter_map(|w| serde_json::from_value(w).ok())
             .collect(),
     };
-    (plan, plan_stats)
+    (plan, plan_stats, diagnostics)
 }
 
 // ---------------------------------------------------------------------------

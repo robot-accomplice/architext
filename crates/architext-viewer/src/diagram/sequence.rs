@@ -47,10 +47,16 @@ const PARTICIPANT_CARD_HALF_WIDTH: f64 = 58.0;
 const FRAME_X_INSET: f64 = 8.0;
 /// Frame width shrink (`- 16`, i.e. `8` per side).
 const FRAME_WIDTH_INSET: f64 = 16.0;
-/// Frame top lift above the first bracketed row (`- 30`).
+/// Frame top lift above the first bracketed row (`- 30`). Kept at 30 so the first
+/// bracketed row's action label (drawn 17px above its line, ~9px ascent → ~26px up)
+/// stays inside the fragment border.
 const FRAME_Y_LIFT: f64 = 30.0;
-/// Frame bottom extension below the last bracketed row (`+ 34`).
-const FRAME_HEIGHT_TAIL: f64 = 34.0;
+/// Frame bottom extension below the last bracketed row. Reduced from the JS port's
+/// `34` to `18` so two SEQUENTIAL fragments (last row of one, first row of the next,
+/// `row_height` = 56 apart) no longer overlap: `lift + tail = 48 < 56` leaves an 8px
+/// gap between adjacent fragment borders. UML combined fragments are disjoint, not
+/// overlapping (design > JS parity — the `34` produced an 8px border collision).
+const FRAME_HEIGHT_TAIL: f64 = 18.0;
 /// Activation-bar fixed width (`width="10"`).
 const ACTIVATION_BAR_WIDTH: f64 = 10.0;
 /// Activation-bar x nudge per depth level (`depth * 8`).
@@ -110,6 +116,41 @@ impl MessageKind {
             MessageKind::Selfloop => "self",
         }
     }
+}
+
+/// Resolve every message's kind WITH sequence context. Explicit `step.kind` /
+/// `return_of` always win; otherwise a message is INFERRED to be a **return** when
+/// it answers an open call with mirrored endpoints on the call stack — the standard
+/// UML call/return pairing. So return messages render dashed even when the flow data
+/// doesn't tag them (the FlowForge corpus has untagged returns). Design > JS parity,
+/// which classified by `step.kind` alone and left every untagged return solid.
+fn resolved_kinds(steps: &[FlowStep]) -> Vec<MessageKind> {
+    let mirrored = |ci: usize, step: &FlowStep| steps[ci].from == step.to && steps[ci].to == step.from;
+    let mut kinds = Vec::with_capacity(steps.len());
+    let mut open: Vec<usize> = Vec::new(); // indices of open (unanswered) calls
+    for (i, step) in steps.iter().enumerate() {
+        let explicit = step.kind.as_deref().filter(|k| SEQUENCE_MESSAGE_KINDS.contains(k));
+        let kind = if step.from == step.to {
+            MessageKind::Selfloop
+        } else if explicit.is_some() {
+            MessageKind::from_step(step)
+        } else if step.return_of.is_some() || open.iter().any(|&ci| mirrored(ci, step)) {
+            MessageKind::Return
+        } else {
+            MessageKind::Request
+        };
+        match kind {
+            MessageKind::Return => {
+                if let Some(pos) = open.iter().rposition(|&ci| mirrored(ci, step)) {
+                    open.remove(pos);
+                }
+            }
+            MessageKind::Selfloop => {}
+            _ => open.push(i),
+        }
+        kinds.push(kind);
+    }
+    kinds
 }
 
 /// A participant column: its x-center, the resolved display name + role type
@@ -246,10 +287,11 @@ fn return_source_index(step: &FlowStep, prior: &[FlowStep]) -> Option<usize> {
 /// Port of `sequenceActivationSpans(steps, rowHeight)`. Returns spans paired
 /// with their nesting `depth` (count of enclosing same-participant spans).
 fn activation_spans(steps: &[FlowStep], row_height: f64) -> Vec<(ActivationSpan<'_>, usize)> {
+    let kinds = resolved_kinds(steps);
     // Map source step id → the index of the return that closes it (first match).
     let mut return_end_by_source: HashMap<&str, usize> = HashMap::new();
     for (index, step) in steps.iter().enumerate() {
-        if MessageKind::from_step(step) != MessageKind::Return {
+        if kinds[index] != MessageKind::Return {
             continue;
         }
         if let Some(src_i) = return_source_index(step, &steps[..index]) {
@@ -264,7 +306,7 @@ fn activation_spans(steps: &[FlowStep], row_height: f64) -> Vec<(ActivationSpan<
         .iter()
         .enumerate()
         .filter_map(|(index, step)| {
-            let kind = MessageKind::from_step(step);
+            let kind = kinds[index];
             if kind == MessageKind::Return {
                 return None;
             }
@@ -397,6 +439,7 @@ pub fn build_sequence_layout(
         .collect();
 
     // Message rows (document order; geometry keyed off the original index).
+    let message_kinds = resolved_kinds(&flow.steps);
     let messages = flow
         .steps
         .iter()
@@ -405,12 +448,7 @@ pub fn build_sequence_layout(
             let from_x = x_for(&step.from);
             let to_x = x_for(&step.to);
             let y = MESSAGE_START_Y + (index as f64) * row_height;
-            // from==to is always a self-loop, regardless of declared kind.
-            let kind = if step.from == step.to {
-                MessageKind::Selfloop
-            } else {
-                MessageKind::from_step(step)
-            };
+            let kind = message_kinds[index];
             MessageRow {
                 step_id: step.id.clone(),
                 from: step.from.clone(),
@@ -713,10 +751,11 @@ mod tests {
         // x = 28 + 0*146 + 8 = 36 ; width = (2-0+1)*146 - 16 = 422.
         assert_eq!(f.x, 28.0 + 8.0);
         assert_eq!(f.width, 3.0 * 146.0 - 16.0);
-        // y = yForStep(0) - 30 = 54 ; height = yForStep(1) - y + 34 = 140 - 54 + 34 = 120
-        // (origin-independent: the MESSAGE_START_Y term cancels in the height).
+        // y = yForStep(0) - 30 = 54 ; height = yForStep(1) - y + 18 = 140 - 54 + 18 = 104
+        // (origin-independent: the MESSAGE_START_Y term cancels in the height). Tail is
+        // 18 (not 34) so sequential fragments don't overlap — see FRAME_HEIGHT_TAIL.
         assert_eq!(f.y, 84.0 - 30.0);
-        assert_eq!(f.height, (84.0 + 56.0) - (84.0 - 30.0) + 34.0);
+        assert_eq!(f.height, (84.0 + 56.0) - (84.0 - 30.0) + 18.0);
     }
 
     #[test]
