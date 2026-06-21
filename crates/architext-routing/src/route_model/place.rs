@@ -833,6 +833,53 @@ fn separate_channels(routes: &mut [Vec<Point>]) {
                 reseat_middle(&mut routes[*ri], m.horiz, off);
             }
         }
+        // LINE ORDERING: nesting the middles isn't enough when several arches mount
+        // the SAME face on one end — if that end's mount order doesn't match the
+        // nesting, the outer arch's stem cuts across the inner middles (a 3-surface
+        // bundle still nests with the right order). Reorder the tightly-clustered
+        // (shared-face) end's mounts to MIRROR the other (fixed) end, giving nested
+        // intervals and no stem crossing. Guarded: kept only if total crossings drop.
+        let arches: Vec<usize> = order.iter().map(|&mi| mids[mi].0).collect();
+        let vertical_mid = order.iter().all(|&mi| !mids[mi].1.horiz);
+        if arches.len() >= 2 && vertical_mid && arches.iter().all(|&ri| routes[ri].len() == 4) {
+            let end_y = |ri: usize, top: bool| if top { routes[ri][0].y } else { routes[ri][3].y };
+            let end_x = |ri: usize, top: bool| if top { routes[ri][0].x } else { routes[ri][3].x };
+            let same_x = |top: bool| arches.iter().all(|&ri| (end_x(ri, top) - end_x(arches[0], top)).abs() < EPS);
+            let spread = |top: bool| {
+                let ys: Vec<f64> = arches.iter().map(|&ri| end_y(ri, top)).collect();
+                ys.iter().cloned().fold(f64::MIN, f64::max) - ys.iter().cloned().fold(f64::MAX, f64::min)
+            };
+            // shared end = same x and the tighter tangent spread (one face, not many)
+            let shared_top = if same_x(true) && (!same_x(false) || spread(true) <= spread(false)) {
+                Some(true)
+            } else if same_x(false) {
+                Some(false)
+            } else {
+                None
+            };
+            if let Some(top) = shared_top {
+                let mut slots: Vec<f64> = arches.iter().map(|&ri| end_y(ri, top)).collect();
+                slots.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
+                let mut idx: Vec<usize> = (0..arches.len()).collect();
+                idx.sort_by(|&a, &b| {
+                    end_y(arches[a], !top).partial_cmp(&end_y(arches[b], !top)).unwrap_or(Ordering::Equal)
+                });
+                let saved: Vec<Vec<Point>> = arches.iter().map(|&ri| routes[ri].clone()).collect();
+                let before = total_crossings(routes);
+                for (k, &ai) in idx.iter().enumerate() {
+                    let ri = arches[ai];
+                    let new_y = slots[slots.len() - 1 - k]; // mirror: asc other-end → desc this-end
+                    let (m, c) = if top { (0, 1) } else { (3, 2) };
+                    routes[ri][m].y = new_y;
+                    routes[ri][c].y = new_y;
+                }
+                if total_crossings(routes) >= before {
+                    for (j, &ri) in arches.iter().enumerate() {
+                        routes[ri] = saved[j].clone();
+                    }
+                }
+            }
+        }
     }
 }
 
