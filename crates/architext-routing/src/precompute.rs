@@ -560,6 +560,55 @@ mod tests {
         crate_root.join("..").join("..").join("docs").join("architext").join("data")
     }
 
+    fn flowforge_fixture_dir() -> PathBuf {
+        // The in-repo FlowForge corpus the deterministic model is reviewed against.
+        let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        crate_root.join("..").join("..").join("test").join("fixtures").join("corpus")
+    }
+
+    /// Permanent forbidden-artifact GATE: the deterministic model must produce ZERO
+    /// §0-forbidden artifacts (dogleg, Z/staircase, non-orthogonal, unrouted,
+    /// min-stem, channel overlap) on every (flow, view) of the FlowForge corpus, and
+    /// every route must be a legal straight/L/C. This is an INVARIANT — it asserts
+    /// the hard rules, NOT incidental β/crossing counts (which the planned track
+    /// refactor will change), so it guards correctness through optimization.
+    ///
+    /// `#[ignore]`d because routing the whole corpus in a debug build is slow
+    /// (>60s); run it as a release/CI gate: `cargo test --release -- --ignored
+    /// flowforge_corpus_has_no_forbidden_artifacts`, or use the `audit_model`
+    /// binary (same check, ~2s in release).
+    #[test]
+    #[ignore = "slow in debug; release/CI gate — see audit_model binary"]
+    fn flowforge_corpus_has_no_forbidden_artifacts() {
+        use crate::route_model::audit::audit_routes;
+        let data_dir = flowforge_fixture_dir();
+        if !data_dir.exists() {
+            return; // skip where the fixture isn't checked out
+        }
+        let config = resolve_diagram_config_defaults();
+        let geoms = model_geometry(&data_dir, &config).expect("model_geometry");
+        assert!(!geoms.is_empty(), "corpus produced at least one (flow, view)");
+        for g in &geoms {
+            let a = audit_routes(&g.routes);
+            assert!(
+                a.is_clean(),
+                "{} / {}: forbidden artifacts present: {:?}",
+                g.flow_id,
+                g.view_id,
+                a
+            );
+            let legal = a.straight + a.ells + a.cees;
+            assert_eq!(
+                legal,
+                g.routes.len(),
+                "{} / {}: {} route(s) are not a legal straight/L/C",
+                g.flow_id,
+                g.view_id,
+                g.routes.len() - legal
+            );
+        }
+    }
+
     #[test]
     fn enumerate_produces_16_entries() {
         let data_dir = corpus_data_dir();
