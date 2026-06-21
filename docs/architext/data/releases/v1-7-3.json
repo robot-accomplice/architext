@@ -1,0 +1,139 @@
+{
+  "id": "v1-7-3",
+  "version": "1.7.3",
+  "name": "Architext 1.7.3 Routing Correctness + Diagram Fidelity",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Patch release hardening the deterministic Rust router and the diagram renderers. The model router gains a permanent forbidden-artifact gate (zero doglegs, Z-staircases, non-orthogonal segments, unrouted edges, min-stems, or channel overlaps), shape-preserving channel separation, and crossing reduction (28 -> 21 on the FlowForge corpus; the model is never worse than the engine at a fraction of its bend cost). Sequence diagrams follow the UML standard; the Sequence-mode flow-selection papercut and an overline-tracking drift are fixed.",
+  "targetDate": "2026-06-21",
+  "lastUpdated": "2026-06-21T16:30:00.000Z",
+  "updateSource": "Merged to develop via PR #238 (CI green: verify-rust + package). NOT yet shipped to npm/main — release-candidate pending the develop -> main ceremony. Validation at merge: routing 525 lib tests, viewer 127 tests, forbidden-artifact corpus gate 1/1, corpus_fitness perf ratchet 1/1, native validator pass. Crossings 21 == engine 21 with beta 174 vs engine 1338.",
+  "scope": {
+    "required": [
+      {
+        "id": "routing-channel-separation-gate",
+        "title": "Channel separation + permanent forbidden-artifact gate",
+        "kind": "feature",
+        "summary": "Shape-preserving channel separation removes route overlaps (8 -> 0) and pushes close-parallel channel buffers to within an arrowhead (tight 19 -> 2, the residual accept-with-log). A permanent gate (audit_model binary + an in-repo corpus test) holds the model router to zero forbidden artifacts: doglegs, Z/staircases, non-orthogonal segments, unrouted edges, min-stems, and channel overlaps. Crossings fall 28 -> 21, including an orientation-independent arch-mount nesting fix that took the model-inference / agent-turn-flow bundle to zero.",
+        "evidence": ["pr-238", "routing-gate"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "routing-correctness",
+        "dependsOn": []
+      },
+      {
+        "id": "dense-flow-routing-perf",
+        "title": "Dense-flow routing performance",
+        "kind": "architecture",
+        "summary": "In model-review mode the engine's separate_close_parallel_routes pass is skipped, and channel separation runs once on the final routing instead of per optimizer trial. Dense flows that took minutes now route in milliseconds.",
+        "evidence": ["pr-238"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "routing-correctness",
+        "dependsOn": []
+      },
+      {
+        "id": "sequence-uml-fidelity",
+        "title": "Sequence diagrams follow the UML standard",
+        "kind": "bug-fix",
+        "summary": "Return messages are inferred by call/return pairing (untagged corpus returns now render dashed with an open arrowhead; synchronous calls stay solid with a filled head) and close their activation bars. Combined fragments render a SOLID border (dashing is reserved for return/async messages and lifelines), a pentagon operator tab, no adjacent-fragment overlap, and a right-aligned guard clear of the first message label.",
+        "evidence": ["pr-238"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "diagram-fidelity",
+        "dependsOn": []
+      },
+      {
+        "id": "viewer-sequence-and-overline-fidelity",
+        "title": "Sequence-mode flow preservation + overline tracking",
+        "kind": "bug-fix",
+        "summary": "Switching into Sequence mode no longer resets the flow dropdown to the first flow (it kept the selection's view but discarded the flow). The design-fidelity audit converged three overline labels to var(--overline-tracking) per DESIGN.md item 2; the audit was otherwise clean (role color single-sourced via --c4-*, state never a role hue, no rogue fonts).",
+        "evidence": ["pr-238"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "diagram-fidelity",
+        "dependsOn": []
+      },
+      {
+        "id": "ci-clippy-cleanup",
+        "title": "Clear clippy -D warnings on the routing crate",
+        "kind": "chore",
+        "summary": "The wasm viewer clippy CI step (which lints architext-routing as a dependency under -D warnings) was red on lint debt accumulated across the routing-overhaul commits, uncaught because the branch had no prior PR/CI and cargo test does not run clippy. Cleared (unused_mut, map_or, an OR-pattern range, and two provably-dead route-cache assignments) with routing output byte-identical.",
+        "evidence": ["pr-238", "ci-238"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "routing-correctness",
+        "dependsOn": []
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [
+      {
+        "id": "track-model-refactor",
+        "title": "Collapse the greedy mount-order passes into a direct track assignment",
+        "kind": "architecture",
+        "summary": "Deferred after a measured prototype disproved the hypothesis (Rule 17): a global iterative-barycenter track assignment lands on the SAME 21 crossings the greedy finds (the residual is a structural optimum, not order-fixable), and the assignment ALONE (greedy disabled) gives 92 crossings, 4x worse. The greedy local search's per-candidate crossing evaluation is irreducible; a direct assignment merely re-derives it. Deferral reason: the refactor would not simplify or improve quality, so the current greedy stands.",
+        "status": "deferred",
+        "owner": "maintainer",
+        "priority": "low",
+        "dependsOn": []
+      }
+    ],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "routing-correctness",
+      "name": "Deterministic router correctness + performance",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Bring the model router to a gated, correct, performant state: channel separation, the forbidden-artifact gate, crossing reduction, and dense-flow speed — verified against the FlowForge corpus.",
+      "progress": 100,
+      "itemIds": ["routing-channel-separation-gate", "dense-flow-routing-perf", "ci-clippy-cleanup"],
+      "evidence": ["pr-238", "routing-gate", "ci-238"]
+    },
+    {
+      "id": "diagram-fidelity",
+      "name": "Sequence + design fidelity",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Sequence diagrams to the UML standard and a design-language fidelity pass over the viewer chrome, plus the Sequence-mode flow-selection papercut.",
+      "progress": 100,
+      "itemIds": ["sequence-uml-fidelity", "viewer-sequence-and-overline-fidelity"],
+      "evidence": ["pr-238"]
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "pr-238",
+      "label": "PR #238 router correctness + sequence/design fidelity (merged to develop)",
+      "href": "https://github.com/robot-accomplice/architext/pull/238",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "ci-238",
+      "label": "PR #238 CI green (verify-rust + package)",
+      "href": "https://github.com/robot-accomplice/architext/actions/runs/27909945501",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "routing-gate",
+      "label": "Forbidden-artifact corpus gate (flowforge_corpus_has_no_forbidden_artifacts)",
+      "kind": "test",
+      "status": "complete"
+    }
+  ]
+}
