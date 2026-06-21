@@ -27,17 +27,19 @@ fn main() {
     };
 
     println!(
-        "{:<44} {:>10} {:>10}   {:>8} {:>8}",
-        "flow / view", "β engine", "β model", "X eng", "X model"
+        "{:<44} {:>10} {:>10}   {:>8} {:>8}   {:>8}",
+        "flow / view", "β engine", "β model", "X eng", "X model", "overlap"
     );
-    println!("{}", "-".repeat(90));
+    println!("{}", "-".repeat(100));
     let (mut eb, mut mb, mut ex, mut mx) = (0.0_f64, 0.0_f64, 0usize, 0usize);
+    let mut mo = 0usize;
     let mut unrouted = 0usize;
     for p in &pairs {
         eb += p.engine.bend_score;
         mb += p.model_beta;
         ex += p.engine.crossings;
         mx += p.model_crossings;
+        mo += p.model_overlaps;
         unrouted += p.model_unrouted;
         let win = if p.model_beta < p.engine.bend_score {
             " <= β improved"
@@ -51,21 +53,24 @@ fn main() {
         } else {
             String::new()
         };
+        let ov = if p.model_overlaps > 0 { "  !! overlap" } else { "" };
         println!(
-            "{:<44} {:>10.0} {:>10.0}   {:>8} {:>8}{}{}",
+            "{:<44} {:>10.0} {:>10.0}   {:>8} {:>8}   {:>8}{}{}{}",
             format!("{} / {}", p.flow_id, p.view_id),
             p.engine.bend_score,
             p.model_beta,
             p.engine.crossings,
             p.model_crossings,
+            p.model_overlaps,
             win,
-            flag
+            ov,
+            flag,
         );
     }
-    println!("{}", "-".repeat(90));
+    println!("{}", "-".repeat(100));
     println!(
-        "TOTAL  β: engine {:.0}  ->  model {:.0}    |    crossings: engine {}  ->  model {}",
-        eb, mb, ex, mx
+        "TOTAL  β: engine {:.0}  ->  model {:.0}    |    crossings: engine {}  ->  model {}    |    channel overlaps: model {}",
+        eb, mb, ex, mx, mo
     );
     if unrouted > 0 {
         println!("WARNING: {unrouted} edge(s) the model could not route (monotone detour impossible with side-centre mounts)");

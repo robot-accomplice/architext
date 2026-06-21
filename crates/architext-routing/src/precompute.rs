@@ -24,7 +24,7 @@ use crate::plan_diagram::{plan_diagram, plan_diagram_with_stats, ExtraNodeRect};
 use crate::route_diagnostics::DiagMetrics;
 use crate::route_geometry::route_length;
 use crate::route_model::bend_score;
-use crate::route_model::place::{route_all_slotted, Edge};
+use crate::route_model::place::{route_all_coordinated, total_overlaps, Edge};
 use crate::route_model::select::polyline_crossings;
 use crate::plan_request::{
     build_flow_plan_request,
@@ -223,6 +223,9 @@ pub struct ScorePair {
     pub model_beta: f64,
     pub model_crossings: usize,
     pub model_length: f64,
+    /// Pairs of route segments sharing a channel (collinear overlap) — the hard
+    /// no-overlap rule's violation count; should be 0.
+    pub model_overlaps: usize,
     /// Edges the model could not route even with a monotone detour (should be 0).
     pub model_unrouted: usize,
 }
@@ -265,8 +268,17 @@ pub fn score_model_vs_engine(
             None => continue,
         };
 
-        // Build the model's node/edge view from the SAME layout the plan used.
-        let node_ids: Vec<String> = plan.node_rects.keys().cloned().collect();
+        // Build the model's node/edge view from flow PARTICIPANTS only (nodes
+        // referenced by a routed edge) — hidden/parked nodes are not obstacles.
+        let mut node_ids: Vec<String> = Vec::new();
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for r in &req.plan_diagram_input.relationships {
+            for id in [r.from.as_str(), r.to.as_str()] {
+                if plan.node_rects.contains_key(id) && seen.insert(id) {
+                    node_ids.push(id.to_string());
+                }
+            }
+        }
         let index_of: std::collections::HashMap<&str, usize> =
             node_ids.iter().enumerate().map(|(i, k)| (k.as_str(), i)).collect();
         let nodes: Vec<crate::model::Rect> =
@@ -282,7 +294,7 @@ pub fn score_model_vs_engine(
             })
             .collect();
 
-        let routes = route_all_slotted(&nodes, &edges);
+        let routes = route_all_coordinated(&nodes, &edges);
         let model_unrouted = routes.iter().filter(|r| r.is_empty()).count();
         let model_beta: f64 = routes.iter().map(|r| bend_score(r)).sum();
         let model_length: f64 = routes.iter().map(|r| route_length(r)).sum();
@@ -300,6 +312,7 @@ pub fn score_model_vs_engine(
             model_beta,
             model_crossings,
             model_length,
+            model_overlaps: total_overlaps(&routes),
             model_unrouted,
         });
     }
@@ -342,9 +355,27 @@ pub fn model_geometry(
 
     let mut out = Vec::with_capacity(pairs.len());
     for (view, flow) in pairs {
+        #[cfg(feature = "native")]
+        if std::env::var("ARCHITEXT_ROUTE_TIMING").is_ok() {
+            use std::io::Write;
+            eprintln!("[pair-begin  ] {:>28} / {:<18}", flow.id, view.id);
+            let _ = std::io::stderr().flush();
+        }
         let req = build_flow_plan_request(view, flow, Some(&layout_config), "orthogonal");
         let (plan, _stats, _diag) = plan_diagram_with_stats(&req.plan_diagram_input);
-        let node_ids: Vec<String> = plan.node_rects.keys().cloned().collect();
+        // Obstacle set = flow PARTICIPANTS only (nodes referenced by a routed edge).
+        // Nodes hidden/parked in this flow are NOT obstacles — routes bulldoze
+        // straight through where they sit (maintainer: avoiding nodes that aren't
+        // shown is wrong).
+        let mut node_ids: Vec<String> = Vec::new();
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for r in &req.plan_diagram_input.relationships {
+            for id in [r.from.as_str(), r.to.as_str()] {
+                if plan.node_rects.contains_key(id) && seen.insert(id) {
+                    node_ids.push(id.to_string());
+                }
+            }
+        }
         let index_of: std::collections::HashMap<&str, usize> =
             node_ids.iter().enumerate().map(|(i, k)| (k.as_str(), i)).collect();
         let nodes_v: Vec<crate::model::Rect> =
@@ -360,7 +391,27 @@ pub fn model_geometry(
                 })
             })
             .collect();
-        let routes = route_all_slotted(&nodes_v, &edges);
+        // RCA instrumentation (opt-in): per-flow routing wall-clock so a slow flow
+        // is identifiable, not just "the corpus is slow". Native only (Instant).
+        #[cfg(feature = "native")]
+        if std::env::var("ARCHITEXT_ROUTE_TIMING").is_ok() {
+            use std::io::Write;
+            eprintln!("[route-start ] {:>28} / {:<18} edges={}", flow.id, view.id, edges.len());
+            let _ = std::io::stderr().flush();
+        }
+        #[cfg(feature = "native")]
+        let _t0 = std::time::Instant::now();
+        let routes = route_all_coordinated(&nodes_v, &edges);
+        #[cfg(feature = "native")]
+        if std::env::var("ARCHITEXT_ROUTE_TIMING").is_ok() {
+            eprintln!(
+                "[route-timing] {:>28} / {:<18} edges={:<3} {:?}",
+                flow.id,
+                view.id,
+                edges.len(),
+                _t0.elapsed()
+            );
+        }
         out.push(ModelGeometry {
             flow_id: flow.id.clone(),
             view_id: view.id.clone(),
@@ -533,6 +584,55 @@ mod tests {
         // Relative from the crate root: ../../docs/architext/data
         let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         crate_root.join("..").join("..").join("docs").join("architext").join("data")
+    }
+
+    fn flowforge_fixture_dir() -> PathBuf {
+        // The in-repo FlowForge corpus the deterministic model is reviewed against.
+        let crate_root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        crate_root.join("..").join("..").join("test").join("fixtures").join("corpus")
+    }
+
+    /// Permanent forbidden-artifact GATE: the deterministic model must produce ZERO
+    /// §0-forbidden artifacts (dogleg, Z/staircase, non-orthogonal, unrouted,
+    /// min-stem, channel overlap) on every (flow, view) of the FlowForge corpus, and
+    /// every route must be a legal straight/L/C. This is an INVARIANT — it asserts
+    /// the hard rules, NOT incidental β/crossing counts (which the planned track
+    /// refactor will change), so it guards correctness through optimization.
+    ///
+    /// `#[ignore]`d because routing the whole corpus in a debug build is slow
+    /// (>60s); run it as a release/CI gate: `cargo test --release -- --ignored
+    /// flowforge_corpus_has_no_forbidden_artifacts`, or use the `audit_model`
+    /// binary (same check, ~2s in release).
+    #[test]
+    #[ignore = "slow in debug; release/CI gate — see audit_model binary"]
+    fn flowforge_corpus_has_no_forbidden_artifacts() {
+        use crate::route_model::audit::audit_routes;
+        let data_dir = flowforge_fixture_dir();
+        if !data_dir.exists() {
+            return; // skip where the fixture isn't checked out
+        }
+        let config = resolve_diagram_config_defaults();
+        let geoms = model_geometry(&data_dir, &config).expect("model_geometry");
+        assert!(!geoms.is_empty(), "corpus produced at least one (flow, view)");
+        for g in &geoms {
+            let a = audit_routes(&g.routes);
+            assert!(
+                a.is_clean(),
+                "{} / {}: forbidden artifacts present: {:?}",
+                g.flow_id,
+                g.view_id,
+                a
+            );
+            let legal = a.straight + a.ells + a.cees;
+            assert_eq!(
+                legal,
+                g.routes.len(),
+                "{} / {}: {} route(s) are not a legal straight/L/C",
+                g.flow_id,
+                g.view_id,
+                g.routes.len() - legal
+            );
+        }
     }
 
     #[test]

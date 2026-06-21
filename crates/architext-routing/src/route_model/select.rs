@@ -8,7 +8,7 @@
 
 use std::cmp::Ordering;
 
-use super::{bend_score, build_path_01, clears, Side, EPS};
+use super::{build_arch, bend_score, build_path_01, clears, Side, EPS, MIN_SURFACE_STEM};
 use crate::model::{Point, Rect};
 use crate::route_geometry::route_length;
 
@@ -37,7 +37,15 @@ pub fn clean_candidates(a: &Rect, b: &Rect, obstacles: &[Rect]) -> Vec<Candidate
     let mut out = Vec::new();
     for (sa, pa) in side_center_mounts(a) {
         for (sb, pb) in side_center_mounts(b) {
-            if let Some(points) = build_path_01(sa, &pa, sb, &pb) {
+            let built = if sa == sb {
+                // Two LIKE-facing surfaces: the only clean shape is a C arch
+                // (∩/∪/[/]). A flat straight/L between two same-orientation
+                // surfaces grazes along the plane — never emit it.
+                build_arch(sa, &pa, &pb, obstacles, MIN_SURFACE_STEM)
+            } else {
+                build_path_01(sa, &pa, sb, &pb)
+            };
+            if let Some(points) = built {
                 if clears(&points, obstacles) {
                     out.push(Candidate { points, side_a: sa, side_b: sb });
                 }
@@ -153,10 +161,12 @@ mod tests {
         let blocker = Rect { x: 180.0, y: -40.0, width: 40.0, height: 130.0 };
         let r = best_clean_route(&a, &b, &[blocker.clone()], &[]);
         if let Some(c) = &r {
-            // whatever it picked, it must clear the blocker and never be a dogleg
+            // whatever it picked, it must clear the blocker and never double back
+            // over itself. With the straight (β=0) and single Ls blocked, the
+            // clean winner is the C arch over the blocker (β=2) — non-monotone but
+            // valid by §0.
             assert!(clears(&c.points, &[blocker.clone()]));
-            assert!(monotone(&c.points));
-            // the straight (β=0) is blocked, so any clean winner here is an L (β≥1)
+            assert!(!super::super::doubles_back(&c.points));
             assert!(bend_score(&c.points) >= 1.0);
         }
     }
