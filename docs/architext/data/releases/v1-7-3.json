@@ -1,37 +1,37 @@
 {
   "id": "v1-7-3",
   "version": "1.7.3",
-  "name": "Architext 1.7.3 Routing Correctness + Diagram Fidelity",
+  "name": "Architext 1.7.3 Diagram Fidelity + Distribution (routing-model groundwork)",
   "status": "implementing",
   "posture": "release-candidate",
-  "summary": "Patch release hardening the deterministic Rust router and the diagram renderers. The model router gains a permanent forbidden-artifact gate (zero doglegs, Z-staircases, non-orthogonal segments, unrouted edges, min-stems, or channel overlaps), shape-preserving channel separation, and crossing reduction (28 -> 21 on the FlowForge corpus; the model is never worse than the engine at a fraction of its bend cost). Sequence diagrams follow the UML standard; the Sequence-mode flow-selection papercut and an overline-tracking drift are fixed.",
+  "summary": "Patch release. User-facing: sequence diagrams now follow the UML standard, the Sequence-mode flow-selection papercut and an overline-tracking drift are fixed, a Homebrew formula installs the native binary, and the serve plan farm warms incrementally so the first diagram appears fast. Under the hood, a from-scratch deterministic Rust routing model lands behind the ARCHITEXT_ROUTING_MODEL review flag (default routing is unchanged — still the engine): a locked shape law, a permanent forbidden-artifact gate, and crossings cut 28 -> 21, beating the engine on bend cost (beta 174 vs 1338) at equal crossings. That model is groundwork toward a future default switch, not a default change in 1.7.3.",
   "targetDate": "2026-06-21",
-  "lastUpdated": "2026-06-21T16:30:00.000Z",
-  "updateSource": "Merged to develop via PR #238 (CI green: verify-rust + package). NOT yet shipped to npm/main — release-candidate pending the develop -> main ceremony. Validation at merge: routing 525 lib tests, viewer 127 tests, forbidden-artifact corpus gate 1/1, corpus_fitness perf ratchet 1/1, native validator pass. Crossings 21 == engine 21 with beta 174 vs engine 1338.",
+  "lastUpdated": "2026-06-21T19:00:00.000Z",
+  "updateSource": "All scope merged to develop (PRs #234 serve-warm, #235 Homebrew, #238 routing model + sequence/viewer fidelity + clippy, #239 this Release Truth, #240 version bump), each green on verify-rust + package. NOT yet shipped — release-candidate pending the develop -> main merge (#241) + just github-release. Validation: routing 525 lib tests, viewer 127, forbidden-artifact corpus gate 1/1, corpus_fitness ratchet 1/1, native validator pass. The deterministic router is opt-in via ARCHITEXT_ROUTING_MODEL; default rendering is the engine, so this release carries no default routing change.",
   "scope": {
     "required": [
       {
-        "id": "routing-channel-separation-gate",
-        "title": "Channel separation + permanent forbidden-artifact gate",
-        "kind": "feature",
-        "summary": "Shape-preserving channel separation removes route overlaps (8 -> 0) and pushes close-parallel channel buffers to within an arrowhead (tight 19 -> 2, the residual accept-with-log). A permanent gate (audit_model binary + an in-repo corpus test) holds the model router to zero forbidden artifacts: doglegs, Z/staircases, non-orthogonal segments, unrouted edges, min-stems, and channel overlaps. Crossings fall 28 -> 21, including an orientation-independent arch-mount nesting fix that took the model-inference / agent-turn-flow bundle to zero.",
+        "id": "deterministic-routing-model",
+        "title": "Deterministic routing model behind ARCHITEXT_ROUTING_MODEL (groundwork + gate)",
+        "kind": "architecture",
+        "summary": "A from-scratch deterministic Rust router built and hardened over this cycle, exposed behind the ARCHITEXT_ROUTING_MODEL review flag — DEFAULT rendering is unchanged (still the engine). It carries a locked shape law (straight/L/C/Z/dogleg), shape-preserving channel separation (overlaps 8 -> 0; channel-buffer tight 19 -> 2), and a PERMANENT forbidden-artifact gate (zero doglegs, Z/staircases, non-orthogonal segments, unrouted edges, min-stems, or channel overlaps) enforced by the audit_model binary + an in-repo corpus test. Crossings fall 28 -> 21 (model == engine, never worse) while beating the engine on bend cost (beta 174 vs 1338); in model mode the engine's separate_close_parallel_routes is skipped and channel separation runs once, taking dense flows from minutes to milliseconds. Groundwork toward making the model the default in a later release.",
         "evidence": ["pr-238", "routing-gate"],
         "status": "complete",
         "owner": "maintainer",
         "priority": "high",
-        "workstreamId": "routing-correctness",
+        "workstreamId": "routing-model",
         "dependsOn": []
       },
       {
-        "id": "dense-flow-routing-perf",
-        "title": "Dense-flow routing performance",
-        "kind": "architecture",
-        "summary": "In model-review mode the engine's separate_close_parallel_routes pass is skipped, and channel separation runs once on the final routing instead of per optimizer trial. Dense flows that took minutes now route in milliseconds.",
-        "evidence": ["pr-238"],
+        "id": "ci-clippy-cleanup",
+        "title": "Clear clippy -D warnings on the routing crate",
+        "kind": "chore",
+        "summary": "The wasm viewer clippy CI step (which lints architext-routing as a dependency under -D warnings) was red on lint debt accumulated across the routing build-out, uncaught because cargo test does not run clippy. Cleared (unused_mut, map_or, an OR-pattern range, two provably-dead route-cache assignments) with routing output byte-identical.",
+        "evidence": ["pr-238", "ci-238"],
         "status": "complete",
         "owner": "maintainer",
         "priority": "medium",
-        "workstreamId": "routing-correctness",
+        "workstreamId": "routing-model",
         "dependsOn": []
       },
       {
@@ -59,15 +59,27 @@
         "dependsOn": []
       },
       {
-        "id": "ci-clippy-cleanup",
-        "title": "Clear clippy -D warnings on the routing crate",
-        "kind": "chore",
-        "summary": "The wasm viewer clippy CI step (which lints architext-routing as a dependency under -D warnings) was red on lint debt accumulated across the routing-overhaul commits, uncaught because the branch had no prior PR/CI and cargo test does not run clippy. Cleared (unused_mut, map_or, an OR-pattern range, and two provably-dead route-cache assignments) with routing output byte-identical.",
-        "evidence": ["pr-238", "ci-238"],
+        "id": "homebrew-formula",
+        "title": "Homebrew formula for the native binary",
+        "kind": "feature",
+        "summary": "A Homebrew formula installs the native architext binary, adding a first-class macOS/Linux distribution path alongside the curl installer and the npm bridge.",
+        "evidence": ["pr-235"],
         "status": "complete",
         "owner": "maintainer",
         "priority": "medium",
-        "workstreamId": "routing-correctness",
+        "workstreamId": "distribution-and-perf",
+        "dependsOn": []
+      },
+      {
+        "id": "serve-incremental-warm",
+        "title": "Incremental plan-farm warm — fast first diagram",
+        "kind": "architecture",
+        "summary": "The serve plan farm warms incrementally so the first diagram renders quickly instead of waiting on the whole corpus to precompute.",
+        "evidence": ["pr-234"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "distribution-and-perf",
         "dependsOn": []
       }
     ],
@@ -83,20 +95,30 @@
         "owner": "maintainer",
         "priority": "low",
         "dependsOn": []
+      },
+      {
+        "id": "routing-model-as-default",
+        "title": "Promote the deterministic routing model to the default",
+        "kind": "architecture",
+        "summary": "The deterministic model ships behind ARCHITEXT_ROUTING_MODEL in 1.7.3 (review/groundwork). Making it the default requires a live-UI review pass across all flows and a decision on the residual 21 (structural) crossings vs the engine's tradeoffs. Deferral reason: sequencing — the model wants maintainer review in the live viewer before it replaces the engine for all users.",
+        "status": "deferred",
+        "owner": "maintainer",
+        "priority": "medium",
+        "dependsOn": ["deterministic-routing-model"]
       }
     ],
     "outOfScope": []
   },
   "workstreams": [
     {
-      "id": "routing-correctness",
-      "name": "Deterministic router correctness + performance",
+      "id": "routing-model",
+      "name": "Deterministic routing model (behind flag) + gate",
       "owner": "maintainer",
       "status": "complete",
       "posture": "on-track",
-      "summary": "Bring the model router to a gated, correct, performant state: channel separation, the forbidden-artifact gate, crossing reduction, and dense-flow speed — verified against the FlowForge corpus.",
+      "summary": "Land the from-scratch deterministic router behind ARCHITEXT_ROUTING_MODEL with a locked shape law, channel separation, a permanent forbidden-artifact gate, and crossing reduction — verified against the FlowForge corpus, default routing untouched.",
       "progress": 100,
-      "itemIds": ["routing-channel-separation-gate", "dense-flow-routing-perf", "ci-clippy-cleanup"],
+      "itemIds": ["deterministic-routing-model", "ci-clippy-cleanup"],
       "evidence": ["pr-238", "routing-gate", "ci-238"]
     },
     {
@@ -105,10 +127,21 @@
       "owner": "maintainer",
       "status": "complete",
       "posture": "on-track",
-      "summary": "Sequence diagrams to the UML standard and a design-language fidelity pass over the viewer chrome, plus the Sequence-mode flow-selection papercut.",
+      "summary": "Sequence diagrams to the UML standard, a design-language fidelity pass over the viewer chrome, and the Sequence-mode flow-selection papercut.",
       "progress": 100,
       "itemIds": ["sequence-uml-fidelity", "viewer-sequence-and-overline-fidelity"],
       "evidence": ["pr-238"]
+    },
+    {
+      "id": "distribution-and-perf",
+      "name": "Distribution + serve performance",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Add a Homebrew distribution path for the native binary and warm the serve plan farm incrementally so the first diagram appears fast.",
+      "progress": 100,
+      "itemIds": ["homebrew-formula", "serve-incremental-warm"],
+      "evidence": ["pr-234", "pr-235"]
     }
   ],
   "blockers": [],
@@ -117,8 +150,22 @@
   "evidence": [
     {
       "id": "pr-238",
-      "label": "PR #238 router correctness + sequence/design fidelity (merged to develop)",
+      "label": "PR #238 routing model + sequence/design fidelity + clippy (merged to develop)",
       "href": "https://github.com/robot-accomplice/architext/pull/238",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-235",
+      "label": "PR #235 Homebrew formula for the native binary",
+      "href": "https://github.com/robot-accomplice/architext/pull/235",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "pr-234",
+      "label": "PR #234 incremental plan-farm warm (fast first diagram)",
+      "href": "https://github.com/robot-accomplice/architext/pull/234",
       "kind": "document",
       "status": "complete"
     },
