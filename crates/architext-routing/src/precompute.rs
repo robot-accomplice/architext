@@ -265,8 +265,17 @@ pub fn score_model_vs_engine(
             None => continue,
         };
 
-        // Build the model's node/edge view from the SAME layout the plan used.
-        let node_ids: Vec<String> = plan.node_rects.keys().cloned().collect();
+        // Build the model's node/edge view from flow PARTICIPANTS only (nodes
+        // referenced by a routed edge) — hidden/parked nodes are not obstacles.
+        let mut node_ids: Vec<String> = Vec::new();
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for r in &req.plan_diagram_input.relationships {
+            for id in [r.from.as_str(), r.to.as_str()] {
+                if plan.node_rects.contains_key(id) && seen.insert(id) {
+                    node_ids.push(id.to_string());
+                }
+            }
+        }
         let index_of: std::collections::HashMap<&str, usize> =
             node_ids.iter().enumerate().map(|(i, k)| (k.as_str(), i)).collect();
         let nodes: Vec<crate::model::Rect> =
@@ -344,7 +353,19 @@ pub fn model_geometry(
     for (view, flow) in pairs {
         let req = build_flow_plan_request(view, flow, Some(&layout_config), "orthogonal");
         let (plan, _stats, _diag) = plan_diagram_with_stats(&req.plan_diagram_input);
-        let node_ids: Vec<String> = plan.node_rects.keys().cloned().collect();
+        // Obstacle set = flow PARTICIPANTS only (nodes referenced by a routed edge).
+        // Nodes hidden/parked in this flow are NOT obstacles — routes bulldoze
+        // straight through where they sit (maintainer: avoiding nodes that aren't
+        // shown is wrong).
+        let mut node_ids: Vec<String> = Vec::new();
+        let mut seen: std::collections::HashSet<&str> = std::collections::HashSet::new();
+        for r in &req.plan_diagram_input.relationships {
+            for id in [r.from.as_str(), r.to.as_str()] {
+                if plan.node_rects.contains_key(id) && seen.insert(id) {
+                    node_ids.push(id.to_string());
+                }
+            }
+        }
         let index_of: std::collections::HashMap<&str, usize> =
             node_ids.iter().enumerate().map(|(i, k)| (k.as_str(), i)).collect();
         let nodes_v: Vec<crate::model::Rect> =

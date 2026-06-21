@@ -518,13 +518,24 @@ fn apply_model_routes(
 ) {
     use crate::route_edges::helpers::route_with_points;
     use crate::route_model::place::{route_all_coordinated, Edge};
-    use std::collections::HashMap;
+    use std::collections::{HashMap, HashSet};
 
-    let node_ids: Vec<&String> = input.node_rects.keys().collect();
+    // Obstacle set = flow PARTICIPANTS only (nodes referenced by a routed edge).
+    // Nodes hidden/parked in this flow are NOT obstacles — routes bulldoze straight
+    // through where they sit (maintainer: avoiding nodes that aren't shown is wrong).
+    let mut node_ids: Vec<&str> = Vec::new();
+    let mut seen: HashSet<&str> = HashSet::new();
+    for rel in &input.relationships {
+        for id in [rel.from.as_str(), rel.to.as_str()] {
+            if input.node_rects.contains_key(id) && seen.insert(id) {
+                node_ids.push(id);
+            }
+        }
+    }
     let idx: HashMap<&str, usize> = node_ids
         .iter()
         .enumerate()
-        .map(|(i, &id)| (id.as_str(), i))
+        .map(|(i, &id)| (id, i))
         .collect();
     let rects: Vec<Rect> = node_ids
         .iter()
