@@ -790,7 +790,15 @@ fn separate_channels(routes: &mut [Vec<Point>]) {
             };
             let (a0, a1) = mid(i);
             let (b0, b1) = mid(j);
-            if crate::route_model::segments_overlap(&a0, &a1, &b0, &b1) {
+            // Cluster middles that share a channel — collinear+overlapping (exact),
+            // OR close-parallel: same orientation, extents overlap, and offsets within
+            // a CHANNEL_GAP. The concentric nesting below then spreads the whole
+            // cluster to ≥ an arrowhead apart (the channel-buffer rule for arches).
+            let (ci, cj) = (&mids[i].1, &mids[j].1);
+            let close = ci.horiz == cj.horiz
+                && ci.lo.max(cj.lo) + EPS < ci.hi.min(cj.hi)
+                && (ci.off - cj.off).abs() < CHANNEL_GAP;
+            if close || crate::route_model::segments_overlap(&a0, &a1, &b0, &b1) {
                 let (ri, rj) = (find(&mut parent, i), find(&mut parent, j));
                 parent[ri] = rj;
             }
