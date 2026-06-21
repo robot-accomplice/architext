@@ -35,6 +35,11 @@ pub struct RouteAudit {
     pub short_stems: Vec<usize>,
     /// Pairs of routes whose segments share a channel (collinear overlap).
     pub channel_overlaps: Vec<(usize, usize)>,
+    // ---- TRACK-MODEL TARGET (tracked metric, not yet gate-blocking) ----
+    /// Pairs of routes whose parallel runs are closer than [`MIN_CHANNEL_CLEARANCE`]
+    /// (an arrowhead) without overlapping — the "channel buffer" rule. Currently
+    /// unavoidable on over-capacity faces; the track model drives this to 0.
+    pub tight_channels: Vec<(usize, usize)>,
     // ---- SOFT validation (only meaningful once the gate is clean) ----
     pub straight: usize,
     pub ells: usize,
@@ -63,6 +68,40 @@ impl RouteAudit {
 
 fn seg_len(a: &Point, b: &Point) -> f64 {
     ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
+}
+
+/// Minimum clearance between two parallel routes — "a channel an arrowhead wide".
+/// The flow arrowhead marker is ~7px (`markerWidth/Height="7"` in the renderer);
+/// parallel runs closer than this share visual space (the channel-buffer rule).
+pub const MIN_CHANNEL_CLEARANCE: f64 = 7.0;
+
+/// Do two axis-aligned segments run PARALLEL and overlap along their shared axis
+/// closer than `clearance` (perpendicular gap in `(EPS, clearance)`)? Exact overlap
+/// (gap ≈ 0) is excluded — that is the `channel_overlaps` case, not a buffer breach.
+fn parallel_too_close(a0: &Point, a1: &Point, b0: &Point, b1: &Point, clearance: f64) -> bool {
+    let a_h = (a0.y - a1.y).abs() < EPS;
+    let b_h = (b0.y - b1.y).abs() < EPS;
+    let a_v = (a0.x - a1.x).abs() < EPS;
+    let b_v = (b0.x - b1.x).abs() < EPS;
+    if a_h && b_h {
+        let gap = (a0.y - b0.y).abs();
+        if gap <= EPS || gap >= clearance {
+            return false;
+        }
+        let lo = a0.x.min(a1.x).max(b0.x.min(b1.x));
+        let hi = a0.x.max(a1.x).min(b0.x.max(b1.x));
+        lo + EPS < hi
+    } else if a_v && b_v {
+        let gap = (a0.x - b0.x).abs();
+        if gap <= EPS || gap >= clearance {
+            return false;
+        }
+        let lo = a0.y.min(a1.y).max(b0.y.min(b1.y));
+        let hi = a0.y.max(a1.y).min(b0.y.max(b1.y));
+        lo + EPS < hi
+    } else {
+        false
+    }
 }
 
 /// Audit one routing for every forbidden artifact, plus the soft shape facts.
@@ -113,6 +152,16 @@ pub fn audit_routes(routes: &[Vec<Point>]) -> RouteAudit {
             });
             if shares {
                 a.channel_overlaps.push((i, j));
+            }
+            // channel buffer: parallel runs closer than an arrowhead (but not the
+            // exact-overlap case above).
+            let tight = routes[i].windows(2).any(|wi| {
+                routes[j].windows(2).any(|wj| {
+                    parallel_too_close(&wi[0], &wi[1], &wj[0], &wj[1], MIN_CHANNEL_CLEARANCE)
+                })
+            });
+            if tight {
+                a.tight_channels.push((i, j));
             }
         }
     }
@@ -175,6 +224,25 @@ mod tests {
         let r1 = vec![p(0.0, 5.0), p(0.0, 15.0)];
         let a = audit_routes(&[r0, r1]);
         assert_eq!(a.channel_overlaps, vec![(0, 1)], "shared channel must be flagged");
+    }
+
+    #[test]
+    fn flags_close_parallel_channels_under_an_arrowhead() {
+        // two horizontal runs 4px apart, overlapping in x → closer than an arrowhead
+        // (no exact overlap, so channel_overlaps stays empty; tight_channels catches it).
+        let r0 = vec![p(0.0, 100.0), p(50.0, 100.0)];
+        let r1 = vec![p(10.0, 104.0), p(60.0, 104.0)];
+        let a = audit_routes(&[r0, r1]);
+        assert_eq!(a.channel_overlaps, Vec::<(usize, usize)>::new(), "not an exact overlap");
+        assert_eq!(a.tight_channels, vec![(0, 1)], "4px < arrowhead must be flagged");
+    }
+
+    #[test]
+    fn parallel_runs_an_arrowhead_apart_are_not_flagged() {
+        let r0 = vec![p(0.0, 100.0), p(50.0, 100.0)];
+        let r1 = vec![p(10.0, 100.0 + MIN_CHANNEL_CLEARANCE + 1.0), p(60.0, 100.0 + MIN_CHANNEL_CLEARANCE + 1.0)];
+        let a = audit_routes(&[r0, r1]);
+        assert!(a.tight_channels.is_empty(), "≥ arrowhead apart is fine: {a:?}");
     }
 
     #[test]

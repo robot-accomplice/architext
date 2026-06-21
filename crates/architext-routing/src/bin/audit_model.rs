@@ -48,6 +48,7 @@ fn main() {
 
     let (mut beta, mut crossings, mut length) = (0.0_f64, 0usize, 0.0_f64);
     let (mut n_straight, mut n_l, mut n_c, mut n_routes) = (0usize, 0usize, 0usize, 0usize);
+    let mut tight = Class { label: "channel buffer < arrowhead (track-model target)", hits: vec![] };
 
     for g in &geoms {
         let a = audit_routes(&g.routes);
@@ -59,6 +60,7 @@ fn main() {
         unrouted.hits.extend(a.unrouted.iter().map(|&e| at(e)));
         short_stem.hits.extend(a.short_stems.iter().map(|&e| at(e)));
         overlap.hits.extend(a.channel_overlaps.iter().map(|&(i, j)| pair(i, j)));
+        tight.hits.extend(a.tight_channels.iter().map(|&(i, j)| pair(i, j)));
         beta += a.beta;
         crossings += a.crossings;
         length += a.length;
@@ -112,4 +114,15 @@ fn main() {
     }
     println!("β total: {beta:.0}   crossings: {crossings}   length: {length:.0}");
     println!("\nVALID ✓ — gate clean, all {n_routes} routes are legal §0 shapes.");
+
+    // Track-model TARGET (not gate-blocking yet): close-parallel channel buffer.
+    // The track model drives this to 0; over-capacity faces are the last-resort tail.
+    println!("\n=== CHANNEL BUFFER (track-model target, not gate-blocking) ===");
+    println!("parallel runs closer than an arrowhead: {} pair(s)", tight.hits.len());
+    for h in tight.hits.iter().take(20) {
+        println!("  - {h}");
+    }
+    if tight.hits.len() > 20 {
+        println!("  … and {} more", tight.hits.len() - 20);
+    }
 }
