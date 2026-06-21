@@ -1051,7 +1051,14 @@ pub fn route_edges_with_stats(
     let endpoint_adjusted = enforce_endpoint_stubs(spread, &plan_rels, &node_rects_plain);
 
     // onPhase("Separating parallel runs")
-    let separated_routes = {
+    // In model-review mode (ARCHITEXT_ROUTING_MODEL) the deterministic model
+    // replaces ALL route geometry downstream (apply_model_routes), so this engine
+    // separation pass — the dense-flow hotspot, historically ~100s of a ~120s plan —
+    // is pure waste and was wedging the viewer for minutes on dense flows. Skip it in
+    // that mode only; production routing (flag unset) is byte-for-byte unchanged.
+    let separated_routes = if std::env::var("ARCHITEXT_ROUTING_MODEL").is_ok() {
+        endpoint_adjusted
+    } else {
         use crate::route_edges::{separate_close_parallel_routes, SeparationRelationship};
         let sep_rels: Vec<SeparationRelationship> = input
             .relationships
