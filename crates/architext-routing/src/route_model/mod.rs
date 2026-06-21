@@ -156,8 +156,8 @@ pub fn bends(points: &[Point]) -> usize {
 
 /// Whether two collinear axis-aligned segments **overlap** (share more than a
 /// single point on the same line) — the geometric signature of a line lying over
-/// itself.
-fn segments_overlap(a0: &Point, a1: &Point, b0: &Point, b1: &Point) -> bool {
+/// itself, OR of two different routes sharing a channel.
+pub(crate) fn segments_overlap(a0: &Point, a1: &Point, b0: &Point, b1: &Point) -> bool {
     let a_horiz = (a0.y - a1.y).abs() < EPS;
     let b_horiz = (b0.y - b1.y).abs() < EPS;
     if a_horiz != b_horiz {

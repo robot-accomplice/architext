@@ -575,6 +575,28 @@ pub fn route_all_weighted(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> {
     build_slotted_with_sides(nodes, edges, &sides, &detour)
 }
 
+/// Count of channel overlaps: pairs of segments from DIFFERENT routes that are
+/// collinear and overlap (share a run, not just a crossing point). A measurement
+/// helper — the maintainer's hard rule is that this must be ZERO, but it is
+/// enforced by a shape-preserving channel-separation pass, NOT by penalising it in
+/// the shape optimizer (that just trades an overlap for a forbidden Z).
+#[allow(dead_code)] // scaffolding: the channel-separation pass / its assert will use this
+pub(crate) fn total_overlaps(routes: &[Vec<Point>]) -> usize {
+    let mut n = 0usize;
+    for i in 0..routes.len() {
+        for j in (i + 1)..routes.len() {
+            for wi in routes[i].windows(2) {
+                for wj in routes[j].windows(2) {
+                    if crate::route_model::segments_overlap(&wi[0], &wi[1], &wj[0], &wj[1]) {
+                        n += 1;
+                    }
+                }
+            }
+        }
+    }
+    n
+}
+
 /// Weighted total cost of a routing: `W_BEND·Σ shape-cost + W_CROSS·crossings`.
 fn weighted_total(routes: &[Vec<Point>]) -> f64 {
     let shape: f64 = routes.iter().map(|r| bend_score(r)).sum();
