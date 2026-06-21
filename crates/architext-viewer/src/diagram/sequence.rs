@@ -112,6 +112,41 @@ impl MessageKind {
     }
 }
 
+/// Resolve every message's kind WITH sequence context. Explicit `step.kind` /
+/// `return_of` always win; otherwise a message is INFERRED to be a **return** when
+/// it answers an open call with mirrored endpoints on the call stack — the standard
+/// UML call/return pairing. So return messages render dashed even when the flow data
+/// doesn't tag them (the FlowForge corpus has untagged returns). Design > JS parity,
+/// which classified by `step.kind` alone and left every untagged return solid.
+fn resolved_kinds(steps: &[FlowStep]) -> Vec<MessageKind> {
+    let mirrored = |ci: usize, step: &FlowStep| steps[ci].from == step.to && steps[ci].to == step.from;
+    let mut kinds = Vec::with_capacity(steps.len());
+    let mut open: Vec<usize> = Vec::new(); // indices of open (unanswered) calls
+    for (i, step) in steps.iter().enumerate() {
+        let explicit = step.kind.as_deref().filter(|k| SEQUENCE_MESSAGE_KINDS.contains(k));
+        let kind = if step.from == step.to {
+            MessageKind::Selfloop
+        } else if explicit.is_some() {
+            MessageKind::from_step(step)
+        } else if step.return_of.is_some() || open.iter().any(|&ci| mirrored(ci, step)) {
+            MessageKind::Return
+        } else {
+            MessageKind::Request
+        };
+        match kind {
+            MessageKind::Return => {
+                if let Some(pos) = open.iter().rposition(|&ci| mirrored(ci, step)) {
+                    open.remove(pos);
+                }
+            }
+            MessageKind::Selfloop => {}
+            _ => open.push(i),
+        }
+        kinds.push(kind);
+    }
+    kinds
+}
+
 /// A participant column: its x-center, the resolved display name + role type
 /// (for the `--c4-*` header tint), and the underlying node id (for click →
 /// inspector).
@@ -246,10 +281,11 @@ fn return_source_index(step: &FlowStep, prior: &[FlowStep]) -> Option<usize> {
 /// Port of `sequenceActivationSpans(steps, rowHeight)`. Returns spans paired
 /// with their nesting `depth` (count of enclosing same-participant spans).
 fn activation_spans(steps: &[FlowStep], row_height: f64) -> Vec<(ActivationSpan<'_>, usize)> {
+    let kinds = resolved_kinds(steps);
     // Map source step id → the index of the return that closes it (first match).
     let mut return_end_by_source: HashMap<&str, usize> = HashMap::new();
     for (index, step) in steps.iter().enumerate() {
-        if MessageKind::from_step(step) != MessageKind::Return {
+        if kinds[index] != MessageKind::Return {
             continue;
         }
         if let Some(src_i) = return_source_index(step, &steps[..index]) {
@@ -264,7 +300,7 @@ fn activation_spans(steps: &[FlowStep], row_height: f64) -> Vec<(ActivationSpan<
         .iter()
         .enumerate()
         .filter_map(|(index, step)| {
-            let kind = MessageKind::from_step(step);
+            let kind = kinds[index];
             if kind == MessageKind::Return {
                 return None;
             }
@@ -397,6 +433,7 @@ pub fn build_sequence_layout(
         .collect();
 
     // Message rows (document order; geometry keyed off the original index).
+    let message_kinds = resolved_kinds(&flow.steps);
     let messages = flow
         .steps
         .iter()
@@ -405,12 +442,7 @@ pub fn build_sequence_layout(
             let from_x = x_for(&step.from);
             let to_x = x_for(&step.to);
             let y = MESSAGE_START_Y + (index as f64) * row_height;
-            // from==to is always a self-loop, regardless of declared kind.
-            let kind = if step.from == step.to {
-                MessageKind::Selfloop
-            } else {
-                MessageKind::from_step(step)
-            };
+            let kind = message_kinds[index];
             MessageRow {
                 step_id: step.id.clone(),
                 from: step.from.clone(),

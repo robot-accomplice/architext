@@ -1490,6 +1490,14 @@ button.c4-breadcrumb__crumb:hover {
   opacity: 0.6;
   vector-effect: non-scaling-stroke;
 }
+/* Open (stick) arrowhead for return/async replies — UML: filled head = sync call,
+   open head = reply. No fill; stroke only. */
+.sequence-arrowhead-open {
+  fill: none;
+  stroke: var(--edge);
+  stroke-width: 1.5;
+  vector-effect: non-scaling-stroke;
+}
 .sequence-line {
   stroke: var(--edge);
   stroke-width: 1.5;

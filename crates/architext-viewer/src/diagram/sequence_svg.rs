@@ -89,6 +89,18 @@ pub fn SequenceSvg(
                 >
                     <path d="M 0 0 L 10 5 L 0 10 z" class="flow-arrowhead"></path>
                 </marker>
+                // OPEN (stick) arrowhead for RETURN/async messages — the UML
+                // convention (filled head = synchronous call, open head = reply/async).
+                <marker
+                    id="sequence-arrowhead-open"
+                    viewBox="0 0 10 10"
+                    refX="9" refY="5"
+                    markerWidth="9" markerHeight="9"
+                    markerUnits="userSpaceOnUse"
+                    orient="auto-start-reverse"
+                >
+                    <path d="M 0 0 L 10 5 L 0 10" class="sequence-arrowhead-open"></path>
+                </marker>
                 // Clip the body layers to below the participant header band so a
                 // first-row action label can't bleed up behind the header cards.
                 <clipPath id="sequence-body-clip">
@@ -190,6 +202,11 @@ fn SeqMessage(
         }
     };
     let line_class = format!("sequence-line sequence-line--{}", kind.css_suffix());
+    // UML: filled head for a synchronous call, OPEN head for a return/async reply.
+    let marker_end = match kind {
+        MessageKind::Return | MessageKind::Async => "url(#sequence-arrowhead-open)",
+        _ => "url(#sequence-arrowhead)",
+    };
     let action_text = truncate_action(&action);
     let step_id_for_click = step_id.clone();
 
@@ -206,7 +223,7 @@ fn SeqMessage(
             h = loop_h,
         );
         view! {
-            <path class=line_class.clone() d=d fill="none" marker-end="url(#sequence-arrowhead)"></path>
+            <path class=line_class.clone() d=d fill="none" marker-end=marker_end></path>
         }
         .into_view()
     } else {
@@ -214,7 +231,7 @@ fn SeqMessage(
             <line
                 class=line_class.clone()
                 x1=from_x y1=y x2=to_x y2=y
-                marker-end="url(#sequence-arrowhead)"
+                marker-end=marker_end
             ></line>
         }
         .into_view()
