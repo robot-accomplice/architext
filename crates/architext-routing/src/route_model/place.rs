@@ -842,36 +842,52 @@ fn separate_channels(routes: &mut [Vec<Point>]) {
         let arches: Vec<usize> = order.iter().map(|&mi| mids[mi].0).collect();
         let vertical_mid = order.iter().all(|&mi| !mids[mi].1.horiz);
         if arches.len() >= 2 && vertical_mid && arches.iter().all(|&ri| routes[ri].len() == 4) {
-            let end_y = |ri: usize, top: bool| if top { routes[ri][0].y } else { routes[ri][3].y };
-            let end_x = |ri: usize, top: bool| if top { routes[ri][0].x } else { routes[ri][3].x };
-            let same_x = |top: bool| arches.iter().all(|&ri| (end_x(ri, top) - end_x(arches[0], top)).abs() < EPS);
-            let spread = |top: bool| {
-                let ys: Vec<f64> = arches.iter().map(|&ri| end_y(ri, top)).collect();
-                ys.iter().cloned().fold(f64::MIN, f64::max) - ys.iter().cloned().fold(f64::MAX, f64::min)
+            // Edge orientation is NOT consistent (route[0] may be either mount), so
+            // classify each arch's two mounts by y — lo = smaller y, hi = larger y —
+            // not by index. `lohi[k]` = (lo_endpoint_idx, hi_endpoint_idx) for arch k.
+            let lohi: Vec<(usize, usize)> = arches
+                .iter()
+                .map(|&ri| {
+                    let last = routes[ri].len() - 1;
+                    if routes[ri][0].y <= routes[ri][last].y { (0, last) } else { (last, 0) }
+                })
+                .collect();
+            let lo_yv: Vec<f64> = arches.iter().zip(&lohi).map(|(&ri, &(lo, _))| routes[ri][lo].y).collect();
+            let hi_yv: Vec<f64> = arches.iter().zip(&lohi).map(|(&ri, &(_, hi))| routes[ri][hi].y).collect();
+            let lo_xv: Vec<f64> = arches.iter().zip(&lohi).map(|(&ri, &(lo, _))| routes[ri][lo].x).collect();
+            let hi_xv: Vec<f64> = arches.iter().zip(&lohi).map(|(&ri, &(_, hi))| routes[ri][hi].x).collect();
+            let spread = |v: &[f64]| {
+                v.iter().cloned().fold(f64::MIN, f64::max) - v.iter().cloned().fold(f64::MAX, f64::min)
             };
-            // shared end = same x and the tighter tangent spread (one face, not many)
-            let shared_top = if same_x(true) && (!same_x(false) || spread(true) <= spread(false)) {
+            let lo_same_x = lo_xv.iter().all(|&x| (x - lo_xv[0]).abs() < EPS);
+            let hi_same_x = hi_xv.iter().all(|&x| (x - hi_xv[0]).abs() < EPS);
+            // shared face = same-x mount group with the tighter tangent spread (one node
+            // face holds these mounts; the other end fans out to different nodes).
+            let shared_lo = if lo_same_x && (!hi_same_x || spread(&lo_yv) <= spread(&hi_yv)) {
                 Some(true)
-            } else if same_x(false) {
+            } else if hi_same_x {
                 Some(false)
             } else {
                 None
             };
-            if let Some(top) = shared_top {
-                let mut slots: Vec<f64> = arches.iter().map(|&ri| end_y(ri, top)).collect();
+            if let Some(use_lo) = shared_lo {
+                let (shared_yv, other_yv) = if use_lo { (&lo_yv, &hi_yv) } else { (&hi_yv, &lo_yv) };
+                let mut slots: Vec<f64> = shared_yv.clone();
                 slots.sort_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal));
                 let mut idx: Vec<usize> = (0..arches.len()).collect();
-                idx.sort_by(|&a, &b| {
-                    end_y(arches[a], !top).partial_cmp(&end_y(arches[b], !top)).unwrap_or(Ordering::Equal)
-                });
+                idx.sort_by(|&a, &b| other_yv[a].partial_cmp(&other_yv[b]).unwrap_or(Ordering::Equal));
                 let saved: Vec<Vec<Point>> = arches.iter().map(|&ri| routes[ri].clone()).collect();
                 let before = total_crossings(routes);
-                for (k, &ai) in idx.iter().enumerate() {
-                    let ri = arches[ai];
-                    let new_y = slots[slots.len() - 1 - k]; // mirror: asc other-end → desc this-end
-                    let (m, c) = if top { (0, 1) } else { (3, 2) };
-                    routes[ri][m].y = new_y;
-                    routes[ri][c].y = new_y;
+                for (rank, &k) in idx.iter().enumerate() {
+                    // mirror: arch with the smallest OTHER-end mount gets the largest
+                    // SHARED slot → nested mount intervals → no stem crosses a middle.
+                    let new_y = slots[slots.len() - 1 - rank];
+                    let ri = arches[k];
+                    let last = routes[ri].len() - 1;
+                    let ei = if use_lo { lohi[k].0 } else { lohi[k].1 };
+                    let ci = if ei == 0 { 1 } else { last - 1 };
+                    routes[ri][ei].y = new_y;
+                    routes[ri][ci].y = new_y;
                 }
                 if total_crossings(routes) >= before {
                     for (j, &ri) in arches.iter().enumerate() {
