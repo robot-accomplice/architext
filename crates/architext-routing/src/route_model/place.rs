@@ -342,6 +342,89 @@ fn opposite_rank(nodes: &[Rect], e: Edge, node_idx: usize, side: Side) -> f64 {
 
 const SIDE_OF: [Side; 4] = [Side::Left, Side::Right, Side::Top, Side::Bottom];
 
+/// Over-capacity RE-FACING (the track model's capacity policy). A face holds at most
+/// `floor(len / MIN_CHANNEL_CLEARANCE) - 1` mounts at ≥-arrowhead spacing (slots sit
+/// at `len/(n+1)`). When a face is over-subscribed, move the most perpendicular-
+/// offset excess connections to an ADJACENT face that has room — keeping the other
+/// end, so the route becomes a clean perpendicular L (never a vertical-facing Z).
+/// Connections that can't be cleanly re-faced stay put (accept-with-log = last
+/// resort, per the maintainer). Mutates `sides`; runs before mount-ordering.
+fn relieve_over_capacity(nodes: &[Rect], edges: &[Edge], sides: &mut [Option<(Side, Side)>]) {
+    use crate::route_model::audit::MIN_CHANNEL_CLEARANCE;
+    let cap = |node: &Rect, side: Side| -> usize {
+        let len = if side.is_horizontal() { node.height } else { node.width };
+        ((len / MIN_CHANNEL_CLEARANCE) as usize).saturating_sub(1).max(1)
+    };
+    let centre = |r: &Rect| (r.x + r.width / 2.0, r.y + r.height / 2.0);
+    for _ in 0..edges.len() {
+        // mounts per (node, side)
+        let mut face: HashMap<(usize, u8), Vec<usize>> = HashMap::new();
+        for (ei, e) in edges.iter().enumerate() {
+            if let Some((sa, sb)) = sides[ei] {
+                face.entry((e.a, sa.index())).or_default().push(ei);
+                face.entry((e.b, sb.index())).or_default().push(ei);
+            }
+        }
+        // the most over-subscribed face
+        let mut worst: Option<(usize, u8, usize)> = None;
+        for (&(node, si), v) in &face {
+            let over = v.len().saturating_sub(cap(&nodes[node], SIDE_OF[si as usize]));
+            if over > 0 && worst.map_or(true, |(_, _, w)| over > w) {
+                worst = Some((node, si, over));
+            }
+        }
+        let (node, si, _) = match worst {
+            Some(x) => x,
+            None => break,
+        };
+        let side = SIDE_OF[si as usize];
+        let nc = centre(&nodes[node]);
+        // pick the excess edge with the largest perpendicular offset whose opposite
+        // keeps a horizontal face (→ clean perpendicular L after the move).
+        let mut best: Option<(usize, Side)> = None;
+        let mut best_off = 0.0_f64;
+        for &ei in &face[&(node, si)] {
+            let e = edges[ei];
+            let (sa, sb) = sides[ei].unwrap();
+            let (opp, opp_side) = if e.a == node { (e.b, sb) } else { (e.a, sa) };
+            if !opp_side.is_horizontal() {
+                continue; // moving into a vertical-facing pair risks a Z
+            }
+            let oc = centre(&nodes[opp]);
+            let (new_side, off) = if side.is_horizontal() {
+                // vertical face (Left/Right) over capacity → re-face to Top/Bottom
+                if oc.1 < nc.1 - EPS {
+                    (Side::Top, nc.1 - oc.1)
+                } else if oc.1 > nc.1 + EPS {
+                    (Side::Bottom, oc.1 - nc.1)
+                } else {
+                    continue;
+                }
+            } else {
+                // horizontal face (Top/Bottom) over capacity → re-face to Left/Right
+                if oc.0 < nc.0 - EPS {
+                    (Side::Left, nc.0 - oc.0)
+                } else if oc.0 > nc.0 + EPS {
+                    (Side::Right, oc.0 - nc.0)
+                } else {
+                    continue;
+                }
+            };
+            if off > best_off {
+                best_off = off;
+                best = Some((ei, new_side));
+            }
+        }
+        let (ei, new_side) = match best {
+            Some(x) => x,
+            None => break, // nothing cleanly re-faceable — accept-with-log
+        };
+        let e = edges[ei];
+        let (sa, sb) = sides[ei].unwrap();
+        sides[ei] = if e.a == node { Some((new_side, sb)) } else { Some((sa, new_side)) };
+    }
+}
+
 /// Build slotted routes for an explicit per-edge surface assignment. Clean edges
 /// (`sides[ei] = Some`) are spread across each surface (co-monotone order, even
 /// slots) and rebuilt from their slotted mounts; edges with `sides[ei] = None`
@@ -967,6 +1050,10 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
             }
         }
     }
+
+    // Over-capacity re-facing: relieve faces with more mounts than fit at
+    // ≥-arrowhead spacing by moving excess connections to an adjacent face.
+    relieve_over_capacity(nodes, edges, &mut sides);
 
     // Phase 3: MOUNT-ORDER repair (lane nesting). A bundle of edges sharing a
     // surface crosses when its slot order doesn't nest with the partner surface's
