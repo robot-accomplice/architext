@@ -793,8 +793,10 @@ fn leg_channel(routes: &[Vec<Point>], leg: &Leg) -> f64 {
 /// and only if the moved mount stays on its face — so it can never regress. This is
 /// the deterministic seed of the track model's slot-side channel ownership.
 fn separate_leg_channels(nodes: &[Rect], edges: &[Edge], routes: &mut [Vec<Point>]) {
+    use crate::route_model::audit::{parallel_too_close, total_tight_pairs, MIN_CHANNEL_CLEARANCE};
     let mut base_ov = total_overlaps(routes);
-    if base_ov == 0 {
+    let mut base_tight = total_tight_pairs(routes);
+    if base_ov == 0 && base_tight == 0 {
         return;
     }
     let legs = collect_legs(nodes, edges, routes);
@@ -818,17 +820,20 @@ fn separate_leg_channels(nodes: &[Rect], edges: &[Edge], routes: &mut [Vec<Point
             }
             let (a0, a1) = seg(routes, &legs[i]);
             let (b0, b1) = seg(routes, &legs[j]);
-            if !crate::route_model::segments_overlap(&a0, &a1, &b0, &b1) {
+            let overlapping = crate::route_model::segments_overlap(&a0, &a1, &b0, &b1);
+            let close = parallel_too_close(&a0, &a1, &b0, &b1, MIN_CHANNEL_CLEARANCE);
+            if !overlapping && !close {
                 continue;
             }
             // Try sliding either leg by ±CHANNEL_GAP and KEEP the candidate that
-            // minimises (overlaps, crossings) lexicographically — an overlap is
-            // strictly worse than a crossing (lines may meet orthogonally but never
-            // share a channel), so converting this overlap into a clean orthogonal
-            // crossing is the correct, shape-preserving resolution when the routes
-            // are interlocked. Shape is untouched (only the mount slides along its
-            // face), so no bend is ever added.
-            let mut best: Option<(usize, usize, f64)> = None; // (ov, cr, next) for the chosen leg
+            // minimises (overlaps, tight, crossings) lexicographically. An OVERLAP is
+            // strictly worse than a TIGHT channel, which is strictly worse than a
+            // CROSSING (lines may meet orthogonally but never share a channel or run
+            // closer than an arrowhead). So this both separates exact overlaps and
+            // opens close-parallel runs to >= an arrowhead, accepting a permitted
+            // crossing only when nothing better fits. Shape is untouched (the mount
+            // slides along its face), so no bend is ever added.
+            let mut best: Option<(usize, usize, usize, f64)> = None; // (ov, tight, cr, next)
             let mut best_leg: Option<&Leg> = None;
             for li in [&legs[i], &legs[j]] {
                 for &d in &[CHANNEL_GAP, -CHANNEL_GAP] {
@@ -837,20 +842,23 @@ fn separate_leg_channels(nodes: &[Rect], edges: &[Edge], routes: &mut [Vec<Point
                         continue; // would slide off the face
                     }
                     let saved = apply(routes, li, next);
-                    let (ov, cr) = (total_overlaps(routes), total_crossings(routes));
+                    let (ov, tt, cr) = (total_overlaps(routes), total_tight_pairs(routes), total_crossings(routes));
                     routes[li.ri][li.mount_i] = saved.0;
                     routes[li.ri][li.corner_i] = saved.1;
-                    if ov < base_ov && best.is_none_or(|(bo, bc, _)| (ov, cr) < (bo, bc)) {
-                        best = Some((ov, cr, next));
+                    if (ov, tt) < (base_ov, base_tight)
+                        && best.is_none_or(|(bo, bt, bc, _)| (ov, tt, cr) < (bo, bt, bc))
+                    {
+                        best = Some((ov, tt, cr, next));
                         best_leg = Some(li);
                     }
                 }
             }
-            if let (Some((ov, _, next)), Some(li)) = (best, best_leg) {
+            if let (Some((ov, tt, _, next)), Some(li)) = (best, best_leg) {
                 apply(routes, li, next);
                 base_ov = ov;
+                base_tight = tt;
             }
-            if base_ov == 0 {
+            if base_ov == 0 && base_tight == 0 {
                 return;
             }
         }

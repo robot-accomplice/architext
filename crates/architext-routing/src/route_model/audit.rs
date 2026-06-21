@@ -78,7 +78,7 @@ pub const MIN_CHANNEL_CLEARANCE: f64 = 7.0;
 /// Do two axis-aligned segments run PARALLEL and overlap along their shared axis
 /// closer than `clearance` (perpendicular gap in `(EPS, clearance)`)? Exact overlap
 /// (gap ≈ 0) is excluded — that is the `channel_overlaps` case, not a buffer breach.
-fn parallel_too_close(a0: &Point, a1: &Point, b0: &Point, b1: &Point, clearance: f64) -> bool {
+pub(crate) fn parallel_too_close(a0: &Point, a1: &Point, b0: &Point, b1: &Point, clearance: f64) -> bool {
     let a_h = (a0.y - a1.y).abs() < EPS;
     let b_h = (b0.y - b1.y).abs() < EPS;
     let a_v = (a0.x - a1.x).abs() < EPS;
@@ -102,6 +102,26 @@ fn parallel_too_close(a0: &Point, a1: &Point, b0: &Point, b1: &Point, clearance:
     } else {
         false
     }
+}
+
+/// Count route pairs whose parallel runs are closer than [`MIN_CHANNEL_CLEARANCE`]
+/// (an arrowhead) without exactly overlapping — the channel-buffer breach count. Used
+/// by the channel-separation guard to drive this toward zero.
+pub(crate) fn total_tight_pairs(routes: &[Vec<Point>]) -> usize {
+    let mut n = 0usize;
+    for i in 0..routes.len() {
+        for j in (i + 1)..routes.len() {
+            let tight = routes[i].windows(2).any(|wi| {
+                routes[j].windows(2).any(|wj| {
+                    parallel_too_close(&wi[0], &wi[1], &wj[0], &wj[1], MIN_CHANNEL_CLEARANCE)
+                })
+            });
+            if tight {
+                n += 1;
+            }
+        }
+    }
+    n
 }
 
 /// Audit one routing for every forbidden artifact, plus the soft shape facts.
