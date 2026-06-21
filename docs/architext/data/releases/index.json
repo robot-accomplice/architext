@@ -576,18 +576,18 @@
     {
       "id": "v1-7-3",
       "version": "1.7.3",
-      "name": "Architext 1.7.3 Routing Correctness + Diagram Fidelity",
+      "name": "Architext 1.7.3 Diagram Fidelity + Distribution (routing-model groundwork)",
       "status": "implementing",
       "posture": "release-candidate",
       "targetDate": "2026-06-21",
-      "lastUpdated": "2026-06-21T16:30:00.000Z",
-      "summary": "Patch release hardening the deterministic Rust router and the diagram renderers. The model router gains a permanent forbidden-artifact gate (zero doglegs, Z-staircases, non-orthogonal segments, unrouted edges, min-stems, or channel overlaps), shape-preserving channel separation, and crossing reduction (28 -> 21 on the FlowForge corpus; the model is never worse than the engine at a fraction of its bend cost). Sequence diagrams follow the UML standard; the Sequence-mode flow-selection papercut and an overline-tracking drift are fixed.",
+      "lastUpdated": "2026-06-21T19:00:00.000Z",
+      "summary": "Patch release. User-facing: sequence diagrams now follow the UML standard, the Sequence-mode flow-selection papercut and an overline-tracking drift are fixed, a Homebrew formula installs the native binary, and the serve plan farm warms incrementally so the first diagram appears fast. Under the hood, a from-scratch deterministic Rust routing model lands behind the ARCHITEXT_ROUTING_MODEL review flag (default routing is unchanged — still the engine): a locked shape law, a permanent forbidden-artifact gate, and crossings cut 28 -> 21, beating the engine on bend cost (beta 174 vs 1338) at equal crossings. That model is groundwork toward a future default switch, not a default change in 1.7.3.",
       "counts": {
         "features": 1,
         "bugFixes": 2,
-        "workstreams": 2,
+        "workstreams": 3,
         "blockers": 0,
-        "complete": 5,
+        "complete": 6,
         "inProgress": 0,
         "planned": 0,
         "stretch": 0
