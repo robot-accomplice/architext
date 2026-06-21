@@ -369,7 +369,7 @@ fn relieve_over_capacity(nodes: &[Rect], edges: &[Edge], sides: &mut [Option<(Si
         let mut worst: Option<(usize, u8, usize)> = None;
         for (&(node, si), v) in &face {
             let over = v.len().saturating_sub(cap(&nodes[node], SIDE_OF[si as usize]));
-            if over > 0 && worst.map_or(true, |(_, _, w)| over > w) {
+            if over > 0 && worst.is_none_or(|(_, _, w)| over > w) {
                 worst = Some((node, si, over));
             }
         }
@@ -573,7 +573,7 @@ fn build_slotted_with_order(
         mount_b[ei] = Some(qb);
     }
 
-    let mut routes: Vec<Vec<Point>> = edges
+    let routes: Vec<Vec<Point>> = edges
         .iter()
         .enumerate()
         .map(|(ei, e)| match sides[ei] {
@@ -913,7 +913,7 @@ struct Leg {
 
 fn collect_legs(nodes: &[Rect], edges: &[Edge], routes: &[Vec<Point>]) -> Vec<Leg> {
     let mut legs = Vec::new();
-    let mut push = |ri: usize, mi: usize, ci: usize, node: &Rect, out: &mut Vec<Leg>| {
+    let push = |ri: usize, mi: usize, ci: usize, node: &Rect, out: &mut Vec<Leg>| {
         let (m, c) = (&routes[ri][mi], &routes[ri][ci]);
         if (m.x - c.x).abs() < EPS && (m.y - c.y).abs() >= EPS {
             out.push(Leg { ri, mount_i: mi, corner_i: ci, vertical: true, lo: node.x, hi: node.x + node.width });
@@ -1069,7 +1069,8 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
             let cost = weighted_total(&trial);
             if cost < best {
                 best = cost;
-                routes = trial;
+                // `routes` is rebuilt from `order` after this phase; only `sides`/`best`
+                // carry forward, so caching `trial` into `routes` here is dead.
                 improved = true;
             } else {
                 for &ei in members {
@@ -1114,7 +1115,7 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
         let cost = weighted_total(&trial);
         if cost < best {
             best = cost;
-            routes = trial;
+            // dead cache: `routes` is rebuilt from `order` below — keep `sides`/`best`.
         } else {
             for (k, &ei) in group.iter().enumerate() {
                 sides[ei] = orig[k];

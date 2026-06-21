@@ -230,7 +230,7 @@ pub fn bend_score(points: &[Point]) -> f64 {
     }
     let c = corners(points);
     match c.len() {
-        0 | 1 | 2 => 0.0,                                      // straight
+        0..=2 => 0.0,                                      // straight
         3 => 1.0,                                              // L
         4 if two_bend_is_c(&c) => MAX_CLEAN_BENDS as f64,      // C
         _ => Z_PENALTY,                                        // Z / staircase
