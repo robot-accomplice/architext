@@ -24,7 +24,7 @@ use crate::plan_diagram::{plan_diagram, plan_diagram_with_stats, ExtraNodeRect};
 use crate::route_diagnostics::DiagMetrics;
 use crate::route_geometry::route_length;
 use crate::route_model::bend_score;
-use crate::route_model::place::{route_all_coordinated, Edge};
+use crate::route_model::place::{route_all_coordinated, total_overlaps, Edge};
 use crate::route_model::select::polyline_crossings;
 use crate::plan_request::{
     build_flow_plan_request,
@@ -223,6 +223,9 @@ pub struct ScorePair {
     pub model_beta: f64,
     pub model_crossings: usize,
     pub model_length: f64,
+    /// Pairs of route segments sharing a channel (collinear overlap) — the hard
+    /// no-overlap rule's violation count; should be 0.
+    pub model_overlaps: usize,
     /// Edges the model could not route even with a monotone detour (should be 0).
     pub model_unrouted: usize,
 }
@@ -309,6 +312,7 @@ pub fn score_model_vs_engine(
             model_beta,
             model_crossings,
             model_length,
+            model_overlaps: total_overlaps(&routes),
             model_unrouted,
         });
     }
