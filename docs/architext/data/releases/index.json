@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-7-2",
+  "currentReleaseId": "v1-7-3",
   "releases": [
     {
       "id": "v1-1-2",
@@ -572,6 +572,27 @@
         "stretch": 0
       },
       "file": "v1-7-2.json"
+    },
+    {
+      "id": "v1-7-3",
+      "version": "1.7.3",
+      "name": "Architext 1.7.3 Routing Correctness + Diagram Fidelity",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-06-21",
+      "lastUpdated": "2026-06-21T16:30:00.000Z",
+      "summary": "Patch release hardening the deterministic Rust router and the diagram renderers. The model router gains a permanent forbidden-artifact gate (zero doglegs, Z-staircases, non-orthogonal segments, unrouted edges, min-stems, or channel overlaps), shape-preserving channel separation, and crossing reduction (28 -> 21 on the FlowForge corpus; the model is never worse than the engine at a fraction of its bend cost). Sequence diagrams follow the UML standard; the Sequence-mode flow-selection papercut and an overline-tracking drift are fixed.",
+      "counts": {
+        "features": 1,
+        "bugFixes": 2,
+        "workstreams": 2,
+        "blockers": 0,
+        "complete": 5,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-7-3.json"
     }
   ]
 }
