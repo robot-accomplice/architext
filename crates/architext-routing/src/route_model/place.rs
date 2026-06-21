@@ -490,7 +490,7 @@ fn build_slotted_with_order(
         mount_b[ei] = Some(qb);
     }
 
-    edges
+    let mut routes: Vec<Vec<Point>> = edges
         .iter()
         .enumerate()
         .map(|(ei, e)| match sides[ei] {
@@ -503,7 +503,11 @@ fn build_slotted_with_order(
             }
             None => detour[ei].clone(),
         })
-        .collect()
+        .collect();
+    // Hard no-overlap rule: nest any arches that ended up sharing a channel onto
+    // distinct, concentric channels (shape-preserving — only the free middle moves).
+    separate_channels(&mut routes);
+    routes
 }
 
 /// Clean-shape cost weights (LAW REVISION 2026-06-20: crossings can outweigh a
@@ -580,7 +584,6 @@ pub fn route_all_weighted(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> {
 /// helper — the maintainer's hard rule is that this must be ZERO, but it is
 /// enforced by a shape-preserving channel-separation pass, NOT by penalising it in
 /// the shape optimizer (that just trades an overlap for a forbidden Z).
-#[allow(dead_code)] // scaffolding: the channel-separation pass / its assert will use this
 pub(crate) fn total_overlaps(routes: &[Vec<Point>]) -> usize {
     let mut n = 0usize;
     for i in 0..routes.len() {
@@ -595,6 +598,142 @@ pub(crate) fn total_overlaps(routes: &[Vec<Point>]) -> usize {
         }
     }
     n
+}
+
+/// Minimum clear gap between two parallel channels — an arrowhead wide — so two
+/// lines sharing a band never touch (the hard no-overlap rule).
+const CHANNEL_GAP: f64 = 12.0;
+
+/// The free conjoining (middle) segment of a clean 2-bend C/arch route
+/// `[pa, m1, m2, pb]`: its axis (the channel the line owns), the segment's extent
+/// along that axis, and the **outward** direction (the side the arch bulges, away
+/// from both mounts). `None` for non-arch shapes (straight/L, Z, or any route whose
+/// two end segments are NOT on the same side of the middle — only a true C/arch has
+/// a freely-shiftable channel).
+struct MiddleChannel {
+    horiz: bool, // middle segment runs horizontally (an over/under arch)
+    off: f64,    // the axis coordinate of the channel (y if horiz, else x)
+    lo: f64,     // extent of the middle segment along its run
+    hi: f64,
+    out: f64, // +1/-1: direction the arch bulges away from the surface
+}
+
+fn middle_channel(r: &[Point]) -> Option<MiddleChannel> {
+    if r.len() != 4 {
+        return None; // only clean 2-bend C/arch routes have a free middle channel
+    }
+    let (pa, m1, m2, pb) = (&r[0], &r[1], &r[2], &r[3]);
+    if (m1.y - m2.y).abs() < EPS && (m1.x - m2.x).abs() >= EPS {
+        // horizontal middle at y = m1.y; both stems must hang off the SAME side
+        let off = m1.y;
+        let (da, db) = (pa.y - off, pb.y - off);
+        if da.abs() < EPS || db.abs() < EPS || da.signum() != db.signum() {
+            return None; // grazes the channel or is a Z — not a true arch
+        }
+        Some(MiddleChannel { horiz: true, off, lo: m1.x.min(m2.x), hi: m1.x.max(m2.x), out: -da.signum() })
+    } else if (m1.x - m2.x).abs() < EPS && (m1.y - m2.y).abs() >= EPS {
+        let off = m1.x;
+        let (da, db) = (pa.x - off, pb.x - off);
+        if da.abs() < EPS || db.abs() < EPS || da.signum() != db.signum() {
+            return None;
+        }
+        Some(MiddleChannel { horiz: false, off, lo: m1.y.min(m2.y), hi: m1.y.max(m2.y), out: -da.signum() })
+    } else {
+        None
+    }
+}
+
+/// Rebuild a 2-bend arch route with its channel shifted to `off` (its mounts and
+/// shape class unchanged — only the conjoining segment moves, stems stretch).
+fn reseat_middle(r: &mut [Point], horiz: bool, off: f64) {
+    if horiz {
+        r[1].y = off;
+        r[2].y = off;
+    } else {
+        r[1].x = off;
+        r[2].x = off;
+    }
+}
+
+/// Shape-preserving channel separation — the seed of the maintainer's track model.
+/// Two arch routes whose conjoining segments share a channel (collinear AND
+/// overlapping) violate the hard no-overlap rule. Cluster them by that exact
+/// overlap, then nest concentrically: the **widest-span** arch owns the OUTER
+/// channel, narrower arches nest inside it, each ≥ [`CHANNEL_GAP`] apart. Only the
+/// free middle offset moves (stems lengthen), so the §0 shape class is untouched —
+/// no bend is added, and a properly contained bundle gains no crossing. Penalising
+/// overlap in the optimizer would instead buy separation with forbidden Z's; this
+/// pass keeps the shapes and separates the geometry.
+fn separate_channels(routes: &mut [Vec<Point>]) {
+    let mids: Vec<(usize, MiddleChannel)> = routes
+        .iter()
+        .enumerate()
+        .filter_map(|(i, r)| middle_channel(r).map(|m| (i, m)))
+        .collect();
+    if mids.len() < 2 {
+        return;
+    }
+    // Union-find clusters of arches sharing a channel (collinear + overlapping
+    // middles — exactly what `segments_overlap` detects, the overlap metric itself).
+    let n = mids.len();
+    let mut parent: Vec<usize> = (0..n).collect();
+    fn find(parent: &mut [usize], x: usize) -> usize {
+        let mut r = x;
+        while parent[r] != r {
+            r = parent[r];
+        }
+        let mut c = x;
+        while parent[c] != c {
+            let next = parent[c];
+            parent[c] = r;
+            c = next;
+        }
+        r
+    }
+    for i in 0..n {
+        for j in (i + 1)..n {
+            let mid = |k: usize| {
+                let (a, b) = (&routes[mids[k].0][1], &routes[mids[k].0][2]);
+                (a.clone(), b.clone())
+            };
+            let (a0, a1) = mid(i);
+            let (b0, b1) = mid(j);
+            if crate::route_model::segments_overlap(&a0, &a1, &b0, &b1) {
+                let (ri, rj) = (find(&mut parent, i), find(&mut parent, j));
+                parent[ri] = rj;
+            }
+        }
+    }
+    let mut clusters: HashMap<usize, Vec<usize>> = HashMap::new();
+    for i in 0..n {
+        let root = find(&mut parent, i);
+        clusters.entry(root).or_default().push(i);
+    }
+    let mut roots: Vec<usize> = clusters.keys().copied().collect();
+    roots.sort_unstable();
+    for root in roots {
+        let members = &clusters[&root];
+        if members.len() < 2 {
+            continue;
+        }
+        // Nest narrow → wide. The narrowest keeps the innermost (current) channel;
+        // each wider arch is pushed one CHANNEL_GAP further out than the previous.
+        let mut order: Vec<usize> = members.clone();
+        order.sort_by(|&a, &b| {
+            let wa = mids[a].1.hi - mids[a].1.lo;
+            let wb = mids[b].1.hi - mids[b].1.lo;
+            wa.partial_cmp(&wb).unwrap_or(Ordering::Equal).then(mids[a].0.cmp(&mids[b].0))
+        });
+        let out = mids[order[0]].1.out;
+        let mut off = mids[order[0]].1.off;
+        for (k, &mi) in order.iter().enumerate() {
+            let (ri, m) = (&mids[mi].0, &mids[mi].1);
+            if k > 0 {
+                off += out * CHANNEL_GAP;
+                reseat_middle(&mut routes[*ri], m.horiz, off);
+            }
+        }
+    }
 }
 
 /// Weighted total cost of a routing: `W_BEND·Σ shape-cost + W_CROSS·crossings`.
@@ -1081,6 +1220,47 @@ mod tests {
             0,
             "facing pair must straighten to 0 bends, got {:?}",
             routes[0]
+        );
+    }
+
+    #[test]
+    fn two_like_facing_arches_on_a_plane_own_distinct_channels() {
+        // Two like-facing (Top,Top) edges between coplanar nodes both arch over the
+        // top. Each is the sole edge on its own surface, so both get the same fan
+        // fraction → the same crossbar stem → the same channel. With overlapping
+        // x-spans their crossbars coincide, violating the hard no-overlap rule. The
+        // builder must separate them onto distinct, concentrically-nested channels
+        // WITHOUT re-bending (still clean arches, zero doublings-back).
+        // A→B spans the wider top channel; C→D nests inside it (its mounts fall
+        // within A→B's crossbar x-range), the real FlowForge shape ([435,900] ⊃
+        // [480,855]). Concentric nesting (wider arch outermost) separates them with
+        // no new crossing.
+        let nodes = vec![
+            Rect { x: 0.0, y: 0.0, width: 100.0, height: 50.0 },   // A  top-centre x=50
+            Rect { x: 500.0, y: 0.0, width: 100.0, height: 50.0 }, // B  top-centre x=550
+            Rect { x: 100.0, y: 0.0, width: 100.0, height: 50.0 }, // C  top-centre x=150
+            Rect { x: 400.0, y: 0.0, width: 100.0, height: 50.0 }, // D  top-centre x=450
+        ];
+        let edges = vec![Edge { a: 0, b: 1 }, Edge { a: 2, b: 3 }];
+        let sides = vec![Some((Side::Top, Side::Top)), Some((Side::Top, Side::Top))];
+        let detour = vec![Vec::new(), Vec::new()];
+        let routes = build_slotted_with_sides(&nodes, &edges, &sides, &detour);
+        for r in &routes {
+            assert!(!r.is_empty(), "both arches build");
+            assert!(!crate::route_model::doubles_back(r), "shape preserved (no dogleg)");
+            assert_eq!(crate::route_model::bends(r), 2, "still a clean 2-bend arch");
+        }
+        assert_eq!(
+            total_overlaps(&routes),
+            0,
+            "two like-facing arches must not share a channel; routes = {:?}",
+            routes
+        );
+        assert_eq!(
+            total_crossings(&routes),
+            0,
+            "concentric nesting adds no crossing; routes = {:?}",
+            routes
         );
     }
 
