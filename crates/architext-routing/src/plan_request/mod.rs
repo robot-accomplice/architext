@@ -469,6 +469,7 @@ pub fn build_structural_plan_request(
         score_edge_proximity: false,
         style: style.to_string(),
         diagnostics: false,
+        force_engine: false,
     };
 
     StructuralPlanRequest { key, plan_diagram_input, edge_labels }
@@ -554,5 +555,6 @@ fn build_plan_diagram_input(
         score_edge_proximity: false,
         style: style.to_string(),
         diagnostics: false,
+        force_engine: false,
     }
 }

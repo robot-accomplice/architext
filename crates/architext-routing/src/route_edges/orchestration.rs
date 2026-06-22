@@ -85,6 +85,11 @@ pub struct RouteEdgesInput {
     pub grid_route_max_points: usize,
     pub grid_route_max_expansions: usize,
     pub score_edge_proximity: bool,
+    /// Force the legacy candidate engine (incl. close-parallel separation) for
+    /// THIS plan, regardless of the global model default. Used by engine-anchored
+    /// tests/goldens so they stay race-free in a parallel test binary; production
+    /// leaves it `false` (the model is the default — see `routing_model_enabled`).
+    pub force_engine: bool,
 }
 
 /// A node rect with optional `fixedPorts` flag and optional per-side anchor
@@ -1051,12 +1056,13 @@ pub fn route_edges_with_stats(
     let endpoint_adjusted = enforce_endpoint_stubs(spread, &plan_rels, &node_rects_plain);
 
     // onPhase("Separating parallel runs")
-    // In model-review mode (ARCHITEXT_ROUTING_MODEL) the deterministic model
-    // replaces ALL route geometry downstream (apply_model_routes), so this engine
-    // separation pass — the dense-flow hotspot, historically ~100s of a ~120s plan —
-    // is pure waste and was wedging the viewer for minutes on dense flows. Skip it in
-    // that mode only; production routing (flag unset) is byte-for-byte unchanged.
-    let separated_routes = if std::env::var("ARCHITEXT_ROUTING_MODEL").is_ok() {
+    // With the deterministic model as the default, it replaces ALL route geometry
+    // downstream (apply_model_routes) and runs its own one-pass channel separation,
+    // so this engine separation pass — the dense-flow hotspot, historically ~100s of
+    // a ~120s plan — is pure waste and wedged the viewer for minutes on dense flows.
+    // Skip it whenever the model is active; only the `ARCHITEXT_ROUTING_ENGINE=1`
+    // fallback runs it (and is then byte-for-byte the legacy engine).
+    let separated_routes = if crate::routing_model_enabled() && !input.force_engine {
         endpoint_adjusted
     } else {
         use crate::route_edges::{separate_close_parallel_routes, SeparationRelationship};
@@ -1440,6 +1446,7 @@ mod tests {
             grid_route_max_points: 1600,
             grid_route_max_expansions: 4000,
             score_edge_proximity: false,
+            force_engine: true,
         }
     }
 

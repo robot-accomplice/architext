@@ -50,6 +50,17 @@ pub fn clean_candidates(a: &Rect, b: &Rect, obstacles: &[Rect]) -> Vec<Candidate
                     out.push(Candidate { points, side_a: sa, side_b: sb });
                 }
             }
+            // FACING-OPPOSITE offset surfaces (e.g. right→left, different rows) have
+            // no clean straight/L — `build_path_01` returns None above. Their clean
+            // shape is a 2-bend C jog with perpendicular stems off both faces (the
+            // stem is the §0 exception to the Z rule). Offer it so a facing-offset
+            // edge has a clean candidate instead of dropping to a grazing detour.
+            if sa != sb && super::place::is_facing(sa, sb) {
+                let c = super::place::build_c(sa, &pa, &pb, 0.5);
+                if clears(&c, obstacles) {
+                    out.push(Candidate { points: c, side_a: sa, side_b: sb });
+                }
+            }
         }
     }
     out

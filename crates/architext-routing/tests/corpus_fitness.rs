@@ -272,6 +272,11 @@ fn plan_corpus_flow(flow: &CorpusFlow, views: &[View]) -> (FlowMetrics, FlowPerf
         grid_route_max_points: 600,
         grid_route_max_expansions: 3000,
         score_edge_proximity: false,
+        // This frozen-baseline gate guards the legacy ENGINE path (it calls
+        // route_edges_with_stats directly, not the model's plan_diagram overwrite).
+        // Force the engine so the baseline stays meaningful now that the model is
+        // the production default; the model has its own gate (audit_model corpus test).
+        force_engine: true,
     };
 
     let (routes, stats) = route_edges_with_stats(&route_input);

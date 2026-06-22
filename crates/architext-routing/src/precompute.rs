@@ -615,7 +615,8 @@ mod tests {
         let geoms = model_geometry(&data_dir, &config).expect("model_geometry");
         assert!(!geoms.is_empty(), "corpus produced at least one (flow, view)");
         for g in &geoms {
-            let a = audit_routes(&g.routes);
+            let rects: Vec<crate::model::Rect> = g.nodes.iter().map(|(_, r)| r.clone()).collect();
+            let a = audit_routes(&g.routes, &rects);
             assert!(
                 a.is_clean(),
                 "{} / {}: forbidden artifacts present: {:?}",

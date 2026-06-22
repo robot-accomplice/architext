@@ -51,7 +51,8 @@ fn main() {
     let mut tight = Class { label: "channel buffer < arrowhead (track-model target)", hits: vec![] };
 
     for g in &geoms {
-        let a = audit_routes(&g.routes);
+        let rects: Vec<architext_routing::model::Rect> = g.nodes.iter().map(|(_, r)| r.clone()).collect();
+        let a = audit_routes(&g.routes, &rects);
         let at = |edge: usize| format!("{} / {} edge#{}", g.flow_id, g.view_id, edge);
         let pair = |i: usize, j: usize| format!("{} / {} edges#{},{}", g.flow_id, g.view_id, i, j);
         dogleg.hits.extend(a.doglegs.iter().map(|&e| at(e)));

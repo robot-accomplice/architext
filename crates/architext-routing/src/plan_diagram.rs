@@ -146,6 +146,11 @@ pub struct PlanDiagramInput {
     pub style: String,
     #[serde(default)]
     pub diagnostics: bool,
+    /// Force the legacy candidate engine for THIS plan (default `false` → the
+    /// deterministic model). Engine-anchored goldens set it so they stay race-free
+    /// in the parallel lib-test binary without touching the global env switch.
+    #[serde(default)]
+    pub force_engine: bool,
 }
 
 fn default_style() -> String {
@@ -710,6 +715,7 @@ pub fn plan_diagram_with_stats(
         canvas_height,
         margin_y,
         score_edge_proximity: input.score_edge_proximity,
+        force_engine: input.force_engine,
         // Match JS defaults: these are not in the planInput wire shape
         grid_route_max_points: 600,
         grid_route_max_expansions: 3000,
@@ -717,12 +723,13 @@ pub fn plan_diagram_with_stats(
 
     let (mut routed_edges, plan_stats) = route_edges_with_stats(&route_edges_input);
 
-    // REVIEW HOOK (post-cutover, net-new): when `ARCHITEXT_ROUTING_MODEL` is set,
-    // overwrite each route's geometry with the deterministic model's polyline so
-    // the live viewer renders the model's routing instead of the engine's. Off by
-    // default → zero parity impact; used only to serve the FlowForge corpus for a
-    // visual verdict. Labels/markers downstream re-derive from the new geometry.
-    if std::env::var("ARCHITEXT_ROUTING_MODEL").is_ok() {
+    // DEFAULT routing path: overwrite each route's geometry with the deterministic
+    // model's polyline. The model carries a permanent forbidden-artifact gate (no
+    // doglegs / Z-staircases / non-orthogonal segments), so this is what kills
+    // doublebacks and step formations across every plan() diagram (flows, C4,
+    // deployment). Labels/markers downstream re-derive from the new geometry.
+    // `ARCHITEXT_ROUTING_ENGINE=1` falls back to the legacy candidate engine.
+    if crate::routing_model_enabled() && !input.force_engine {
         apply_model_routes(&route_edges_input, &mut routed_edges);
     }
 
@@ -961,8 +968,12 @@ mod tests {
     #[test]
     fn plan_diagram_fresh_install_golden() {
         let input_json = include_str!("../tests/fixtures/plan-diagram-input-fresh-install.json");
-        let input: PlanDiagramInput = serde_json::from_str(input_json)
+        let mut input: PlanDiagramInput = serde_json::from_str(input_json)
             .expect("deserialize golden input");
+        // This golden pins the ENGINE geometry (JS-parity anchor). The model is the
+        // production default, so force the engine here to keep the anchor meaningful
+        // and race-free in the parallel lib-test binary.
+        input.force_engine = true;
 
         let plan = plan_diagram(&input);
 

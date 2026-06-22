@@ -872,6 +872,40 @@
           ]
         }
       ]
+    },
+    {
+      "id": "ax-fresh-install-dataflow",
+      "name": "Architext fresh-install (stem scenario)",
+      "type": "dataflow",
+      "summary": "Lifted from architext: facing-offset write-starter-data edge with both orthogonal-L escapes blocked (schema-validator below the CLI, target-repository above target-data-files) and a competing right-face write-metadata edge \u2014 the \u00a70 stem pathology.",
+      "lanes": [
+        {
+          "id": "actors",
+          "name": "Actors",
+          "nodeIds": [
+            "maintainer"
+          ]
+        },
+        {
+          "id": "package-owned",
+          "name": "Package-Owned",
+          "nodeIds": [
+            "architext-cli",
+            "schema-validator",
+            "package-schemas",
+            "cli-adapters",
+            "lifecycle-domain"
+          ]
+        },
+        {
+          "id": "repo-owned",
+          "name": "Repo-Owned",
+          "nodeIds": [
+            "target-repository",
+            "target-data-files"
+          ]
+        }
+      ]
     }
   ]
 }
