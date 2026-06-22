@@ -8,7 +8,8 @@
 
 use std::collections::{HashMap, HashSet};
 
-use architext_routing::model::{Plan, Rect};
+use architext_routing::model::{Plan, Point, Rect};
+use architext_routing::plan_request::DECISION_STEM_PREFIX;
 use leptos::*;
 
 use super::edge::{DiagramEdge, EdgeView, ARROWHEAD_ID};
@@ -22,12 +23,34 @@ use crate::data::models::{Flow, Node, View as DataView};
 /// The fully-resolved render model for one diagram: everything the renderers
 /// need, derived once from the plan + dataset (no per-element lookups in the
 /// view closures).
+/// A decision diamond ready to render: its rect, the host component's role color
+/// (tint), and the annotation — the decision step's `action`, i.e. WHAT is being
+/// decided (viewer/DESIGN.md "Flow decision diamonds").
+#[derive(Clone)]
+pub struct DecisionView {
+    pub rect: Rect,
+    pub role_var: String,
+    pub annotation: Option<String>,
+}
+
+/// A decision branch's outcome label (e.g. `valid` / `invalid`): the text the
+/// branch represents, anchored just outside the diamond on that branch line.
+/// `step_id` is the branch step so it highlights when that step is selected.
+#[derive(Clone)]
+pub struct OutcomeLabel {
+    pub x: f64,
+    pub y: f64,
+    pub text: String,
+    pub step_id: String,
+}
+
 #[derive(Clone)]
 pub struct RenderModel {
     pub canvas_width: f64,
     pub canvas_height: f64,
     pub nodes: Vec<NodeView>,
-    pub decisions: Vec<(Rect, String)>,
+    pub decisions: Vec<DecisionView>,
+    pub outcome_labels: Vec<OutcomeLabel>,
     pub edges: Vec<EdgeView>,
     pub labels: Vec<LabelView>,
     /// Top-left anchor of the "NOT IN THIS FLOW" overline above the parked
@@ -104,19 +127,39 @@ pub fn build_render_model(
                 let component_type = flow
                     .map(|f| decision_component_type(id, f, nodes_by_id))
                     .unwrap_or("external");
-                decisions.push((rect.clone(), role_color_var(component_type)));
+                // The annotation — what is being decided — is the decision step's
+                // `action`, looked up from the flow by the diamond's step id.
+                let annotation = flow.and_then(|f| decision_annotation(id, f));
+                decisions.push(DecisionView {
+                    rect: rect.clone(),
+                    role_var: role_color_var(component_type),
+                    annotation,
+                });
             }
         }
     }
 
-    // Edges: the `d`-string verbatim, with the resolved kind.
+    // Branch outcome labels (e.g. `valid` / `invalid`): one per flow step that
+    // carries an `outcome`, anchored just outside the diamond on that branch.
+    let outcome_labels = flow
+        .map(|f| build_outcome_labels(f, plan))
+        .unwrap_or_default();
+
+    // Edges: the `d`-string verbatim, with the resolved kind. A decision-stem
+    // route (`decision-stem:<step>`) is not a flow step, so it is not in
+    // `kind_by_step`; detect it by its id prefix and render it as a Stem (no
+    // arrowhead).
     let edges = plan
         .routes
         .iter()
         .map(|(id, route)| EdgeView {
             id: id.clone(),
             d: route.d.clone(),
-            kind: kind_by_step.get(id.as_str()).copied().unwrap_or(EdgeKind::Process),
+            kind: if id.starts_with(DECISION_STEM_PREFIX) {
+                EdgeKind::Stem
+            } else {
+                kind_by_step.get(id.as_str()).copied().unwrap_or(EdgeKind::Process)
+            },
         })
         .collect();
 
@@ -195,6 +238,7 @@ pub fn build_render_model(
         canvas_height: plan.canvas_height,
         nodes: node_views,
         decisions,
+        outcome_labels,
         edges,
         labels,
         parked_label,
@@ -385,6 +429,68 @@ fn edge_label_from_flow(edge_id: &str, flow: &Flow) -> Option<String> {
         .map(|(i, s)| format!("{}. {}", i + 1, s.action))
 }
 
+/// The decision diamond's annotation — WHAT is being decided. This is the
+/// `action` of the `decision`-kind step the diamond was built from
+/// (`decision:<stepId>` → step.action), e.g. `"validateStarterModel"`. The full
+/// exposition still lives in the steps panel; this is the on-diagram caption.
+fn decision_annotation(decision_id: &str, flow: &Flow) -> Option<String> {
+    let step_id = decision_id.strip_prefix("decision:").unwrap_or(decision_id);
+    flow.steps
+        .iter()
+        .find(|s| s.id == step_id)
+        .map(|s| s.action.clone())
+}
+
+/// Distance (canvas px) from a branch's diamond-tip start at which to anchor its
+/// outcome label, measured ALONG the branch's first segment so the label sits
+/// just outside the diamond on the line it belongs to.
+const OUTCOME_LABEL_OFFSET: f64 = 18.0;
+
+/// Build the branch outcome labels: one per flow step carrying an `outcome`,
+/// anchored `OUTCOME_LABEL_OFFSET` px along that branch's route from the diamond
+/// tip. Steps with no routed edge (or a degenerate route) are skipped.
+fn build_outcome_labels(flow: &Flow, plan: &Plan) -> Vec<OutcomeLabel> {
+    flow.steps
+        .iter()
+        .filter_map(|s| {
+            let outcome = s.outcome.as_ref()?;
+            let route = plan.routes.get(&s.id)?;
+            let (x, y) = point_along(&route.points, OUTCOME_LABEL_OFFSET)?;
+            // Highlight with the DECISION step, not the branch: a branch shares
+            // its decision's selection (and the steps panel collapses branches
+            // under it), so selecting the decision lights the whole cluster —
+            // stem + every outcome label — together (viewer/DESIGN.md).
+            let decision_step_id = flow
+                .steps
+                .iter()
+                .find(|d| d.kind.as_deref() == Some("decision") && d.to == s.from)
+                .map(|d| d.id.clone())
+                .unwrap_or_else(|| s.id.clone());
+            Some(OutcomeLabel { x, y, text: outcome.clone(), step_id: decision_step_id })
+        })
+        .collect()
+}
+
+/// The point `dist` canvas-px along a polyline from its first vertex. Returns the
+/// last vertex if `dist` runs past the end, and `None` for a polyline with fewer
+/// than two points.
+fn point_along(points: &[Point], dist: f64) -> Option<(f64, f64)> {
+    if points.len() < 2 {
+        return None;
+    }
+    let mut remaining = dist;
+    for seg in points.windows(2) {
+        let (a, b) = (&seg[0], &seg[1]);
+        let len = ((b.x - a.x).powi(2) + (b.y - a.y).powi(2)).sqrt();
+        if len >= remaining {
+            let t = if len == 0.0 { 0.0 } else { remaining / len };
+            return Some((a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t));
+        }
+        remaining -= len;
+    }
+    points.last().map(|p| (p.x, p.y))
+}
+
 /// The fluid diagram SVG. `pan_x`/`pan_y`/`zoom` drive the inner transform.
 #[component]
 pub fn DiagramSvg(
@@ -426,6 +532,7 @@ pub fn DiagramSvg(
 
     let node_items = model.nodes.clone();
     let decision_items = model.decisions.clone();
+    let outcome_items = model.outcome_labels.clone();
     let edge_items = model.edges.clone();
     let label_items = model.labels.clone();
     let parked_label = model.parked_label;
@@ -449,9 +556,16 @@ pub fn DiagramSvg(
                 // Z-order: edges, then labels, then decisions, then node cards on top.
                 <g class="flow-edges">
                     {edge_items.into_iter().map(|e| {
-                        let id = e.id.clone();
+                        // A stem's route id is `decision-stem:<step>`; it should
+                        // light up with its decision STEP, so match on the
+                        // stripped step id. Other edges match their route id
+                        // (== step id) directly.
+                        let match_id = e.id
+                            .strip_prefix(DECISION_STEM_PREFIX)
+                            .unwrap_or(&e.id)
+                            .to_string();
                         let is_selected = Signal::derive(move || {
-                            selected_step.get().as_deref() == Some(id.as_str())
+                            selected_step.get().as_deref() == Some(match_id.as_str())
                         });
                         view! { <DiagramEdge edge=e selected=is_selected/> }
                     }).collect_view()}
@@ -466,8 +580,29 @@ pub fn DiagramSvg(
                     }).collect_view()}
                 </g>
                 <g class="flow-decisions">
-                    {decision_items.into_iter().map(|(rect, role)| view! {
-                        <DecisionDiamond rect=rect role_var=role/>
+                    {decision_items.into_iter().map(|d| view! {
+                        <DecisionDiamond rect=d.rect role_var=d.role_var annotation=d.annotation/>
+                    }).collect_view()}
+                </g>
+                // Branch outcome labels (e.g. `valid` / `invalid`), each anchored
+                // just outside the diamond on its branch line. Lights up with the
+                // `--accent` STATE when its branch step is selected.
+                <g class="flow-outcomes">
+                    {outcome_items.into_iter().map(|o| {
+                        let sid = o.step_id.clone();
+                        let is_selected = Signal::derive(move || {
+                            selected_step.get().as_deref() == Some(sid.as_str())
+                        });
+                        view! {
+                            <text
+                                class="flow-outcome"
+                                class=("flow-outcome--active", move || is_selected.get())
+                                x=o.x
+                                y=o.y
+                            >
+                                {o.text}
+                            </text>
+                        }
                     }).collect_view()}
                 </g>
                 // "NOT IN THIS FLOW" overline above the parked cluster. Drawn

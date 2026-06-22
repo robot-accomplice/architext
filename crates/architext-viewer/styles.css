@@ -1168,6 +1168,49 @@ button.c4-breadcrumb__crumb:hover {
   fill: var(--canvas-black);
   stroke-width: 1.5;
 }
+/* The anchoring STEM: host node → diamond. A SOLID muted tether (no arrowhead —
+   the renderer omits the marker), thinner than a flow edge so it reads as an
+   anchor, not a step. Constant screen-space stroke like other edges. */
+.flow-edge--stem {
+  stroke: var(--line-strong);
+  stroke-width: 1.25;
+}
+/* Decision annotation — WHAT is being decided — captioned beside the diamond.
+   A --canvas-black halo keeps it legible where it overlaps branch lines. */
+.flow-decision__annotation {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  fill: var(--muted);
+  text-anchor: middle;
+  dominant-baseline: text-after-edge;
+  paint-order: stroke;
+  stroke: var(--canvas-black);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+/* Branch outcome label (e.g. `valid` / `invalid`): the result a branch
+   represents, anchored just outside the diamond on its line. Same halo idiom. */
+.flow-outcome {
+  font-family: var(--font-ui);
+  font-size: 10px;
+  font-weight: 600;
+  fill: var(--muted);
+  text-anchor: middle;
+  dominant-baseline: middle;
+  paint-order: stroke;
+  stroke: var(--canvas-black);
+  stroke-width: 3px;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  pointer-events: none;
+}
+/* Selected branch step → its outcome label takes the --accent STATE (rule 1),
+   mirroring the active edge + number pill. */
+.flow-outcome--active {
+  fill: var(--accent);
+}
 
 /* ── Node cards (8px radius; 2px role top-bar; name + type chip) ──────────── */
 .flow-node { cursor: pointer; }

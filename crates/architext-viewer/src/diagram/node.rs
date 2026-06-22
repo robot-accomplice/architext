@@ -202,11 +202,24 @@ pub fn DiagramNode(
     }
 }
 
+/// Gap (canvas px) between the diamond's top tip and its annotation caption.
+/// The caption sits ABOVE the diamond because decision branches only ever exit
+/// the left/right/bottom tips (see `decision_branch.rs`) — never the top, which
+/// carries the stem — so an above-centered caption can't collide with a branch
+/// or its outcome label.
+const ANNOTATION_GAP: f64 = 8.0;
+
 /// Render a decision diamond (an extra decision-node rect, `fixedPorts`). It is
 /// a rotated square centered on the rect; tinted with the affiliated component's
-/// role color so the branch point reads as part of that node's lane.
+/// role color so the branch point reads as part of that node's lane. The
+/// `annotation` (the decision step's `action` — WHAT is being decided) renders
+/// as a caption beside the diamond and as a hover title.
 #[component]
-pub fn DecisionDiamond(rect: Rect, #[prop(into)] role_var: String) -> impl IntoView {
+pub fn DecisionDiamond(
+    rect: Rect,
+    #[prop(into)] role_var: String,
+    annotation: Option<String>,
+) -> impl IntoView {
     let cx = rect.x + rect.width / 2.0;
     let cy = rect.y + rect.height / 2.0;
     let r = rect.width / 2.0;
@@ -218,8 +231,16 @@ pub fn DecisionDiamond(rect: Rect, #[prop(into)] role_var: String) -> impl IntoV
         cy + r,
         cx - r,
     );
+    let caption_x = cx;
+    let caption_y = rect.y - ANNOTATION_GAP;
     view! {
-        <polygon class="flow-decision" points=points stroke=role_var></polygon>
+        <g class="flow-decision-group">
+            {annotation.clone().map(|a| view! { <title>{a}</title> })}
+            <polygon class="flow-decision" points=points stroke=role_var></polygon>
+            {annotation.map(|a| view! {
+                <text class="flow-decision__annotation" x=caption_x y=caption_y>{a}</text>
+            })}
+        </g>
     }
 }
 
