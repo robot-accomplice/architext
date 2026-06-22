@@ -10,6 +10,7 @@ use leptos::*;
 use std::rc::Rc;
 
 use crate::data::ArchitectureData;
+use crate::data::{models::RepoTreePayload, FetchError};
 use crate::selection;
 use crate::theme::{load_theme, Mode, Theme};
 
@@ -83,6 +84,14 @@ pub struct AppState {
     /// is the only navigation history the viewer keeps; modes that don't drill
     /// never read it.
     pub c4_trail: RwSignal<Vec<usize>>,
+
+    /// Cached `/api/repo-tree` result, fetched ONCE and shared across RepoTree
+    /// (re)mounts. The canvas center region remounts RepoTree several times as a
+    /// mode switch settles; an unguarded per-mount fetch fired ~5 concurrent
+    /// requests (5× the `git ls-files` cost on a real repo — the "slow initial
+    /// load"). `repo_tree_loading` guards same-tick mounts down to one fetch.
+    pub repo_tree: RwSignal<Option<Result<RepoTreePayload, FetchError>>>,
+    pub repo_tree_loading: RwSignal<bool>,
 }
 
 impl AppState {
@@ -118,6 +127,8 @@ impl AppState {
             theme: create_rw_signal(load_theme()),
             // Initial mode is Flows, which doesn't drill — start with no trail.
             c4_trail: create_rw_signal(Vec::new()),
+            repo_tree: create_rw_signal(None),
+            repo_tree_loading: create_rw_signal(false),
         }
     }
 

@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-7-4",
+  "currentReleaseId": "v1-7-5",
   "releases": [
     {
       "id": "v1-1-2",
@@ -599,10 +599,11 @@
       "id": "v1-7-4",
       "version": "1.7.4",
       "name": "Architext 1.7.4 Self-Contained Native Serve",
-      "status": "implementing",
-      "posture": "release-candidate",
+      "status": "completed",
+      "posture": "shipped",
       "targetDate": "2026-06-22",
-      "lastUpdated": "2026-06-22T07:00:00.000Z",
+      "releasedAt": "2026-06-22T07:26:48.000Z",
+      "lastUpdated": "2026-06-22T07:30:00.000Z",
       "summary": "Patch release fixing `architext serve` on a pure off-npm install. The viewer dist is now EMBEDDED into the native binary (rust-embed in architext-serve), so a binary installed by the curl installer or `architext update` is self-contained — it no longer depends on a co-located <exe_dir>/dist that the GitHub-release download lacked. Latent since the 1.7.2 native-install feature; surfaced when serving from a binary after leaving npm. On-disk dist (dev / ARCHITEXT_VIEWER_DIST override / npm co-located) still wins; the release pipeline builds the viewer before compiling the CLI so the embed is populated.",
       "counts": {
         "features": 0,
@@ -615,6 +616,27 @@
         "stretch": 0
       },
       "file": "v1-7-4.json"
+    },
+    {
+      "id": "v1-7-5",
+      "version": "1.7.5",
+      "name": "Architext 1.7.5 Single Routing Model + npm Phase-Out + Self-Model Refresh",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-06-22",
+      "lastUpdated": "2026-06-22T15:45:00.000Z",
+      "summary": "Consolidation release. Routing is now exactly two routers and only two: one deterministic node-based MODEL for every box-and-line diagram (flows, system map, C4, deployment, dataflow, risk overlay) and the separate sequential router for sequence diagrams. The legacy candidate-based engine was physically removed (~13,300 LOC) — plan_diagram used to run it and then overwrite every route with the model, pure wasted work, which is why structural views spun for seconds; with it gone they render instantly and route geometry is byte-identical. npm continues to be phased out: the redundant per-platform npm dist co-location is dropped (the viewer is embedded in the binary — completing the item deferred from 1.7.4), and the npm 'root scripts' convenience feature plus the `migrate` command alias are removed. `init` joins `sync`/`install` as a synonym. The Architext self-model (this repo's own architecture data) was refreshed from JS-era source paths and npm verification to the real Rust crates. A wall-time guard now backs the corpus quality gate.",
+      "counts": {
+        "features": 1,
+        "bugFixes": 1,
+        "workstreams": 4,
+        "blockers": 0,
+        "complete": 7,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-7-5.json"
     }
   ]
 }

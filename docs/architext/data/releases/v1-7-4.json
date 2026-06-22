@@ -2,12 +2,13 @@
   "id": "v1-7-4",
   "version": "1.7.4",
   "name": "Architext 1.7.4 Self-Contained Native Serve",
-  "status": "implementing",
-  "posture": "release-candidate",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Patch release fixing `architext serve` on a pure off-npm install. The viewer dist is now EMBEDDED into the native binary (rust-embed in architext-serve), so a binary installed by the curl installer or `architext update` is self-contained — it no longer depends on a co-located <exe_dir>/dist that the GitHub-release download lacked. Latent since the 1.7.2 native-install feature; surfaced when serving from a binary after leaving npm. On-disk dist (dev / ARCHITEXT_VIEWER_DIST override / npm co-located) still wins; the release pipeline builds the viewer before compiling the CLI so the embed is populated.",
   "targetDate": "2026-06-22",
-  "lastUpdated": "2026-06-22T07:00:00.000Z",
-  "updateSource": "Fix verified locally: a release binary (16.3 MB, +2.7 MB from the embed) serves the full viewer with no on-disk dist (ARCHITEXT_VIEWER_DIST pointed at a nonexistent dir) — index.html, the 2.46 MB wasm, and CSS all 200, and the app boots and renders flows in a real browser. release-binaries.yml + publish.yml now build the viewer dist and place it before the CLI compiles (with a pre-compile presence check). Pending merge to develop -> main + just github-release.",
+  "releasedAt": "2026-06-22T07:26:48.000Z",
+  "lastUpdated": "2026-06-22T07:30:00.000Z",
+  "updateSource": "Shipped to npm 2026-06-22 (1.7.4 launcher + all five per-platform binaries, dist-tag latest=1.7.4; publish.yml fully green incl. the new build-viewer job, roboticus-site dispatch, and the published-CLI smoke). DEFINITIVELY verified against the SHIPPED artifact: downloaded the published darwin-arm64 binary (16.3 MB) and ran its `serve` from a bare temp dir with no co-located dist — index.html 200 and the 2.46 MB wasm 200, served from the embedded viewer, no 'assets missing'. The user's exact off-npm scenario (native binary, serve) now works.",
   "scope": {
     "required": [
       {

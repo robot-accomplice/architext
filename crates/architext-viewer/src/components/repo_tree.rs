@@ -67,12 +67,21 @@ fn glyph_path(key: &str) -> &'static str {
 pub fn RepoTree() -> impl IntoView {
     let state = use_app_state();
 
-    // Fetch the file list once on mount via spawn_local into a plain signal.
-    // The dataset (nodes) is already loaded in AppState.
-    let repo = create_rw_signal::<RepoState>(None);
-    spawn_local(async move {
-        repo.set(Some(fetch_repo_tree().await));
-    });
+    // Read the SHARED, cached repo-tree (fetched ONCE across remounts). The
+    // canvas center region remounts this component several times as a mode
+    // switch settles; fetching per-mount fired ~5 concurrent /api/repo-tree
+    // requests (5× the git ls-files cost — the "slow initial load"). The loading
+    // guard, set synchronously, collapses same-tick remounts to a single fetch;
+    // later opens reuse the cached list instantly.
+    let repo = state.repo_tree;
+    let loading = state.repo_tree_loading;
+    if repo.get_untracked().is_none() && !loading.get_untracked() {
+        loading.set(true);
+        spawn_local(async move {
+            repo.set(Some(fetch_repo_tree().await));
+            loading.set(false);
+        });
+    }
 
     // Collapsed directory paths (expanded by default).
     let collapsed = create_rw_signal::<HashSet<String>>(HashSet::new());

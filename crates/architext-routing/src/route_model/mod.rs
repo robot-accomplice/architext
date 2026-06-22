@@ -218,12 +218,35 @@ fn two_bend_is_c(c: &[Point]) -> bool {
     }
 }
 
+/// A two-bend (4-corner) jog whose end segments are both proper perpendicular
+/// **stems** (≥ [`MIN_SURFACE_STEM`]). Stems are the SOLE exception to the Z rule:
+/// a facing-offset connection must jog, and the mandatory perpendicular escape off
+/// each surface is what keeps the line from collapsing onto the face. Such a
+/// stemmed jog is a legal shape, NOT a forbidden Z. (A jog with a stem shorter than
+/// the minimum is the grazing case the rule exists to forbid.) Used by the §0 gate
+/// ([`audit::audit_routes`]) to exempt the stemmed jog from the Z classification —
+/// NOT by `bend_score`, which keeps a facing jog at `Z_PENALTY` so the cost model
+/// still prefers a straight/L/C and only falls to the jog when nothing else clears
+/// (perturbing dense flows otherwise displaces routes into colliding detours).
+pub(crate) fn is_stemmed_jog(c: &[Point]) -> bool {
+    if c.len() != 4 {
+        return false;
+    }
+    let first = ((c[0].x - c[1].x).powi(2) + (c[0].y - c[1].y).powi(2)).sqrt();
+    let last = ((c[3].x - c[2].x).powi(2) + (c[3].y - c[2].y).powi(2)).sqrt();
+    first + EPS >= MIN_SURFACE_STEM && last + EPS >= MIN_SURFACE_STEM
+}
+
 /// §2.5 — the bend score β (the §0 shape ladder). **Shape, not bend count.**
 /// A **dogleg** (the line folds over itself, [`doubles_back`]) scores
 /// [`DOGLEG_PENALTY`] (1e9). Otherwise by shape: straight 0, L 1; a two-bend route
 /// is a **C** (2) when its end segments sit on the **same side** of the middle
 /// segment, else a **Z** ([`Z_PENALTY`], 99); any route with ≥3 bends is a
-/// **staircase** (also [`Z_PENALTY`], 99).
+/// **staircase** (also [`Z_PENALTY`], 99). NB: a facing jog keeps `Z_PENALTY` here
+/// (cost model) so a straight/L/C is always preferred and the jog is only chosen
+/// when nothing else clears; the §0 GATE separately exempts a *stemmed* jog from
+/// being forbidden (see [`is_stemmed_jog`]). Splitting it this way keeps the legal
+/// jog from displacing dense-flow routes into colliding detours.
 pub fn bend_score(points: &[Point]) -> f64 {
     if doubles_back(points) {
         return DOGLEG_PENALTY;
@@ -278,7 +301,15 @@ pub fn build_path_01(side_a: Side, p_a: &Point, side_b: Side, p_b: &Point) -> Op
     let nb = side_b.normal();
     let facing = (nb.0 + na.0).abs() < EPS && (nb.1 + na.1).abs() < EPS;
     if facing {
-        return Some(vec![p_a.clone(), p_b.clone()]); // collinear straight
+        // A clean straight only exists when the facing mounts are truly collinear.
+        // Offset facing mounts have no clean 0/1-bend shape (the two-point path is a
+        // diagonal); the clean form is a C jog, built by the caller via `build_c`.
+        let collinear = if side_a.is_horizontal() {
+            (p_a.y - p_b.y).abs() < EPS
+        } else {
+            (p_a.x - p_b.x).abs() < EPS
+        };
+        return if collinear { Some(vec![p_a.clone(), p_b.clone()]) } else { None };
     }
     // Perpendicular L. side_a horizontal ⇒ exit horizontally ⇒ corner (p_b.x, p_a.y);
     // side_a vertical ⇒ exit vertically ⇒ corner (p_a.x, p_b.y).

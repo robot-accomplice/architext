@@ -8,16 +8,21 @@
 // metrics and deterministic work counters so no routing change can silently make
 // a complex diagram worse — or do measurably more work — after the cutover.
 //
-// COVERAGE PARITY with the JS ratchet:
-//   Quality (GATED_METRICS): routes, bends, crossings, pairInternalCrossings,
-//     laneOrderViolations, closeParallelRuns, sharedSegments, repeatedCrossings.
-//   Perf (PERF_GATED_COUNTERS): edgesPlanned, cheapCandidateCount, gridRouteCalls.
-//   The JS Tier-2 machine-normalized wall-ratio is intentionally NOT ported: it is
-//   non-deterministic and the task forbids gating wall-clock in CI. The deterministic
-//   work counters above are the robust half and gate strictly with zero flake.
+// COVERAGE: the gate freezes the deterministic MODEL's quality metrics
+//   (GATED_METRICS): routes, bends, crossings, pairInternalCrossings,
+//   laneOrderViolations, closeParallelRuns, sharedSegments, repeatedCrossings,
+//   doglegs, length, bendScore. The model (`route_all_coordinated`) is the sole
+//   production router, so this gate now judges the geometry the viewer renders.
 //
-// Both gates judge ONE planning pass per flow (route_edges_with_stats), so quality
-// and perf can never observe different plans.
+//   The legacy candidate engine's deterministic work counters (edgesPlanned,
+//   cheapCandidateCount, gridRouteCalls) are GONE with the engine: the model
+//   exposes no per-plan work counters, so the perf half of the JS ratchet has no
+//   analogue here and is dropped. The quality gate above is the robust half and
+//   gates strictly with zero flake.
+//
+// Each flow is routed exactly as `apply_model_routes` (plan_diagram.rs) does:
+// build participant rects + edges, call `route_all_coordinated`, wrap each
+// polyline via `route_with_points`, then a hop pass via `render_orthogonal_route`.
 //
 // Re-baseline after an intentional, reviewed routing change:
 //   REGEN_CORPUS_BASELINE=1 cargo test -p architext-routing --test corpus_fitness
@@ -30,10 +35,14 @@ use architext_routing::plan_request::types::{View, ViewsFile};
 use architext_routing::route_diagnostics::{
     diagnose_planned_routes, DiagOptions, DiagPlan, DiagRelationship,
 };
+use architext_routing::route_edges::helpers::{render_orthogonal_route, route_with_points};
+use architext_routing::route_edges::types::RouteData;
 use architext_routing::route_edges::{
-    crossings_between, route_edges_with_stats, InputRelationship, NodeRect, RouteEdgesInput,
+    crossings_between, InputRelationship, NodeRect, RouteEdgesInput,
 };
+use architext_routing::route_model::place::{route_all_coordinated, Edge};
 use architext_routing::model::Rect;
+use std::collections::{HashMap, HashSet};
 use indexmap::{IndexMap, IndexSet};
 use serde::Deserialize;
 use serde_json::{json, Value};
@@ -104,24 +113,6 @@ impl FlowMetrics {
     }
 }
 
-/// The three gated work counters, mirroring the JS PERF_GATED_COUNTERS set.
-#[derive(Debug, Clone, PartialEq)]
-struct FlowPerf {
-    edges_planned: i64,
-    cheap_candidate_count: i64,
-    grid_route_calls: u64,
-}
-
-impl FlowPerf {
-    fn to_json(&self) -> Value {
-        json!({
-            "edgesPlanned": self.edges_planned,
-            "cheapCandidateCount": self.cheap_candidate_count,
-            "gridRouteCalls": self.grid_route_calls,
-        })
-    }
-}
-
 // ---------------------------------------------------------------------------
 // Corpus loading + the JS `renderedViewFor` projection rule
 // ---------------------------------------------------------------------------
@@ -176,7 +167,7 @@ fn rendered_view_for<'a>(flow: &CorpusFlow, views: &'a [View]) -> Option<&'a Vie
 // One planning pass → (quality metrics, work counters), mirroring JS planCorpusFlow
 // ---------------------------------------------------------------------------
 
-fn plan_corpus_flow(flow: &CorpusFlow, views: &[View]) -> (FlowMetrics, FlowPerf) {
+fn plan_corpus_flow(flow: &CorpusFlow, views: &[View]) -> FlowMetrics {
     let view = rendered_view_for(flow, views)
         .unwrap_or_else(|| panic!("No rendered view for corpus flow \"{}\"", flow.id));
 
@@ -274,7 +265,9 @@ fn plan_corpus_flow(flow: &CorpusFlow, views: &[View]) -> (FlowMetrics, FlowPerf
         score_edge_proximity: false,
     };
 
-    let (routes, stats) = route_edges_with_stats(&route_input);
+    // Route via the deterministic MODEL, mirroring `apply_model_routes`
+    // (plan_diagram.rs) so this gate freezes the geometry the viewer renders.
+    let routes = model_route(&route_input);
 
     // Aggregate crossings over every route pair (JS totalCrossings).
     let all: Vec<_> = routes.values().collect();
@@ -315,7 +308,7 @@ fn plan_corpus_flow(flow: &CorpusFlow, views: &[View]) -> (FlowMetrics, FlowPerf
     };
     let diag = diagnose_planned_routes(&diag_plan, &diag_relationships, &DiagOptions::default());
 
-    let metrics = FlowMetrics {
+    FlowMetrics {
         routes: diag.metrics.routes,
         bends: diag.metrics.bends,
         crossings: total_crossings,
@@ -327,16 +320,70 @@ fn plan_corpus_flow(flow: &CorpusFlow, views: &[View]) -> (FlowMetrics, FlowPerf
         close_parallel_runs: diag.metrics.close_parallel_runs,
         shared_segments: diag.metrics.shared_segments,
         repeated_crossings: diag.metrics.repeated_crossings,
-    };
-    let perf = FlowPerf {
-        edges_planned: stats.edges_planned,
-        cheap_candidate_count: stats.cheap_candidate_count,
-        grid_route_calls: stats.grid_route_calls,
-    };
-    (metrics, perf)
+    }
 }
 
-fn compute_corpus() -> (BTreeMap<String, FlowMetrics>, BTreeMap<String, FlowPerf>) {
+/// Route one corpus flow through the deterministic model, mirroring
+/// `apply_model_routes` in plan_diagram.rs exactly: obstacle set = flow
+/// participants, edges in relationship order, `route_all_coordinated`, then
+/// `route_with_points` per polyline, then a hop pass via
+/// `render_orthogonal_route` over the model-routed set.
+fn model_route(input: &RouteEdgesInput) -> IndexMap<String, RouteData> {
+    let mut node_ids: Vec<&str> = Vec::new();
+    let mut seen: HashSet<&str> = HashSet::new();
+    for rel in &input.relationships {
+        for id in [rel.from.as_str(), rel.to.as_str()] {
+            if input.node_rects.contains_key(id) && seen.insert(id) {
+                node_ids.push(id);
+            }
+        }
+    }
+    let idx: HashMap<&str, usize> =
+        node_ids.iter().enumerate().map(|(i, &id)| (id, i)).collect();
+    let rects: Vec<Rect> = node_ids.iter().map(|&id| input.node_rects[id].rect.clone()).collect();
+
+    let mut edges: Vec<Edge> = Vec::new();
+    let mut edge_rel_ids: Vec<String> = Vec::new();
+    for rel in &input.relationships {
+        if let (Some(&a), Some(&b)) = (idx.get(rel.from.as_str()), idx.get(rel.to.as_str())) {
+            edges.push(Edge { a, b });
+            edge_rel_ids.push(rel.id.clone());
+        }
+    }
+
+    let model_routes = route_all_coordinated(&rects, &edges);
+    let mut routed: IndexMap<String, RouteData> = IndexMap::new();
+    for (i, rel_id) in edge_rel_ids.iter().enumerate() {
+        let pts = &model_routes[i];
+        if pts.len() < 2 {
+            continue;
+        }
+        let base = RouteData {
+            d: String::new(),
+            points: Vec::new(),
+            controls: None,
+            samples: Vec::new(),
+            sample_bounds: Rect { x: 0.0, y: 0.0, width: 0.0, height: 0.0 },
+            bends: 0,
+            label_x: 0.0,
+            label_y: 0.0,
+            style: input.style.clone(),
+            extra: IndexMap::new(),
+        };
+        routed.insert(rel_id.clone(), route_with_points(&base, pts.clone(), None));
+    }
+
+    let hop_ids: Vec<String> =
+        edge_rel_ids.iter().filter(|id| routed.contains_key(*id)).cloned().collect();
+    let hop_routes: Vec<_> = hop_ids.iter().map(|id| routed[id].clone()).collect();
+    for (i, id) in hop_ids.iter().enumerate() {
+        let rebuilt = render_orthogonal_route(&hop_routes[i], &hop_routes, i);
+        routed.insert(id.clone(), rebuilt);
+    }
+    routed
+}
+
+fn compute_corpus() -> BTreeMap<String, FlowMetrics> {
     let views: Vec<View> = serde_json::from_value::<ViewsFile>(read_json("views.json"))
         .expect("views.json")
         .views;
@@ -345,24 +392,16 @@ fn compute_corpus() -> (BTreeMap<String, FlowMetrics>, BTreeMap<String, FlowPerf
         .flows;
 
     let mut metrics = BTreeMap::new();
-    let mut perf = BTreeMap::new();
     for flow in &flows {
-        let (m, p) = plan_corpus_flow(flow, &views);
-        metrics.insert(flow.id.clone(), m);
-        perf.insert(flow.id.clone(), p);
+        metrics.insert(flow.id.clone(), plan_corpus_flow(flow, &views));
     }
-    (metrics, perf)
+    metrics
 }
 
-fn snapshot_json(
-    metrics: &BTreeMap<String, FlowMetrics>,
-    perf: &BTreeMap<String, FlowPerf>,
-) -> Value {
+fn snapshot_json(metrics: &BTreeMap<String, FlowMetrics>) -> Value {
     let m: serde_json::Map<String, Value> =
         metrics.iter().map(|(k, v)| (k.clone(), v.to_json())).collect();
-    let p: serde_json::Map<String, Value> =
-        perf.iter().map(|(k, v)| (k.clone(), v.to_json())).collect();
-    json!({ "metrics": m, "perf": p })
+    json!({ "metrics": m })
 }
 
 // ---------------------------------------------------------------------------
@@ -370,9 +409,11 @@ fn snapshot_json(
 // ---------------------------------------------------------------------------
 
 #[test]
-fn corpus_fitness_and_perf_hold_the_frozen_baseline() {
-    let (metrics, perf) = compute_corpus();
-    let current = snapshot_json(&metrics, &perf);
+fn corpus_fitness_holds_the_frozen_baseline() {
+    let route_start = std::time::Instant::now();
+    let metrics = compute_corpus();
+    let route_ms = route_start.elapsed().as_secs_f64() * 1000.0;
+    let current = snapshot_json(&metrics);
 
     let path = baseline_path();
     if std::env::var("REGEN_CORPUS_BASELINE").is_ok() || !path.exists() {
@@ -389,7 +430,6 @@ fn corpus_fitness_and_perf_hold_the_frozen_baseline() {
     let baseline: Value =
         serde_json::from_str(&std::fs::read_to_string(&path).expect("read baseline")).unwrap();
     let base_metrics = baseline["metrics"].as_object().expect("baseline.metrics");
-    let base_perf = baseline["perf"].as_object().expect("baseline.perf");
 
     // Flow set must be identical.
     let cur_ids: Vec<&String> = metrics.keys().collect();
@@ -431,27 +471,14 @@ fn corpus_fitness_and_perf_hold_the_frozen_baseline() {
         quality_drift.join("\n  ")
     );
 
-    // --- Perf gate: work counters must not exceed the frozen baseline. ---
-    // Counters are exact for fixed inputs on any machine; any increase is a real
-    // volume regression, never flake. The bar only moves toward improvement.
-    let mut perf_drift = Vec::new();
-    for (flow, p) in &perf {
-        let was = &base_perf[flow];
-        let now = p.to_json();
-        for key in ["edgesPlanned", "cheapCandidateCount", "gridRouteCalls"] {
-            let w = was[key].as_i64().unwrap();
-            let n = now[key].as_i64().unwrap();
-            if n > w {
-                perf_drift.push(format!("{flow}.{key}: {w} -> {n} (REGRESSED)"));
-            }
-        }
-    }
+    // Catastrophic-regression guard (wall time). The deterministic model routes
+    // the whole corpus in tens of ms; this bound is deliberately generous so it
+    // never flakes on a slow/debug/CI runner, while still tripping if a
+    // super-linear pass is reintroduced (the removed legacy engine spent SECONDS
+    // on a single dense view). A coarse blow-up alarm, not a tight ratchet.
+    const MAX_CORPUS_ROUTE_MS: f64 = 1000.0;
     assert!(
-        perf_drift.is_empty(),
-        "planner work volume regressed beyond the perf baseline:\n  {}\n\
-         The perf bar only moves toward improvement. Fix the regression; if work \
-         legitimately decreased and you want to tighten the bar, run:\n  \
-         REGEN_CORPUS_BASELINE=1 cargo test -p architext-routing --test corpus_fitness",
-        perf_drift.join("\n  ")
+        route_ms < MAX_CORPUS_ROUTE_MS,
+        "corpus routing took {route_ms:.0}ms (budget {MAX_CORPUS_ROUTE_MS:.0}ms) — routing perf regression"
     );
 }

@@ -44,6 +44,18 @@ Development, Design, Release, or any project-specific grouping. Respect
 cleanup targets. Rank rules by `criticality` and `order`, not alphabetical
 order or creation time.
 
+Element notes are human annotations on an architecture element (node, flow,
+decision, risk, view, or data class), persisted in the optional
+`docs/architext/data/notes.json` and registered as `manifest.files.notes`.
+Each note records `target: { kind, id }`, a `category`
+(`note` | `mitigation` | `caveat` | `todo`), a `body`, and timestamps; the
+note's `target.id` must reference an existing element (validation enforces
+this). Notes capture maintainer judgement — for example, that a high-risk
+area is intentionally mitigated by the documented system — so treat them as
+user-owned: preserve and update them, but do not fabricate notes or delete a
+human's note as cleanup. They are edited in the viewer (the detail panel's
+Notes section) and never replace validation or recorded architecture facts.
+
 When ordered work or use-case paths deserve a dedicated Flows projection, add a
 `workflow` view in `docs/architext/data/views.json`. Workflow views should reuse
 existing nodes and ordered flows; do not duplicate flow facts or invent

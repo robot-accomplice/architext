@@ -27,7 +27,7 @@ pub fn run(target: &Path, out: &str) {
 
     let viewer_dist = viewer_dist_dir();
     if !viewer_dist.join("index.html").exists() {
-        eprintln!("Package viewer assets are missing. Run npm run build before packing Architext.");
+        eprintln!("Package viewer assets are missing. Build the viewer first: trunk build --release --config crates/architext-viewer/Trunk.toml");
         process::exit(1);
     }
 

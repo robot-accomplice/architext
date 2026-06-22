@@ -2,109 +2,18 @@
   "metrics": {
     "bracket-intermediates": {
       "routes": 10,
-      "bends": 22,
-      "crossings": 4,
-      "pairInternalCrossings": 1,
+      "bends": 8,
+      "crossings": 0,
+      "pairInternalCrossings": 0,
       "laneOrderViolations": 0,
       "closeParallelRuns": 0,
       "sharedSegments": 0,
       "repeatedCrossings": 0,
-      "doglegs": 1,
-      "length": 4331.2,
-      "bendScore": 117.0
+      "doglegs": 0,
+      "length": 4038.0000000000005,
+      "bendScore": 8.0
     },
     "bundle-coaligned": {
-      "routes": 8,
-      "bends": 19,
-      "crossings": 0,
-      "pairInternalCrossings": 0,
-      "laneOrderViolations": 0,
-      "closeParallelRuns": 0,
-      "sharedSegments": 0,
-      "repeatedCrossings": 0,
-      "doglegs": 2,
-      "length": 3653.4,
-      "bendScore": 211.0
-    },
-    "bundle-return-gutter": {
-      "routes": 8,
-      "bends": 15,
-      "crossings": 0,
-      "pairInternalCrossings": 0,
-      "laneOrderViolations": 0,
-      "closeParallelRuns": 0,
-      "sharedSegments": 0,
-      "repeatedCrossings": 0,
-      "doglegs": 0,
-      "length": 4063.2857142857147,
-      "bendScore": 15.0
-    },
-    "coaligned-multibundle-surfaceselect": {
-      "routes": 8,
-      "bends": 12,
-      "crossings": 0,
-      "pairInternalCrossings": 0,
-      "laneOrderViolations": 0,
-      "closeParallelRuns": 0,
-      "sharedSegments": 0,
-      "repeatedCrossings": 0,
-      "doglegs": 0,
-      "length": 3896.0,
-      "bendScore": 12.0
-    },
-    "fan-coaligned-selfcross": {
-      "routes": 7,
-      "bends": 10,
-      "crossings": 0,
-      "pairInternalCrossings": 0,
-      "laneOrderViolations": 0,
-      "closeParallelRuns": 0,
-      "sharedSegments": 0,
-      "repeatedCrossings": 0,
-      "doglegs": 0,
-      "length": 2798.0,
-      "bendScore": 10.0
-    },
-    "fan-max-systemmap": {
-      "routes": 10,
-      "bends": 21,
-      "crossings": 0,
-      "pairInternalCrossings": 0,
-      "laneOrderViolations": 0,
-      "closeParallelRuns": 0,
-      "sharedSegments": 0,
-      "repeatedCrossings": 0,
-      "doglegs": 0,
-      "length": 5921.0,
-      "bendScore": 21.0
-    },
-    "fan-parallel-bundle": {
-      "routes": 10,
-      "bends": 20,
-      "crossings": 0,
-      "pairInternalCrossings": 0,
-      "laneOrderViolations": 0,
-      "closeParallelRuns": 0,
-      "sharedSegments": 0,
-      "repeatedCrossings": 0,
-      "doglegs": 0,
-      "length": 4020.0,
-      "bendScore": 20.0
-    },
-    "fan-quad-reciprocal": {
-      "routes": 8,
-      "bends": 10,
-      "crossings": 0,
-      "pairInternalCrossings": 0,
-      "laneOrderViolations": 0,
-      "closeParallelRuns": 0,
-      "sharedSegments": 0,
-      "repeatedCrossings": 0,
-      "doglegs": 0,
-      "length": 2170.0,
-      "bendScore": 10.0
-    },
-    "feature-showcase": {
       "routes": 8,
       "bends": 6,
       "crossings": 0,
@@ -114,12 +23,103 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 1369.0,
+      "length": 3224.0,
       "bendScore": 6.0
+    },
+    "bundle-return-gutter": {
+      "routes": 8,
+      "bends": 4,
+      "crossings": 0,
+      "pairInternalCrossings": 0,
+      "laneOrderViolations": 0,
+      "closeParallelRuns": 0,
+      "sharedSegments": 0,
+      "repeatedCrossings": 0,
+      "doglegs": 0,
+      "length": 3633.0,
+      "bendScore": 4.0
+    },
+    "coaligned-multibundle-surfaceselect": {
+      "routes": 8,
+      "bends": 0,
+      "crossings": 0,
+      "pairInternalCrossings": 0,
+      "laneOrderViolations": 0,
+      "closeParallelRuns": 0,
+      "sharedSegments": 0,
+      "repeatedCrossings": 0,
+      "doglegs": 0,
+      "length": 3016.0,
+      "bendScore": 0.0
+    },
+    "fan-coaligned-selfcross": {
+      "routes": 7,
+      "bends": 6,
+      "crossings": 0,
+      "pairInternalCrossings": 0,
+      "laneOrderViolations": 0,
+      "closeParallelRuns": 1,
+      "sharedSegments": 0,
+      "repeatedCrossings": 0,
+      "doglegs": 0,
+      "length": 2377.0,
+      "bendScore": 6.0
+    },
+    "fan-max-systemmap": {
+      "routes": 10,
+      "bends": 10,
+      "crossings": 0,
+      "pairInternalCrossings": 0,
+      "laneOrderViolations": 0,
+      "closeParallelRuns": 1,
+      "sharedSegments": 0,
+      "repeatedCrossings": 0,
+      "doglegs": 0,
+      "length": 5800.428571428572,
+      "bendScore": 10.0
+    },
+    "fan-parallel-bundle": {
+      "routes": 10,
+      "bends": 6,
+      "crossings": 0,
+      "pairInternalCrossings": 0,
+      "laneOrderViolations": 0,
+      "closeParallelRuns": 0,
+      "sharedSegments": 0,
+      "repeatedCrossings": 0,
+      "doglegs": 0,
+      "length": 3768.5,
+      "bendScore": 6.0
+    },
+    "fan-quad-reciprocal": {
+      "routes": 8,
+      "bends": 4,
+      "crossings": 0,
+      "pairInternalCrossings": 0,
+      "laneOrderViolations": 0,
+      "closeParallelRuns": 0,
+      "sharedSegments": 0,
+      "repeatedCrossings": 0,
+      "doglegs": 0,
+      "length": 2252.0,
+      "bendScore": 4.0
+    },
+    "feature-showcase": {
+      "routes": 8,
+      "bends": 4,
+      "crossings": 0,
+      "pairInternalCrossings": 0,
+      "laneOrderViolations": 0,
+      "closeParallelRuns": 0,
+      "sharedSegments": 0,
+      "repeatedCrossings": 0,
+      "doglegs": 0,
+      "length": 1414.6666666666667,
+      "bendScore": 4.0
     },
     "hub-fan-dense": {
       "routes": 18,
-      "bends": 28,
+      "bends": 18,
       "crossings": 0,
       "pairInternalCrossings": 0,
       "laneOrderViolations": 0,
@@ -127,12 +127,12 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 11487.999999999998,
-      "bendScore": 28.0
+      "length": 11637.272727272728,
+      "bendScore": 18.0
     },
     "pair-chain-linear": {
       "routes": 6,
-      "bends": 10,
+      "bends": 4,
       "crossings": 4,
       "pairInternalCrossings": 0,
       "laneOrderViolations": 0,
@@ -140,11 +140,24 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 2982.0,
-      "bendScore": 10.0
+      "length": 3064.0,
+      "bendScore": 4.0
     },
     "pair-chain-short": {
       "routes": 6,
+      "bends": 4,
+      "crossings": 0,
+      "pairInternalCrossings": 0,
+      "laneOrderViolations": 0,
+      "closeParallelRuns": 0,
+      "sharedSegments": 0,
+      "repeatedCrossings": 0,
+      "doglegs": 0,
+      "length": 3416.0000000000005,
+      "bendScore": 4.0
+    },
+    "pair-fan-basic": {
+      "routes": 7,
       "bends": 6,
       "crossings": 0,
       "pairInternalCrossings": 0,
@@ -153,25 +166,12 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 3498.0000000000005,
+      "length": 4013.6,
       "bendScore": 6.0
-    },
-    "pair-fan-basic": {
-      "routes": 7,
-      "bends": 14,
-      "crossings": 4,
-      "pairInternalCrossings": 0,
-      "laneOrderViolations": 0,
-      "closeParallelRuns": 0,
-      "sharedSegments": 0,
-      "repeatedCrossings": 0,
-      "doglegs": 0,
-      "length": 3789.0,
-      "bendScore": 14.0
     },
     "pair-fan-compact": {
       "routes": 8,
-      "bends": 16,
+      "bends": 8,
       "crossings": 0,
       "pairInternalCrossings": 0,
       "laneOrderViolations": 0,
@@ -179,12 +179,12 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 4464.0,
-      "bendScore": 16.0
+      "length": 4542.0,
+      "bendScore": 8.0
     },
     "pair-minimal": {
       "routes": 4,
-      "bends": 8,
+      "bends": 2,
       "crossings": 0,
       "pairInternalCrossings": 0,
       "laneOrderViolations": 0,
@@ -192,12 +192,12 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 2308.0,
-      "bendScore": 8.0
+      "length": 2034.0,
+      "bendScore": 2.0
     },
     "pair-single-multiedge": {
       "routes": 5,
-      "bends": 8,
+      "bends": 4,
       "crossings": 0,
       "pairInternalCrossings": 0,
       "laneOrderViolations": 0,
@@ -205,90 +205,8 @@
       "sharedSegments": 0,
       "repeatedCrossings": 0,
       "doglegs": 0,
-      "length": 1058.0,
-      "bendScore": 8.0
-    }
-  },
-  "perf": {
-    "bracket-intermediates": {
-      "edgesPlanned": 573,
-      "cheapCandidateCount": 181641,
-      "gridRouteCalls": 342
-    },
-    "bundle-coaligned": {
-      "edgesPlanned": 651,
-      "cheapCandidateCount": 218343,
-      "gridRouteCalls": 704
-    },
-    "bundle-return-gutter": {
-      "edgesPlanned": 365,
-      "cheapCandidateCount": 214663,
-      "gridRouteCalls": 174
-    },
-    "coaligned-multibundle-surfaceselect": {
-      "edgesPlanned": 260,
-      "cheapCandidateCount": 145592,
-      "gridRouteCalls": 96
-    },
-    "fan-coaligned-selfcross": {
-      "edgesPlanned": 223,
-      "cheapCandidateCount": 59033,
-      "gridRouteCalls": 27
-    },
-    "fan-max-systemmap": {
-      "edgesPlanned": 761,
-      "cheapCandidateCount": 200592,
-      "gridRouteCalls": 564
-    },
-    "fan-parallel-bundle": {
-      "edgesPlanned": 459,
-      "cheapCandidateCount": 241888,
-      "gridRouteCalls": 689
-    },
-    "fan-quad-reciprocal": {
-      "edgesPlanned": 368,
-      "cheapCandidateCount": 110870,
-      "gridRouteCalls": 208
-    },
-    "feature-showcase": {
-      "edgesPlanned": 278,
-      "cheapCandidateCount": 70080,
-      "gridRouteCalls": 13
-    },
-    "hub-fan-dense": {
-      "edgesPlanned": 479,
-      "cheapCandidateCount": 720896,
-      "gridRouteCalls": 743
-    },
-    "pair-chain-linear": {
-      "edgesPlanned": 171,
-      "cheapCandidateCount": 60673,
-      "gridRouteCalls": 115
-    },
-    "pair-chain-short": {
-      "edgesPlanned": 381,
-      "cheapCandidateCount": 80650,
-      "gridRouteCalls": 119
-    },
-    "pair-fan-basic": {
-      "edgesPlanned": 296,
-      "cheapCandidateCount": 74744,
-      "gridRouteCalls": 285
-    },
-    "pair-fan-compact": {
-      "edgesPlanned": 226,
-      "cheapCandidateCount": 101769,
-      "gridRouteCalls": 374
-    },
-    "pair-minimal": {
-      "edgesPlanned": 169,
-      "cheapCandidateCount": 16276,
-      "gridRouteCalls": 20
-    },
-    "pair-single-multiedge": {
-      "edgesPlanned": 99,
-      "cheapCandidateCount": 30529,
-      "gridRouteCalls": 9
+      "length": 1222.0,
+      "bendScore": 4.0
     }
   }
 }

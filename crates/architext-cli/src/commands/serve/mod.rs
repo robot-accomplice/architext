@@ -663,7 +663,7 @@ fn restart_serve(target: &Path, opts: &ParsedArgs, version: &str) -> Result<(), 
 
 /// `refreshTarget` = the sync used before a restart. Mirrors the JS
 /// `syncTarget(refreshTarget, { quiet, branch: none, noAgents, noGitignore,
-/// noRootScripts, skipValidate })`.
+/// skipValidate })`.
 fn refresh_target(target: &Path, version: &str) {
     let sync_opts = ParsedArgs {
         command: "sync".to_string(),
@@ -672,7 +672,6 @@ fn refresh_target(target: &Path, version: &str) {
         branch: "none".to_string(),
         no_agents: true,
         no_gitignore: true,
-        no_root_scripts: true,
         skip_validate: true,
         ..default_args()
     };

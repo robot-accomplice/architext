@@ -1,6 +1,6 @@
 {
   "name": "@robotaccomplice/architext",
-  "version": "1.7.4",
+  "version": "1.7.5",
   "description": "Local JSON-backed architecture and dataflow viewer for engineering teams and LLM-maintained architecture maps. Rust-native CLI + WASM viewer.",
   "type": "module",
   "engines": {
