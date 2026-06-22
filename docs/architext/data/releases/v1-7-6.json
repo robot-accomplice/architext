@@ -2,12 +2,13 @@
   "id": "v1-7-6",
   "version": "1.7.6",
   "name": "Architext 1.7.6 Native-Only Distribution + Flow Decision Diamonds",
-  "status": "implementing",
-  "posture": "in-progress",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Distribution becomes native-only: the entire npm channel is removed — the @robotaccomplice/architext launcher package, the per-platform binary packages (optionalDependencies), package.json/package-lock.json, the npm build/publish/CI steps, and the npm Just recipes. The product version moves off package.json to a repo-root VERSION file that build.rs stamps into the binary (no Node needed to build or test). The curl installer + GitHub-release binaries (with the viewer dist and schemas embedded) + the in-binary `architext update` self-updater are the sole supported install; `architext update` keeps the npm→native off-ramp for users still on the old bridge. Flow decision diamonds are completed per the settled design (viewer/DESIGN.md): a decision diamond now carries an anchoring stem to its host node, a per-branch outcome label, and a what-is-being-decided annotation, instead of rendering as an orphaned floating rect. The README screenshots and the Architext self-model are reconciled to the native-only reality.",
   "targetDate": "2026-06-22",
-  "lastUpdated": "2026-06-22T20:00:00.000Z",
-  "updateSource": "Work complete on the release branch (feat/1.7.6-decision-diamonds), pending PR to develop/main + maintainer ship. Decision diamonds live-verified via Playwright DOM on the FlowForge corpus AND architext's own data (stem a clean vertical with no arrowhead, outcomes + annotation with zero collisions, cluster co-highlight); routing + viewer suites green (370 + 127) plus a new end-to-end stem-geometry test through the real build_flow_plan_request → plan_diagram path. npm removal: actionlint clean on all three workflows, `architext --version` stamps 1.7.6 from VERSION, native validator green, self-model reconciled and validated. README screenshots regenerated at 1680x1000 from architext's own served data.",
+  "releasedAt": "2026-06-22T18:51:33.000Z",
+  "lastUpdated": "2026-06-22T18:51:33.000Z",
+  "updateSource": "Shipped 2026-06-22: GitHub release v1.7.6 published 2026-06-22T18:51:33Z with all five native binaries + SHA256SUMS attached by the rewritten native-only publish.yml (validated by a dry-run first). Install-path verified end to end: the darwin-arm64 asset downloaded, its SHA256 matched, and the binary reports 1.7.6; the dry-run's smoke ran sync + validate on the self-contained binary from outside the repo. npm registry correctly stays at 1.7.5 (no 1.7.6 npm publish — native-only). Diamonds live-verified on the FlowForge corpus AND architext's own data; routing + viewer suites green plus the end-to-end stem-geometry test.",
   "scope": {
     "required": [
       {
