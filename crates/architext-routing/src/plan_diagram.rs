@@ -29,8 +29,8 @@ use serde_json::Value;
 
 use crate::js_compat::js_hypot;
 use crate::model::{Plan, Point, Rect, Route};
-use crate::route_edges::orchestration::{
-    route_edges_with_stats, CorpusPlanStats, InputRelationship, NodeRect, RouteEdgesInput,
+use crate::route_edges::inputs::{
+    CorpusPlanStats, InputRelationship, NodeRect, RouteEdgesInput,
 };
 use crate::route_ports::SideAnchors;
 use crate::route_geometry::rects_overlap;
@@ -146,11 +146,6 @@ pub struct PlanDiagramInput {
     pub style: String,
     #[serde(default)]
     pub diagnostics: bool,
-    /// Force the legacy candidate engine for THIS plan (default `false` → the
-    /// deterministic model). Engine-anchored goldens set it so they stay race-free
-    /// in the parallel lib-test binary without touching the global env switch.
-    #[serde(default)]
-    pub force_engine: bool,
 }
 
 fn default_style() -> String {
@@ -560,12 +555,28 @@ fn apply_model_routes(
     for (i, rel_id) in edge_rel_ids.iter().enumerate() {
         let pts = &model_routes[i];
         if pts.len() < 2 {
-            continue; // model produced nothing usable — keep the engine route
+            continue; // model produced nothing usable
         }
-        if let Some(existing) = routed.get(rel_id) {
-            let rebuilt = route_with_points(existing, pts.clone(), None);
-            routed.insert(rel_id.clone(), rebuilt);
-        }
+        // The model is the router: build geometry from scratch. We carry only
+        // `style` from any pre-existing RouteData (legacy-engine fallback path);
+        // when the engine is skipped, synthesise a base RouteData with the
+        // diagram's style. `route_with_points` recomputes every other field.
+        let base = routed.get(rel_id).cloned().unwrap_or_else(|| {
+            crate::route_edges::types::RouteData {
+                d: String::new(),
+                points: Vec::new(),
+                controls: None,
+                samples: Vec::new(),
+                sample_bounds: Rect { x: 0.0, y: 0.0, width: 0.0, height: 0.0 },
+                bends: 0,
+                label_x: 0.0,
+                label_y: 0.0,
+                style: input.style.clone(),
+                extra: indexmap::IndexMap::new(),
+            }
+        });
+        let rebuilt = route_with_points(&base, pts.clone(), None);
+        routed.insert(rel_id.clone(), rebuilt);
     }
     // HOP pass: route_with_points emits a plain `d`. Rebuild each rendered (flow-
     // participant) route's `d` with line-jump hops against the OTHER rendered routes
@@ -715,23 +726,19 @@ pub fn plan_diagram_with_stats(
         canvas_height,
         margin_y,
         score_edge_proximity: input.score_edge_proximity,
-        force_engine: input.force_engine,
         // Match JS defaults: these are not in the planInput wire shape
         grid_route_max_points: 600,
         grid_route_max_expansions: 3000,
     };
 
-    let (mut routed_edges, plan_stats) = route_edges_with_stats(&route_edges_input);
-
-    // DEFAULT routing path: overwrite each route's geometry with the deterministic
-    // model's polyline. The model carries a permanent forbidden-artifact gate (no
-    // doglegs / Z-staircases / non-orthogonal segments), so this is what kills
-    // doublebacks and step formations across every plan() diagram (flows, C4,
-    // deployment). Labels/markers downstream re-derive from the new geometry.
-    // `ARCHITEXT_ROUTING_ENGINE=1` falls back to the legacy candidate engine.
-    if crate::routing_model_enabled() && !input.force_engine {
-        apply_model_routes(&route_edges_input, &mut routed_edges);
-    }
+    // The deterministic model IS the router. It carries a permanent
+    // forbidden-artifact gate (no doglegs / Z-staircases / non-orthogonal
+    // segments) and produces every plan() diagram's geometry (flows, C4,
+    // deployment, risk overlay). `apply_model_routes` builds geometry from
+    // scratch — the legacy candidate engine has been removed.
+    let mut routed_edges: IndexMap<String, crate::route_edges::types::RouteData> = IndexMap::new();
+    let plan_stats = CorpusPlanStats;
+    apply_model_routes(&route_edges_input, &mut routed_edges);
 
     // Build relationships-by-id map
     let relationships_by_id: IndexMap<String, &RelationshipInput> =
@@ -958,26 +965,20 @@ fn route_data_to_json(route: &crate::route_edges::types::RouteData) -> Value {
 mod tests {
     use super::*;
 
-    /// Golden test: deserialize the first flow's wire-form input and check that
-    /// `plan_diagram` produces the expected canvas size, first route d-string,
-    /// and first route label position.
-    ///
-    /// This test is RED before the implementation is wired, GREEN after.
-    ///
-    /// Source: node golden run on `fresh-install @ system-map`, 2026-06-16.
+    /// Structural smoke test: the model router produces a complete plan for the
+    /// fresh-install fixture (canvas, node rects, one route per relationship,
+    /// labels placed). The previous engine-anchored d-string golden was removed
+    /// with the legacy engine; geometry fidelity is gated by corpus_fitness and
+    /// the farm_dump output-preservation check, not pinned d-strings here.
     #[test]
-    fn plan_diagram_fresh_install_golden() {
+    fn plan_diagram_fresh_install_smoke() {
         let input_json = include_str!("../tests/fixtures/plan-diagram-input-fresh-install.json");
-        let mut input: PlanDiagramInput = serde_json::from_str(input_json)
-            .expect("deserialize golden input");
-        // This golden pins the ENGINE geometry (JS-parity anchor). The model is the
-        // production default, so force the engine here to keep the anchor meaningful
-        // and race-free in the parallel lib-test binary.
-        input.force_engine = true;
+        let input: PlanDiagramInput =
+            serde_json::from_str(input_json).expect("deserialize golden input");
 
         let plan = plan_diagram(&input);
 
-        // Canvas dimensions
+        // Canvas dimensions are layout-derived (router-independent).
         assert_eq!(plan.canvas_width, 1332.0, "canvasWidth");
         assert_eq!(plan.canvas_height, 906.0, "canvasHeight");
 
@@ -987,35 +988,19 @@ mod tests {
         // routes count
         assert_eq!(plan.routes.len(), 6, "routes count");
 
-        // nodeRects: first node is "maintainer"
+        // nodeRects: first node is "maintainer" (layout-derived).
         let maintainer_rect = plan.node_rects.get("maintainer").expect("maintainer rect");
         assert_eq!(maintainer_rect.x, 180.0);
         assert_eq!(maintainer_rect.y, 104.0);
         assert_eq!(maintainer_rect.width, 136.0);
         assert_eq!(maintainer_rect.height, 54.0);
 
-        // First route: "resolve-target"
+        // The model routes "resolve-target" with a non-empty geometry + label box.
         let first_route = plan.routes.get("resolve-target").expect("resolve-target route");
-        assert_eq!(first_route.d, "M 316 117.5 L 390 117.5", "first route d");
-        assert_eq!(first_route.label_x, 360.4, "first route labelX");
-        assert_eq!(first_route.label_y, 117.5, "first route labelY");
-
-        // First label box
-        let first_lb = plan.label_boxes.get("resolve-target").expect("resolve-target labelBox");
-        // box: {x:346.4, y:105.5, width:28, height:24}
-        assert!((first_lb.x - 346.4).abs() < 0.01, "labelBox.x got {}", first_lb.x);
-        assert!((first_lb.y - 105.5).abs() < 0.01, "labelBox.y got {}", first_lb.y);
-        assert_eq!(first_lb.width, 28.0, "labelBox.width");
-        assert_eq!(first_lb.height, 24.0, "labelBox.height");
-
-        // The JS planDiagram produces 1 "least-bad-route" warning for install-valid
-        // because sideAnchors on the decision node forces a collision in the JS router.
-        // The Rust router currently ignores sideAnchors (anchor_for uses geometric centre),
-        // so it routes collision-free and produces 0 route-level warnings. This is a
-        // known parity gap; the differential gate will catch the fingerprint delta.
-        // Test: plan_diagram pipeline is wired (routes generated, labels placed).
-        // The warnings count is 0 because no route-level warnings were generated.
-        // label-over-node/label-over-label may also differ. Just verify ≥ 0 warnings.
-        assert!(plan.warnings.len() <= 5, "sanity check on warning count: got {}", plan.warnings.len());
+        assert!(!first_route.d.is_empty(), "first route d should be non-empty");
+        assert!(
+            plan.label_boxes.contains_key("resolve-target"),
+            "resolve-target labelBox placed"
+        );
     }
 }

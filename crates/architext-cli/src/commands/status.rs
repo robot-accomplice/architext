@@ -130,7 +130,7 @@ pub fn format_status_lines(status: &serde_json::Value) -> Vec<String> {
 /// { verbose: true })`. The non-verbose lines are computed by
 /// `format_status_lines`; this appends the verbose-only tail and the verbose
 /// insertions ("Doctor repairs available:", validation output, C4 issues,
-/// instruction-rule migration, instruction files, root scripts).
+/// instruction-rule migration, instruction files).
 ///
 /// To keep parity exact we reproduce the JS line ORDER, which interleaves a few
 /// verbose-only lines into the base list (doctor-repairs detail right after the
@@ -277,17 +277,6 @@ pub fn format_status_lines_verbose(status: &serde_json::Value) -> Vec<String> {
                 if fs["mentionsCopiedTemplate"].as_bool().unwrap_or(false) { "outdated Architext section" } else { "current Architext section" }
             } else if fs["exists"].as_bool().unwrap_or(false) {
                 "missing Architext section"
-            } else {
-                "missing"
-            };
-            push!("- {name}: {state}");
-        }
-    }
-    push!("Root scripts:");
-    if let Some(obj) = status["rootScripts"].as_object() {
-        for (name, script) in obj {
-            let state = if script["present"].as_bool().unwrap_or(false) {
-                if script["recommended"].as_bool().unwrap_or(false) { "ok" } else { "custom" }
             } else {
                 "missing"
             };

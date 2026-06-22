@@ -442,6 +442,7 @@ button:focus-visible {
 /* Config button: on-language hairline + mono, --accent only as a STATE signal
    (hover/active) — never a role hue (rule 1). */
 .topbar__config-btn,
+.topbar__pdf-btn,
 .topbar__theme-btn {
   font-family: var(--font-mono);
   font-size: var(--overline-size);
@@ -455,14 +456,38 @@ button:focus-visible {
 }
 .topbar__config-btn:hover,
 .topbar__config-btn:focus-visible,
-.topbar__theme-btn:hover,
-.topbar__theme-btn:focus-visible {
+.topbar__pdf-btn:hover,
+.topbar__pdf-btn:focus-visible {
   color: var(--accent);
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent-ring);
 }
-/* The theme toggle's leading glyph sits a touch larger than the mono label. */
-.topbar__theme-btn span[aria-hidden] { font-size: 1.1em; margin-right: 2px; }
+/* Theme toggle: each state renders as a literal SWATCH of the theme it switches
+   TO — the "Light" button looks exactly like the light theme, the "Dark" button
+   exactly like the dark theme. So the values below are the OTHER theme's own
+   --panel-2 / --ink / --line literals (the current-theme `var()` would defeat the
+   preview). Keep these in sync with the :root and [data-theme=light] token blocks. */
+/* Dark theme active → button says "Light" → preview the LIGHT theme. */
+.topbar__theme-btn {
+  background: #ffffff;       /* light --panel-2 */
+  color: #14181b;            /* light --ink */
+  border-color: #cfd8dd;     /* light --line */
+}
+.topbar__theme-btn:hover,
+.topbar__theme-btn:focus-visible { border-color: #8c9aa1; } /* light --line-strong */
+/* Light theme active → button says "Dark" → preview the DARK theme. */
+:root[data-theme="light"] .topbar__theme-btn {
+  background: #1e2023;       /* dark --panel-2 */
+  color: #e2e2e6;            /* dark --ink */
+  border-color: #3b494b;     /* dark --line */
+}
+:root[data-theme="light"] .topbar__theme-btn:hover,
+:root[data-theme="light"] .topbar__theme-btn:focus-visible { border-color: #849495; } /* dark --line-strong */
+/* The glyph carries a hue at the button's regular font size — sun orange (reads
+   well on the light swatch), moon purple — while the button body stays a faithful
+   theme swatch (everything else is the theme you're toggling into). */
+.topbar__theme-btn span[aria-hidden] { margin-right: 4px; color: #ea580c; }
+:root[data-theme="light"] .topbar__theme-btn span[aria-hidden] { color: #b39dff; }
 
 /* ── Config drawer (read-only resolved diagram config) ───────────────────────
    A right-side drawer over the shell + a click-away scrim. Values are read-only
@@ -2751,4 +2776,43 @@ button.blast-chip { cursor: pointer; }
   border-color: var(--line);
   box-shadow: none;
   cursor: not-allowed;
+}
+
+/* ── Print / save-as-PDF ──────────────────────────────────────────────────
+   The "PDF" topbar control calls window.print(); these rules strip the app
+   chrome so the printed page (→ "Save as PDF") is the active VIEW, not the UI.
+   The active theme's colors are preserved (toggle to Light first for a paper
+   PDF). */
+@media print {
+  .topbar,
+  .left-nav,
+  .inspector,
+  .canvas-panel__controls,
+  .canvas-panel__unrelated-toggle,
+  .canvas-panel__placard,
+  .legend,
+  .c4-breadcrumb,
+  .steps-panel,
+  [role="status"] {
+    display: none !important;
+  }
+  /* Collapse the three-column grid to a single full-width canvas. */
+  .shell {
+    display: block !important;
+  }
+  .canvas-panel,
+  .canvas-panel__stage,
+  .canvas-panel__surface {
+    position: static !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+  }
+  /* Render the diagram's real colors in the PDF. */
+  :root,
+  .canvas-panel,
+  .canvas-panel__surface {
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
 }

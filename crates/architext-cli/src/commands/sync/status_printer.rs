@@ -2,7 +2,7 @@
 //!
 //! The sync command calls `printStatus(finalStatus, { verbose: true })` after
 //! performing writes. The non-sync `status` command uses non-verbose mode.
-//! This module adds the verbose sections (instruction files, root scripts)
+//! This module adds the verbose sections (instruction files)
 //! on top of the base `format_status_lines` from commands::status.
 
 use serde_json::Value;
@@ -101,23 +101,6 @@ pub fn format_verbose_status_lines(status: &Value) -> Vec<String> {
                     "missing"
                 };
                 lines.push(format!("- {file_name}: {state}"));
-            }
-        }
-    }
-
-    // verbose: root scripts
-    if let Some(root_scripts) = status.get("rootScripts").and_then(|v| v.as_object()) {
-        lines.push("Root scripts:".to_string());
-        for &(name, _expected) in super::target_layout::ROOT_SCRIPTS {
-            if let Some(script) = root_scripts.get(name) {
-                let present = script["present"].as_bool().unwrap_or(false);
-                let recommended = script["recommended"].as_bool().unwrap_or(false);
-                let state = if present {
-                    if recommended { "ok" } else { "custom" }
-                } else {
-                    "missing"
-                };
-                lines.push(format!("- {name}: {state}"));
             }
         }
     }

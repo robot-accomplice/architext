@@ -1133,6 +1133,7 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
         }
     }
 
+
     // Phase 2: reciprocal-pair symmetry. A pair a→b / b→a routed with MISMATCHED
     // shapes (e.g. one toggled to C, its return left an L) crosses. Try forcing
     // every edge between the same node-pair onto the facing surfaces (so they run
@@ -1213,6 +1214,7 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
         }
     }
 
+
     // Phase 3b: JOINT pair-swap (track nesting). A reciprocal / multi-edge bundle
     // between two surfaces nests only when both surfaces' slot orders move together
     // — but the right "mirror" can be the SAME order (facing surfaces) or the
@@ -1264,6 +1266,7 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
             break;
         }
     }
+
 
     // Hard no-overlap rule: applied ONCE on the chosen routing (shape-preserving),
     // not inside the mount-order optimizer above.

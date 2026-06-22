@@ -80,7 +80,7 @@
     {
       "id": "pdf-export",
       "title": "PDF export",
-      "summary": "Export the active Architext view as a portable PDF artifact with clear diagnostics.",
+      "summary": "Export the active Architext view as a portable PDF via the browser print / save-as-PDF workflow. Delivered 1.4.0; regressed out in the 1.7.0 Rust/Leptos rewrite; restored in 1.7.5 (topbar PDF control + @media print scoping).",
       "kind": "feature",
       "status": "complete",
       "priority": "low",
@@ -88,10 +88,9 @@
       "dateAdded": "2026-05-18T06:05:00.000Z",
       "targetReleaseId": "v1-4-0",
       "evidence": [
-        "viewer/src/main.tsx PDF control",
-        "viewer/src/styles.css print artifact styles",
-        "test/pdf-export-ui.test.mjs",
-        "npm --prefix viewer run build"
+        "crates/architext-viewer/src/components/header.rs topbar PDF control (window.print)",
+        "crates/architext-viewer/styles.css @media print rules",
+        "live-UI: PDF button fires window.print, print stylesheet strips chrome"
       ]
     },
     {
@@ -368,6 +367,16 @@
       "section": "Routing Performance",
       "dateAdded": "2026-06-11T00:00:00.000Z",
       "targetReleaseId": "v1-7-0"
+    },
+    {
+      "id": "retire-copied-install-migration",
+      "title": "Retire copied-install migration at 2.0.0 (npm phase-out)",
+      "summary": "Remove the JS/npm-era copied-install upgrade path: COPIED_INSTALL_ENTRIES (still lists dist/node_modules/vite.config.ts/src/package.json) and the sync logic that converts an old copied JS viewer install into a data-only install. DEFERRED to the 2.0.0 major bump (maintainer decision 2026-06-22): it is the only remaining migration ramp for repos still on the pre-1.7.0 copied-viewer layout, and deleting it before 2.0.0 would leave those repos dirty (orphaned vite/node_modules/src that nothing cleans up). Keep it as the upgrade ramp through the 1.x line; axe it with the 2.0.0 break. Sibling npm-era features (root scripts, the `migrate` command alias) were already removed. targetReleaseId left unset until a v2-0-0 release exists (Release Truth ids must reference an existing release), matching the diagram-spacing-controls precedent.",
+      "kind": "chore",
+      "status": "deferred",
+      "priority": "low",
+      "section": "CLI Lifecycle Refactor",
+      "dateAdded": "2026-06-22T00:00:00.000Z"
     }
   ]
 }

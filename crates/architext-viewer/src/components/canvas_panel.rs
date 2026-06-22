@@ -278,12 +278,14 @@ pub fn CanvasPanel() -> impl IntoView {
         let data = state.data.get_untracked();
         let gen = generation.get_untracked() + 1;
         generation.set(gen);
-        // A compute is starting → show the indicator until the bundle is ready.
-        routing.set(true);
+        // The on-canvas "Routing" indicator is set true ONLY on modes that
+        // actually compute a route, immediately before their async work — never
+        // up here. Route-less modes (Repo Tree, Blast Radius, Release Truth,
+        // Rules) must never flash "ROUTING" (it reads as a broken app). Each
+        // routing path clears it when done; the route-less arm clears any
+        // leftover true from a prior diagram mode's in-flight compute.
 
-        // SEQUENCE is a custom (non-plan) layout; compute it on its own signal.
-        // Not in the farm → in-process, but still flagged through `routing` so
-        // the indicator behaves uniformly across modes.
+        // SEQUENCE is a custom (non-plan) synchronous layout — no spinner.
         if mode == Mode::Sequence {
             let seq = (|| {
                 let view = view_idx.and_then(|i| data.views.get(i).cloned())?;
@@ -316,6 +318,7 @@ pub fn CanvasPanel() -> impl IntoView {
                 };
                 let nodes = data.nodes.clone();
                 let layout = layout_config();
+                routing.set(true); // structural compute is async (frame-yielded) → show "Routing"
                 spawn_local(async move {
                     // Yield a frame so the spinner renders, then compute.
                     gloo_timers::future::TimeoutFuture::new(16).await;
@@ -367,15 +370,20 @@ pub fn CanvasPanel() -> impl IntoView {
             build_flow_plan_request(&view.to_routing(), &flow.to_routing(), Some(&layout), "orthogonal");
         let hash = plan_hash(&request.key);
 
+        routing.set(true); // farm fetch / in-process fallback is async → show "Routing"
         spawn_local(async move {
-            // Poll the native plan farm (responsive await, main thread stays free)
-            // instead of computing the plan in-process on the UI thread — the
-            // latter freezes a dense diagram for the whole plan duration. The farm
-            // warms its whole map atomically in the background, so early requests
-            // miss; we poll (~up to 5 min) with `routing` kept true (loading
-            // state). Only a genuinely non-precomputed plan falls through to a
-            // one-off in-process computation.
-            let plan = match fetch_farm_plan_polling(&hash, 600, 500).await {
+            // Try the precomputed farm plan first (instant, no main-thread block),
+            // but only BRIEFLY: the farm warms in the background, so a just-opened
+            // view can miss for a moment. The deterministic model is now fast (tens
+            // of ms — the legacy candidate engine that used to make an in-process
+            // compute freeze the UI for seconds is gone), so on a short miss we fall
+            // straight back to an in-process compute instead of spinning. Views that
+            // will NEVER be in the farm (e.g. a risk-overlay, which isn't a
+            // precomputed flow-view) therefore resolve in under a second rather than
+            // polling for minutes — the bug that made Data/Risks "spin interminably".
+            const FARM_WARM_ATTEMPTS: u32 = 6; // ~1.5s, then fall back to in-process
+            const FARM_WARM_DELAY_MS: u32 = 250;
+            let plan = match fetch_farm_plan_polling(&hash, FARM_WARM_ATTEMPTS, FARM_WARM_DELAY_MS).await {
                 Some(plan) => plan,
                 None => plan_diagram(&request.plan_diagram_input),
             };

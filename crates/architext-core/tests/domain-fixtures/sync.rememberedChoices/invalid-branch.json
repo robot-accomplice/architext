@@ -1,4 +1,4 @@
 {
-  "metadata": { "syncChoices": { "branch": "invalid-branch", "instructionFiles": ["CLAUDE.md"], "manageGitignore": false, "manageRootScripts": false, "applyDoctorRepairs": false, "proceedWithChanges": false } },
+  "metadata": { "syncChoices": { "branch": "invalid-branch", "instructionFiles": ["CLAUDE.md"], "manageGitignore": false, "applyDoctorRepairs": false, "proceedWithChanges": false } },
   "instructionFiles": ["AGENTS.md", "CLAUDE.md", ".cursorrules"]
 }

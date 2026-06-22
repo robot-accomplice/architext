@@ -35,8 +35,6 @@ pub struct ParsedArgs {
     pub overwrite_data: bool,
     pub append_agents: bool,
     pub no_agents: bool,
-    pub root_scripts: bool,
-    pub no_root_scripts: bool,
     pub update_gitignore: bool,
     pub no_gitignore: bool,
     pub mode: String,
@@ -48,7 +46,7 @@ pub struct ParsedArgs {
 }
 
 const KNOWN_COMMANDS: &[&str] = &[
-    "install", "upgrade", "sync", "migrate", "doctor", "status", "serve",
+    "install", "upgrade", "sync", "init", "doctor", "status", "serve",
     "validate", "build", "prompt", "skill", "clean", "explain", "help", "version",
     "update",
 ];
@@ -172,8 +170,6 @@ pub fn parse_args(argv: &[String]) -> Result<ParsedArgs, String> {
         overwrite_data: false,
         append_agents: false,
         no_agents: false,
-        root_scripts: false,
-        no_root_scripts: false,
         update_gitignore: false,
         no_gitignore: false,
         mode: "initial-buildout".to_string(),
@@ -266,8 +262,6 @@ pub fn parse_args(argv: &[String]) -> Result<ParsedArgs, String> {
             "--overwrite-data" => opts.overwrite_data = true,
             "--append-agents" => opts.append_agents = true,
             "--no-agents" => opts.no_agents = true,
-            "--root-scripts" => opts.root_scripts = true,
-            "--no-root-scripts" => opts.no_root_scripts = true,
             "--update-gitignore" => opts.update_gitignore = true,
             "--no-gitignore" => opts.no_gitignore = true,
             "--mode" => {

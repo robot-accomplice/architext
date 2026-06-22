@@ -186,6 +186,8 @@ From any target project repository:
 architext sync
 ```
 
+`install` and `init` are synonyms for `sync`.
+
 You can also pass a target repository explicitly:
 
 ```sh
@@ -207,20 +209,6 @@ code, schemas, validation, and starter templates are package-owned. Target
 repositories commit architecture data, lifecycle metadata, and optional
 repository-level agent instructions.
 
-When the target repository has a root `package.json`, the CLI can add
-convenience scripts:
-
-```sh
-npm run architext
-npm run architext:validate
-npm run architext:build
-npm run architext:doctor
-npm run architext:prompt
-npm run architext:clean
-```
-
-Those root scripts call the global `architext` CLI with `.` as the target path.
-
 Install or update project data explicitly:
 
 ```sh
@@ -233,7 +221,7 @@ Use `architext sync` for project data.)
 Run non-interactively:
 
 ```sh
-architext sync . --yes --branch current --append-agents --root-scripts
+architext sync . --yes --branch current --append-agents
 ```
 
 After `sync` records repository-level prompt answers, later interactive syncs
@@ -252,8 +240,6 @@ Useful options:
 - `--append-agents` creates or appends both `AGENTS.md` and `CLAUDE.md` with the
   Architext instructions.
 - `--no-agents` skips `AGENTS.md` and `CLAUDE.md` prompts.
-- `--root-scripts` adds root `package.json` convenience scripts.
-- `--no-root-scripts` skips root `package.json` script prompts.
 - `--update-gitignore` adds Architext generated artifact ignores without
   prompting.
 - `--no-gitignore` skips `.gitignore` prompts.
@@ -326,7 +312,7 @@ docs/architext/.architext.json
 ```
 
 This file records the CLI version, update time, operation, migrated install
-state, managed instruction files, gitignore/root-script handling, and last
+state, managed instruction files, gitignore handling, and last
 validation state. It is automation state, not the architecture model.
 
 ## Management Commands
@@ -352,7 +338,7 @@ architext --check-updates
 
 Use `doctor` when something looks wrong. It reports the installed version,
 whether an upgrade is needed, validation status, missing ignore rules, missing
-AGENTS/CLAUDE appendix sections, root script status, accidentally tracked
+AGENTS/CLAUDE appendix sections, accidentally tracked
 generated artifacts, model-specific `AGENTS.md`, `CLAUDE.md`, Cursor rule, and
 `.cursorrules` project rules that can be migrated into
 `docs/architext/data/rules.json`, and deterministic repairs. Run `doctor --yes`

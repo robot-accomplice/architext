@@ -266,7 +266,7 @@
           "from": "maintainer",
           "to": "architext-cli",
           "action": "startLocalServer",
-          "summary": "CLI starts the package-owned Vite server with target data directory configured.",
+          "summary": "CLI starts the package-owned architext-serve HTTP server with the target data directory configured.",
           "data": [
             "repository-metadata"
           ]
@@ -274,9 +274,9 @@
         {
           "id": "serve-assets",
           "from": "architext-cli",
-          "to": "viewer-runtime",
+          "to": "serve-server",
           "action": "servePackageViewer",
-          "summary": "Viewer assets are served from the installed package.",
+          "summary": "The architext-serve server serves the rust-embedded Leptos viewer assets from the installed package.",
           "data": [
             "package-assets"
           ]
@@ -325,7 +325,7 @@
           "from": "architext-cli",
           "to": "viewer-runtime",
           "action": "buildStaticViewer",
-          "summary": "CLI builds package-owned viewer assets into target docs/architext/dist.",
+          "summary": "CLI copies the package-owned prebuilt viewer dist (trunk-built) into target docs/architext/dist.",
           "data": [
             "package-assets"
           ]
@@ -401,12 +401,9 @@
         "Viewer status notice",
         "Browser print dialog"
       ],
-      "verification": [
-        "test/pdf-export-ui.test.mjs",
-        "scripts/uat-harness.mjs"
-      ],
+      "verification": [],
       "knownGaps": [
-        "CLI/headless generated PDF artifacts, multi-view export bundles, and preflight clipping diagnostics remain future hardening work."
+        "FLAGGED FOR HUMAN REVIEW: this flow has no implementation in the Rust/Leptos viewer. The prior browser PDF-export control and its test (test/pdf-export-ui.test.mjs) and harness (scripts/uat-harness.mjs) were removed in the 1.7.0 rewrite. Decide whether to drop this flow (with the pdf-export node and pdf-export-fidelity risk) or move PDF export to the roadmap."
       ]
     },
     {

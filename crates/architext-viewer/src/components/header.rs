@@ -78,6 +78,22 @@ pub fn Header() -> impl IntoView {
                 >
                     <span aria-hidden="true">"⚙ "</span>"Config"
                 </button>
+                // Hand the active view to the browser print / save-as-PDF
+                // workflow. rAF-gated so the click's own repaint settles before
+                // the synchronous print dialog (mirrors the pre-1.7.0 export).
+                // Print CSS (@media print) strips the chrome so the PDF is the view.
+                <button
+                    class="topbar__pdf-btn"
+                    title="Save the active view as PDF (opens the browser print dialog)"
+                    aria-label="Save the active view as PDF"
+                    on:click=move |_| leptos::request_animation_frame(|| {
+                        if let Some(win) = web_sys::window() {
+                            let _ = win.print();
+                        }
+                    })
+                >
+                    <span aria-hidden="true">"⎙ "</span>"PDF"
+                </button>
             </div>
             <InvalidNotice/>
             <ConfigPanel open=config_open/>

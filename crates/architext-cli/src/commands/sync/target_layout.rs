@@ -10,14 +10,6 @@ pub const GENERATED_IGNORES: &[&str] = &[
     "docs/architext/dist/",
     "docs/architext/.architext-write.lock/",
 ];
-pub const ROOT_SCRIPTS: &[(&str, &str)] = &[
-    ("architext",          "architext serve ."),
-    ("architext:build",    "architext build ."),
-    ("architext:clean",    "architext clean ."),
-    ("architext:doctor",   "architext doctor ."),
-    ("architext:prompt",   "architext prompt ."),
-    ("architext:validate", "architext validate ."),
-];
 pub const COPIED_INSTALL_ENTRIES: &[&str] = &[
     "AGENTS_APPENDIX.md",
     "LLM_ARCHITEXT.md",

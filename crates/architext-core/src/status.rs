@@ -27,16 +27,6 @@ const DATA_SCHEMA_VERSION: &str = "1.5.0";
 const INSTRUCTION_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md"];
 const GENERATED_IGNORES: &[&str] = &["docs/architext/dist/", "docs/architext/.architext-write.lock/"];
 
-// rootScripts: name → expected value
-const ROOT_SCRIPTS: &[(&str, &str)] = &[
-    ("architext",          "architext serve ."),
-    ("architext:build",    "architext build ."),
-    ("architext:clean",    "architext clean ."),
-    ("architext:doctor",   "architext doctor ."),
-    ("architext:prompt",   "architext prompt ."),
-    ("architext:validate", "architext validate ."),
-];
-
 // copiedInstallEntries (relative to docs/architext/)
 const COPIED_INSTALL_ENTRIES: &[&str] = &[
     "AGENTS_APPENDIX.md",
@@ -501,23 +491,8 @@ pub fn collect_status(target: &Path, version: &str, run_validation: bool) -> Val
         }));
     }
 
-    // rootScripts
-    let (pkg_exists, pkg_json) = package_json_info(target);
-    let mut root_script_status = Map::new();
-    for &(name, expected_value) in ROOT_SCRIPTS {
-        let actual = pkg_json.as_ref()
-            .and_then(|p| p["scripts"][name].as_str())
-            .unwrap_or("")
-            .to_string();
-        let present = !actual.is_empty();
-        let recommended = actual == expected_value;
-        let value_field = if present { Value::String(actual) } else { Value::Null };
-        root_script_status.insert(name.to_string(), json!({
-            "present": present,
-            "recommended": recommended,
-            "value": value_field
-        }));
-    }
+    // rootPackageExists
+    let (pkg_exists, _pkg_json) = package_json_info(target);
 
     // trackedGenerated (git ls-files docs/architext/dist)
     let tracked_generated: Vec<Value> = if git_available(target) {
@@ -543,7 +518,6 @@ pub fn collect_status(target: &Path, version: &str, run_validation: bool) -> Val
         "gitignoreMissing": gitignore_missing,
         "instructionStatus": instruction_status,
         "rootPackageExists": pkg_exists,
-        "rootScripts": root_script_status,
         "trackedGenerated": tracked_generated,
         "manifest": manifest_status,
         "instructionRules": instruction_rules,
@@ -568,12 +542,6 @@ mod tests {
 
     fn temp_dir() -> TempDir {
         tempfile::tempdir().expect("tempdir")
-    }
-
-    fn write_json(dir: &std::path::Path, rel: &str, v: &Value) {
-        let p = dir.join(rel);
-        fs::create_dir_all(p.parent().unwrap()).unwrap();
-        fs::write(&p, serde_json::to_string_pretty(v).unwrap() + "\n").unwrap();
     }
 
     // ─── gitignore-missing diff ────────────────────────────────────────────────
@@ -634,49 +602,6 @@ mod tests {
             status["instructionStatus"]["AGENTS.md"]["mentionsCopiedTemplate"],
             Value::Bool(false)
         );
-    }
-
-    // ─── rootScripts recommended match ────────────────────────────────────────
-
-    #[test]
-    fn root_scripts_recommended_when_exact_match() {
-        let td = temp_dir();
-        let scripts: serde_json::Map<String, Value> = ROOT_SCRIPTS
-            .iter()
-            .map(|(k, v)| (k.to_string(), Value::String(v.to_string())))
-            .collect();
-        let pkg = json!({ "name": "test", "scripts": scripts });
-        write_json(td.path(), "package.json", &pkg);
-        let status = collect_status(td.path(), "0.0.0", false);
-        for (name, _) in ROOT_SCRIPTS {
-            let entry = &status["rootScripts"][name];
-            assert_eq!(entry["recommended"], Value::Bool(true), "script {name} should be recommended");
-            assert_eq!(entry["present"], Value::Bool(true));
-        }
-    }
-
-    #[test]
-    fn root_scripts_not_recommended_when_different_value() {
-        let td = temp_dir();
-        let pkg = json!({ "name": "test", "scripts": { "architext": "wrong command" } });
-        write_json(td.path(), "package.json", &pkg);
-        let status = collect_status(td.path(), "0.0.0", false);
-        let entry = &status["rootScripts"]["architext"];
-        assert_eq!(entry["present"], Value::Bool(true));
-        assert_eq!(entry["recommended"], Value::Bool(false));
-        assert_eq!(entry["value"], Value::String("wrong command".to_string()));
-    }
-
-    #[test]
-    fn root_scripts_absent_when_no_package_json() {
-        let td = temp_dir();
-        let status = collect_status(td.path(), "0.0.0", false);
-        assert_eq!(status["rootPackageExists"], Value::Bool(false));
-        // Scripts should still be listed, all with present=false
-        for (name, _) in ROOT_SCRIPTS {
-            let entry = &status["rootScripts"][name];
-            assert_eq!(entry["present"], Value::Bool(false));
-        }
     }
 
     // ─── doctorRepairsForStatus combinator ────────────────────────────────────

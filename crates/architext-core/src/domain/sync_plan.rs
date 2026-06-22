@@ -42,13 +42,12 @@ pub fn normalize_sync_instruction_files(files: &Value, valid_instruction_files: 
     Value::Array(result)
 }
 
-/// `defaultSyncChoices({ rootPackageExists, instructionFiles })`.
-pub fn default_sync_choices(root_package_exists: bool, instruction_files: &[String]) -> Value {
+/// `defaultSyncChoices({ instructionFiles })`.
+pub fn default_sync_choices(instruction_files: &[String]) -> Value {
     json!({
         "branch": "current",
         "instructionFiles": instruction_files,
         "manageGitignore": true,
-        "manageRootScripts": root_package_exists,
         "applyDoctorRepairs": true,
         "proceedWithChanges": true,
         "promptBeforeProceed": false
@@ -76,7 +75,6 @@ pub fn remembered_sync_choices(metadata: &Value, instruction_files: &[String]) -
 
     // Boolean(choices.manageGitignore)
     let manage_gitignore = js_bool(&choices["manageGitignore"]);
-    let manage_root_scripts = js_bool(&choices["manageRootScripts"]);
     // applyDoctorRepairs !== false
     let apply_doctor_repairs = choices["applyDoctorRepairs"] != Value::Bool(false);
     let proceed_with_changes = choices["proceedWithChanges"] != Value::Bool(false);
@@ -85,7 +83,6 @@ pub fn remembered_sync_choices(metadata: &Value, instruction_files: &[String]) -
         "branch": branch,
         "instructionFiles": normalized,
         "manageGitignore": manage_gitignore,
-        "manageRootScripts": manage_root_scripts,
         "applyDoctorRepairs": apply_doctor_repairs,
         "proceedWithChanges": proceed_with_changes,
         "promptBeforeProceed": false
@@ -117,13 +114,6 @@ pub fn apply_explicit_sync_options(choices: &Value, options: &Value, instruction
         next.insert("manageGitignore".to_string(), Value::Bool(true));
     }
 
-    // noRootScripts beats rootScripts
-    if js_bool(&options["noRootScripts"]) {
-        next.insert("manageRootScripts".to_string(), Value::Bool(false));
-    } else if js_bool(&options["rootScripts"]) {
-        next.insert("manageRootScripts".to_string(), Value::Bool(true));
-    }
-
     Value::Object(next)
 }
 
@@ -153,8 +143,7 @@ pub fn sync_write_plan(
         || doctor_repairs_selected
         || js_bool(&options["force"])
         || instruction_files_len > 0
-        || sync_choices["manageGitignore"] == Value::Bool(true)
-        || sync_choices["manageRootScripts"] == Value::Bool(true);
+        || sync_choices["manageGitignore"] == Value::Bool(true);
 
     let operation = sync_operation(installing, migrating);
     let operation_label = if should_write {
@@ -182,14 +171,13 @@ pub fn persisted_sync_choices(choices: &Value) -> Value {
         "branch": choices["branch"],
         "instructionFiles": choices["instructionFiles"],
         "manageGitignore": choices["manageGitignore"],
-        "manageRootScripts": choices["manageRootScripts"],
         "applyDoctorRepairs": choices["applyDoctorRepairs"],
         "proceedWithChanges": choices["proceedWithChanges"]
     })
 }
 
 /// `syncMetadataPatch({ version, installing, migrating, instructionFiles, syncChoices,
-///   managedInstructions, gitignoreManaged, rootScriptsManaged, validation, now })`.
+///   managedInstructions, gitignoreManaged, validation, now })`.
 ///
 /// `lastValidation: validation ? { ok, at } : undefined` — undefined drops key.
 #[allow(clippy::too_many_arguments)]
@@ -201,7 +189,6 @@ pub fn sync_metadata_patch(
     sync_choices: &Value,
     managed_instructions: &Value,
     gitignore_managed: bool,
-    root_scripts_managed: bool,
     validation: &Value,  // null or object
     now: &str,
 ) -> Value {
@@ -225,7 +212,6 @@ pub fn sync_metadata_patch(
         "instructionFiles": Value::Object(instr_obj),
         "managedInstructions": managed_instructions,
         "gitignoreManaged": gitignore_managed,
-        "rootScriptsManaged": root_scripts_managed,
         "syncChoices": persisted_sync_choices(sync_choices)
     });
 
@@ -262,9 +248,9 @@ mod tests {
     }
 
     #[test]
-    fn default_choices_with_root_package() {
-        let result = default_sync_choices(true, &["CLAUDE.md".to_string()]);
-        assert_eq!(result["manageRootScripts"], true);
+    fn default_choices() {
+        let result = default_sync_choices(&["CLAUDE.md".to_string()]);
+        assert_eq!(result["manageGitignore"], true);
         assert_eq!(result["branch"], "current");
     }
 
@@ -276,7 +262,7 @@ mod tests {
 
     #[test]
     fn remembered_choices_invalid_branch_fallback() {
-        let meta = json!({ "syncChoices": { "branch": "invalid", "instructionFiles": [], "manageGitignore": true, "manageRootScripts": false, "applyDoctorRepairs": true, "proceedWithChanges": true } });
+        let meta = json!({ "syncChoices": { "branch": "invalid", "instructionFiles": [], "manageGitignore": true, "applyDoctorRepairs": true, "proceedWithChanges": true } });
         let result = remembered_sync_choices(&meta, &["CLAUDE.md".to_string()]);
         assert_eq!(result["branch"], "current");
     }
@@ -290,7 +276,7 @@ mod tests {
 
     #[test]
     fn write_plan_install_should_write() {
-        let choices = json!({ "instructionFiles": [], "manageGitignore": false, "manageRootScripts": false, "applyDoctorRepairs": false });
+        let choices = json!({ "instructionFiles": [], "manageGitignore": false, "applyDoctorRepairs": false });
         let result = sync_write_plan(true, false, false, &choices, &json!({}));
         assert_eq!(result["shouldWrite"], true);
         assert_eq!(result["operation"], "install");
@@ -298,7 +284,7 @@ mod tests {
 
     #[test]
     fn write_plan_sync_current() {
-        let choices = json!({ "instructionFiles": [], "manageGitignore": false, "manageRootScripts": false, "applyDoctorRepairs": false });
+        let choices = json!({ "instructionFiles": [], "manageGitignore": false, "applyDoctorRepairs": false });
         let result = sync_write_plan(false, false, false, &choices, &json!({}));
         assert_eq!(result["shouldWrite"], false);
         assert_eq!(result["operationLabel"], "Operation: sync (current)");
@@ -316,15 +302,15 @@ mod tests {
 
     #[test]
     fn metadata_patch_drops_last_validation_when_null() {
-        let sync_choices = json!({ "branch": "current", "instructionFiles": ["CLAUDE.md"], "manageGitignore": true, "manageRootScripts": false, "applyDoctorRepairs": true, "proceedWithChanges": true });
-        let result = sync_metadata_patch("1.7.0", true, false, &["CLAUDE.md".to_string()], &sync_choices, &json!([]), false, false, &Value::Null, "2024-01-01T00:00:00.000Z");
+        let sync_choices = json!({ "branch": "current", "instructionFiles": ["CLAUDE.md"], "manageGitignore": true, "applyDoctorRepairs": true, "proceedWithChanges": true });
+        let result = sync_metadata_patch("1.7.0", true, false, &["CLAUDE.md".to_string()], &sync_choices, &json!([]), false, &Value::Null, "2024-01-01T00:00:00.000Z");
         assert!(result.get("lastValidation").is_none());
     }
 
     #[test]
     fn metadata_patch_includes_last_validation() {
-        let sync_choices = json!({ "branch": "current", "instructionFiles": ["CLAUDE.md"], "manageGitignore": true, "manageRootScripts": false, "applyDoctorRepairs": true, "proceedWithChanges": true });
-        let result = sync_metadata_patch("1.7.0", false, false, &["CLAUDE.md".to_string()], &sync_choices, &json!(["CLAUDE.md"]), true, false, &json!({ "ok": true }), "2024-01-01T00:00:00.000Z");
+        let sync_choices = json!({ "branch": "current", "instructionFiles": ["CLAUDE.md"], "manageGitignore": true, "applyDoctorRepairs": true, "proceedWithChanges": true });
+        let result = sync_metadata_patch("1.7.0", false, false, &["CLAUDE.md".to_string()], &sync_choices, &json!(["CLAUDE.md"]), true, &json!({ "ok": true }), "2024-01-01T00:00:00.000Z");
         assert_eq!(result["lastValidation"]["ok"], true);
     }
 }

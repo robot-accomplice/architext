@@ -18,6 +18,12 @@
       "runtimeExecutable": "target/release/architext-serve",
       "runtimeArgs": ["--data-dir", "docs/architext/data", "--dist", "crates/architext-viewer/dist", "--port", "8110"],
       "port": 8110
+    },
+    {
+      "name": "viewer-corpus",
+      "runtimeExecutable": "target/release/architext-serve",
+      "runtimeArgs": ["--data-dir", "test/fixtures/corpus", "--dist", "crates/architext-viewer/dist", "--port", "8110"],
+      "port": 8110
     }
   ]
 }
