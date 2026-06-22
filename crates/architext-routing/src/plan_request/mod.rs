@@ -43,6 +43,19 @@ fn decision_node_id(step_id: &str) -> String {
     format!("decision:{step_id}")
 }
 
+/// Route-id prefix marking a decision diamond's anchoring stem. The viewer
+/// detects stems by this prefix to render them without an arrowhead (a stem is
+/// an anchor, not a directional message). Shared so the producer (here) and the
+/// consumer (the viewer's render model) cannot drift.
+pub const DECISION_STEM_PREFIX: &str = "decision-stem:";
+
+/// The route id for a decision diamond's anchoring stem. Distinct from the
+/// decision step's own id and from any branch step id, so the viewer can detect
+/// the stem (it carries no flow-step number and renders without an arrowhead).
+pub fn decision_stem_id(step_id: &str) -> String {
+    format!("{DECISION_STEM_PREFIX}{step_id}")
+}
+
 /// Port of JS `decisionTip(rect, side)`.
 /// Returns the tip point of a diamond at the given side.
 fn decision_tip(x: f64, y: f64, width: f64, height: f64, side: &str) -> Point {
@@ -62,6 +75,10 @@ fn decision_tip(x: f64, y: f64, width: f64, height: f64, side: &str) -> Point {
 pub struct DecisionNode {
     pub id: String,
     pub component_id: String,
+    /// The id of the `decision`-kind flow step this diamond was built from. Used
+    /// to id the anchoring stem (`decision-stem:<step>`) and to share the step's
+    /// selection highlight with the stem.
+    pub decision_step_id: String,
     pub lane_index: usize,
     pub row_index: usize,
     pub rect_x: f64,
@@ -155,6 +172,7 @@ pub fn build_decision_nodes(flow: &Flow, view: &View, layout: &DiagramLayout) ->
         Some(DecisionNode {
             id: decision_node_id(&step.id),
             component_id: step.to.clone(),
+            decision_step_id: step.id.clone(),
             lane_index,
             row_index,
             rect_x: x,
@@ -162,6 +180,34 @@ pub fn build_decision_nodes(flow: &Flow, view: &View, layout: &DiagramLayout) ->
             rect_width: DECISION_SIZE,
             rect_height: DECISION_SIZE,
         })
+    }).collect()
+}
+
+/// Build the anchoring STEMS for a flow's decision diamonds: one short routed
+/// connector per diamond, from the host node (the component that makes the
+/// decision, `dn.component_id`) down to the diamond (`dn.id`). Without it the
+/// diamond floats unconnected (see viewer/DESIGN.md "Flow decision diamonds").
+///
+/// A stem is unlabeled (no number badge — `display_index: 0`, `label: None`) and
+/// routes host-bottom → diamond-top. Because a diamond's center-x equals its
+/// host's center-x (`DECISION_X_OFFSET == DECISION_SIZE / 2`), the stem is a
+/// clean straight vertical, not a forbidden Z/dogleg. The viewer detects the
+/// stem by its `decision-stem:` route id and draws it without an arrowhead.
+pub fn build_decision_stems(decision_nodes: &[DecisionNode], flow_id: &str) -> Vec<BuiltRelationship> {
+    decision_nodes.iter().map(|dn| BuiltRelationship {
+        id: decision_stem_id(&dn.decision_step_id),
+        from: dn.component_id.clone(),
+        to: dn.id.clone(),
+        label: None,
+        relationship_type: "stem".to_string(),
+        step_id: dn.decision_step_id.clone(),
+        flow_id: flow_id.to_string(),
+        display_index: 0,
+        kind: Some("stem".to_string()),
+        return_of: None,
+        outcome: None,
+        preferred_start_side: Some("bottom".to_string()),
+        preferred_end_side: Some("top".to_string()),
     }).collect()
 }
 
@@ -184,9 +230,16 @@ pub fn build_flow_plan_request(
     layout_config: Option<&LayoutConfig>,
     style: &str,
 ) -> FlowPlanRequest {
-    let relationships = build_flow_relationships(flow, view);
+    let mut relationships = build_flow_relationships(flow, view);
+    // Layout density is derived from the flow relationships ONLY; the stems added
+    // below are anchoring decorations, not flow steps, so they must not perturb it.
     let layout = diagram_layout_for(view, relationships.len(), layout_config);
     let decision_nodes = build_decision_nodes(flow, view, &layout);
+
+    // Anchor each decision diamond to its host node with a STEM (see
+    // `build_decision_stems`). Appended after layout so stems don't perturb
+    // layout density, before the cache key so the key reflects them.
+    relationships.extend(build_decision_stems(&decision_nodes, &flow.id));
 
     // visibleNodeIds = union of all nodeIds across all lanes
     let visible_node_ids_unsorted: Vec<String> = view.lanes.iter()
@@ -554,5 +607,55 @@ fn build_plan_diagram_input(
         score_edge_proximity: false,
         style: style.to_string(),
         diagnostics: false,
+    }
+}
+
+#[cfg(test)]
+mod stem_tests {
+    use super::*;
+
+    fn decision_node(id: &str, component_id: &str, step_id: &str) -> DecisionNode {
+        DecisionNode {
+            id: id.to_string(),
+            component_id: component_id.to_string(),
+            decision_step_id: step_id.to_string(),
+            lane_index: 0,
+            row_index: 0,
+            rect_x: 0.0,
+            rect_y: 0.0,
+            rect_width: DECISION_SIZE,
+            rect_height: DECISION_SIZE,
+        }
+    }
+
+    #[test]
+    fn stem_anchors_host_to_diamond_unlabeled_vertical() {
+        // Mirrors the FlowForge `fresh-install` flow: the `validate-install`
+        // decision is hosted by `schema-validator`, diamond id `decision:...`.
+        let dn = decision_node("decision:validate-install", "schema-validator", "validate-install");
+        let stems = build_decision_stems(std::slice::from_ref(&dn), "fresh-install");
+
+        assert_eq!(stems.len(), 1, "one stem per decision diamond");
+        let s = &stems[0];
+        // Host (the deciding component) → diamond, so the diamond stops floating.
+        assert_eq!(s.from, "schema-validator");
+        assert_eq!(s.to, "decision:validate-install");
+        // No number badge: a stem is an anchor, not a numbered flow step.
+        assert!(s.label.is_none());
+        assert_eq!(s.display_index, 0);
+        assert_eq!(s.relationship_type, "stem");
+        assert_eq!(s.kind.as_deref(), Some("stem"));
+        // Routes straight down the host's bottom into the diamond's top tip.
+        assert_eq!(s.preferred_start_side.as_deref(), Some("bottom"));
+        assert_eq!(s.preferred_end_side.as_deref(), Some("top"));
+        // Shares the decision step's id so it highlights with that step.
+        assert_eq!(s.step_id, "validate-install");
+        // Id is distinct from the decision step id and any branch step id.
+        assert_eq!(s.id, "decision-stem:validate-install");
+    }
+
+    #[test]
+    fn no_decisions_yields_no_stems() {
+        assert!(build_decision_stems(&[], "flow").is_empty());
     }
 }

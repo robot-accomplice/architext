@@ -1,7 +1,8 @@
 //! `architext` binary — argv adapter for the Rust CLI.
 //!
-//! Mirrors the JS `main()` in `src/adapters/cli/architext-cli.mjs` and
-//! the `tools/architext-adopt.mjs` bin shim.
+//! This is the entry point of the self-contained native binary (distribution is
+//! native-only: the curl installer + GitHub-release binaries + `architext
+//! update`).
 //!
 //! Architecture: this file is pure routing.  Business logic lives in
 //! `architext_core` and the `commands::*` modules.

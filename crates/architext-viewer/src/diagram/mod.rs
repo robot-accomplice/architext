@@ -69,6 +69,10 @@ pub enum EdgeKind {
     Decision,
     Async,
     Return,
+    /// A decision diamond's anchoring stem (host node → diamond). Not a flow
+    /// step: it carries no number badge and renders WITHOUT an arrowhead — it is
+    /// a tether, not a directional message.
+    Stem,
 }
 
 impl EdgeKind {
@@ -78,6 +82,7 @@ impl EdgeKind {
             Some("decision") => EdgeKind::Decision,
             Some("async") => EdgeKind::Async,
             Some("return") => EdgeKind::Return,
+            Some("stem") => EdgeKind::Stem,
             _ => EdgeKind::Process,
         }
     }
@@ -89,7 +94,14 @@ impl EdgeKind {
             EdgeKind::Decision => "flow-edge--decision",
             EdgeKind::Async => "flow-edge--async",
             EdgeKind::Return => "flow-edge--return",
+            EdgeKind::Stem => "flow-edge--stem",
         }
+    }
+
+    /// Whether this edge ends in an arrowhead. A stem is an anchor, not a
+    /// directional message, so it has none.
+    pub fn has_arrowhead(self) -> bool {
+        !matches!(self, EdgeKind::Stem)
     }
 }
 

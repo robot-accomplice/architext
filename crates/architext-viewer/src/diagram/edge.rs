@@ -39,12 +39,18 @@ pub fn DiagramEdge(
             base.clone()
         }
     };
+    // A stem is a tether, not a directional message → no arrowhead.
+    let marker_end = if edge.kind.has_arrowhead() {
+        format!("url(#{ARROWHEAD_ID})")
+    } else {
+        String::new()
+    };
     view! {
         <path
             class=class
             d=edge.d
             fill="none"
-            marker-end=format!("url(#{ARROWHEAD_ID})")
+            marker-end=marker_end
         ></path>
     }
 }

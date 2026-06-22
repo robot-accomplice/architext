@@ -202,13 +202,13 @@ Run:
 architext validate [path]
 ```
 
-If working inside the Architext package repository, also use the repository's
-test and build commands that match the touched surface, such as:
+If working inside the Architext source repository, also use the repository's
+Rust test and build commands that match the touched surface (no Node/npm):
 
 ```sh
-npm run validate
-npm run build
-npm test
+cargo run -p architext-cli -- validate .
+trunk build --release --config crates/architext-viewer/Trunk.toml
+cargo test --workspace
 ```
 
 Report skipped validation explicitly. Broken Architext data is worse than

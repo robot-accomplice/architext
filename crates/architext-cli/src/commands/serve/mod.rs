@@ -247,10 +247,10 @@ fn viewer_dist_dir() -> PathBuf {
         return PathBuf::from(d);
     }
 
-    // Installed native binary: the per-platform optionalDependency package ships
-    // the viewer dist next to the binary (`<exe_dir>/dist`). Checked first so a
-    // packaged install is self-contained, independent of any repo layout (the
-    // dev candidates below resolve `crates/architext-viewer/dist` from source).
+    // A co-located dist next to the binary (`<exe_dir>/dist`), e.g. a dev/override
+    // layout. Checked before the source-tree candidates. A release binary does not
+    // rely on this: it embeds the viewer dist (rust-embed), so `serve` falls back
+    // to the embedded copy when no on-disk dist is found.
     if let Ok(exe) = std::env::current_exe() {
         if let Some(beside) = exe.parent().map(|d| d.join("dist")) {
             if beside.join("index.html").exists() {
@@ -305,10 +305,14 @@ fn serve_foreground(target: &Path, opts: &ParsedArgs) {
     use std::sync::Arc;
 
     let dist_dir = viewer_dist_dir();
-    // OK if either an on-disk dist exists (dev / npm co-located / override) OR the
-    // viewer is embedded in the binary (the self-contained native install path).
+    // OK if either an on-disk dist exists (dev / ARCHITEXT_VIEWER_DIST override) OR
+    // the viewer is embedded in the binary (the self-contained native install path).
     if !dist_dir.join("index.html").exists() && !architext_serve::has_embedded_viewer() {
-        eprintln!("Package viewer assets are missing. Run npm run build before serving Architext.");
+        eprintln!(
+            "Viewer assets are missing. Install the release binary (the viewer is \
+             embedded), or in a dev checkout run: trunk build --release --config \
+             crates/architext-viewer/Trunk.toml"
+        );
         process::exit(1);
     }
 
