@@ -39,8 +39,8 @@
       "category": "operational",
       "severity": "high",
       "status": "mitigating",
-      "summary": "The global CLI depends on package-owned viewer assets, schemas, and tools. A bad package file list can break serve, build, or validate.",
-      "mitigations": ["Run npm pack --dry-run before release", "Keep package files explicit", "Validate serve/build/package workflows before publishing"],
+      "summary": "The CLI depends on the viewer dist and schemas being embedded in the binary. A build that compiles the binary without those embedded would break serve or validate on an installed binary.",
+      "mitigations": ["Build the viewer dist before compiling the CLI so rust-embed bakes it in", "Run the bare-binary embedded-serve smoke before release (scripts/rust-serve-embedded-smoke.sh)", "Validate serve/build/validate on a binary run from outside the repo"],
       "relatedNodes": ["package-artifacts", "viewer-runtime", "schema-validator"],
       "relatedFlows": ["release-packaging", "local-review", "static-export"]
     },
