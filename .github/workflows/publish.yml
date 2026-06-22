@@ -1,15 +1,12 @@
-name: Publish to npm
+name: Release
 
-# Rust-only publish (1.7.0+). Cross-compiles the five native binaries, then on a
-# single runner builds the viewer dist, stamps the per-platform packages, and
-# publishes the binary packages FIRST and the launcher (main package) LAST — so
-# the launcher's optionalDependencies already exist when anyone installs it.
-# There is no JS fallback after the cutover, so a partial publish (launcher
-# without binaries) would break every install; the binary matrix uses
-# fail-fast and the launcher publishes only after all five succeed.
+# Native-only release (1.7.6+). Cross-compiles the five native binaries (with the
+# Trunk viewer dist embedded via rust-embed), then attaches them plus a
+# SHA256SUMS manifest to the GitHub release. The shell installer (install.sh) and
+# `architext update` download these directly — there is no npm channel.
 #
-# dry_run=true validates the whole flow (build + stamp + gate + `npm publish
-# --dry-run`) without pushing anything or needing OIDC — run it before tagging.
+# dry_run=true builds everything (binaries + viewer) without attaching anything to
+# a release — run it before tagging to validate the build.
 
 on:
   release:
@@ -17,11 +14,11 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: Version to publish, without the leading v.
+        description: Version to build, without the leading v.
         required: false
         type: string
       dry_run:
-        description: Validate the flow without pushing any package.
+        description: Build without attaching binaries to a release.
         required: true
         default: "true"
         type: choice
@@ -31,7 +28,6 @@ on:
 
 permissions:
   contents: write # attach native binaries + checksums to the GitHub release
-  id-token: write
 
 jobs:
   resolve:
@@ -67,6 +63,22 @@ jobs:
             echo "dry_run=$dry_run"
             echo "ref=$ref"
           } >> "$GITHUB_OUTPUT"
+
+      - name: Confirm VERSION matches the released version
+        if: ${{ github.event_name == 'release' }}
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ steps.r.outputs.ref }}
+      - name: Check VERSION file
+        if: ${{ github.event_name == 'release' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual="$(tr -d '[:space:]' < VERSION)"
+          if [ "$actual" != "${{ steps.r.outputs.version }}" ]; then
+            echo "VERSION file ($actual) != released version (${{ steps.r.outputs.version }})" >&2
+            exit 1
+          fi
 
   # The viewer dist is EMBEDDED into the binary (rust-embed in architext-serve), so it
   # must exist before the CLI compiles. Build it once here and feed it to build-binaries.
@@ -104,8 +116,8 @@ jobs:
     name: binary ${{ matrix.target_key }}
     needs: [resolve, build-viewer]
     runs-on: ${{ matrix.runner }}
-    # Publish nothing unless ALL five binaries build — a partial set would break
-    # installs (no JS fallback).
+    # Attach nothing unless ALL five binaries build — a partial set would leave the
+    # installer unable to fetch some platforms.
     strategy:
       fail-fast: true
       matrix:
@@ -184,131 +196,34 @@ jobs:
           path: staged/${{ matrix.bin }}
           if-no-files-found: error
 
-  publish:
-    name: stamp + publish
+  release:
+    name: attach binaries to release
     needs: [resolve, build-binaries]
     runs-on: ubuntu-latest
     steps:
-      - name: Check out the release ref
-        uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.resolve.outputs.ref }}
-
-      - name: Set up Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 24
-          registry-url: https://registry.npmjs.org
-
-      - name: Install Rust toolchain (viewer dist + native validator)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: wasm32-unknown-unknown
-
-      - name: Install trunk
-        uses: jetli/trunk-action@v0.5.0
-        with:
-          version: latest
-
-      - name: Confirm package.json matches the released version
-        shell: bash
-        run: |
-          set -euo pipefail
-          actual="$(node -p 'require("./package.json").version')"
-          if [ "$actual" != "${{ needs.resolve.outputs.version }}" ]; then
-            echo "package.json version ($actual) != released version (${{ needs.resolve.outputs.version }})" >&2
-            exit 1
-          fi
-
-      - name: Build the viewer dist
-        run: npm run build:viewer
-
       - name: Download per-platform binaries
         uses: actions/download-artifact@v5
         with:
           pattern: architext-binary-*
           path: binaries
 
-      - name: Stamp the per-platform packages (binary + co-located dist)
+      # Smoke the linux-x64 binary from OUTSIDE any source tree so it must rely on
+      # its embedded schemas (validate) and embedded viewer dist (serve) — proof the
+      # self-contained native binary works with no npm and no co-located files.
+      - name: Native binary smoke (embedded schemas + dist)
         shell: bash
         run: |
           set -euo pipefail
-          for key in darwin-arm64 darwin-x64 linux-x64 linux-arm64 win32-x64; do
-            bin="architext"
-            [ "$key" = "win32-x64" ] && bin="architext.exe"
-            node scripts/build-binary-packages.mjs \
-              --binary "binaries/architext-binary-$key/$bin" \
-              --target "$key" \
-              --out dist-binaries
-          done
+          bin="$(mktemp -d)/architext"
+          cp binaries/architext-binary-linux-x64/architext "$bin"
+          chmod +x "$bin"
+          target="$(mktemp -d)"
+          "$bin" --version
+          "$bin" sync "$target" --yes --branch none
+          "$bin" validate "$target"
 
-      - name: Release gate (validate + package-shape smoke)
-        run: npm run release:check
-
-      - name: Publish (binaries first, launcher last)
-        shell: bash
-        env:
-          DRY: ${{ needs.resolve.outputs.dry_run }}
-          VERSION: ${{ needs.resolve.outputs.version }}
-          # Auth precedence: a granular NPM_TOKEN secret is the reliable path for
-          # the first publish of the five brand-new package names. If the secret
-          # is unset this is empty and we fall back to OIDC trusted publishing
-          # (which needs a trusted publisher configured per package).
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-        run: |
-          set -euo pipefail
-          flags="--access public"
-          if [ "$DRY" = "true" ]; then
-            flags="$flags --dry-run"
-          else
-            flags="$flags --provenance"
-          fi
-          # When no NPM_TOKEN is provided, strip the empty `_authToken` line that
-          # setup-node wrote so it doesn't shadow OIDC trusted publishing with a
-          # failed empty-token auth. With a token present, leave it in place.
-          if [ -z "${NODE_AUTH_TOKEN:-}" ] && [ -n "${NPM_CONFIG_USERCONFIG:-}" ]; then
-            sed -i '/:_authToken=/d' "$NPM_CONFIG_USERCONFIG" 2>/dev/null || true
-          fi
-
-          # Idempotent, re-runnable publish: a real publish (dry_run=false) skips
-          # any package whose exact version is already on the registry, and treats
-          # a publish that fails *because the version now exists* as success. So if
-          # a run dies partway through the six packages, simply re-running it
-          # completes the set instead of 403-ing on the ones already up. Dry-runs
-          # always pack every package (never skip) so the validation is complete.
-          publish_one() {
-            local name="$1" workdir="$2"
-            if [ "$DRY" != "true" ] && npm view "$name@$VERSION" version >/dev/null 2>&1; then
-              echo "  already published: $name@$VERSION — skipping"
-              return 0
-            fi
-            if ( cd "$workdir" && npm publish $flags ); then
-              return 0
-            fi
-            # Tolerate a race: the version may have landed between the check above
-            # and this publish (e.g. a retried network call).
-            if [ "$DRY" != "true" ] && npm view "$name@$VERSION" version >/dev/null 2>&1; then
-              echo "  $name@$VERSION is now on the registry — treating as published"
-              return 0
-            fi
-            echo "::error::publish failed for $name@$VERSION" >&2
-            return 1
-          }
-
-          # Binary packages FIRST so the launcher's optionalDependencies resolve.
-          for key in darwin-arm64 darwin-x64 linux-x64 linux-arm64 win32-x64; do
-            echo "::group::publish @robotaccomplice/architext-$key"
-            publish_one "@robotaccomplice/architext-$key" "dist-binaries/$key"
-            echo "::endgroup::"
-          done
-          # Launcher (main package) LAST.
-          echo "::group::publish @robotaccomplice/architext"
-          publish_one "@robotaccomplice/architext" "."
-          echo "::endgroup::"
-
-      # Attach the native binaries + a SHA256SUMS manifest to the GitHub release
-      # so the shell installer and `architext update` can download them directly.
-      # This is the off-npm path: npm is only a transition bridge.
+      # Attach the native binaries + a SHA256SUMS manifest to the GitHub release so
+      # the shell installer and `architext update` can download them directly.
       - name: Attach native binaries + checksums to the release
         if: ${{ needs.resolve.outputs.dry_run == 'false' && github.event_name == 'release' }}
         env:
@@ -347,30 +262,3 @@ jobs:
             https://api.github.com/repos/robot-accomplice/roboticus-site/dispatches \
             -d "{\"event_type\":\"architext-release\",\"client_payload\":{\"version\":\"${VERSION}\"}}"
           echo "Dispatched architext-release (${VERSION}) to roboticus-site."
-
-      - name: Smoke-test the published native CLI
-        if: ${{ needs.resolve.outputs.dry_run == 'false' }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          prefix="$(mktemp -d)"
-          target="$(mktemp -d)"
-          ver="${{ needs.resolve.outputs.version }}"
-          # Wait for the just-published version to be visible on the registry read
-          # path before installing. A package's tarball lands immediately but its
-          # package document propagates with a short delay, so installing right
-          # after publish races it and 404s (ETARGET). Poll the launcher AND the
-          # binary this runner installs (linux-x64) up to ~5 min. This is a smoke
-          # timing guard only — the publish has already succeeded by this point.
-          for i in $(seq 1 30); do
-            if npm view "@robotaccomplice/architext@$ver" version >/dev/null 2>&1 \
-               && npm view "@robotaccomplice/architext-linux-x64@$ver" version >/dev/null 2>&1; then
-              break
-            fi
-            echo "waiting for npm to surface $ver ($i/30)..."
-            sleep 10
-          done
-          npm install -g --prefix "$prefix" "@robotaccomplice/architext@$ver"
-          "$prefix/bin/architext" --version
-          "$prefix/bin/architext" sync "$target" --yes --branch none
-          "$prefix/bin/architext" validate "$target"
