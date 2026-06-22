@@ -29,6 +29,10 @@ syntect = { version = "5", default-features = false, features = ["default-fancy"
 clap = { version = "4", features = ["derive"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+# Embed the Trunk-built viewer dist into the binary so a standalone native install
+# (curl installer / `architext update`) serves the viewer with no co-located files.
+# Release builds bake the dist in; debug builds read the folder at runtime.
+rust-embed = { version = "8", features = ["mime-guess"] }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["full"] }

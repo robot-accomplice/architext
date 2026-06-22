@@ -68,9 +68,41 @@ jobs:
             echo "ref=$ref"
           } >> "$GITHUB_OUTPUT"
 
+  # The viewer dist is EMBEDDED into the binary (rust-embed in architext-serve), so it
+  # must exist before the CLI compiles. Build it once here and feed it to build-binaries.
+  build-viewer:
+    name: viewer dist (trunk)
+    needs: resolve
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the release ref
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.resolve.outputs.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Install trunk
+        uses: jetli/trunk-action@v0.5.0
+        with:
+          version: latest
+
+      - name: Build the viewer dist
+        run: trunk build --release --config crates/architext-viewer/Trunk.toml
+
+      - name: Upload viewer dist artifact
+        uses: actions/upload-artifact@v5
+        with:
+          name: architext-viewer-dist
+          path: crates/architext-viewer/dist
+          if-no-files-found: error
+
   build-binaries:
     name: binary ${{ matrix.target_key }}
-    needs: resolve
+    needs: [resolve, build-viewer]
     runs-on: ${{ matrix.runner }}
     # Publish nothing unless ALL five binaries build — a partial set would break
     # installs (no JS fallback).
@@ -118,6 +150,17 @@ jobs:
       - name: Install cross
         if: ${{ matrix.cross }}
         run: cargo install cross --locked
+
+      # Place the Trunk-built viewer dist where rust-embed bakes it into the binary.
+      - name: Download viewer dist (for embedding)
+        uses: actions/download-artifact@v5
+        with:
+          name: architext-viewer-dist
+          path: crates/architext-viewer/dist
+
+      - name: Verify viewer dist present before embedding
+        shell: bash
+        run: test -f crates/architext-viewer/dist/index.html
 
       - name: Build native CLI (cargo)
         if: ${{ !matrix.cross }}
