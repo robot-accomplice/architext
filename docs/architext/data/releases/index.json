@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-7-5",
+  "currentReleaseId": "v1-7-6",
   "releases": [
     {
       "id": "v1-1-2",
@@ -638,6 +638,27 @@
         "stretch": 0
       },
       "file": "v1-7-5.json"
+    },
+    {
+      "id": "v1-7-6",
+      "version": "1.7.6",
+      "name": "Architext 1.7.6 Native-Only Distribution + Flow Decision Diamonds",
+      "status": "implementing",
+      "posture": "in-progress",
+      "targetDate": "2026-06-22",
+      "lastUpdated": "2026-06-22T20:00:00.000Z",
+      "summary": "Distribution becomes native-only: the entire npm channel is removed — the @robotaccomplice/architext launcher package, the per-platform binary packages (optionalDependencies), package.json/package-lock.json, the npm build/publish/CI steps, and the npm Just recipes. The product version moves off package.json to a repo-root VERSION file that build.rs stamps into the binary (no Node needed to build or test). The curl installer + GitHub-release binaries (with the viewer dist and schemas embedded) + the in-binary `architext update` self-updater are the sole supported install; `architext update` keeps the npm→native off-ramp for users still on the old bridge. Flow decision diamonds are completed per the settled design (viewer/DESIGN.md): a decision diamond now carries an anchoring stem to its host node, a per-branch outcome label, and a what-is-being-decided annotation, instead of rendering as an orphaned floating rect. The README screenshots and the Architext self-model are reconciled to the native-only reality.",
+      "counts": {
+        "features": 1,
+        "bugFixes": 0,
+        "workstreams": 2,
+        "blockers": 0,
+        "complete": 3,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-7-6.json"
     }
   ]
 }
