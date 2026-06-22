@@ -128,9 +128,14 @@ is missing any of them is incomplete, not a stylistic choice:
 
 1. **A decision annotation** — a short label on the diamond stating *what is being
    decided* (the question/subject), not merely that a decision occurs.
-2. **Branch labels** — every outgoing branch is labelled with the *outcome* that
-   path represents (`step.outcome`, e.g. `valid` / `invalid`, `cache hit` /
-   `cache miss`), so the reader can see which result leads where.
+2. **Branch labels** — every outgoing branch carries a compact number **pill**
+   that extends the decision's step number with a letter, `Na` / `Nb` (e.g. `4a`,
+   `4b`) by branch order, matching the existing step-number badge idiom. The pill
+   text is always in a pill, never bare canvas text. The *outcome* the branch
+   represents (`step.outcome`, e.g. `valid` / `invalid`) is the pill's hover title
+   and is spelled out on that branch's card in the steps panel — the same
+   "collapse on the diagram, full text in the steps list" rule the numbered steps
+   follow.
 3. **An anchoring stem** — a connector from the diamond to its **host node** (the
    node that makes the decision). The diamond is never a free-floating shape: the
    stem ties it to the component it belongs to.
