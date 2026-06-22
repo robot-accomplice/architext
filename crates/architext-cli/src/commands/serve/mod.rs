@@ -247,10 +247,10 @@ fn viewer_dist_dir() -> PathBuf {
         return PathBuf::from(d);
     }
 
-    // Installed native binary: the per-platform optionalDependency package ships
-    // the viewer dist next to the binary (`<exe_dir>/dist`). Checked first so a
-    // packaged install is self-contained, independent of any repo layout (the
-    // dev candidates below resolve `crates/architext-viewer/dist` from source).
+    // A co-located dist next to the binary (`<exe_dir>/dist`), e.g. a dev/override
+    // layout. Checked before the source-tree candidates. A release binary does not
+    // rely on this: it embeds the viewer dist (rust-embed), so `serve` falls back
+    // to the embedded copy when no on-disk dist is found.
     if let Ok(exe) = std::env::current_exe() {
         if let Some(beside) = exe.parent().map(|d| d.join("dist")) {
             if beside.join("index.html").exists() {
