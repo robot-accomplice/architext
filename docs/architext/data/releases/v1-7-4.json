@@ -1,0 +1,73 @@
+{
+  "id": "v1-7-4",
+  "version": "1.7.4",
+  "name": "Architext 1.7.4 Self-Contained Native Serve",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Patch release fixing `architext serve` on a pure off-npm install. The viewer dist is now EMBEDDED into the native binary (rust-embed in architext-serve), so a binary installed by the curl installer or `architext update` is self-contained — it no longer depends on a co-located <exe_dir>/dist that the GitHub-release download lacked. Latent since the 1.7.2 native-install feature; surfaced when serving from a binary after leaving npm. On-disk dist (dev / ARCHITEXT_VIEWER_DIST override / npm co-located) still wins; the release pipeline builds the viewer before compiling the CLI so the embed is populated.",
+  "targetDate": "2026-06-22",
+  "lastUpdated": "2026-06-22T07:00:00.000Z",
+  "updateSource": "Fix verified locally: a release binary (16.3 MB, +2.7 MB from the embed) serves the full viewer with no on-disk dist (ARCHITEXT_VIEWER_DIST pointed at a nonexistent dir) — index.html, the 2.46 MB wasm, and CSS all 200, and the app boots and renders flows in a real browser. release-binaries.yml + publish.yml now build the viewer dist and place it before the CLI compiles (with a pre-compile presence check). Pending merge to develop -> main + just github-release.",
+  "scope": {
+    "required": [
+      {
+        "id": "embed-viewer-in-binary",
+        "title": "Embed the viewer into the native binary (off-npm serve fix)",
+        "kind": "bug-fix",
+        "summary": "RCA: serve resolved the viewer from <exe_dir>/dist, which the per-platform npm packages co-locate but the standalone GitHub-release binary (curl installer / architext update) does not include, so a pure off-npm install printed 'Package viewer assets are missing' on serve. Fix: rust-embed bakes crates/architext-viewer/dist into architext-serve; the static handler serves on-disk first (override / npm / dev) then falls back to embedded, and the CLI's missing-assets guard passes when the viewer is embedded. release-binaries.yml and publish.yml build the viewer dist and stage it before the CLI compiles (rust-embed embeds at compile time), with a build.rs guard so non-viewer builds still compile.",
+        "evidence": ["pr-244", "serve-embed-verify"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "off-npm-serve",
+        "dependsOn": []
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [
+      {
+        "id": "drop-redundant-npm-co-location",
+        "title": "Stop co-locating the dist in the npm packages (now embedded)",
+        "kind": "chore",
+        "summary": "With the viewer embedded in the binary, the per-platform npm packages' co-located <exe_dir>/dist is redundant (~2.6 MB per package). Deferral reason: out of scope for the serve hotfix; removing it is a packaging optimization to land once 1.7.4 is verified in the wild, and the on-disk copy is harmless (it simply wins over the identical embedded copy).",
+        "status": "deferred",
+        "owner": "maintainer",
+        "priority": "low",
+        "dependsOn": ["embed-viewer-in-binary"]
+      }
+    ],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "off-npm-serve",
+      "name": "Self-contained native serve",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Make the native binary serve the viewer with no co-located files, so the off-npm install/update path works end to end.",
+      "progress": 100,
+      "itemIds": ["embed-viewer-in-binary"],
+      "evidence": ["pr-244", "serve-embed-verify"]
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "pr-244",
+      "label": "PR embedding the viewer in the native binary + pipeline",
+      "href": "https://github.com/robot-accomplice/architext/pull/244",
+      "kind": "document",
+      "status": "complete"
+    },
+    {
+      "id": "serve-embed-verify",
+      "label": "Release binary serves the viewer with no on-disk dist (browser-verified)",
+      "kind": "manual-check",
+      "status": "complete"
+    }
+  ]
+}

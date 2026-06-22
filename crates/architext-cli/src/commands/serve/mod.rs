@@ -305,7 +305,9 @@ fn serve_foreground(target: &Path, opts: &ParsedArgs) {
     use std::sync::Arc;
 
     let dist_dir = viewer_dist_dir();
-    if !dist_dir.join("index.html").exists() {
+    // OK if either an on-disk dist exists (dev / npm co-located / override) OR the
+    // viewer is embedded in the binary (the self-contained native install path).
+    if !dist_dir.join("index.html").exists() && !architext_serve::has_embedded_viewer() {
         eprintln!("Package viewer assets are missing. Run npm run build before serving Architext.");
         process::exit(1);
     }

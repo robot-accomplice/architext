@@ -18,6 +18,10 @@ jobs:
   build-cli:
     name: cli ${{ matrix.target_key }}
     runs-on: ${{ matrix.runner }}
+    # The viewer dist is EMBEDDED into the binary (rust-embed in architext-serve), so
+    # it must be present before the CLI compiles. Build it once (build-viewer) and
+    # download it into the source tree here, rather than rebuilding Trunk per platform.
+    needs: build-viewer
     strategy:
       fail-fast: false
       matrix:
@@ -60,6 +64,18 @@ jobs:
       - name: Install cross
         if: ${{ matrix.cross }}
         run: cargo install cross --locked
+
+      # Place the Trunk-built viewer dist where rust-embed bakes it in
+      # (crates/architext-viewer/dist). Platform-independent (wasm), built once.
+      - name: Download viewer dist (for embedding)
+        uses: actions/download-artifact@v5
+        with:
+          name: architext-viewer-dist
+          path: crates/architext-viewer/dist
+
+      - name: Verify viewer dist present before embedding
+        shell: bash
+        run: test -f crates/architext-viewer/dist/index.html
 
       - name: Build native CLI (cargo)
         if: ${{ !matrix.cross }}

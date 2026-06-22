@@ -24,7 +24,10 @@ use axum::{
 };
 use serde_json::json;
 
+use std::path::Path as FsPath;
+
 use crate::content_type::content_type_for_path;
+use crate::embedded_viewer::embedded_asset;
 use crate::safe_join::safe_join;
 use crate::AppState;
 
@@ -52,31 +55,38 @@ pub async fn get_asset(
 }
 
 async fn serve_static_asset(asset_path: &str, state: &AppState) -> Response {
-    // Try safe_join; on traversal/decode failure fall back to index.html (matches JS).
-    let resolved = safe_join(&state.dist_dir, asset_path);
-
-    // Check if it's an actual file
-    let actual_path = match resolved {
-        Some(p) if tokio::fs::metadata(&p).await.map(|m| m.is_file()).unwrap_or(false) => p,
-        _ => {
-            // SPA fallback: serve index.html
-            state.dist_dir.join("index.html")
+    // 1. On-disk dist FIRST: the ARCHITEXT_VIEWER_DIST override, an npm co-located
+    //    `<exe_dir>/dist`, or a dev source tree all win over the embedded copy.
+    if let Some(p) = safe_join(&state.dist_dir, asset_path) {
+        if tokio::fs::metadata(&p).await.map(|m| m.is_file()).unwrap_or(false) {
+            if let Ok(body) = tokio::fs::read(&p).await {
+                return asset_response(&p, body);
+            }
         }
-    };
+    }
 
-    let body = match tokio::fs::read(&actual_path).await {
-        Ok(b) => b,
-        Err(_) => {
-            return (StatusCode::NOT_FOUND, "Not found").into_response();
-        }
-    };
+    // 2. Embedded viewer: makes a standalone native binary self-contained.
+    if let Some(bytes) = embedded_asset(asset_path) {
+        return asset_response(FsPath::new(asset_path), bytes.into_owned());
+    }
 
-    let content_type = content_type_for_path(&actual_path);
+    // 3. SPA fallback → index.html (on-disk, then embedded).
+    let index = state.dist_dir.join("index.html");
+    if let Ok(body) = tokio::fs::read(&index).await {
+        return asset_response(&index, body);
+    }
+    if let Some(bytes) = embedded_asset("index.html") {
+        return asset_response(FsPath::new("index.html"), bytes.into_owned());
+    }
+    (StatusCode::NOT_FOUND, "Not found").into_response()
+}
+
+fn asset_response(path: &FsPath, body: Vec<u8>) -> Response {
+    let content_type = content_type_for_path(path);
     let mut response = Response::new(axum::body::Body::from(body));
     *response.status_mut() = StatusCode::OK;
-    response.headers_mut().insert(
-        "content-type",
-        HeaderValue::from_static(content_type),
-    );
+    response
+        .headers_mut()
+        .insert("content-type", HeaderValue::from_static(content_type));
     response
 }

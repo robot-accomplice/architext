@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-7-3",
+  "currentReleaseId": "v1-7-4",
   "releases": [
     {
       "id": "v1-1-2",
@@ -577,10 +577,11 @@
       "id": "v1-7-3",
       "version": "1.7.3",
       "name": "Architext 1.7.3 Diagram Fidelity + Distribution (routing-model groundwork)",
-      "status": "implementing",
-      "posture": "release-candidate",
+      "status": "completed",
+      "posture": "shipped",
       "targetDate": "2026-06-21",
-      "lastUpdated": "2026-06-21T19:00:00.000Z",
+      "releasedAt": "2026-06-21T19:35:13.000Z",
+      "lastUpdated": "2026-06-21T19:40:00.000Z",
       "summary": "Patch release. User-facing: sequence diagrams now follow the UML standard, the Sequence-mode flow-selection papercut and an overline-tracking drift are fixed, a Homebrew formula installs the native binary, and the serve plan farm warms incrementally so the first diagram appears fast. Under the hood, a from-scratch deterministic Rust routing model lands behind the ARCHITEXT_ROUTING_MODEL review flag (default routing is unchanged — still the engine): a locked shape law, a permanent forbidden-artifact gate, and crossings cut 28 -> 21, beating the engine on bend cost (beta 174 vs 1338) at equal crossings. That model is groundwork toward a future default switch, not a default change in 1.7.3.",
       "counts": {
         "features": 1,
@@ -593,6 +594,27 @@
         "stretch": 0
       },
       "file": "v1-7-3.json"
+    },
+    {
+      "id": "v1-7-4",
+      "version": "1.7.4",
+      "name": "Architext 1.7.4 Self-Contained Native Serve",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-06-22",
+      "lastUpdated": "2026-06-22T07:00:00.000Z",
+      "summary": "Patch release fixing `architext serve` on a pure off-npm install. The viewer dist is now EMBEDDED into the native binary (rust-embed in architext-serve), so a binary installed by the curl installer or `architext update` is self-contained — it no longer depends on a co-located <exe_dir>/dist that the GitHub-release download lacked. Latent since the 1.7.2 native-install feature; surfaced when serving from a binary after leaving npm. On-disk dist (dev / ARCHITEXT_VIEWER_DIST override / npm co-located) still wins; the release pipeline builds the viewer before compiling the CLI so the embed is populated.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 1,
+        "workstreams": 1,
+        "blockers": 0,
+        "complete": 1,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-7-4.json"
     }
   ]
 }

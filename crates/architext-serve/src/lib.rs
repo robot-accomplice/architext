@@ -19,12 +19,15 @@
 //!   - Unknown /api/* → 404
 
 pub mod content_type;
+pub mod embedded_viewer;
 pub mod farm_state;
 pub mod handlers;
 pub mod safe_join;
 pub mod security;
 pub mod watch_hub;
 pub mod write_txn;
+
+pub use embedded_viewer::has_embedded_viewer;
 
 use std::net::{IpAddr, SocketAddr, TcpListener};
 use std::path::PathBuf;
