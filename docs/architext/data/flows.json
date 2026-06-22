@@ -410,8 +410,8 @@
       "id": "release-packaging",
       "name": "Release packaging",
       "status": "implemented",
-      "summary": "Architext ships the global CLI, package-owned viewer, schemas, starter templates, and Codex plugin metadata as a semver release.",
-      "trigger": "Maintainer prepares a release.",
+      "summary": "Architext ships the global CLI with the viewer and schemas embedded as per-platform native binaries attached to a GitHub release. Distribution is native-only — no npm package as of 1.7.6.",
+      "trigger": "Maintainer prepares a release (bumps VERSION, tags, publishes the GitHub release).",
       "actors": [
         "maintainer"
       ],
@@ -420,8 +420,8 @@
           "id": "run-build",
           "from": "maintainer",
           "to": "package-artifacts",
-          "action": "runBuildAndValidation",
-          "summary": "Maintainer runs validation and production build.",
+          "action": "buildBinariesAndViewer",
+          "summary": "CI validates the data, builds the Trunk viewer dist, and cross-compiles the five native binaries with the dist + schemas embedded.",
           "data": [
             "package-assets",
             "validation-output"
@@ -431,26 +431,26 @@
           "id": "inspect-package",
           "from": "maintainer",
           "to": "package-artifacts",
-          "action": "runPackageDryRun",
-          "summary": "Maintainer verifies npm package contents include plugin metadata and exclude target generated artifacts.",
+          "action": "attachReleaseBinaries",
+          "summary": "CI smoke-runs a self-contained binary, then attaches all five binaries + a SHA256SUMS manifest to the GitHub release for the installer and `architext update`.",
           "data": [
             "package-assets"
           ]
         }
       ],
       "guarantees": [
-        "1.0.0 marks the breaking distribution model change.",
-        ".codex-plugin and skills are included in package dry-run output."
+        "All five binaries must build or the release attaches nothing — a partial set would strand some platforms.",
+        "Binaries are self-contained (embedded viewer dist + schemas) and SHA256-checksummed."
       ],
       "failureBehavior": [
-        "Package contents mismatch blocks release."
+        "A failed binary build blocks the release attach."
       ],
       "observability": [
-        "npm pack --dry-run output",
-        "build output"
+        "GitHub release assets + SHA256SUMS",
+        "CI build logs"
       ],
       "verification": [
-        "npm pack --dry-run"
+        "bash scripts/rust-serve-embedded-smoke.sh"
       ],
       "knownGaps": [
         "A CI workflow is still needed to enforce packaging checks automatically."

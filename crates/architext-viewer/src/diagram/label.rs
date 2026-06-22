@@ -42,6 +42,9 @@ pub enum LabelKind {
 pub struct LabelView {
     pub kind: LabelKind,
     pub step_id: Option<String>,
+    /// Optional hover tooltip. On a decision-branch number badge (`4a`/`4b`) this
+    /// is the outcome word (valid / invalid) the compact label stands for.
+    pub title: Option<String>,
     pub anchor_x: f64,
     pub anchor_y: f64,
     pub box_rect: Rect,
@@ -59,6 +62,7 @@ pub fn DiagramLabel(label: LabelView, #[prop(into)] selected: Signal<bool>) -> i
         // message use, so selecting a step lights up its pill on every diagram.
         LabelKind::Number(text) => view! {
             <g class="flow-label" class=("flow-label--active", move || selected.get())>
+                {label.title.map(|t| view! { <title>{t}</title> })}
                 <circle
                     class="flow-label__badge"
                     cx=label.anchor_x

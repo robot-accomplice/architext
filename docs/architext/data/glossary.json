@@ -10,7 +10,7 @@
     },
     {
       "term": "Package-owned runtime",
-      "definition": "The Architext CLI, viewer, schemas, validation tools, and starter templates shipped by the installed npm package."
+      "definition": "The Architext CLI, viewer, schemas, validation tools, and starter templates shipped inside the installed native binary."
     },
     {
       "term": "Target-owned data",

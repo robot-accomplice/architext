@@ -60,14 +60,41 @@ pub fn is_decision_branch_support_step(steps: &[FlowStep], step: &FlowStep, inde
     step.outcome.is_some() && display_index != index + 1
 }
 
+/// Per-step DISPLAY LABEL, keyed by step id: the string shown on the diagram
+/// pill and the steps-panel card. A normal step is its number `"N"`; a decision
+/// branch outcome that folds onto an earlier decision becomes `"N{letter}"` —
+/// `"4a"`, `"4b"`, … by sibling order — so the `1, 2, 4a, 4b` reading is shared
+/// by the diagram and the list (the JS `flowStepDisplayModel` intent).
+pub fn flow_step_display_labels(steps: &[FlowStep]) -> HashMap<String, String> {
+    let indexes = flow_step_display_indexes(steps);
+    // decision display number → how many branch siblings already labelled.
+    let mut sibling_counter: HashMap<usize, u32> = HashMap::new();
+    let mut labels = HashMap::with_capacity(steps.len());
+    for (i, step) in steps.iter().enumerate() {
+        let n = indexes.get(&step.id).copied().unwrap_or(i + 1);
+        // Support step = an outcome edge folded onto an earlier decision number.
+        let is_support = step.outcome.is_some() && n != i + 1;
+        let label = if is_support {
+            let c = sibling_counter.entry(n).or_insert(0);
+            let letter = (b'a' + (*c).min(25) as u8) as char;
+            *c += 1;
+            format!("{n}{letter}")
+        } else {
+            n.to_string()
+        };
+        labels.insert(step.id.clone(), label);
+    }
+    labels
+}
+
 /// One row in the footer steps panel: the step's original index (for glyph
-/// start/stop inference) and the number to render in the card.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// start/stop inference) and the label to render in the card.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct StepCardRow {
     /// 0-based index of the step in `flow.steps` (drives glyph + click target).
     pub index: usize,
-    /// The number shown on the card.
-    pub display_number: usize,
+    /// The label shown on the card (`"2"`, `"4a"`, …).
+    pub display_label: String,
 }
 
 /// The ordered step rows the panel renders, mode-aware.
@@ -88,17 +115,20 @@ pub fn step_card_rows(steps: &[FlowStep], is_sequence: bool) -> Vec<StepCardRow>
         return steps
             .iter()
             .enumerate()
-            .map(|(index, _)| StepCardRow { index, display_number: index + 1 })
+            .map(|(index, _)| StepCardRow { index, display_label: (index + 1).to_string() })
             .collect();
     }
-    let display_indexes = flow_step_display_indexes(steps);
+    // Flows / Data-Risks: every step is listed, decision branches included, each
+    // with its folded display LABEL (`4a`, `4b`). The list now matches the
+    // diagram pills, so the support steps are no longer hidden — listing them is
+    // how a decision's branch outcomes are explained.
+    let labels = flow_step_display_labels(steps);
     steps
         .iter()
         .enumerate()
-        .filter(|(i, s)| !is_decision_branch_support_step(steps, s, *i))
         .map(|(index, step)| StepCardRow {
             index,
-            display_number: display_indexes.get(&step.id).copied().unwrap_or(index + 1),
+            display_label: labels.get(&step.id).cloned().unwrap_or_else(|| (index + 1).to_string()),
         })
         .collect()
 }
@@ -200,24 +230,48 @@ mod tests {
         assert!(!is_decision_branch_support_step(&steps, &steps[0], 0));
     }
 
-    /// FLOWS mode: the panel hides decision-branch support steps and folds their
-    /// numbers — the routed-plan reading. Same data as
-    /// `decision_branch_outcomes_fold_and_are_support_steps`.
+    /// FLOWS mode: every step is listed, the two decision branches included with
+    /// their folded LETTER labels (`2a`, `2b`) — the `1, 2, 2a, 2b, 5` reading
+    /// shared with the diagram pills.
     #[test]
-    fn step_card_rows_flows_mode_hides_support_steps_and_folds_numbers() {
+    fn step_card_rows_flows_mode_lists_branches_with_letter_labels() {
         let steps = vec![
             step("s1", "a", "router", None, None),                 // 1
             step("s2", "router", "gate", Some("decision"), None),  // 2
-            step("s3", "gate", "yes", None, Some("approved")),     // support → folds to 2
-            step("s4", "gate", "no", None, Some("rejected")),      // support → folds to 2
+            step("s3", "gate", "yes", None, Some("approved")),     // 2a
+            step("s4", "gate", "no", None, Some("rejected")),      // 2b
             step("s5", "yes", "done", None, None),                 // 5
         ];
         let rows = step_card_rows(&steps, false);
-        // s3 + s4 hidden → 3 cards, original indexes 0,1,4.
         assert_eq!(
-            rows.iter().map(|r| (r.index, r.display_number)).collect::<Vec<_>>(),
-            vec![(0, 1), (1, 2), (4, 5)]
+            rows.iter().map(|r| (r.index, r.display_label.clone())).collect::<Vec<_>>(),
+            vec![
+                (0, "1".to_string()),
+                (1, "2".to_string()),
+                (2, "2a".to_string()),
+                (3, "2b".to_string()),
+                (4, "5".to_string()),
+            ]
         );
+    }
+
+    /// The label map directly: branches fold onto the decision number and gain
+    /// `a`/`b` by sibling order; everything else is its plain number.
+    #[test]
+    fn display_labels_letter_decision_branches() {
+        let steps = vec![
+            step("s1", "a", "router", None, None),
+            step("s2", "router", "gate", Some("decision"), None),
+            step("s3", "gate", "yes", None, Some("approved")),
+            step("s4", "gate", "no", None, Some("rejected")),
+            step("s5", "yes", "done", None, None),
+        ];
+        let labels = flow_step_display_labels(&steps);
+        assert_eq!(labels["s1"], "1");
+        assert_eq!(labels["s2"], "2");
+        assert_eq!(labels["s3"], "2a");
+        assert_eq!(labels["s4"], "2b");
+        assert_eq!(labels["s5"], "5");
     }
 
     /// SEQUENCE mode: the panel mirrors the diagram's message rows — EVERY step,
@@ -235,8 +289,14 @@ mod tests {
         ];
         let rows = step_card_rows(&steps, true);
         assert_eq!(
-            rows.iter().map(|r| (r.index, r.display_number)).collect::<Vec<_>>(),
-            vec![(0, 1), (1, 2), (2, 3), (3, 4), (4, 5)]
+            rows.iter().map(|r| (r.index, r.display_label.clone())).collect::<Vec<_>>(),
+            vec![
+                (0, "1".to_string()),
+                (1, "2".to_string()),
+                (2, "3".to_string()),
+                (3, "4".to_string()),
+                (4, "5".to_string()),
+            ]
         );
     }
 

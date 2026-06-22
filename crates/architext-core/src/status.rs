@@ -421,9 +421,9 @@ pub fn collect_status(target: &Path, version: &str, run_validation: bool) -> Val
     let target_data_dir = data_dir(target);
     let manifest_path = target_data_dir.join("manifest.json");
 
-    // packageSelf: detect if target IS the package root (the architext npm package
-    // itself). We check for the presence of viewer/schema/ which only exists in
-    // the real package root. If true, copiedInstallDetected is always false.
+    // packageSelf: detect if target IS the Architext repository itself (not a
+    // consumer's data-only install). We check for viewer/schema/ + crates/, which
+    // only exist in the source repo. If true, copiedInstallDetected is always false.
     let package_self = target.join("viewer").join("schema").exists()
         && target.join("crates").exists();
 

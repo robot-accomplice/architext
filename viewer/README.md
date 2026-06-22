@@ -18,14 +18,14 @@ architext prompt
 architext version
 ```
 
-Install the CLI from the scoped npm package:
+Install the CLI as a native binary (no Node runtime required):
 
 ```sh
-npm install -g @robotaccomplice/architext
+curl -fsSL https://raw.githubusercontent.com/robot-accomplice/architext/main/install.sh | sh
 ```
 
-Do not install the unscoped `architext` npm package. It is a different project
-and can leave the `architext` binary at an unrelated `0.0.7` version.
+Keep it current with `architext update`. See the repository README for manual
+download and the off-ramp for older npm-bridge installs.
 
 Each command also accepts an optional target path:
 
@@ -45,40 +45,33 @@ Additional serve controls are `--foreground`, `--no-open`, `--host <host>`, and
 next available loopback port when it is occupied. Serve process state is local
 runtime state and is not part of target-owned Architext JSON data.
 
-If you are developing Architext itself, use the local npm scripts:
-
-Install local dependencies:
-
-```sh
-npm install
-```
+If you are developing Architext itself, the toolchain is Rust only — Cargo for
+the CLI/engine and Trunk for the WASM viewer. No Node or npm.
 
 Validate architecture data:
 
 ```sh
-npm run validate
+cargo run -p architext-cli -- validate .
 ```
 
-Run the local development server:
+Build the WASM viewer (embedded into the binary):
 
 ```sh
-npm run dev
+trunk build --release --config crates/architext-viewer/Trunk.toml
 ```
 
-Build static assets:
+Serve a project locally (after building the viewer, or from an installed
+binary that has it embedded):
 
 ```sh
-npm run build
+cargo run -p architext-cli -- serve .
 ```
 
-Preview the static build locally:
+Run the workspace tests:
 
 ```sh
-npm run preview
+cargo test --workspace
 ```
-
-The npm scripts avoid shell-specific command chains so they work on Windows,
-Linux, and macOS.
 
 ## Upgrades
 
@@ -156,7 +149,8 @@ remote URLs.
 
 ## Validation
 
-`npm run validate` performs two checks:
+`architext validate` (or `cargo run -p architext-cli -- validate .`) performs
+two checks:
 
 - JSON Schema validation for each data file
 - cross-reference validation for IDs shared across nodes, flows, views, risks,

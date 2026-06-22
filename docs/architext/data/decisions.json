@@ -66,7 +66,7 @@
       "title": "Publish Codex plugin metadata from the repository root",
       "context": "Architext already packages the reusable skill under skills/architext. A generated nested plugin would duplicate that skill and create a second release surface.",
       "decision": "Treat the repository root as the Codex plugin root. Publish .codex-plugin/plugin.json and the existing skills directory as part of the package artifact.",
-      "consequences": ["Codex plugin metadata, npm package contents, and skill guidance share one source tree", "Package dry runs must confirm .codex-plugin and skills are included", "Marketplace entries remain a distribution concern instead of driving repository layout"],
+      "consequences": ["Codex plugin metadata, native release artifacts, and skill guidance share one source tree", "Releases ship .codex-plugin and skills from the repository root", "Marketplace entries remain a distribution concern instead of driving repository layout"],
       "relatedNodes": ["package-artifacts"],
       "relatedFlows": ["release-packaging"]
     }

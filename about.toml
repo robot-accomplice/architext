@@ -1,0 +1,58 @@
+# cargo-about configuration for THIRD_PARTY_NOTICES.md.
+#
+# Regenerate the notices file with:
+#   cargo install cargo-about --features cli
+#   cargo about generate about.hbs > THIRD_PARTY_NOTICES.md
+#
+# `accepted` is the allowlist of SPDX license IDs Architext distributes under.
+# For an `A OR B` crate, cargo-about elects the FIRST accepted license, so the
+# permissive arm of dual-licensed crates is chosen mechanically. GPL/LGPL are
+# deliberately ABSENT: if a crate ever appears that can only be satisfied under
+# copyleft terms, generation fails instead of silently shipping the obligation.
+accepted = [
+    "MIT",
+    "MIT-0",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "BSL-1.0",
+    "Zlib",
+    "0BSD",
+    "Unlicense",
+    "Unicode-3.0",
+    "CC0-1.0",
+    "CDLA-Permissive-2.0",
+]
+
+# The distributed artifacts: native CLI binaries for macOS/Linux/Windows and the
+# wasm32 viewer bundle. Listing every shipped target gathers the union of
+# platform-gated dependencies (e.g. windows-sys, kqueue, inotify, web-sys).
+targets = [
+    "x86_64-unknown-linux-gnu",
+    "aarch64-unknown-linux-gnu",
+    "x86_64-apple-darwin",
+    "aarch64-apple-darwin",
+    "x86_64-pc-windows-msvc",
+    "wasm32-unknown-unknown",
+]
+
+# Build- and dev-dependencies do not ship in the distributed artifacts, so they
+# are not attributed here.
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+
+# Crates whose license metadata cargo-about cannot harvest from the crate source
+# alone use the curated workarounds bundled with the tool (e.g. ring's mixed
+# ISC/OpenSSL/MIT layout). Top-level key: must precede any [table] header.
+workarounds = ["ring"]
+
+# The architext-* workspace crates are first-party (publish = false) and carry
+# no license metadata; they are the project itself, not third-party software, so
+# they are excluded from attribution. Ignoring them also stops cargo-about from
+# synthesizing a license by scanning the viewer crate directory, where the
+# bundled OFL fonts live — those ship as vendored assets (not crates) and are
+# attributed explicitly in the "Bundled Fonts" section of about.hbs instead.
+[private]
+ignore = true

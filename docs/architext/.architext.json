@@ -16,7 +16,6 @@
     "CLAUDE.md"
   ],
   "gitignoreManaged": true,
-  "rootScriptsManaged": true,
   "syncChoices": {
     "branch": "current",
     "instructionFiles": [
@@ -24,7 +23,6 @@
       "CLAUDE.md"
     ],
     "manageGitignore": true,
-    "manageRootScripts": true,
     "applyDoctorRepairs": true,
     "proceedWithChanges": true
   },

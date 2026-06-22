@@ -66,11 +66,14 @@ pub fn StepsPanel() -> impl IntoView {
                     .map(|row| {
                         let step = &flow.steps[row.index];
                         let id = step.id.clone();
-                        let display = row.display_number;
+                        let display = row.display_label.clone();
                         let glyph = glyph_for_step(step, row.index, total);
                         let from = node_name(&step.from);
                         let to = node_name(&step.to);
                         let action = step.action.clone();
+                        // A decision branch's outcome (valid / invalid) — what the
+                        // `Na`/`Nb` step represents. Shown as a chip on the card.
+                        let outcome = step.outcome.clone();
                         let select_id = id.clone();
                         let card_selected = Signal::derive(move || {
                             state.selected_step.get().as_deref() == Some(id.as_str())
@@ -88,11 +91,14 @@ pub fn StepsPanel() -> impl IntoView {
                                 on:click=move |_| state.set_selected_step(select_id.clone())
                             >
                                 <span class="step-card__glyph">{glyph}</span>
-                                <span class="step-card__num mono">{display.to_string()}</span>
+                                <span class="step-card__num mono">{display}</span>
                                 <span class="step-card__route">
                                     {from}" → "{to}
                                 </span>
                                 <span class="step-card__action">{action}</span>
+                                {outcome.map(|o| view! {
+                                    <span class="step-card__outcome chip">{o}</span>
+                                })}
                             </button>
                         }
                     })

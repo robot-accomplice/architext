@@ -125,10 +125,10 @@ jobs:
           path: crates/architext-viewer/dist
           if-no-files-found: error
 
-  # Per-platform proof that the STAMPED, self-contained package actually works:
-  # stamp the binary + co-located dist (build-binary-packages), then run it from
-  # OUTSIDE the repo so it must rely on its embedded schemas (validate) and the
-  # co-located <exe_dir>/dist (serve), not the source tree.
+  # Per-platform proof that the self-contained binary actually works: run it from
+  # OUTSIDE the repo so it must rely on its embedded schemas (validate) and its
+  # embedded viewer dist (serve), not the source tree. No npm stamping — the dist
+  # is baked into the binary (rust-embed), so the binary stands alone.
   #
   # linux-arm64 is intentionally omitted (Rule 16): the default fleet has no
   # arm64 Linux runner to execute that binary, and the linux-arm64 cross-build
@@ -156,28 +156,22 @@ jobs:
             bin: architext.exe
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v6
-
-      - name: Set up Node
-        uses: actions/setup-node@v6
-        with:
-          node-version: 20
-
       - name: Download native binary
         uses: actions/download-artifact@v5
         with:
           name: architext-binary-${{ matrix.target_key }}
           path: bin-stage
 
-      - name: Download viewer dist
-        uses: actions/download-artifact@v5
-        with:
-          name: architext-viewer-dist
-          path: crates/architext-viewer/dist
-
-      - name: Stamp the self-contained package (binary + co-located dist)
-        run: node scripts/build-binary-packages.mjs --binary bin-stage/${{ matrix.bin }} --target ${{ matrix.target_key }} --out dist-binaries
-
-      - name: Native package smoke (embedded schemas + co-located dist)
-        run: node scripts/smoke-native-package.mjs dist-binaries/${{ matrix.target_key }} .
+      # Run the binary from OUTSIDE any source tree so it must rely on its embedded
+      # schemas (validate) and embedded viewer dist (serve) — proof the
+      # self-contained native binary works with no npm and no co-located files.
+      - name: Native binary smoke (embedded schemas + dist)
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="bin-stage/${{ matrix.bin }}"
+          chmod +x "$bin" || true
+          target="$(mktemp -d)"
+          "$bin" --version
+          "$bin" sync "$target" --yes --branch none
+          "$bin" validate "$target"

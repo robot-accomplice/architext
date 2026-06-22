@@ -2,7 +2,6 @@
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-2ff801)](LICENSE)
 [![CI](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml/badge.svg)](https://github.com/robot-accomplice/architext/actions/workflows/ci.yml)
-[![npm version](https://img.shields.io/npm/v/%40robotaccomplice%2Farchitext?color=00dbe9)](https://www.npmjs.com/package/@robotaccomplice/architext)
 ![Rust](https://img.shields.io/badge/Rust-native-00dbe9)
 ![WebAssembly](https://img.shields.io/badge/viewer-WebAssembly-654ff0)
 ![Native binary](https://img.shields.io/badge/install-native%20binary-2ff801)
@@ -155,18 +154,6 @@ Download the binary for your platform from the
 `architext-linux-arm64`, or `architext-win32-x64.exe`), verify it against
 `SHA256SUMS`, make it executable, and put it on your `PATH`.
 
-### Via npm (transitional)
-
-npm is supported as a bridge for existing users while Architext moves to native
-distribution. It installs the same native binary behind a thin launcher:
-
-```sh
-npm install -g @robotaccomplice/architext
-```
-
-Use the scoped package name exactly; the unscoped `architext` npm package is an
-unrelated project.
-
 ### Keeping it current
 
 ```sh
@@ -174,9 +161,14 @@ architext update          # download + install the latest native binary
 architext --check-updates # report whether a newer version is available
 ```
 
-`architext update` replaces the running binary in place. If it detects an
-npm-managed install, it installs a native copy to `~/.local/bin` and prints the
-steps to drop the npm version — the comfortable path off npm.
+`architext update` replaces the running binary in place.
+
+### Already installed via npm?
+
+Architext is distributed natively only — there is no npm package as of 1.7.6.
+If you previously installed the `@robotaccomplice/architext` npm bridge, run
+`architext update`: it installs a native copy to `~/.local/bin` and prints the
+steps to drop the npm version. New installs should use the curl installer above.
 
 ## Adopt Architext In A Project
 
@@ -667,8 +659,9 @@ target repository layout, migration behavior, and release/package lifecycle.
 ## Distribution
 
 Architext is distributed as native binaries for macOS, Linux, and Windows
-(arm64 and x64), built and published from CI with sigstore provenance. The
-recommended install is the shell installer or a direct binary download from the
+(arm64 and x64), cross-compiled in CI and attached to each GitHub release
+alongside a `SHA256SUMS` manifest. The recommended install is the shell
+installer or a direct binary download from the
 [releases page](https://github.com/robot-accomplice/architext/releases/latest);
 see [Installing Architext](#installing-architext).
 
@@ -678,10 +671,9 @@ architext sync
 architext serve
 ```
 
-npm remains a transitional bridge (`npm install -g @robotaccomplice/architext`)
-that installs the same native binary behind a thin launcher. It is being retired
-in favor of native distribution plus `architext update`. Use the scoped package
-name exactly.
+There is no npm package as of 1.7.6 — distribution is native-only. Anyone still
+on the old `@robotaccomplice/architext` npm bridge can move off it with
+`architext update`.
 
 ## Repository Status
 

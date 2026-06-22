@@ -37,7 +37,7 @@ Keep branch names short, specific, and tied to the change being made.
 4. Run the local release gate before opening the pull request:
 
    ```sh
-   npm run release:check
+   just release-check
    ```
 
 5. Open a pull request into `develop`.
@@ -72,7 +72,7 @@ Hotfixes are reserved for urgent corrections that cannot wait for the normal
 3. Run the same release gate:
 
    ```sh
-   npm run release:check
+   just release-check
    ```
 
 4. After the hotfix merges to `main`, immediately backmerge `main` into
@@ -108,18 +108,17 @@ accidentally drop the fix.
 At minimum, contributors should run:
 
 ```sh
-npm run release:check
+just release-check
 ```
 
-For targeted iteration, the release gate expands to the same core checks used by
-CI:
+For targeted iteration, the core checks (the same ones CI runs) are Rust only —
+no Node or npm:
 
 ```sh
-npm test
-npm run test:benchmark
-npm run validate
-npm run build
-npm pack --dry-run
+cargo test --workspace
+cargo test -p architext-routing --test corpus_fitness   # routing fitness ratchet
+cargo run -p architext-cli -- validate .
+trunk build --release --config crates/architext-viewer/Trunk.toml
 ```
 
 Pull requests must pass CI before merge.

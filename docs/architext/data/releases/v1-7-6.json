@@ -1,0 +1,114 @@
+{
+  "id": "v1-7-6",
+  "version": "1.7.6",
+  "name": "Architext 1.7.6 Native-Only Distribution + Flow Decision Diamonds",
+  "status": "implementing",
+  "posture": "in-progress",
+  "summary": "Distribution becomes native-only: the entire npm channel is removed — the @robotaccomplice/architext launcher package, the per-platform binary packages (optionalDependencies), package.json/package-lock.json, the npm build/publish/CI steps, and the npm Just recipes. The product version moves off package.json to a repo-root VERSION file that build.rs stamps into the binary (no Node needed to build or test). The curl installer + GitHub-release binaries (with the viewer dist and schemas embedded) + the in-binary `architext update` self-updater are the sole supported install; `architext update` keeps the npm→native off-ramp for users still on the old bridge. Flow decision diamonds are completed per the settled design (viewer/DESIGN.md): a decision diamond now carries an anchoring stem to its host node, a per-branch outcome label, and a what-is-being-decided annotation, instead of rendering as an orphaned floating rect. The README screenshots and the Architext self-model are reconciled to the native-only reality.",
+  "targetDate": "2026-06-22",
+  "lastUpdated": "2026-06-22T20:00:00.000Z",
+  "updateSource": "Work complete on the release branch (feat/1.7.6-decision-diamonds), pending PR to develop/main + maintainer ship. Decision diamonds live-verified via Playwright DOM on the FlowForge corpus AND architext's own data (stem a clean vertical with no arrowhead, outcomes + annotation with zero collisions, cluster co-highlight); routing + viewer suites green (370 + 127) plus a new end-to-end stem-geometry test through the real build_flow_plan_request → plan_diagram path. npm removal: actionlint clean on all three workflows, `architext --version` stamps 1.7.6 from VERSION, native validator green, self-model reconciled and validated. README screenshots regenerated at 1680x1000 from architext's own served data.",
+  "scope": {
+    "required": [
+      {
+        "id": "flow-decision-diamonds",
+        "title": "Flow decision diamonds: stem + branch outcome labels + annotation",
+        "kind": "feature",
+        "summary": "A decision step rendered as a floating, unconnected rect — missing all three elements the settled contract requires. Implement them: (1) an anchoring STEM, a routed connector from the diamond to its host node (built in plan_request as a synthetic relationship, host-bottom → diamond-top; a clean straight vertical because the diamond's center-x equals its host's, so it never trips the §0 dogleg/Z gate; rendered without an arrowhead as EdgeKind::Stem); (2) per-branch OUTCOME labels (step.outcome, e.g. valid/invalid), read straight from the flow and anchored just outside the diamond on each branch line — the data was already carried through BuiltRelationship.outcome and only discarded at render; (3) an ANNOTATION captioning the diamond with the decision step's action (what is being decided), placed above the diamond where no branch can collide. Selecting the decision step co-highlights the whole cluster. Live-verified on the corpus and architext's own data.",
+        "evidence": ["diamond-live-verify", "diamond-e2e-test"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "diagram-fidelity",
+        "dependsOn": []
+      },
+      {
+        "id": "npm-channel-removal",
+        "title": "Remove the entire npm distribution channel (native-only)",
+        "kind": "chore",
+        "summary": "The final step of the npm phase-out: cut ALL npm. Delete the @robotaccomplice/architext launcher (tools/architext-adopt.mjs + native-binary-resolver.mjs), the per-platform binary packages (optionalDependencies) and their build script, package.json + package-lock.json, the npm packaging scripts (build-binary-packages, smoke-packed-cli, check-install-docs, smoke-native-package), and .npmignore. The product version moves to a repo-root VERSION file (build.rs stamps ARCHITEXT_VERSION from it — was reading package.json). publish.yml drops the npm stamp/publish/OIDC/npm-smoke job and keeps build + a new release job that attaches the five binaries + SHA256SUMS to the GitHub release; ci.yml drops its npm package job (the verify-rust job already builds with trunk and validates with cargo); release-binaries.yml's native-smoke runs the self-contained binary directly; the Justfile npm recipes are removed. The native path (install.sh + `architext update`) is the sole install; the in-binary npm→native migration off-ramp is kept since the npm package shipped through 1.7.5. The copied-install migration ramp stays until 2.0.0 (roadmap retire-copied-install-migration).",
+        "evidence": ["npm-removal-actionlint", "version-migration"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "npm-phase-out",
+        "dependsOn": []
+      },
+      {
+        "id": "native-only-doc-reconcile",
+        "title": "Reconcile docs, self-model, and README screenshots to native-only",
+        "kind": "documentation",
+        "summary": "Bring the docs and the Architext self-model in line with native-only distribution: README drops the npm badge + 'Via npm' install section (Distribution now describes GitHub-release binaries + SHA256SUMS) and keeps an `architext update` off-ramp note; viewer/README + CONTRIBUTING replace the dead `npm run *` commands with the real cargo/trunk/just workflow; CLI messages/comments stop pointing at `npm run build` and the deleted launcher. The self-model is reconciled from source: the 'NPM package artifacts' node becomes 'Native release artifacts', the release-packaging flow's npm-pack step becomes the binary-attach step, and the npm-pack risk/decision/glossary references move to native — keeping the package-artifacts node id so references stay valid. All eight README screenshots are regenerated at 1680x1000 from architext's own served data, including the now-anchored decision diamond.",
+        "evidence": ["selfmodel-validate"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "npm-phase-out",
+        "dependsOn": ["npm-channel-removal", "flow-decision-diamonds"]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "diagram-fidelity",
+      "name": "Diagram fidelity",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Complete the flow decision diamond per the settled design: stem, branch outcome labels, and annotation.",
+      "progress": 100,
+      "itemIds": ["flow-decision-diamonds"],
+      "evidence": ["diamond-live-verify", "diamond-e2e-test"]
+    },
+    {
+      "id": "npm-phase-out",
+      "name": "npm phase-out (final)",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Remove the entire npm channel, move the version source to VERSION, and reconcile docs + the self-model to native-only.",
+      "progress": 100,
+      "itemIds": ["npm-channel-removal", "native-only-doc-reconcile"],
+      "evidence": ["npm-removal-actionlint", "version-migration", "selfmodel-validate"]
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "diamond-live-verify",
+      "label": "Decision diamonds live-verified via Playwright DOM on the FlowForge corpus AND architext's own data (vertical stem, no arrowhead; outcomes + annotation, zero collisions; cluster co-highlight; 0 console errors)",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "diamond-e2e-test",
+      "label": "End-to-end stem-geometry test through the real build_flow_plan_request → plan_diagram path asserts a legal vertical stem clearing the §0 gate (crates/architext-routing/tests/decision_stem_geometry.rs); routing 370 + viewer 127 green",
+      "kind": "automated-test",
+      "status": "complete"
+    },
+    {
+      "id": "npm-removal-actionlint",
+      "label": "All three workflows (publish/ci/release-binaries) rewritten npm-free; actionlint clean",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "version-migration",
+      "label": "Version source moved package.json → VERSION; build.rs stamps it; `architext --version` reports 1.7.6 with no Node",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "selfmodel-validate",
+      "label": "Self-model reconciled to native-only and passes the native validator (cargo run -p architext-cli -- validate .)",
+      "kind": "manual-check",
+      "status": "complete"
+    }
+  ]
+}

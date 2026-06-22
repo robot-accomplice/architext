@@ -9,6 +9,7 @@
 use std::collections::{HashMap, HashSet};
 
 use architext_routing::model::{Plan, Rect};
+use architext_routing::plan_request::DECISION_STEM_PREFIX;
 use leptos::*;
 
 use super::edge::{DiagramEdge, EdgeView, ARROWHEAD_ID};
@@ -22,12 +23,22 @@ use crate::data::models::{Flow, Node, View as DataView};
 /// The fully-resolved render model for one diagram: everything the renderers
 /// need, derived once from the plan + dataset (no per-element lookups in the
 /// view closures).
+/// A decision diamond ready to render: its rect, the host component's role color
+/// (tint), and the annotation — the decision step's `action`, i.e. WHAT is being
+/// decided (viewer/DESIGN.md "Flow decision diamonds").
+#[derive(Clone)]
+pub struct DecisionView {
+    pub rect: Rect,
+    pub role_var: String,
+    pub annotation: Option<String>,
+}
+
 #[derive(Clone)]
 pub struct RenderModel {
     pub canvas_width: f64,
     pub canvas_height: f64,
     pub nodes: Vec<NodeView>,
-    pub decisions: Vec<(Rect, String)>,
+    pub decisions: Vec<DecisionView>,
     pub edges: Vec<EdgeView>,
     pub labels: Vec<LabelView>,
     /// Top-left anchor of the "NOT IN THIS FLOW" overline above the parked
@@ -76,6 +87,19 @@ pub fn build_render_model(
             .collect())
         .unwrap_or_default();
 
+    // Per-step display LABEL for the number pill: `"N"` normally, `"Na"/"Nb"` for
+    // a decision's branch outcomes (shared with the steps panel). And the outcome
+    // word per branch step, used as the pill's hover title (the full word lives in
+    // the steps panel).
+    let display_labels: HashMap<String, String> = flow
+        .map(|f| crate::flow_step_display::flow_step_display_labels(&f.steps))
+        .unwrap_or_default();
+    let outcome_by_step: HashMap<&str, &str> = flow
+        .map(|f| f.steps.iter()
+            .filter_map(|s| s.outcome.as_deref().map(|o| (s.id.as_str(), o)))
+            .collect())
+        .unwrap_or_default();
+
     // The "in active flow" id set: the union of every flow step's `from` + `to`
     // endpoints. `None` flow (structural C4/Deployment) → no orphan concept, so
     // `is_in_flow` treats every node as in-flow.
@@ -104,19 +128,33 @@ pub fn build_render_model(
                 let component_type = flow
                     .map(|f| decision_component_type(id, f, nodes_by_id))
                     .unwrap_or("external");
-                decisions.push((rect.clone(), role_color_var(component_type)));
+                // The annotation — what is being decided — is the decision step's
+                // `action`, looked up from the flow by the diamond's step id.
+                let annotation = flow.and_then(|f| decision_annotation(id, f));
+                decisions.push(DecisionView {
+                    rect: rect.clone(),
+                    role_var: role_color_var(component_type),
+                    annotation,
+                });
             }
         }
     }
 
-    // Edges: the `d`-string verbatim, with the resolved kind.
+    // Edges: the `d`-string verbatim, with the resolved kind. A decision-stem
+    // route (`decision-stem:<step>`) is not a flow step, so it is not in
+    // `kind_by_step`; detect it by its id prefix and render it as a Stem (no
+    // arrowhead).
     let edges = plan
         .routes
         .iter()
         .map(|(id, route)| EdgeView {
             id: id.clone(),
             d: route.d.clone(),
-            kind: kind_by_step.get(id.as_str()).copied().unwrap_or(EdgeKind::Process),
+            kind: if id.starts_with(DECISION_STEM_PREFIX) {
+                EdgeKind::Stem
+            } else {
+                kind_by_step.get(id.as_str()).copied().unwrap_or(EdgeKind::Process)
+            },
         })
         .collect();
 
@@ -145,18 +183,23 @@ pub fn build_render_model(
             continue;
         };
         let collapsed = pill_label(&raw_label);
-        // A flow-step label collapses to its number (a badge); anything else
-        // is a structural relationship label → a glyph pill (the word kept
-        // for the hover title + legend). A number badge carries its route id (==
-        // step id) so it can highlight when that step is selected.
-        let (kind, step_id) = if collapsed != raw_label {
-            (LabelKind::Number(collapsed), Some(id.clone()))
+        // A flow-step label collapses to a number badge; anything else is a
+        // structural relationship label → a glyph pill (the word kept for the
+        // hover title + legend). A number badge carries its route id (== step id)
+        // so it can highlight when that step is selected. For a flow step the
+        // badge text is its display LABEL — `Na`/`Nb` for a decision branch — and
+        // a branch carries its outcome word as the badge's hover title.
+        let (kind, step_id, title) = if collapsed != raw_label {
+            let text = display_labels.get(id).cloned().unwrap_or(collapsed);
+            let title = outcome_by_step.get(id.as_str()).map(|o| o.to_string());
+            (LabelKind::Number(text), Some(id.clone()), title)
         } else {
             (
                 LabelKind::Relationship {
                     kind: RelationshipKind::classify(&raw_label),
                     word: raw_label,
                 },
+                None,
                 None,
             )
         };
@@ -169,6 +212,7 @@ pub fn build_render_model(
         labels.push(LabelView {
             kind,
             step_id,
+            title,
             anchor_x: route.label_x,
             anchor_y: route.label_y,
             box_rect,
@@ -385,6 +429,19 @@ fn edge_label_from_flow(edge_id: &str, flow: &Flow) -> Option<String> {
         .map(|(i, s)| format!("{}. {}", i + 1, s.action))
 }
 
+/// The decision diamond's annotation — WHAT is being decided. This is the
+/// `action` of the `decision`-kind step the diamond was built from
+/// (`decision:<stepId>` → step.action), e.g. `"validateStarterModel"`. The full
+/// exposition still lives in the steps panel; this is the on-diagram caption.
+fn decision_annotation(decision_id: &str, flow: &Flow) -> Option<String> {
+    let step_id = decision_id.strip_prefix("decision:").unwrap_or(decision_id);
+    flow.steps
+        .iter()
+        .find(|s| s.id == step_id)
+        .map(|s| s.action.clone())
+}
+
+
 /// The fluid diagram SVG. `pan_x`/`pan_y`/`zoom` drive the inner transform.
 #[component]
 pub fn DiagramSvg(
@@ -449,9 +506,16 @@ pub fn DiagramSvg(
                 // Z-order: edges, then labels, then decisions, then node cards on top.
                 <g class="flow-edges">
                     {edge_items.into_iter().map(|e| {
-                        let id = e.id.clone();
+                        // A stem's route id is `decision-stem:<step>`; it should
+                        // light up with its decision STEP, so match on the
+                        // stripped step id. Other edges match their route id
+                        // (== step id) directly.
+                        let match_id = e.id
+                            .strip_prefix(DECISION_STEM_PREFIX)
+                            .unwrap_or(&e.id)
+                            .to_string();
                         let is_selected = Signal::derive(move || {
-                            selected_step.get().as_deref() == Some(id.as_str())
+                            selected_step.get().as_deref() == Some(match_id.as_str())
                         });
                         view! { <DiagramEdge edge=e selected=is_selected/> }
                     }).collect_view()}
@@ -466,8 +530,8 @@ pub fn DiagramSvg(
                     }).collect_view()}
                 </g>
                 <g class="flow-decisions">
-                    {decision_items.into_iter().map(|(rect, role)| view! {
-                        <DecisionDiamond rect=rect role_var=role/>
+                    {decision_items.into_iter().map(|d| view! {
+                        <DecisionDiamond rect=d.rect role_var=d.role_var annotation=d.annotation/>
                     }).collect_view()}
                 </g>
                 // "NOT IN THIS FLOW" overline above the parked cluster. Drawn
