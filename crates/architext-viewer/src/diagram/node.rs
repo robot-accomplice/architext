@@ -202,18 +202,25 @@ pub fn DiagramNode(
     }
 }
 
-/// Gap (canvas px) between the diamond's top tip and its annotation caption.
-/// The caption sits ABOVE the diamond because decision branches only ever exit
-/// the left/right/bottom tips (see `decision_branch.rs`) — never the top, which
-/// carries the stem — so an above-centered caption can't collide with a branch
-/// or its outcome label.
-const ANNOTATION_GAP: f64 = 8.0;
+/// Gap (canvas px) between the diamond's top tip and the annotation pill's
+/// bottom edge. The annotation sits ABOVE the diamond because decision branches
+/// only ever exit the left/right/bottom tips (see `decision_branch.rs`) — never
+/// the top, which carries the stem — so an above-centered pill can't collide
+/// with a branch or its outcome label.
+const ANNOTATION_GAP: f64 = 4.0;
+/// Annotation pill height, the per-character advance used to size the pill to its
+/// text (no text measurement in SVG), and the horizontal padding inside it. The
+/// advance is tuned to the 10px UI font in `styles.css`.
+const ANNOTATION_PILL_H: f64 = 15.0;
+const ANNOTATION_CHAR_W: f64 = 5.6;
+const ANNOTATION_PAD_X: f64 = 7.0;
 
 /// Render a decision diamond (an extra decision-node rect, `fixedPorts`). It is
 /// a rotated square centered on the rect; tinted with the affiliated component's
 /// role color so the branch point reads as part of that node's lane. The
 /// `annotation` (the decision step's `action` — WHAT is being decided) renders
-/// as a caption beside the diamond and as a hover title.
+/// as a PILL above the diamond (all on-line text is pilled, never bare) and as a
+/// hover title.
 #[component]
 pub fn DecisionDiamond(
     rect: Rect,
@@ -231,14 +238,26 @@ pub fn DecisionDiamond(
         cy + r,
         cx - r,
     );
-    let caption_x = cx;
-    let caption_y = rect.y - ANNOTATION_GAP;
+    // Annotation pill: a stadium rect sized to the text, centered above the
+    // diamond's top tip; its opaque fill carries the text over the stem line.
+    let pill = annotation.clone().map(|a| {
+        let w = (a.chars().count() as f64) * ANNOTATION_CHAR_W + 2.0 * ANNOTATION_PAD_X;
+        let h = ANNOTATION_PILL_H;
+        let center_y = rect.y - ANNOTATION_GAP - h / 2.0;
+        (a, w, h, cx - w / 2.0, center_y - h / 2.0, center_y)
+    });
     view! {
         <g class="flow-decision-group">
-            {annotation.clone().map(|a| view! { <title>{a}</title> })}
+            {annotation.map(|a| view! { <title>{a}</title> })}
             <polygon class="flow-decision" points=points stroke=role_var></polygon>
-            {annotation.map(|a| view! {
-                <text class="flow-decision__annotation" x=caption_x y=caption_y>{a}</text>
+            {pill.map(|(text, w, h, x, y, cy)| view! {
+                <g class="flow-decision__annotation">
+                    <rect
+                        class="flow-decision__annotation-pill"
+                        x=x y=y width=w height=h rx=h / 2.0 ry=h / 2.0
+                    ></rect>
+                    <text class="flow-decision__annotation-text" x=cx y=cy>{text}</text>
+                </g>
             })}
         </g>
     }
