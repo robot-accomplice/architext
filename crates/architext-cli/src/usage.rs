@@ -12,8 +12,7 @@ Path:
     architext serve /path/to/repo
 
 Commands:
-  sync | install             Install data-only Architext or migrate old copied installs.
-  migrate                    Alias for sync, intended for old copied installs.
+  sync | install | init      Install or update data-only Architext.
   update | upgrade           Update the architext binary to the latest release.
   doctor                     Diagnose installation health and optionally repair drift.
   status                     Print installation status. Use --json for machine output.
@@ -52,8 +51,6 @@ Options:
   --overwrite-data           Replace docs/architext/data/*.json with neutral starter data.
   --append-agents            Append or replace Architext sections in AGENTS.md and CLAUDE.md.
   --no-agents                Do not manage AGENTS.md or CLAUDE.md.
-  --root-scripts             Add root package.json Architext convenience scripts.
-  --no-root-scripts          Do not manage root package.json scripts.
   --update-gitignore         Add generated artifact ignores without prompting.
   --no-gitignore             Do not manage .gitignore.
   --mode <name>              Prompt mode: initial-buildout, architecture-change, repair-validation, source-extraction.

@@ -813,15 +813,6 @@ pub fn render_orthogonal_route(
 }
 
 // ---------------------------------------------------------------------------
-// route_intersects_rect — pub(super) re-export for construction.rs
-// ---------------------------------------------------------------------------
-
-/// Re-export of the private `route_intersects_rect` for use by sibling submodules.
-pub(super) fn route_intersects_rect_pub(route: &RouteData, rect: &Rect, padding: f64) -> bool {
-    route_intersects_rect(route, rect, padding)
-}
-
-// ---------------------------------------------------------------------------
 // sideEndpointKey (L108)
 // ---------------------------------------------------------------------------
 

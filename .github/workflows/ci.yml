@@ -50,6 +50,9 @@ jobs:
       - name: Rust serve end-to-end smoke
         run: bash scripts/rust-serve-smoke.sh
 
+      - name: Bare-binary serve smoke (embedded viewer)
+        run: bash scripts/rust-serve-embedded-smoke.sh
+
   package:
     name: package
     runs-on: ubuntu-latest

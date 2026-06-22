@@ -231,12 +231,11 @@ fn dispatch(op: &str, fixture: &Value) -> Value {
         }
 
         "sync.defaultChoices" => {
-            let root_pkg = fixture["rootPackageExists"].as_bool().unwrap_or(false);
             let instr: Vec<String> = fixture["instructionFiles"]
                 .as_array()
                 .map(|a| a.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
                 .unwrap_or_default();
-            ok(sync_plan::default_sync_choices(root_pkg, &instr))
+            ok(sync_plan::default_sync_choices(&instr))
         }
 
         "sync.rememberedChoices" => {
@@ -294,12 +293,11 @@ fn dispatch(op: &str, fixture: &Value) -> Value {
             let sync_choices = &fixture["syncChoices"];
             let managed_instructions = &fixture["managedInstructions"];
             let gitignore_managed = fixture["gitignoreManaged"].as_bool().unwrap_or(false);
-            let root_scripts_managed = fixture["rootScriptsManaged"].as_bool().unwrap_or(false);
             let validation = &fixture["validation"];
             let now = fixture["now"].as_str().unwrap_or("");
             ok(sync_plan::sync_metadata_patch(
                 version, installing, migrating, &instr, sync_choices,
-                managed_instructions, gitignore_managed, root_scripts_managed,
+                managed_instructions, gitignore_managed,
                 validation, now,
             ))
         }

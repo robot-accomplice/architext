@@ -3,6 +3,16 @@
 This project uses `docs/architext/data/**/*.json` as the machine-readable
 architecture and release source of truth.
 
+Derive what you record in those JSON files from the **source code only**.
+Existing architecture documentation — prose READMEs, design docs, diagrams,
+comments, and even prior Architext claims — may be stale, aspirational, or
+wrong; do not treat any of it as authoritative for what the system actually is.
+Read the code to determine real responsibilities, flows, data movement,
+dependencies, and trust boundaries. Treat existing documents as unverified
+hints at most, verify every claim against the code, and when code and a
+document disagree, the code wins. (This governs the architecture you record;
+this contract and the schema still govern how you record it.)
+
 `docs/architext/data/manifest.json` records the Architext data schema version.
 That version tracks the JSON data contract, not the installed CLI/package
 version. Additive schema changes may ship in minor releases; breaking schema
@@ -33,6 +43,18 @@ Development, Design, Release, or any project-specific grouping. Respect
 `protection.edit` and `protection.delete`; protected rules are not casual
 cleanup targets. Rank rules by `criticality` and `order`, not alphabetical
 order or creation time.
+
+Element notes are human annotations on an architecture element (node, flow,
+decision, risk, view, or data class), persisted in the optional
+`docs/architext/data/notes.json` and registered as `manifest.files.notes`.
+Each note records `target: { kind, id }`, a `category`
+(`note` | `mitigation` | `caveat` | `todo`), a `body`, and timestamps; the
+note's `target.id` must reference an existing element (validation enforces
+this). Notes capture maintainer judgement — for example, that a high-risk
+area is intentionally mitigated by the documented system — so treat them as
+user-owned: preserve and update them, but do not fabricate notes or delete a
+human's note as cleanup. They are edited in the viewer (the detail panel's
+Notes section) and never replace validation or recorded architecture facts.
 
 When ordered work or use-case paths deserve a dedicated Flows projection, add a
 `workflow` view in `docs/architext/data/views.json`. Workflow views should reuse

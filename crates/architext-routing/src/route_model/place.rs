@@ -190,7 +190,7 @@ fn facing_pair(from: &Rect, to: &Rect) -> (Side, Side) {
 }
 
 /// True when two faces directly face each other (opposite outward normals).
-fn is_facing(sa: Side, sb: Side) -> bool {
+pub(crate) fn is_facing(sa: Side, sb: Side) -> bool {
     let na = sa.normal();
     let nb = sb.normal();
     (na.0 + nb.0).abs() < f64::EPSILON && (na.1 + nb.1).abs() < f64::EPSILON
@@ -214,7 +214,7 @@ fn clamp_jog(raw: f64, a: f64, b: f64) -> f64 {
 /// dogleg. `frac` staggers the jog by fan order so the Cs nest instead of sharing
 /// one channel; the channel is then clamped so both stems clear
 /// [`MIN_SURFACE_STEM`] (no bending right at the surface).
-fn build_c(sa: Side, pa: &Point, pb: &Point, frac: f64) -> Vec<Point> {
+pub(crate) fn build_c(sa: Side, pa: &Point, pb: &Point, frac: f64) -> Vec<Point> {
     // Nesting: the jog channel moves toward the source as the fan order grows
     // (nearest target jogs nearest the target, farthest jogs nearest the source),
     // so the Cs nest instead of crossing — hence `1 - frac`, not `frac`.
@@ -573,6 +573,56 @@ fn build_slotted_with_order(
         mount_b[ei] = Some(qb);
     }
 
+    // Facing-C nesting: reciprocal/parallel Cs between the SAME node-pair are built
+    // independently and default to the mid-channel (the per-source-slot `frac_a`
+    // doesn't coordinate across different source nodes), so two of them share a jog
+    // channel and overlap. Spread each node-pair's facing-Cs across distinct channels
+    // in the gutter — direction-aware (frac derived from an absolute target), so
+    // opposite-direction reciprocals land at different positions. Order within a pair
+    // is irrelevant; distinctness is what removes the overlap.
+    let mut c_frac = frac_a.clone();
+    // Group by GUTTER (orientation + the rounded face-to-face span), not node-pair:
+    // every facing-C jogging through the same gutter must get a distinct channel —
+    // whether it's a reciprocal of one pair or different pairs bundled through the
+    // same gutter (three edges sharing one gutter all collapsed to the mid-channel
+    // before). Node-pair grouping missed the cross-pair bundles.
+    let mut gutter_cs: HashMap<(bool, i64, i64), Vec<usize>> = HashMap::new();
+    for ei in 0..edges.len() {
+        if let (Some((sa, sb)), Some(pa), Some(pb)) =
+            (sides[ei], mount_a[ei].as_ref(), mount_b[ei].as_ref())
+        {
+            if is_facing(sa, sb) {
+                let (a_axis, b_axis) = if sa.is_horizontal() { (pa.x, pb.x) } else { (pa.y, pb.y) };
+                let key = (
+                    sa.is_horizontal(),
+                    a_axis.min(b_axis).round() as i64,
+                    a_axis.max(b_axis).round() as i64,
+                );
+                gutter_cs.entry(key).or_default().push(ei);
+            }
+        }
+    }
+    for group in gutter_cs.values_mut() {
+        let n = group.len();
+        if n < 2 {
+            continue; // a lone facing-C keeps its source-slot frac
+        }
+        group.sort_unstable(); // deterministic slot assignment
+        for (k, &ei) in group.iter().enumerate() {
+            let (sa, _) = sides[ei].unwrap();
+            let pa = mount_a[ei].as_ref().unwrap();
+            let pb = mount_b[ei].as_ref().unwrap();
+            let (a_axis, b_axis) = if sa.is_horizontal() { (pa.x, pb.x) } else { (pa.y, pb.y) };
+            let denom = b_axis - a_axis;
+            if denom.abs() < EPS {
+                continue; // collinear ⇒ a straight, not a C; frac unused
+            }
+            let (lo, hi) = (a_axis.min(b_axis), a_axis.max(b_axis));
+            let target = lo + (k as f64 + 1.0) / (n as f64 + 1.0) * (hi - lo);
+            c_frac[ei] = 1.0 - (target - a_axis) / denom;
+        }
+    }
+
     let routes: Vec<Vec<Point>> = edges
         .iter()
         .enumerate()
@@ -581,7 +631,7 @@ fn build_slotted_with_order(
                 let pa = mount_a[ei].clone().unwrap_or_else(|| sa.mount_at(&nodes[e.a], 0.5));
                 let pb = mount_b[ei].clone().unwrap_or_else(|| sb.mount_at(&nodes[e.b], 0.5));
                 let obstacles = obstacles_for(nodes, e.a, e.b);
-                build_l_or_c(sa, &pa, sb, &pb, frac_a[ei], &obstacles)
+                build_l_or_c(sa, &pa, sb, &pb, c_frac[ei], &obstacles)
                     .unwrap_or_else(|| detour[ei].clone())
             }
             None => detour[ei].clone(),
@@ -1083,6 +1133,7 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
         }
     }
 
+
     // Phase 2: reciprocal-pair symmetry. A pair a→b / b→a routed with MISMATCHED
     // shapes (e.g. one toggled to C, its return left an L) crosses. Try forcing
     // every edge between the same node-pair onto the facing surfaces (so they run
@@ -1163,6 +1214,7 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
         }
     }
 
+
     // Phase 3b: JOINT pair-swap (track nesting). A reciprocal / multi-edge bundle
     // between two surfaces nests only when both surfaces' slot orders move together
     // — but the right "mirror" can be the SAME order (facing surfaces) or the
@@ -1214,6 +1266,7 @@ pub fn route_all_coordinated(nodes: &[Rect], edges: &[Edge]) -> Vec<Vec<Point>> 
             break;
         }
     }
+
 
     // Hard no-overlap rule: applied ONCE on the chosen routing (shape-preserving),
     // not inside the mount-order optimizer above.

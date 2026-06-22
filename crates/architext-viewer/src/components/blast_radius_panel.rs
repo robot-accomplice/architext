@@ -25,15 +25,12 @@ use leptos::*;
 use leptos::spawn_local;
 
 use crate::blast_radius::{blast_radius_for_node, BlastInputs, BlastRadius};
-use crate::data::{fetch_repo_tree, models::RepoTreePayload, FetchError};
+use crate::data::fetch_repo_tree;
 use crate::diagram::role_color_var;
 use crate::repo_tree_model::FileEntry;
 use crate::severity::{sensitivity_color_var, severity_color_var};
 use crate::state::use_app_state;
 
-/// The repo-tree fetch outcome (for owned files), held in a plain signal — same
-/// pattern as the Repo Tree surface. `None` while loading.
-type RepoState = Option<Result<RepoTreePayload, FetchError>>;
 
 #[component]
 pub fn BlastRadiusPanel() -> impl IntoView {
@@ -58,11 +55,19 @@ pub fn BlastRadiusPanel() -> impl IntoView {
     // Search query over the node list.
     let query = create_rw_signal(String::new());
 
-    // Live repo file list (for owned files), fetched once on mount.
-    let repo = create_rw_signal::<RepoState>(None);
-    spawn_local(async move {
-        repo.set(Some(fetch_repo_tree().await));
-    });
+    // Live repo file list (for owned files) — read the SHARED, cached fetch so a
+    // remount during a mode switch doesn't refire /api/repo-tree (this panel was
+    // remounting several times → many concurrent fetches, slow on a real repo).
+    // The guard, set synchronously, collapses same-tick remounts to one fetch.
+    let repo = state.repo_tree;
+    let repo_loading = state.repo_tree_loading;
+    if repo.get_untracked().is_none() && !repo_loading.get_untracked() {
+        repo_loading.set(true);
+        spawn_local(async move {
+            repo.set(Some(fetch_repo_tree().await));
+            repo_loading.set(false);
+        });
+    }
 
     // Re-focus to a node id (dependency/dependent chip click) + mirror it into
     // the inspector selection so the right panel follows.

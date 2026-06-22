@@ -1,5 +1,0 @@
-{
-  "choices": { "branch": "current", "instructionFiles": ["CLAUDE.md"], "manageGitignore": true, "manageRootScripts": false, "applyDoctorRepairs": true, "proceedWithChanges": true, "promptBeforeProceed": false },
-  "options": { "rootScripts": true },
-  "instructionFiles": ["AGENTS.md", "CLAUDE.md", ".cursorrules"]
-}

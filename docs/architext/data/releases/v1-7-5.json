@@ -1,0 +1,190 @@
+{
+  "id": "v1-7-5",
+  "version": "1.7.5",
+  "name": "Architext 1.7.5 Single Routing Model + npm Phase-Out + Self-Model Refresh",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Consolidation release. Routing is now exactly two routers and only two: one deterministic node-based MODEL for every box-and-line diagram (flows, system map, C4, deployment, dataflow, risk overlay) and the separate sequential router for sequence diagrams. The legacy candidate-based engine was physically removed (~13,300 LOC) — plan_diagram used to run it and then overwrite every route with the model, pure wasted work, which is why structural views spun for seconds; with it gone they render instantly and route geometry is byte-identical. npm continues to be phased out: the redundant per-platform npm dist co-location is dropped (the viewer is embedded in the binary — completing the item deferred from 1.7.4), and the npm 'root scripts' convenience feature plus the `migrate` command alias are removed. `init` joins `sync`/`install` as a synonym. The Architext self-model (this repo's own architecture data) was refreshed from JS-era source paths and npm verification to the real Rust crates. A wall-time guard now backs the corpus quality gate.",
+  "targetDate": "2026-06-22",
+  "lastUpdated": "2026-06-22T15:45:00.000Z",
+  "updateSource": "Work complete on the release branch; pending maintainer bless + ship. Routing engine removal verified output-preserving (27/27 corpus flow×view geometries byte-identical to pre-removal), §0 gate VALID (220 legal routes), workspace tests green, WASM viewer compiles against the slimmed routing crate. npm root-scripts + migrate removal verified (no rootScripts refs remain; migrate not a command; status reports no root scripts). init dispatches as sync. Self-model refresh validated with architext validate. Reviewed live on the FlowForge corpus.",
+  "scope": {
+    "required": [
+      {
+        "id": "single-node-routing-model",
+        "title": "One deterministic node-based router; legacy candidate engine removed",
+        "kind": "architecture",
+        "summary": "Promote the deterministic model (route_all_coordinated) to the SOLE node-based router for all box-and-line diagrams (doublebacks and step formations costed out; facing-offset stem fix — no L flush to a surface, stems the only Z exception). Then physically delete the legacy candidate engine (~13,300 LOC: route_edges/orchestration, separation, construction; route_candidate_builders/ports; route_strategies; route_scoring; route_mount_model/). RCA: plan_diagram ran the engine and then apply_model_routes overwrote every route with the model's geometry — the engine's expensive search was computed and discarded on every diagram, which is why structural views (C4 / deployment / risk overlay / repo tree) spun for seconds in the browser (risk-overlay ~4000ms). With the engine gone they route in tens of ms (risk-overlay 44ms) and the rendered geometry is byte-identical (proven 27/27 corpus flow×view). The corpus quality gate was repointed onto the model with a regenerated, uniformly-cleaner baseline (all doglegs / pair-internal crossings / shared segments now 0).",
+        "evidence": ["engine-removal-output-parity", "corpus-fitness-model-baseline", "section0-gate"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "routing-model",
+        "dependsOn": []
+      },
+      {
+        "id": "corpus-walltime-guard",
+        "title": "Wall-time catastrophic-regression guard on the corpus gate",
+        "kind": "test",
+        "summary": "The corpus_fitness gate now ratchets a wall-time bound (full-corpus model routing < 1000ms; real cost is a few ms, ~200x headroom) alongside the route-quality metrics, so a reintroduced super-linear routing pass (the kind the removed engine had) trips CI without flaking on slow runners.",
+        "evidence": ["corpus-fitness-model-baseline"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "routing-model",
+        "dependsOn": ["single-node-routing-model"]
+      },
+      {
+        "id": "npm-phase-out-continues",
+        "title": "Continue phasing out npm (dist co-location, root scripts, migrate alias)",
+        "kind": "chore",
+        "summary": "Drop the redundant per-platform npm dist co-location now that the viewer is embedded in the binary (~2.6 MB/package) — completes the drop-redundant-npm-co-location item deferred from 1.7.4. Remove the npm 'root scripts' convenience feature entirely (--root-scripts/--no-root-scripts flags, the ROOT_SCRIPTS aliases, the upsert logic, the status report, the sync prompt) and the `migrate` command alias (redundant with sync). Add a bare-binary embedded-serve CI smoke that boots with an empty dist so the off-npm embedded path is exercised. The copied-install migration ramp is intentionally KEPT until 2.0.0 (roadmap retire-copied-install-migration) so it doesn't strand pre-1.7.0 repos dirty.",
+        "evidence": ["embedded-serve-smoke"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "npm-phase-out",
+        "dependsOn": []
+      },
+      {
+        "id": "cli-init-synonym",
+        "title": "`init` synonym for `sync`",
+        "kind": "feature",
+        "summary": "Add `init` as a synonym for `sync` (alongside `install`); all three dispatch identically. Recognized by the parser, dispatched in main, documented in usage/README.",
+        "evidence": [],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "low",
+        "workstreamId": "cli",
+        "dependsOn": []
+      },
+      {
+        "id": "self-model-rust-refresh",
+        "title": "Refresh the Architext self-model to the Rust-native codebase",
+        "kind": "documentation",
+        "summary": "The project's own architecture data was JS-era stale: 11 of 18 nodes pointed sourcePaths at deleted viewer/src/**/*.js files, 0 referenced Rust crates, and ~10 verified via npm test — the 1.7.0 Rust rewrite was never reflected in the self-model. Refresh nodes/flows/decisions/risks from the real Rust crates (architext-cli / architext-core / architext-routing / architext-serve / architext-viewer): real sourcePaths, cargo/trunk/script verification, the routing node re-pointed to the model, npm phase-out reflected. Prose docs (README) updated for the same. Validated with architext validate.",
+        "evidence": ["self-model-validate"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "doc-currency",
+        "dependsOn": []
+      },
+      {
+        "id": "viewer-theme-toggle-restyle",
+        "title": "Light/dark toggle reads as a swatch of the target theme",
+        "kind": "chore",
+        "summary": "The theme toggle now renders as a literal swatch of the theme it switches to (light button = light theme's surface/ink/line; dark button = dark theme's) with a single hued glyph — sun orange, moon purple — at the regular font size.",
+        "evidence": [],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "low",
+        "workstreamId": "cli",
+        "dependsOn": []
+      },
+      {
+        "id": "restore-pdf-export",
+        "title": "Restore PDF export (regressed out in the 1.7.0 rewrite)",
+        "kind": "bug-fix",
+        "summary": "Browser-native PDF export was dropped in the 1.7.0 Rust/Leptos rewrite (no PDF control survived; the old test + UAT harness were deleted). Restored as a regression fix: a topbar 'PDF' control hands the active view to the browser print / save-as-PDF workflow (window.print, rAF-gated), and new @media print CSS strips the app chrome so the printed page is the diagram in the active theme's colors. Live-UI verified: the button fires window.print and the print stylesheet hides nav/inspector/topbar/controls.",
+        "evidence": ["pdf-export-restored"],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "cli",
+        "dependsOn": []
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "routing-model",
+      "name": "Single node-based routing model",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Make the deterministic model the sole node-based router, delete the legacy engine, and guard the corpus gate on quality + wall time.",
+      "progress": 100,
+      "itemIds": ["single-node-routing-model", "corpus-walltime-guard"],
+      "evidence": ["engine-removal-output-parity", "corpus-fitness-model-baseline", "section0-gate"]
+    },
+    {
+      "id": "npm-phase-out",
+      "name": "npm phase-out",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Drop redundant npm dist co-location, remove the npm root-scripts feature and the migrate alias, and add a bare-binary serve smoke.",
+      "progress": 100,
+      "itemIds": ["npm-phase-out-continues"],
+      "evidence": ["embedded-serve-smoke"]
+    },
+    {
+      "id": "cli",
+      "name": "CLI + viewer ergonomics",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "init synonym for sync; theme-toggle restyle.",
+      "progress": 100,
+      "itemIds": ["cli-init-synonym", "viewer-theme-toggle-restyle", "restore-pdf-export"],
+      "evidence": []
+    },
+    {
+      "id": "doc-currency",
+      "name": "Documentation currency",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Refresh the Architext self-model to the Rust crates and update prose docs.",
+      "progress": 100,
+      "itemIds": ["self-model-rust-refresh"],
+      "evidence": ["self-model-validate"]
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "engine-removal-output-parity",
+      "label": "Engine removal byte-identical: 27/27 corpus flow×view geometries unchanged from a clean relink",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "corpus-fitness-model-baseline",
+      "label": "corpus_fitness repointed onto the model with regenerated baseline + wall-time guard (cargo test -p architext-routing --test corpus_fitness)",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "section0-gate",
+      "label": "§0 forbidden-artifact gate VALID — 220 legal routes (audit_model on the corpus)",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "embedded-serve-smoke",
+      "label": "Bare-binary embedded-serve CI smoke (scripts/rust-serve-embedded-smoke.sh)",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "self-model-validate",
+      "label": "Self-model refresh passes architext validate",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "pdf-export-restored",
+      "label": "PDF export restored + live-UI verified (topbar PDF control fires window.print; @media print strips chrome)",
+      "kind": "manual-check",
+      "status": "complete"
+    }
+  ]
+}

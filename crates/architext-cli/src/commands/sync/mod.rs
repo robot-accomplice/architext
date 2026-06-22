@@ -1,4 +1,4 @@
-//! `sync` / `install` / `migrate` command — Rust port of `syncTarget`.
+//! `sync` / `install` / `init` command — Rust port of `syncTarget`.
 //! (`upgrade` was historically an alias here; it now updates the binary.)
 //!
 //! Sub-modules:
@@ -7,7 +7,6 @@
 //!   - `starter_data`    — `write_starter_data` + `write_starter_release_data`
 //!   - `instruction_files` — `upsert_instruction_file`
 //!   - `gitignore`       — `upsert_gitignore`
-//!   - `root_scripts`    — `upsert_root_scripts`
 //!   - `metadata`        — `read_metadata` / `write_metadata`
 //!   - `branch`          — `handle_branch`
 //!   - `status_printer`  — verbose `format_verbose_status_lines`
@@ -16,7 +15,6 @@ mod branch;
 mod gitignore;
 mod instruction_files;
 mod metadata;
-mod root_scripts;
 mod starter_data;
 pub mod status_printer;
 mod target_layout;
@@ -40,7 +38,6 @@ use self::branch::handle_branch;
 use self::gitignore::upsert_gitignore;
 use self::instruction_files::upsert_instruction_file;
 use self::metadata::{read_metadata, write_metadata};
-use self::root_scripts::upsert_root_scripts;
 use self::starter_data::write_starter_data;
 use self::status_printer::format_verbose_status_lines;
 use self::target_layout::{
@@ -107,8 +104,6 @@ fn options_json(opts: &ParsedArgs) -> Value {
         "appendAgents": opts.append_agents,
         "noGitignore": opts.no_gitignore,
         "updateGitignore": opts.update_gitignore,
-        "noRootScripts": opts.no_root_scripts,
-        "rootScripts": opts.root_scripts,
         "dryRun": opts.dry_run,
         "force": opts.force,
         "overwriteData": opts.overwrite_data,
@@ -166,9 +161,8 @@ pub fn run(target: &Path, opts: &ParsedArgs, version: &str) {
     // Select sync choices (non-interactive: --yes path only in gate)
     let instruction_files_list: Vec<String> = INSTRUCTION_FILES.iter().map(|s| s.to_string()).collect();
     let metadata_val = read_metadata(target).unwrap_or(Value::Null);
-    let root_package_exists = target.join("package.json").exists();
 
-    let defaults = default_sync_choices(root_package_exists, &instruction_files_list);
+    let defaults = default_sync_choices(&instruction_files_list);
     // Non-interactive: use defaults + explicit options
     let sync_choices = apply_explicit_sync_options(&defaults, &options, &instruction_files_list);
 
@@ -352,37 +346,6 @@ fn perform_writes(
         }
     }
 
-    // upsertRootScripts
-    let mut root_scripts_managed = false;
-    if sync_choices["manageRootScripts"].as_bool().unwrap_or(false) {
-        match upsert_root_scripts(target, dry_run) {
-            Ok((changed, missing)) => {
-                let dest = target.join("package.json");
-                if changed {
-                    println_single(&format!(
-                        "{} {} with {} scripts",
-                        if dry_run { "Would update" } else { "Updated" },
-                        dest.display(),
-                        missing.len()
-                    ));
-                    root_scripts_managed = true;
-                } else {
-                    let reason = if !target.join("package.json").exists() {
-                        "missing package.json"
-                    } else {
-                        "already present"
-                    };
-                    println_single(&format!("Skipped {}: {reason}", dest.display()));
-                    root_scripts_managed = reason == "already present";
-                }
-            }
-            Err(e) => {
-                eprintln!("Failed to update package.json: {e}");
-                process::exit(1);
-            }
-        }
-    }
-
     // shouldValidateSync — skip validation in dry-run-install or skipValidate
     let do_validate = should_validate_sync(options, installing) && !dry_run;
     let validation_result: Value = if do_validate {
@@ -417,7 +380,6 @@ fn perform_writes(
             sync_choices,
             &Value::Array(managed_instructions.iter().map(|s| Value::String(s.clone())).collect()),
             gitignore_managed,
-            root_scripts_managed,
             &validation_result,
             &timestamp::now_iso(),
         );

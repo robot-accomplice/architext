@@ -5,10 +5,10 @@
 //!
 //! This is a non-interactive sync+validate that applies doctor repairs and
 //! validates. It mirrors the JS `syncTarget(target, { quiet: true, branch:
-//! "none", noAgents: true, noGitignore: true, noRootScripts: true })` call.
+//! "none", noAgents: true, noGitignore: true })` call.
 //!
 //! Since the Rust serve layer doesn't have the full `syncTarget` pipeline
-//! (no branch handling, no gitignore writes, no root scripts, no instruction
+//! (no branch handling, no gitignore writes, no instruction
 //! file upsert), the serve-layer `syncRepairApiRequest` is equivalent to:
 //!   1. `collect_status` with validation.
 //!   2. If there are doctor repairs AND installed && !needsMigration: apply them.

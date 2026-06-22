@@ -37,18 +37,13 @@ mod wasm_tests {
         assert!(!plan.routes.is_empty());
     }
 
-    /// Regression: reroute callbacks (separate_close_parallel_routes, optimize_mount_assignments)
-    /// must inherit lane/row indices from the PlannerContext, not pass None and fall back to 0.
+    /// Regression: `detect-copied-files` connects architext-cli (lane 1, row 0) →
+    /// target-repository (lane 3, row 0), with viewer-runtime (lane 2, row 0) in
+    /// the primary right→left corridor.
     ///
-    /// `detect-copied-files` connects architext-cli (lane 1, row 0) → target-repository (lane 3, row 0).
-    /// viewer-runtime (lane 2, row 0) blocks the primary right→left corridor.
-    ///
-    /// The route exits the RIGHT side of architext-cli (x=526) and the optimizer's trySideMoves
-    /// pass reroutes via the top gutter (y=67) to avoid the blocked corridor. The JavaScript
-    /// reference produces: M 526 122 L 544 122 L 544 67 L 792 67 L 792 131 L 810 131
-    ///
-    /// Before the lane/row fix, reroutes passed None indices so semantic scoring misfired.
-    /// After the fix, the route matches the JS reference: exiting x=526 (right side of architext-cli).
+    /// The deterministic model routes the edge exiting architext-cli's RIGHT side
+    /// (x=526) rather than its top. This pins that right-side exit so a future
+    /// model change can't silently flip the mount side.
     #[test]
     fn detect_copied_files_routes_right_side_exit() {
         let input_str = include_str!(

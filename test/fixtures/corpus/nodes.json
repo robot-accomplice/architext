@@ -3322,6 +3322,316 @@
         "internal/security Landlock tests (Linux >= 5.13)",
         "core SandboxConfig/SandboxApplier mapping tests"
       ]
+    },
+    {
+      "id": "maintainer",
+      "type": "actor",
+      "name": "Maintainer",
+      "summary": "Engineer installing, migrating, validating, or reviewing Architext in a repository.",
+      "responsibilities": [
+        "Run lifecycle commands",
+        "Review generated architecture data",
+        "Keep instructions current"
+      ],
+      "owner": "Project maintainers",
+      "sourcePaths": [],
+      "runtime": "Terminal workflow",
+      "interfaces": [
+        "architext CLI"
+      ],
+      "dependencies": [
+        "architext-cli"
+      ],
+      "dataHandled": [],
+      "security": [
+        "Reviews generated changes before commit"
+      ],
+      "observability": [
+        "CLI output",
+        "Git diff"
+      ],
+      "relatedFlows": [
+        "fresh-install"
+      ],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [
+        "architext doctor ."
+      ]
+    },
+    {
+      "id": "architext-cli",
+      "type": "service",
+      "name": "Architext CLI",
+      "summary": "Global Node CLI that manages installs, migrations, validation, serving, builds, prompts, and diagnostics.",
+      "responsibilities": [
+        "Resolve target paths",
+        "Write starter data",
+        "Migrate copied installs",
+        "Serve package viewer",
+        "Run validation"
+      ],
+      "owner": "Architext maintainers",
+      "sourcePaths": [
+        "tools/architext-adopt.mjs"
+      ],
+      "runtime": "Node.js 20+ global executable",
+      "interfaces": [
+        "architext <command> [path]",
+        "status --json"
+      ],
+      "dependencies": [
+        "schema-validator",
+        "target-repository"
+      ],
+      "dataHandled": [],
+      "security": [
+        "Dry-run exposes destructive migration changes",
+        "Architecture facts are not rewritten silently"
+      ],
+      "observability": [
+        "Console output",
+        "doctor/status JSON"
+      ],
+      "relatedFlows": [
+        "fresh-install"
+      ],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [
+        "node tools/architext-adopt.mjs --help",
+        "node tools/architext-adopt.mjs status . --json"
+      ]
+    },
+    {
+      "id": "schema-validator",
+      "type": "module",
+      "name": "Schema validator",
+      "summary": "AJV-based validator that checks schemas, unique IDs, and cross-file references.",
+      "responsibilities": [
+        "Validate JSON Schema",
+        "Reject unresolved references",
+        "Report duplicate IDs"
+      ],
+      "owner": "Architext maintainers",
+      "sourcePaths": [
+        "viewer/tools/validate-architext.mjs",
+        "viewer/schema/*.schema.json"
+      ],
+      "runtime": "Node.js process invoked by CLI",
+      "interfaces": [
+        "architext validate [path]",
+        "--data-dir",
+        "--schema-dir"
+      ],
+      "dependencies": [
+        "target-data-files"
+      ],
+      "dataHandled": [],
+      "security": [
+        "Fails closed on invalid model"
+      ],
+      "observability": [
+        "Validation errors by file and reference context"
+      ],
+      "relatedFlows": [
+        "fresh-install"
+      ],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [
+        "architext validate ."
+      ]
+    },
+    {
+      "id": "target-data-files",
+      "type": "data-store",
+      "name": "Target data files",
+      "summary": "Project-owned Architext JSON files committed under docs/architext/data.",
+      "responsibilities": [
+        "Store nodes",
+        "Store flows",
+        "Store views",
+        "Store decisions and risks"
+      ],
+      "owner": "Target project maintainers",
+      "sourcePaths": [
+        "docs/architext/data/*.json"
+      ],
+      "runtime": "Version-controlled JSON",
+      "interfaces": [
+        "manifest.json file map",
+        "JSON Schema"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [
+        "Reviewed as code"
+      ],
+      "observability": [
+        "Validation output",
+        "Rendered viewer"
+      ],
+      "relatedFlows": [
+        "fresh-install"
+      ],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [
+        "architext validate ."
+      ]
+    },
+    {
+      "id": "target-repository",
+      "type": "software-system",
+      "name": "Target repository",
+      "summary": "Any project that adopts Architext and commits only architecture data, metadata, and optional instruction pointers.",
+      "responsibilities": [
+        "Own architecture facts",
+        "Store lifecycle metadata",
+        "Keep generated build output ignored"
+      ],
+      "owner": "Target project maintainers",
+      "sourcePaths": [
+        "docs/architext/data/*.json",
+        "docs/architext/.architext.json",
+        "AGENTS.md",
+        "CLAUDE.md",
+        ".cursor/rules/*",
+        ".cursorrules"
+      ],
+      "runtime": "Git repository",
+      "interfaces": [
+        "Filesystem",
+        "Git diff",
+        "package.json scripts"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [
+        "Project instructions must remain authoritative outside the managed Architext section"
+      ],
+      "observability": [
+        "Git status",
+        "doctor output"
+      ],
+      "relatedFlows": [
+        "fresh-install"
+      ],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [
+        "architext doctor ."
+      ]
+    },
+    {
+      "id": "package-schemas",
+      "type": "module",
+      "name": "Package schemas",
+      "summary": "Architext-owned JSON Schemas shipped with the global package.",
+      "responsibilities": [
+        "Define data contract",
+        "Provide validation source of truth"
+      ],
+      "owner": "Architext maintainers",
+      "sourcePaths": [
+        "viewer/schema/*.schema.json"
+      ],
+      "runtime": "Package files",
+      "interfaces": [
+        "JSON Schema 2020-12"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [
+        "Schemas are not target-repository-owned"
+      ],
+      "observability": [
+        "npm pack --dry-run"
+      ],
+      "relatedFlows": [
+        "fresh-install"
+      ],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [
+        "npm pack --dry-run"
+      ]
+    },
+    {
+      "id": "cli-adapters",
+      "type": "module",
+      "name": "CLI adapters",
+      "summary": "Argument parsing, command routing, and terminal presentation modules that keep CLI mechanics out of lifecycle policy.",
+      "responsibilities": [
+        "Parse command lines",
+        "Route commands to handlers",
+        "Format terminal output"
+      ],
+      "owner": "Architext maintainers",
+      "sourcePaths": [
+        "src/adapters/cli/command-line.mjs",
+        "src/adapters/cli/command-router.mjs",
+        "src/adapters/cli/terminal-presenter.mjs"
+      ],
+      "runtime": "Node.js modules loaded by the CLI executable",
+      "interfaces": [
+        "parseArgs",
+        "routeCommand",
+        "formatStatus"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [
+        "Command parsing stays deterministic and side-effect free"
+      ],
+      "observability": [
+        "CLI tests",
+        "terminal output"
+      ],
+      "relatedFlows": [
+        "fresh-install"
+      ],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [
+        "npm test"
+      ]
+    },
+    {
+      "id": "lifecycle-domain",
+      "type": "module",
+      "name": "Lifecycle domain",
+      "summary": "Pure lifecycle policy for doctor findings and repair categories, independent of filesystem and terminal adapters.",
+      "responsibilities": [
+        "Derive repair categories",
+        "Keep sync and doctor repair semantics aligned",
+        "Preserve architecture facts by default"
+      ],
+      "owner": "Architext maintainers",
+      "sourcePaths": [
+        "src/domain/lifecycle/doctor-repairs.mjs"
+      ],
+      "runtime": "Pure Node.js module",
+      "interfaces": [
+        "deriveDoctorRepairs"
+      ],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [
+        "Repairs are explicit categories before mutation"
+      ],
+      "observability": [
+        "doctor repair tests"
+      ],
+      "relatedFlows": [
+        "fresh-install"
+      ],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": [
+        "npm test -- test/doctor-repairs.test.mjs"
+      ]
     }
   ]
 }

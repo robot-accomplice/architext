@@ -3,10 +3,9 @@
   "installing": false,
   "migrating": false,
   "instructionFiles": ["AGENTS.md", "CLAUDE.md"],
-  "syncChoices": { "branch": "current", "instructionFiles": ["CLAUDE.md"], "manageGitignore": true, "manageRootScripts": false, "applyDoctorRepairs": true, "proceedWithChanges": true, "promptBeforeProceed": false },
+  "syncChoices": { "branch": "current", "instructionFiles": ["CLAUDE.md"], "manageGitignore": true, "applyDoctorRepairs": true, "proceedWithChanges": true, "promptBeforeProceed": false },
   "managedInstructions": ["CLAUDE.md"],
   "gitignoreManaged": true,
-  "rootScriptsManaged": false,
   "validation": { "ok": true },
   "now": "2024-01-01T00:00:00.000Z"
 }

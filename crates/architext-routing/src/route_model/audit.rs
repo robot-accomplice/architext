@@ -14,10 +14,10 @@
 //! crossings, length).
 
 use super::{
-    bend_score, corners, doubles_back, segments_overlap, DOGLEG_PENALTY, EPS, MIN_SURFACE_STEM,
+    bend_score, corners, doubles_back, is_stemmed_jog, segments_overlap, DOGLEG_PENALTY, EPS, MIN_SURFACE_STEM,
     Z_PENALTY,
 };
-use crate::model::Point;
+use crate::model::{Point, Rect};
 
 /// Per-routing forbidden-artifact gate plus the soft (post-gate) validation facts.
 #[derive(Default, Debug)]
@@ -68,6 +68,30 @@ impl RouteAudit {
 
 fn seg_len(a: &Point, b: &Point) -> f64 {
     ((a.x - b.x).powi(2) + (a.y - b.y).powi(2)).sqrt()
+}
+
+/// Whether segment `a→b` runs **flush** to one of `rect`'s faces: it lies on a
+/// face line (collinear, within [`EPS`]) AND overlaps that face's extent for a
+/// nonzero length. A perpendicular stem only TOUCHES its mount face at a point
+/// (zero overlap along the face), so it is not flush; a segment that runs ALONG a
+/// surface is — the verboten "L with a side flush to a surface". Checked against
+/// EVERY node (incl. the route's own endpoints, which is how a grazing stem is
+/// caught).
+fn segment_flush_to_rect(a: &Point, b: &Point, rect: &Rect) -> bool {
+    let horizontal = (a.y - b.y).abs() < EPS;
+    let vertical = (a.x - b.x).abs() < EPS;
+    if horizontal {
+        let (lo, hi) = (a.x.min(b.x).max(rect.x), a.x.max(b.x).min(rect.x + rect.width));
+        if lo + EPS < hi {
+            return (a.y - rect.y).abs() < EPS || (a.y - (rect.y + rect.height)).abs() < EPS;
+        }
+    } else if vertical {
+        let (lo, hi) = (a.y.min(b.y).max(rect.y), a.y.max(b.y).min(rect.y + rect.height));
+        if lo + EPS < hi {
+            return (a.x - rect.x).abs() < EPS || (a.x - (rect.x + rect.width)).abs() < EPS;
+        }
+    }
+    false
 }
 
 /// Minimum clearance between two parallel routes — "a channel an arrowhead wide".
@@ -125,7 +149,9 @@ pub(crate) fn total_tight_pairs(routes: &[Vec<Point>]) -> usize {
 }
 
 /// Audit one routing for every forbidden artifact, plus the soft shape facts.
-pub fn audit_routes(routes: &[Vec<Point>]) -> RouteAudit {
+/// `rects` are the node rectangles; pass an empty slice to skip the flush-to-surface
+/// check (e.g. in pure-geometry unit tests with no layout).
+pub fn audit_routes(routes: &[Vec<Point>], rects: &[Rect]) -> RouteAudit {
     let mut a = RouteAudit::default();
     for (i, r) in routes.iter().enumerate() {
         if r.len() < 2 {
@@ -138,19 +164,24 @@ pub fn audit_routes(routes: &[Vec<Point>]) -> RouteAudit {
         }
         // dogleg vs Z/staircase via the §0 shape classifier.
         let score = bend_score(r);
+        let c = corners(r);
+        // STEM EXCEPTION: a 2-bend facing jog whose end segments are proper stems is
+        // the unavoidable, legal shape for an offset facing pair — stems are the sole
+        // exception to the Z rule. It scores Z_PENALTY in the cost model but is NOT a
+        // forbidden artifact. (A short-stem jog / ≥3-bend staircase stays forbidden.)
+        let stemmed_jog = c.len() == 4 && is_stemmed_jog(&c);
         if doubles_back(r) || score >= DOGLEG_PENALTY {
             a.doglegs.push(i);
-        } else if (score - Z_PENALTY).abs() < EPS {
+        } else if (score - Z_PENALTY).abs() < EPS && !stemmed_jog {
             a.staircases.push(i); // Z (2-bend, opposite sides) or ≥3-bend staircase
         } else {
-            // a legal shape — record it and check its stems.
+            // a legal shape (incl. the stemmed facing jog) — record it, check stems.
             match score as i64 {
                 0 => a.straight += 1,
                 1 => a.ells += 1,
                 _ => a.cees += 1,
             }
             // min-stem: the segment off each mount before the first/last bend.
-            let c = corners(r);
             if c.len() >= 3 {
                 let first = seg_len(&c[0], &c[1]);
                 let last = seg_len(&c[c.len() - 1], &c[c.len() - 2]);
@@ -158,6 +189,16 @@ pub fn audit_routes(routes: &[Vec<Point>]) -> RouteAudit {
                     a.short_stems.push(i);
                 }
             }
+        }
+        // flush-to-surface: ANY segment running flush along a node face is a min-stem
+        // violation — the verboten "L with a side flush to a surface" (a grazing stem
+        // that clings to the wall instead of escaping perpendicular). The length check
+        // above misses it (a flush stem can be long); this catches it geometrically.
+        let flushed = rects
+            .iter()
+            .any(|rect| r.windows(2).any(|w| segment_flush_to_rect(&w[0], &w[1], rect)));
+        if flushed && !a.short_stems.contains(&i) {
+            a.short_stems.push(i);
         }
         a.beta += score;
         a.length += r.windows(2).map(|w| seg_len(&w[0], &w[1])).sum::<f64>();
@@ -201,31 +242,78 @@ mod tests {
     fn flags_a_dogleg() {
         // right to x=20 then BACK left to x=10 (overlaps itself on y=0) then up.
         let dogleg = vec![p(0.0, 0.0), p(20.0, 0.0), p(10.0, 0.0), p(10.0, 20.0)];
-        let a = audit_routes(&[dogleg]);
+        let a = audit_routes(&[dogleg], &[]);
         assert_eq!(a.doglegs, vec![0], "dogleg must be flagged");
         assert!(!a.is_clean());
     }
 
     #[test]
-    fn flags_a_z_jog() {
-        // end segments point the SAME way but sit on OPPOSITE sides of the vertical
-        // middle (x=20): (0,0) is left of it, (40,10) is right of it → a Z.
-        let z = vec![p(0.0, 0.0), p(20.0, 0.0), p(20.0, 10.0), p(40.0, 10.0)];
-        let a = audit_routes(&[z]);
-        assert_eq!(a.staircases, vec![0], "Z jog must be flagged");
+    fn accepts_a_stemmed_jog() {
+        // A 2-bend facing jog whose end segments are both proper stems (20 ≥
+        // MIN_SURFACE_STEM=16) is the legal §0 stem exception — stems are the sole
+        // exception to the Z rule, so this is NOT a forbidden Z.
+        let jog = vec![p(0.0, 0.0), p(20.0, 0.0), p(20.0, 10.0), p(40.0, 10.0)];
+        let a = audit_routes(&[jog], &[]);
+        assert!(a.staircases.is_empty(), "stemmed jog is legal, not a Z");
+        assert_eq!(a.cees, 1, "counted as a legal 2-bend shape");
+        assert!(a.is_clean());
+    }
+
+    #[test]
+    fn flags_a_short_stem_jog() {
+        // The same jog but with a first stem of only 8 < MIN_SURFACE_STEM: the stem
+        // exception does NOT apply to a too-short stem, so it stays a forbidden Z.
+        let jog = vec![p(0.0, 0.0), p(8.0, 0.0), p(8.0, 10.0), p(40.0, 10.0)];
+        let a = audit_routes(&[jog], &[]);
+        assert_eq!(a.staircases, vec![0], "short-stem jog stays forbidden");
         assert!(!a.is_clean());
+    }
+
+    #[test]
+    fn flags_a_staircase() {
+        // A 3-bend staircase (≥5 corners) is forbidden regardless of stem length —
+        // the exception is for the single stemmed jog, not multi-bend staircases.
+        let s = vec![
+            p(0.0, 0.0), p(20.0, 0.0), p(20.0, 10.0), p(40.0, 10.0), p(40.0, 20.0),
+        ];
+        let a = audit_routes(&[s], &[]);
+        assert_eq!(a.staircases, vec![0], "≥3-bend staircase stays forbidden");
+        assert!(!a.is_clean());
+    }
+
+    #[test]
+    fn flags_an_l_flush_to_a_surface() {
+        // An L whose first side drops straight DOWN the source node's right face
+        // (x=50) instead of escaping perpendicular — a side flush to a surface, the
+        // verboten grazing L. The length check would miss it (the side is 75px long).
+        let rect = Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 };
+        let l = vec![p(50.0, 25.0), p(50.0, 100.0), p(120.0, 100.0)];
+        let a = audit_routes(&[l], &[rect]);
+        assert_eq!(a.short_stems, vec![0], "L flush to a surface must be flagged");
+        assert!(!a.is_clean());
+    }
+
+    #[test]
+    fn accepts_a_perpendicular_stem_off_a_surface() {
+        // Same endpoints, but the route escapes the right face perpendicular first:
+        // it only TOUCHES the face at the mount, never runs along it.
+        let rect = Rect { x: 0.0, y: 0.0, width: 50.0, height: 50.0 };
+        let l = vec![p(50.0, 25.0), p(120.0, 25.0), p(120.0, 100.0)];
+        let a = audit_routes(&[l], &[rect]);
+        assert!(a.short_stems.is_empty(), "a perpendicular stem is not flush");
+        assert!(a.is_clean());
     }
 
     #[test]
     fn flags_a_non_orthogonal_segment() {
         let diag = vec![p(0.0, 0.0), p(10.0, 10.0)];
-        let a = audit_routes(&[diag]);
+        let a = audit_routes(&[diag], &[]);
         assert_eq!(a.non_orthogonal, vec![0], "diagonal segment must be flagged");
     }
 
     #[test]
     fn flags_an_unrouted_edge() {
-        let a = audit_routes(&[Vec::new()]);
+        let a = audit_routes(&[Vec::new()], &[]);
         assert_eq!(a.unrouted, vec![0]);
     }
 
@@ -233,7 +321,7 @@ mod tests {
     fn flags_a_short_stem() {
         // L whose first stem is only 5 < MIN_SURFACE_STEM (16) — bends at the wall.
         let l = vec![p(0.0, 0.0), p(0.0, 5.0), p(40.0, 5.0)];
-        let a = audit_routes(&[l]);
+        let a = audit_routes(&[l], &[]);
         assert_eq!(a.short_stems, vec![0], "stem below MIN_SURFACE_STEM must be flagged");
     }
 
@@ -242,7 +330,7 @@ mod tests {
         // two vertical routes on x=0 sharing the run y[5,10].
         let r0 = vec![p(0.0, 0.0), p(0.0, 10.0)];
         let r1 = vec![p(0.0, 5.0), p(0.0, 15.0)];
-        let a = audit_routes(&[r0, r1]);
+        let a = audit_routes(&[r0, r1], &[]);
         assert_eq!(a.channel_overlaps, vec![(0, 1)], "shared channel must be flagged");
     }
 
@@ -252,7 +340,7 @@ mod tests {
         // (no exact overlap, so channel_overlaps stays empty; tight_channels catches it).
         let r0 = vec![p(0.0, 100.0), p(50.0, 100.0)];
         let r1 = vec![p(10.0, 104.0), p(60.0, 104.0)];
-        let a = audit_routes(&[r0, r1]);
+        let a = audit_routes(&[r0, r1], &[]);
         assert_eq!(a.channel_overlaps, Vec::<(usize, usize)>::new(), "not an exact overlap");
         assert_eq!(a.tight_channels, vec![(0, 1)], "4px < arrowhead must be flagged");
     }
@@ -261,7 +349,7 @@ mod tests {
     fn parallel_runs_an_arrowhead_apart_are_not_flagged() {
         let r0 = vec![p(0.0, 100.0), p(50.0, 100.0)];
         let r1 = vec![p(10.0, 100.0 + MIN_CHANNEL_CLEARANCE + 1.0), p(60.0, 100.0 + MIN_CHANNEL_CLEARANCE + 1.0)];
-        let a = audit_routes(&[r0, r1]);
+        let a = audit_routes(&[r0, r1], &[]);
         assert!(a.tight_channels.is_empty(), "≥ arrowhead apart is fine: {a:?}");
     }
 
@@ -271,7 +359,7 @@ mod tests {
         let straight = vec![p(0.0, 0.0), p(40.0, 0.0)];
         let ell = vec![p(0.0, 100.0), p(0.0, 120.0), p(40.0, 120.0)];
         let cee = vec![p(0.0, 200.0), p(0.0, 180.0), p(40.0, 180.0), p(40.0, 200.0)];
-        let a = audit_routes(&[straight, ell, cee]);
+        let a = audit_routes(&[straight, ell, cee], &[]);
         assert!(a.is_clean(), "no forbidden artifacts: {a:?}");
         assert_eq!((a.straight, a.ells, a.cees), (1, 1, 1));
     }

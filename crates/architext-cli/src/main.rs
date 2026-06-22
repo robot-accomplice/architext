@@ -107,7 +107,7 @@ fn main() {
     if opts.command == "update" || opts.command == "upgrade" {
         if opts.command == "upgrade" {
             eprintln!(
-                "note: `upgrade` now updates the architext binary; use `architext sync` to install or migrate project data."
+                "note: `upgrade` now updates the architext binary; use `architext sync` to install project data."
             );
         }
         commands::update::run(version);
@@ -134,7 +134,7 @@ fn main() {
         "build" => commands::build::run(&target, &opts.out),
         "clean" => commands::clean::run(&target, opts.node_modules, opts.dry_run),
 
-        "sync" | "install" | "migrate" => {
+        "sync" | "install" | "init" => {
             commands::sync::run(&target, &opts, version);
         }
         "serve" => commands::serve::run(&target, &opts, version),
