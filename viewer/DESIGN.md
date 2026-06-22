@@ -119,3 +119,24 @@ existing `--bg`/`--surface` tokens; tune exact values against a secondary-text
 contrast target (the audit flagged muted-gray-on-near-black as hard to scan). Role
 hues stay governed by `--c4-*`; only their exact hex may be refreshed, and only with
 one hue per role held across every mode.
+
+## Flow decision diamonds
+
+A decision step renders as a diamond (`step.kind: "decision"`). The design is
+settled — a decision diamond must always carry all three of these; a diamond that
+is missing any of them is incomplete, not a stylistic choice:
+
+1. **A decision annotation** — a short label on the diamond stating *what is being
+   decided* (the question/subject), not merely that a decision occurs.
+2. **Branch labels** — every outgoing branch is labelled with the *outcome* that
+   path represents (`step.outcome`, e.g. `valid` / `invalid`, `cache hit` /
+   `cache miss`), so the reader can see which result leads where.
+3. **An anchoring stem** — a connector from the diamond to its **host node** (the
+   node that makes the decision). The diamond is never a free-floating shape: the
+   stem ties it to the component it belongs to.
+
+Supporting rules (consistent with the flow-authoring contract): a decision has at
+least two outgoing outcome branches; the branch lines share the decision's step
+number; the decision is its own node, separate from any component node; and when a
+decision step is selected, the host node, the diamond, and every branch
+destination are highlighted together.
