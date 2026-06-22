@@ -1,0 +1,270 @@
+# Third-Party Notices
+
+Architext is MIT licensed. This file records the third-party software and
+algorithm references that the project depends on or studies.
+
+This is not legal advice. It is a project-maintained attribution and license
+posture document.
+
+This file is generated. Do not edit it by hand. To regenerate it from the live
+dependency graph:
+
+```sh
+cargo install cargo-about --features cli
+cargo about generate about.hbs > THIRD_PARTY_NOTICES.md
+```
+
+The `about.toml` allowlist and `about.hbs` template are the source of truth for
+how this file is produced; the static prose below lives in the template.
+
+## How Architext Is Distributed
+
+As of 1.7.6 Architext ships as native CLI binaries (built from the Rust
+workspace in `crates/`) plus a viewer compiled from Rust to WebAssembly with
+[Leptos](https://leptos.dev) (client-side rendering). There is no npm package
+and the viewer carries no JavaScript framework dependencies. The third-party
+software bundled into the distributed artifacts is the set of Rust crates the
+workspace links, transitively resolved by Cargo across every shipped target
+(macOS/Linux/Windows native plus `wasm32-unknown-unknown`).
+
+`Cargo.lock` is the source of truth for the exact transitive versions in any
+given build. Build- and dev-dependencies do not ship and are not attributed
+here.
+
+## Direct Crate Dependencies
+
+The crates each workspace member declares directly, and what they are used for.
+
+### `architext-cli` — command-line entry point
+
+| Crate | Use |
+| --- | --- |
+| axum | HTTP types shared with the serve runtime |
+| serde_json | JSON parsing |
+| sha2 | Checksum verification for `architext update` |
+| ureq | Blocking HTTP client (rustls TLS) for release downloads |
+| tokio | Async runtime |
+| nix (Unix only) | Signal/process control for the serve lifecycle |
+
+### `architext-core` — schema validation and domain model
+
+| Crate | Use |
+| --- | --- |
+| jsonschema | JSON Schema validation |
+| serde | Serialization/deserialization |
+| serde_json | JSON with preserved key order |
+| indexmap | Order-preserving maps |
+| regex | Pattern matching in validation |
+| include_dir | Embed JSON schemas into the binary |
+
+### `architext-routing` — diagram routing engine
+
+| Crate | Use |
+| --- | --- |
+| libm | Portable math (wasm/no-std friendly) |
+| ryu-js | JS-parity float formatting |
+| serde | Serialization |
+| serde_json | JSON with preserved key order |
+| indexmap | Order-preserving maps |
+| wasm-bindgen (wasm feature) | wasm boundary for `plan()` |
+| rayon (native feature) | Parallel plan precompute farm |
+| sha2 (native feature) | Plan-key hashing |
+| hex (native feature) | Hash encoding |
+
+### `architext-serve` — local viewer server and plan farm
+
+| Crate | Use |
+| --- | --- |
+| axum | HTTP server |
+| tokio | Async runtime |
+| tokio-stream | SSE data-event stream |
+| futures | Async combinators |
+| notify | Filesystem watch for live reload |
+| tower | Service middleware |
+| tower-http | Static-file serving |
+| serde / serde_json | Serialization |
+| rand | Non-cryptographic randomness |
+| url | URL parsing |
+| syntect | Server-side syntax highlighting (pure-Rust fancy-regex backend) |
+| clap | Argument parsing |
+| tracing / tracing-subscriber | Structured logging |
+| rust-embed | Embed the built viewer dist into the binary |
+
+### `architext-viewer` — WebAssembly viewer (Leptos CSR)
+
+| Crate | Use |
+| --- | --- |
+| leptos | Client-side rendering UI framework |
+| console_error_panic_hook | Panic-to-console hook |
+| wasm-bindgen | Rust to JS/wasm boundary |
+| js-sys | JS `Date` for note timestamps |
+| web-sys | DOM measurement, SSE, localStorage |
+| gloo-net | Same-origin fetch of data docs and plans |
+| gloo-timers | Non-blocking poll delay |
+| serde / serde_json | Serialization with preserved order |
+| sha2 | Plan-key hashing (wasm) |
+
+## License Posture
+
+Every bundled crate is available under a permissive license. The `accepted`
+allowlist in `about.toml` contains only permissive licenses; copyleft licenses
+(GPL, LGPL) are deliberately omitted. For a crate offered under an `A OR B`
+expression, generation elects the first accepted (permissive) license, so the
+permissive arm of dual-licensed crates such as `self_cell` (Apache-2.0 OR
+GPL-2.0) and `r-efi` (… OR LGPL-2.1 …) is chosen and no copyleft obligation is
+triggered. If a crate ever appears that cannot be satisfied under a permissive
+license, regeneration fails rather than silently shipping the obligation.
+
+## Routing Algorithm References
+
+Architext's router is custom project code. It does not copy source code from
+the projects below. The project studies their public documentation and papers
+for established routing concepts such as fixed-node routing, explicit ports,
+orthogonal routing, monotonic path restrictions, edge crossing costs, bridge
+rendering, and route/label planning.
+
+| Project | License / Terms | Architext Use |
+| --- | --- | --- |
+| Eclipse Layout Kernel / elkjs | EPL-2.0 | Algorithm reference only |
+| Adaptagrams / libavoid | LGPL, with commercial dual licensing available | Algorithm reference only |
+| yFiles | Commercial SDK | Capability reference only |
+| JointJS Community | MPL-2.0 | Router behavior reference only |
+| JointJS+ | Commercial product | Capability reference only |
+| Cytoscape.js | MIT | Visualization ergonomics reference only |
+| React Flow | MIT | Edge-style/UI ergonomics reference only |
+| Graphviz | EPL-2.0 for current versions | Export/layout reference only |
+| Sprotty | Eclipse open-source project | Architecture reference only |
+| D2 | MPL-2.0 | Diagram-language reference only |
+| TALA | Proprietary/closed-source | Capability reference only |
+
+Any future change that copies, ports, bundles, wraps, or links third-party
+routing code must update this file and include the required license text,
+copyright notices, and distribution obligations before the change ships.
+
+## Product Inspiration
+
+The original project idea for Architext was inspired by Dave J's x.com post
+about interactive architecture and flow visualization:
+
+https://x.com/davej/status/2053867258653339746?s=46&t=e_qP9a_xUWuOJ6eKxFpaAQ
+
+## Bundled Fonts
+
+The viewer bundles two web fonts as vendored assets (embedded into the serve
+binary and the wasm viewer dist, referenced by `@font-face` in `styles.css`).
+They are not Cargo dependencies; they ship as font files and are attributed
+here. Both are licensed under the SIL Open Font License, Version 1.1, whose
+text is reproduced once below.
+
+| Font | Copyright | Source |
+| --- | --- | --- |
+| JetBrains Mono | Copyright 2020 The JetBrains Mono Project Authors | https://github.com/JetBrains/JetBrainsMono |
+| Hanken Grotesk | Copyright 2021 The Hanken Grotesk Project Authors | https://github.com/marcologous/hanken-grotesk |
+
+```
+SIL OPEN FONT LICENSE Version 1.1 - 26 February 2007
+
+PREAMBLE
+The goals of the Open Font License (OFL) are to stimulate worldwide
+development of collaborative font projects, to support the font creation
+efforts of academic and linguistic communities, and to provide a free and
+open framework in which fonts may be shared and improved in partnership
+with others.
+
+The OFL allows the licensed fonts to be used, studied, modified and
+redistributed freely as long as they are not sold by themselves. The
+fonts, including any derivative works, can be bundled, embedded,
+redistributed and/or sold with any software provided that any reserved
+names are not used by derivative works. The fonts and derivatives,
+however, cannot be released under any other type of license. The
+requirement for fonts to remain under this license does not apply
+to any document created using the fonts or their derivatives.
+
+DEFINITIONS
+"Font Software" refers to the set of files released by the Copyright
+Holder(s) under this license and clearly marked as such. This may
+include source files, build scripts and documentation.
+
+"Reserved Font Name" refers to any names specified as such after the
+copyright statement(s).
+
+"Original Version" refers to the collection of Font Software components as
+distributed by the Copyright Holder(s).
+
+"Modified Version" refers to any derivative made by adding to, deleting,
+or substituting -- in part or in whole -- any of the components of the
+Original Version, by changing formats or by porting the Font Software to a
+new environment.
+
+"Author" refers to any designer, engineer, programmer, technical
+writer or other person who contributed to the Font Software.
+
+PERMISSION & CONDITIONS
+Permission is hereby granted, free of charge, to any person obtaining
+a copy of the Font Software, to use, study, copy, merge, embed, modify,
+redistribute, and sell modified and unmodified copies of the Font
+Software, subject to the following conditions:
+
+1) Neither the Font Software nor any of its individual components,
+in Original or Modified Versions, may be sold by itself.
+
+2) Original or Modified Versions of the Font Software may be bundled,
+redistributed and/or sold with any software, provided that each copy
+contains the above copyright notice and this license. These can be
+included either as stand-alone text files, human-readable headers or
+in the appropriate machine-readable metadata fields within text or
+binary files as long as those fields can be easily viewed by the user.
+
+3) No Modified Version of the Font Software may use the Reserved Font
+Name(s) unless explicit written permission is granted by the corresponding
+Copyright Holder. This restriction only applies to the primary font name as
+presented to the users.
+
+4) The name(s) of the Copyright Holder(s) or the Author(s) of the Font
+Software shall not be used to promote, endorse or advertise any
+Modified Version, except to acknowledge the contribution(s) of the
+Copyright Holder(s) and the Author(s) or with their explicit written
+permission.
+
+5) The Font Software, modified or unmodified, in part or in whole,
+must be distributed entirely under this license, and must not be
+distributed under any other license. The requirement for fonts to
+remain under this license does not apply to any document created
+using the Font Software.
+
+TERMINATION
+This license becomes null and void if any of the above conditions are
+not met.
+
+DISCLAIMER
+THE FONT SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO ANY WARRANTIES OF
+MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT
+OF COPYRIGHT, PATENT, TRADEMARK, OR OTHER RIGHT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY,
+INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
+DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
+OTHER DEALINGS IN THE FONT SOFTWARE.
+```
+
+## Bundled Crate License Texts
+
+The distributed artifacts bundle Rust crates under the following licenses:
+{{#each overview}}{{{name}}} ({{count}}){{#unless @last}}, {{/unless}}{{/each}}.
+
+The full text of each license follows, with the crates that use it.
+
+{{#each licenses}}
+### {{{name}}}
+
+Used by:
+{{#each used_by}}
+- {{crate.name}} {{crate.version}}
+{{/each}}
+
+```
+{{{text}}}
+```
+
+{{/each}}
