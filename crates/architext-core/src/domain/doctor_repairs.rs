@@ -164,29 +164,58 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<String> {
             // history index" (generatedReleaseHistoryChanges), so the applied
             // change summary must match.
             None => {
-                // Same union enumerator as the exists-branch (empty named set) so
-                // id-dedup semantics are uniform across both paths.
-                let detail_entries = release_detail_entries(release_dir, &index_path, &Value::Null);
-                let generated = release::generated_release_index(&Value::Null, &detail_entries);
+                // Same plan machinery with a null index (empty named set) so
+                // scan and id-dedup semantics are uniform across both paths. An
+                // unparseable index is backed up before being replaced (E-1).
+                let plan = release_truth_repair_plan(release_dir, &index_path, &Value::Null);
                 if !dry_run {
                     let _ = std::fs::create_dir_all(release_dir);
-                    let _ = write_json(&index_path, &generated);
+                    if index_path.exists() {
+                        let _ = backup_file(&index_path);
+                    }
+                    let _ = write_json(&index_path, &plan.generated);
                 }
                 return vec!["create missing Release Truth history index".to_string()];
             }
         };
-        let detail_entries = release_detail_entries(release_dir, &index_path, &index);
-        let generated = release::generated_release_index(&index, &detail_entries);
-        let changes_val = release::release_index_generation_changes(&index, &generated);
-        let repair_changes: Vec<String> = changes_val
-            .as_array()
-            .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
-            .unwrap_or_default();
-
-        if !repair_changes.is_empty() && !dry_run {
-            let _ = write_json(&index_path, &generated);
+        let plan = release_truth_repair_plan(release_dir, &index_path, &index);
+        if plan.changes.is_empty() {
+            return vec![];
         }
-        return repair_changes;
+        if !dry_run {
+            // E-1 (human directive): every file this repair overwrites is first
+            // backed up with a timestamped name; recovered details are written
+            // re-marshalled so the regenerated index is derived from valid data;
+            // and each recovery is recorded in repair-advice.json because
+            // reconciling old (backup) vs new (recovered) content is the
+            // maintaining agent's responsibility, not the repair's.
+            let mut advice_entries: Vec<Value> = Vec::new();
+            for (file, detail, backfilled) in &plan.normalized {
+                let path = release_dir.join(file);
+                let backup_name = if path.exists() { backup_file(&path) } else { None };
+                let _ = write_json(&path, detail);
+                let rel_dir = release_dir
+                    .strip_prefix(&target_data_dir)
+                    .unwrap_or_else(|_| Path::new(""));
+                advice_entries.push(json!({
+                    "kind": "release-detail-recovery",
+                    "file": rel_dir.join(file).to_string_lossy(),
+                    "backup": backup_name
+                        .map(|b| rel_dir.join(b).to_string_lossy().to_string()),
+                    "backfilledFields": backfilled,
+                    "generatedAt": chrono_now(),
+                    "instruction": RECONCILE_INSTRUCTION,
+                }));
+            }
+            if plan.index_changed {
+                let _ = backup_file(&index_path);
+                let _ = write_json(&index_path, &plan.generated);
+            }
+            if !advice_entries.is_empty() {
+                append_repair_advice(&target_data_dir, advice_entries);
+            }
+        }
+        return plan.changes;
     }
 
     // manifest.files.releases absent — write starter data
@@ -285,16 +314,18 @@ fn write_starter_release_data(releases_dir: &Path) {
     let _ = write_json(&releases_dir.join(format!("{release_id}.json")), &detail);
 }
 
-fn chrono_now() -> String {
+fn now_secs() -> u64 {
     // Use std time only; no chrono dep needed for a timestamp string
     use std::time::{SystemTime, UNIX_EPOCH};
-    let secs = SystemTime::now()
+    SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .map(|d| d.as_secs())
-        .unwrap_or(0);
+        .unwrap_or(0)
+}
+
+fn chrono_now() -> String {
     // Format as ISO 8601 — approximate (no sub-second, no tz offset awareness)
-    let s = secs;
-    let (y, mo, d, h, mi, sec) = secs_to_datetime(s);
+    let (y, mo, d, h, mi, sec) = secs_to_datetime(now_secs());
     format!("{y:04}-{mo:02}-{d:02}T{h:02}:{mi:02}:{sec:02}.000Z")
 }
 
@@ -433,7 +464,7 @@ fn collect_instruction_rule_source_files(target: &Path) -> Vec<Value> {
     files
 }
 
-// ─── build_release_detail_entries ────────────────────────────────────────────
+// ─── release detail enumeration + repair plan ────────────────────────────────
 
 /// Discover release detail entries directly from the releases directory, for the
 /// case where no readable index exists to enumerate them. (New Rust-side behavior
@@ -470,10 +501,7 @@ fn release_detail_entries_from_dir(release_dir: &Path, index_path: &Path) -> Val
         .iter()
         .filter_map(|file| {
             let detail = read_json(&release_dir.join(file))?;
-            let looks_like_detail = ["id", "version", "name", "status", "posture", "summary", "lastUpdated"]
-                .iter()
-                .all(|field| detail[*field].as_str().is_some_and(|s| !s.trim().is_empty()));
-            if !looks_like_detail {
+            if !is_complete_detail(&detail) {
                 return None;
             }
             Some(json!({ "file": file, "detail": detail }))
@@ -482,62 +510,219 @@ fn release_detail_entries_from_dir(release_dir: &Path, index_path: &Path) -> Val
     Value::Array(entries)
 }
 
-fn build_release_detail_entries(release_dir: &Path, index: &Value) -> Value {
-    let releases = match index["releases"].as_array() {
-        Some(arr) => arr,
-        None => return json!([]),
-    };
-    let entries: Vec<Value> = releases
+/// The summary-source fields every release detail must carry as non-blank
+/// strings for the generated index entry to be schema-valid.
+const DETAIL_SUMMARY_FIELDS: [&str; 7] =
+    ["id", "version", "name", "status", "posture", "summary", "lastUpdated"];
+
+fn is_complete_detail(detail: &Value) -> bool {
+    DETAIL_SUMMARY_FIELDS
         .iter()
-        .filter_map(|summary| {
-            let file = summary["file"].as_str()?;
-            let detail = read_json(&release_dir.join(file))?;
-            Some(json!({ "file": file, "detail": detail }))
-        })
-        .collect();
-    Value::Array(entries)
+        .all(|field| detail[*field].as_str().is_some_and(|s| !s.trim().is_empty()))
 }
 
-/// Enumerate release detail entries as the union of files the index names and
-/// details discovered on disk. Index-named files are authoritative — enumerated
-/// even when they would not pass the dir-scan's strict shape filter, so an
-/// imperfect-but-indexed detail surfaces via validation instead of silently
-/// vanishing from the index on regeneration. Dir-discovered files not named by
-/// the index (a detail added on disk but never indexed — the unreachable
-/// "add <id> to Release Truth history" case) go through the strict filter.
-/// Used by both the status side (`generated_release_history_changes`) and the
-/// apply side so advertised and applied repairs always agree.
-///
-/// Dedup is by normalized joined path (the index may spell a file
-/// "./v1.json" or point into a subdirectory) AND by release id (index-named
-/// entries win, then sorted scan order) — validation has no duplicate-id
-/// check, so an id entering twice would be written as silent corruption.
-pub fn release_detail_entries(release_dir: &Path, index_path: &Path, index: &Value) -> Value {
+/// Best-effort recovery of an index-named release detail (E-1 human directive):
+/// keep everything the original carries, backfill missing/blank summary-source
+/// fields from the index summary, then from explicit defaults, and ensure the
+/// schema-required containers exist — so the re-marshalled detail (and the
+/// index generated from it) is always schema-valid. Returns the recovered
+/// detail plus the list of fields that were backfilled, which the repair
+/// records as reconciliation advice for the maintaining agent.
+fn normalize_release_detail(
+    detail: Option<&Value>,
+    summary: &Value,
+    now: &str,
+) -> (Value, Vec<String>) {
+    let mut backfilled: Vec<String> = Vec::new();
+    let mut obj = detail
+        .and_then(|d| d.as_object().cloned())
+        .unwrap_or_default();
+
+    let recovered_id = obj
+        .get("id")
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty())
+        .or_else(|| summary["id"].as_str().filter(|s| !s.trim().is_empty()))
+        .unwrap_or("recovered-release")
+        .to_string();
+
+    let defaults: [(&str, String); 7] = [
+        ("id", recovered_id.clone()),
+        ("version", "0.0.0".to_string()),
+        ("name", recovered_id.clone()),
+        ("status", "draft".to_string()),
+        ("posture", "at-risk".to_string()),
+        (
+            "summary",
+            "Recovered by architext doctor from an incomplete release detail; review and complete."
+                .to_string(),
+        ),
+        ("lastUpdated", now.to_string()),
+    ];
+    for (field, default) in defaults {
+        let blank = obj
+            .get(field)
+            .and_then(Value::as_str)
+            .map(|s| s.trim().is_empty())
+            .unwrap_or(true);
+        if blank {
+            let value = summary[field]
+                .as_str()
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| s.to_string())
+                .unwrap_or(default);
+            obj.insert(field.to_string(), Value::String(value));
+            backfilled.push(field.to_string());
+        }
+    }
+    for optional in ["releasedAt", "targetDate", "targetWindow"] {
+        if !obj.contains_key(optional) {
+            if let Some(s) = summary[optional].as_str() {
+                obj.insert(optional.to_string(), Value::String(s.to_string()));
+                backfilled.push(optional.to_string());
+            }
+        }
+    }
+    // Validation requires a target for draft/planned/implementing releases. A
+    // placeholder window is an honest plan statement demanding review; a
+    // fabricated releasedAt for a completed release would be invented history,
+    // so that case is deliberately left for validation to flag.
+    let status = obj.get("status").and_then(Value::as_str).unwrap_or("");
+    if matches!(status, "draft" | "planned" | "implementing")
+        && !obj.contains_key("targetDate")
+        && !obj.contains_key("targetWindow")
+    {
+        obj.insert(
+            "targetWindow".to_string(),
+            Value::String("TBD — set a target window (recovered detail)".to_string()),
+        );
+        backfilled.push("targetWindow".to_string());
+    }
+    if !obj.get("scope").map(Value::is_object).unwrap_or(false) {
+        obj.insert("scope".to_string(), json!({}));
+    }
+    if let Some(scope) = obj.get_mut("scope").and_then(Value::as_object_mut) {
+        for section in ["required", "planned", "stretch", "deferred", "outOfScope"] {
+            if !scope.get(section).map(Value::is_array).unwrap_or(false) {
+                scope.insert(section.to_string(), json!([]));
+            }
+        }
+    }
+    for container in ["workstreams", "blockers", "milestones", "dependencies", "evidence"] {
+        if !obj.get(container).map(Value::is_array).unwrap_or(false) {
+            obj.insert(container.to_string(), json!([]));
+            backfilled.push(container.to_string());
+        }
+    }
+    (Value::Object(obj), backfilled)
+}
+
+/// Standing instruction recorded with every recovery: the repair produces a
+/// mechanically valid file, but only the maintaining agent can restore the
+/// real facts.
+const RECONCILE_INSTRUCTION: &str = "architext doctor recovered this file with \
+backfilled placeholder values. Reconciling recovered content is YOUR \
+responsibility: restore real facts from the timestamped backup, the source \
+code, and git history; replace every placeholder; run `architext validate`; \
+then delete the backup file and remove this advice entry.";
+
+/// Append recovery entries to `docs/architext/data/repair-advice.json`,
+/// creating it if absent and preserving unresolved entries from earlier runs.
+/// The maintaining agent removes entries as it reconciles them.
+fn append_repair_advice(target_data_dir: &Path, new_entries: Vec<Value>) {
+    let advice_path = target_data_dir.join("repair-advice.json");
+    let mut advice = read_json(&advice_path)
+        .filter(|v| v["advice"].is_array())
+        .unwrap_or_else(|| json!({ "advice": [] }));
+    if let Some(list) = advice["advice"].as_array_mut() {
+        list.extend(new_entries);
+    }
+    let _ = write_json(&advice_path, &advice);
+}
+
+/// Copy `path` to a timestamped sibling (`<name>.<yyyymmddThhmmssZ>.bak`)
+/// before it is overwritten. The `.bak` extension keeps backups out of the
+/// `*.json` dir scan. Returns the backup file name on success.
+fn backup_file(path: &Path) -> Option<String> {
+    let (y, mo, d, h, mi, s) = secs_to_datetime(now_secs());
+    let name = format!(
+        "{}.{y:04}{mo:02}{d:02}T{h:02}{mi:02}{s:02}Z.bak",
+        path.file_name()?.to_str()?
+    );
+    let dest = path.with_file_name(&name);
+    std::fs::copy(path, &dest).ok()?;
+    Some(name)
+}
+
+/// The full release-truth repair plan: what to say (changes), which details to
+/// recover (normalized), and the index to write (generated). Computed
+/// identically by the status side and the apply side so advertised and applied
+/// repairs cannot diverge.
+pub struct ReleaseTruthPlan {
+    pub changes: Vec<String>,
+    /// (release-dir-relative file, recovered detail, backfilled field names)
+    pub normalized: Vec<(String, Value, Vec<String>)>,
+    pub entries: Value,
+    pub generated: Value,
+    pub index_changed: bool,
+}
+
+pub fn release_truth_repair_plan(
+    release_dir: &Path,
+    index_path: &Path,
+    index: &Value,
+) -> ReleaseTruthPlan {
+    let now = chrono_now();
     // Components-normalized join: drops "." segments so "./v1.json" and
     // "v1.json" compare equal, and subdirectory spellings stay distinct.
-    let normalize = |file: &str| -> std::path::PathBuf {
+    let normalize_path = |file: &str| -> std::path::PathBuf {
         release_dir.join(file).components().collect()
     };
 
-    let indexed = build_release_detail_entries(release_dir, index);
-    let mut entries = indexed.as_array().cloned().unwrap_or_default();
-    let named_paths: std::collections::HashSet<std::path::PathBuf> = index["releases"]
-        .as_array()
-        .into_iter()
-        .flatten()
-        .filter_map(|s| s["file"].as_str().map(normalize))
-        .collect();
-    let mut seen_ids: std::collections::HashSet<String> = entries
-        .iter()
-        .filter_map(|e| e["detail"]["id"].as_str().map(|s| s.to_string()))
-        .collect();
+    let mut entries: Vec<Value> = Vec::new();
+    let mut normalized: Vec<(String, Value, Vec<String>)> = Vec::new();
+    let mut changes: Vec<String> = Vec::new();
+    let mut named_paths: std::collections::HashSet<std::path::PathBuf> =
+        std::collections::HashSet::new();
+    let mut seen_ids: std::collections::HashSet<String> = std::collections::HashSet::new();
+
+    // Index-named files first: kept even when imperfect, but imperfect ones are
+    // recovered (backfilled + re-marshalled) rather than summarized with nulls.
+    // Dangling references (file deleted) drop out: deleting a detail file is an
+    // intentional removal.
+    for summary in index["releases"].as_array().into_iter().flatten() {
+        let Some(file) = summary["file"].as_str() else { continue };
+        named_paths.insert(normalize_path(file));
+        let path = release_dir.join(file);
+        if !path.exists() {
+            continue;
+        }
+        let raw = read_json(&path);
+        let detail = match raw {
+            Some(d) if is_complete_detail(&d) => d,
+            other => {
+                let (norm, backfilled) = normalize_release_detail(other.as_ref(), summary, &now);
+                changes.push(format!("normalize incomplete release detail {file}"));
+                normalized.push((file.to_string(), norm.clone(), backfilled));
+                norm
+            }
+        };
+        if let Some(id) = detail["id"].as_str() {
+            seen_ids.insert(id.to_string());
+        }
+        entries.push(json!({ "file": file, "detail": detail }));
+    }
+
+    // Dir-discovered details the index omits (strict shape filter), deduped by
+    // normalized path and by id — validation has no duplicate-id check, so an
+    // id entering twice would be written as silent corruption.
     for entry in release_detail_entries_from_dir(release_dir, index_path)
         .as_array()
         .into_iter()
         .flatten()
     {
         let file = entry["file"].as_str().unwrap_or_default();
-        if named_paths.contains(&normalize(file)) {
+        if named_paths.contains(&normalize_path(file)) {
             continue;
         }
         let id = entry["detail"]["id"].as_str().unwrap_or_default();
@@ -546,7 +731,17 @@ pub fn release_detail_entries(release_dir: &Path, index_path: &Path, index: &Val
         }
         entries.push(entry.clone());
     }
-    Value::Array(entries)
+
+    let entries = Value::Array(entries);
+    let generated = release::generated_release_index(index, &entries);
+    let gen_changes: Vec<String> = release::release_index_generation_changes(index, &generated)
+        .as_array()
+        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
+        .unwrap_or_default();
+    let index_changed = !gen_changes.is_empty();
+    changes.extend(gen_changes);
+
+    ReleaseTruthPlan { changes, normalized, entries, generated, index_changed }
 }
 
 // ─── doctorRepairCategories ───────────────────────────────────────────────────
@@ -982,6 +1177,267 @@ mod tests {
             vec![("v1-0-0", "v1-0-0.json")],
             "index-named file wins; no duplicate ids: {entries:?}"
         );
+    }
+
+    fn bak_files(dir: &Path) -> Vec<String> {
+        std::fs::read_dir(dir)
+            .unwrap()
+            .flatten()
+            .filter_map(|e| e.file_name().to_str().map(|s| s.to_string()))
+            .filter(|n| n.ends_with(".bak"))
+            .collect()
+    }
+
+    #[test]
+    fn repair_release_truth_normalizes_incomplete_indexed_detail() {
+        // E-1 (human directive): an index-named detail that is incomplete is
+        // recovered — original backed up timestamped, missing fields backfilled
+        // from the index summary then defaults, normalized detail rewritten —
+        // so the regenerated index never carries null required fields.
+        let td = temp_dir();
+        write(
+            td.path(),
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "releases/index.json" } }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/v0-1-0.json",
+            r#"{ "id": "v0-1-0", "version": "0.1.0", "name": "Partial", "status": "planned",
+                 "summary": "stub", "scope": { "required": [] } }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "v0-1-0", "releases": [
+                 { "id": "v0-1-0", "file": "v0-1-0.json", "version": "0.1.0", "name": "Partial",
+                   "status": "planned", "posture": "on-track", "summary": "stub" } ] }"#,
+        );
+
+        let changes = repair_release_truth_data(td.path(), false);
+        assert!(
+            changes.iter().any(|c| c.contains("normalize incomplete release detail v0-1-0.json")),
+            "expected a normalize change, got: {changes:?}"
+        );
+
+        let releases_dir = td.path().join("docs/architext/data/releases");
+        let backups = bak_files(&releases_dir);
+        assert!(
+            backups.iter().any(|b| b.starts_with("v0-1-0.json.")),
+            "original detail must be backed up: {backups:?}"
+        );
+
+        let detail = read_json(&releases_dir.join("v0-1-0.json")).expect("normalized detail");
+        // Backfilled from the index summary where available…
+        assert_eq!(detail["posture"], "on-track");
+        // …and from defaults where nothing else is known.
+        assert!(detail["lastUpdated"].as_str().is_some_and(|s| !s.is_empty()));
+        for container in ["workstreams", "blockers", "milestones", "dependencies", "evidence"] {
+            assert!(detail[container].is_array(), "{container} must exist");
+        }
+
+        let index = read_json(&releases_dir.join("index.json")).expect("index rewritten");
+        let entry = &index["releases"][0];
+        assert_eq!(entry["id"], "v0-1-0");
+        assert!(entry["posture"].as_str().is_some(), "no null posture in index: {entry}");
+        assert!(entry["lastUpdated"].as_str().is_some(), "no null lastUpdated in index");
+    }
+
+    #[test]
+    fn repair_release_truth_recovers_unparseable_indexed_detail() {
+        // An index-named detail that no longer parses is recovered from the
+        // index summary (plus defaults); the corrupt original is backed up.
+        let td = temp_dir();
+        write(
+            td.path(),
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "releases/index.json" } }"#,
+        );
+        write(td.path(), "docs/architext/data/releases/v0-2-0.json", "{ not json");
+        write(
+            td.path(),
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "v0-2-0", "releases": [
+                 { "id": "v0-2-0", "file": "v0-2-0.json", "version": "0.2.0", "name": "Corrupt",
+                   "status": "completed", "posture": "shipped", "summary": "was fine once",
+                   "lastUpdated": "2026-01-01T00:00:00.000Z" } ] }"#,
+        );
+
+        let changes = repair_release_truth_data(td.path(), false);
+        assert!(
+            changes.iter().any(|c| c.contains("normalize incomplete release detail v0-2-0.json")),
+            "expected recovery change, got: {changes:?}"
+        );
+
+        let releases_dir = td.path().join("docs/architext/data/releases");
+        assert!(
+            bak_files(&releases_dir).iter().any(|b| b.starts_with("v0-2-0.json.")),
+            "corrupt original must be backed up"
+        );
+        let detail = read_json(&releases_dir.join("v0-2-0.json")).expect("recovered detail parses");
+        assert_eq!(detail["id"], "v0-2-0");
+        assert_eq!(detail["posture"], "shipped");
+
+        let index = read_json(&releases_dir.join("index.json")).expect("index");
+        assert_eq!(index["releases"][0]["id"], "v0-2-0", "entry retained, not dropped");
+    }
+
+    #[test]
+    fn repair_release_truth_backs_up_index_before_rewrite() {
+        let td = temp_dir();
+        write_release_truth_target(
+            td.path(),
+            Some(r#"{ "currentReleaseId": "v1-0-0", "releases": [] }"#),
+        );
+
+        repair_release_truth_data(td.path(), false);
+        let releases_dir = td.path().join("docs/architext/data/releases");
+        assert!(
+            bak_files(&releases_dir).iter().any(|b| b.starts_with("index.json.")),
+            "index must be backed up before rewrite"
+        );
+        // Backups themselves must never be scanned as details on later runs.
+        let changes_again = repair_release_truth_data(td.path(), false);
+        assert!(changes_again.is_empty(), "second run stable, got: {changes_again:?}");
+    }
+
+    #[test]
+    fn repair_release_truth_dry_run_normalization_writes_nothing() {
+        let td = temp_dir();
+        write(
+            td.path(),
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "releases/index.json" } }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/v0-1-0.json",
+            r#"{ "id": "v0-1-0", "version": "0.1.0" }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "v0-1-0", "releases": [
+                 { "id": "v0-1-0", "file": "v0-1-0.json", "version": "0.1.0" } ] }"#,
+        );
+        let before = std::fs::read_to_string(td.path().join("docs/architext/data/releases/v0-1-0.json")).unwrap();
+
+        let changes = repair_release_truth_data(td.path(), true);
+        assert!(changes.iter().any(|c| c.contains("normalize incomplete release detail")));
+
+        let releases_dir = td.path().join("docs/architext/data/releases");
+        assert!(bak_files(&releases_dir).is_empty(), "dry run must not create backups");
+        let after = std::fs::read_to_string(releases_dir.join("v0-1-0.json")).unwrap();
+        assert_eq!(before, after, "dry run must not rewrite the detail");
+    }
+
+    #[test]
+    fn repair_release_truth_writes_reconciliation_advice() {
+        // E-1 addendum (human directive): recovery is not the end state — the
+        // repair must record, machine-readably, that reconciling old (backup)
+        // vs new (normalized) content is the maintaining agent's
+        // responsibility, naming the backup and the backfilled fields.
+        let td = temp_dir();
+        write(
+            td.path(),
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "releases/index.json" } }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/v0-1-0.json",
+            r#"{ "id": "v0-1-0", "version": "0.1.0", "name": "Partial", "status": "planned",
+                 "summary": "stub", "scope": { "required": [] } }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "v0-1-0", "releases": [
+                 { "id": "v0-1-0", "file": "v0-1-0.json", "version": "0.1.0", "name": "Partial",
+                   "status": "planned", "posture": "on-track", "summary": "stub" } ] }"#,
+        );
+
+        repair_release_truth_data(td.path(), false);
+
+        let advice_path = td.path().join("docs/architext/data/repair-advice.json");
+        let advice = read_json(&advice_path).expect("repair-advice.json written");
+        let entries = advice["advice"].as_array().expect("advice array");
+        assert_eq!(entries.len(), 1);
+        let entry = &entries[0];
+        assert_eq!(entry["file"], "releases/v0-1-0.json");
+        let backup = entry["backup"].as_str().expect("backup recorded");
+        assert!(backup.starts_with("releases/v0-1-0.json."), "backup path: {backup}");
+        assert!(td.path().join("docs/architext/data").join(backup).exists(), "backup on disk");
+        let backfilled: Vec<&str> = entry["backfilledFields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(Value::as_str)
+            .collect();
+        assert!(backfilled.contains(&"posture") && backfilled.contains(&"lastUpdated"),
+            "backfilled fields recorded: {backfilled:?}");
+        assert!(entry["instruction"].as_str().is_some_and(|s| s.contains("responsibility")));
+    }
+
+    #[test]
+    fn repair_release_truth_appends_advice_and_stays_stable() {
+        let td = temp_dir();
+        write(
+            td.path(),
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "releases/index.json" } }"#,
+        );
+        write(td.path(), "docs/architext/data/releases/v0-2-0.json", "{ not json");
+        write(
+            td.path(),
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "v0-2-0", "releases": [
+                 { "id": "v0-2-0", "file": "v0-2-0.json", "version": "0.2.0", "name": "Corrupt",
+                   "status": "completed", "posture": "shipped", "summary": "was fine",
+                   "lastUpdated": "2026-01-01T00:00:00.000Z" } ] }"#,
+        );
+        // Pre-existing advice from an earlier repair must survive.
+        write(
+            td.path(),
+            "docs/architext/data/repair-advice.json",
+            r#"{ "advice": [ { "kind": "release-detail-recovery", "file": "releases/old.json",
+                 "backup": "releases/old.json.20260101T000000Z.bak",
+                 "backfilledFields": ["summary"], "instruction": "reconcile" } ] }"#,
+        );
+
+        repair_release_truth_data(td.path(), false);
+        let advice = read_json(&td.path().join("docs/architext/data/repair-advice.json")).unwrap();
+        assert_eq!(advice["advice"].as_array().unwrap().len(), 2, "appended, not replaced");
+
+        // A stable second run must not grow the advice ledger.
+        let changes = repair_release_truth_data(td.path(), false);
+        assert!(changes.is_empty(), "second run stable: {changes:?}");
+        let advice = read_json(&td.path().join("docs/architext/data/repair-advice.json")).unwrap();
+        assert_eq!(advice["advice"].as_array().unwrap().len(), 2);
+    }
+
+    #[test]
+    fn repair_release_truth_dry_run_writes_no_advice() {
+        let td = temp_dir();
+        write(
+            td.path(),
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "releases/index.json" } }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/v0-1-0.json",
+            r#"{ "id": "v0-1-0", "version": "0.1.0" }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "v0-1-0", "releases": [
+                 { "id": "v0-1-0", "file": "v0-1-0.json", "version": "0.1.0" } ] }"#,
+        );
+
+        repair_release_truth_data(td.path(), true);
+        assert!(!td.path().join("docs/architext/data/repair-advice.json").exists());
     }
 
     #[test]

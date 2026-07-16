@@ -4,8 +4,7 @@
 //! I/O lives here (fs + git); pure domain logic is composed from:
 //!   - `domain::c4_quality::{build_node_map, c4_issues_for_view, c4_drilldown_issues, repair_c4_views}`
 //!   - `domain::schema_migration::schema_migration_plan`
-//!   - `domain::release::{generated_release_index, release_index_generation_changes}`
-//!   - `domain::doctor_repairs::release_detail_entries` (shared with the apply side)
+//!   - `domain::doctor_repairs::release_truth_repair_plan` (shared with the apply side)
 //!   - `domain::instruction_rules::{planned_instruction_rule_migration, INSTRUCTION_RULE_FILES}`
 //!   - `validate_data_dir` (Rust validator)
 //!
@@ -19,7 +18,7 @@ use std::process::Command;
 use regex::Regex;
 use serde_json::{json, Map, Value};
 
-use crate::domain::{c4_quality, doctor_repairs, instruction_rules, release, schema_migration};
+use crate::domain::{c4_quality, doctor_repairs, instruction_rules, schema_migration};
 
 // ─── Constants (mirrors target-layout.mjs) ───────────────────────────────────
 
@@ -219,18 +218,10 @@ fn generated_release_history_changes(index_path: &Path, index_exists: bool) -> V
         None => return vec!["create missing Release Truth history index".to_string()],
     };
     let release_dir = index_path.parent().unwrap_or(index_path);
-    // Shared union enumeration (index-named ∪ dir-discovered) so status
-    // advertises exactly what the apply side will do — including the
-    // "add <id> to Release Truth history" case for on-disk details the
-    // index omits.
-    let detail_entries = doctor_repairs::release_detail_entries(release_dir, index_path, &index);
-    let generated = release::generated_release_index(&index, &detail_entries);
-    let changes_val = release::release_index_generation_changes(&index, &generated);
-    // changes_val is a JSON array of strings
-    changes_val
-        .as_array()
-        .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
-        .unwrap_or_default()
+    // Shared repair plan (index-named ∪ dir-discovered enumeration, plus
+    // incomplete-detail recovery) so status advertises exactly the changes the
+    // apply side will make.
+    doctor_repairs::release_truth_repair_plan(release_dir, index_path, &index).changes
 }
 
 fn collect_release_truth_status(target: &Path) -> Option<Value> {
@@ -511,6 +502,7 @@ pub fn collect_status(target: &Path, version: &str, run_validation: bool) -> Val
         "instructionRules": instruction_rules,
         "c4": c4,
         "releaseTruth": release_truth,
+        "repairAdvice": repair_advice_status(&target_data_dir),
         "validation": validation
     });
 
@@ -518,6 +510,20 @@ pub fn collect_status(target: &Path, version: &str, run_validation: bool) -> Val
     status["doctorRepairs"] = doctor_repairs;
 
     status
+}
+
+/// Pending reconciliation advice left by doctor recoveries
+/// (`repair-advice.json`): the maintaining agent must resolve these; status
+/// surfaces the count so they cannot rot silently.
+fn repair_advice_status(target_data_dir: &Path) -> Value {
+    let advice_path = target_data_dir.join("repair-advice.json");
+    match read_json_file(&advice_path).and_then(|v| v["advice"].as_array().map(|a| a.len())) {
+        Some(pending) => json!({
+            "pending": pending,
+            "path": "docs/architext/data/repair-advice.json"
+        }),
+        None => Value::Null,
+    }
 }
 
 // ─── Unit tests ───────────────────────────────────────────────────────────────
@@ -574,6 +580,26 @@ mod tests {
         let applied =
             crate::domain::doctor_repairs::repair_release_truth_data(td.path(), false);
         assert_eq!(advertised, applied, "status and apply must agree");
+    }
+
+    #[test]
+    fn status_surfaces_pending_repair_advice() {
+        let td = temp_dir();
+        let advice_dir = td.path().join("docs/architext/data");
+        fs::create_dir_all(&advice_dir).unwrap();
+        fs::write(
+            advice_dir.join("repair-advice.json"),
+            r#"{ "advice": [ { "kind": "release-detail-recovery", "file": "releases/x.json",
+                 "backfilledFields": ["summary"], "instruction": "reconcile" } ] }"#,
+        )
+        .unwrap();
+
+        let status = collect_status(td.path(), "0.0.0", false);
+        assert_eq!(status["repairAdvice"]["pending"], 1);
+
+        let td_clean = temp_dir();
+        let status = collect_status(td_clean.path(), "0.0.0", false);
+        assert!(status["repairAdvice"].is_null());
     }
 
     // ─── gitignore-missing diff ────────────────────────────────────────────────

@@ -45,6 +45,14 @@ the release detail file, with `releases/index.json` refreshed from those facts.\
 Keep Release Path labels concise and put long context in the selected release\n\
 item's detail data.\n\
 \n\
+When `architext doctor` recovers a damaged or incomplete data file it backs up\n\
+the original under a timestamped `.bak` name and records the recovery in\n\
+`docs/architext/data/repair-advice.json`. Reconciling recovered content is the\n\
+maintaining agent's responsibility: replace every backfilled placeholder with\n\
+real facts from the backup, the source code, and git history; run `architext\n\
+validate`; then delete the backup file and remove the resolved advice entry.\n\
+Do not treat recovered placeholders as reviewed facts.\n\
+\n\
 When planning a future release, use `docs/architext/data/roadmap.json` as the\n\
 roadmap source and Release Planning as the approval boundary. Selected roadmap\n\
 items keep `source: \"roadmap\"`; manually entered scope uses `source:\n\
