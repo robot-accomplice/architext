@@ -272,13 +272,17 @@ pub fn planned_instruction_rule_migration(files: &[Value], existing_rules: &[Val
         } else {
             upsert_rule_pointer(text)
         };
-        rewrite_files.push(json!({ "path": path, "replacement": replacement }));
-        if !simple {
-            ambiguous_files.push(json!({
-                "path": path,
-                "reason": "preserving non-list prose outside the Architext rule pointer"
-            }));
-        }
+        // Convergence gate (code-rca B-2): only plan a rewrite when it would
+        // actually change the file's written bytes, or when this file
+        // contributes a not-yet-migrated rule below. The unconditional push
+        // made doctor re-advertise and phantom-apply the identical rewrite on
+        // every run for any already-migrated file (bullets never leave the
+        // file by design, so this branch re-entered forever). Compare with the
+        // trailing newline the writer ensures, so a missing final newline
+        // still converges after one real write.
+        let ensure_nl = |s: &str| if s.ends_with('\n') { s.to_string() } else { format!("{s}\n") };
+        let rewrite_differs = ensure_nl(&replacement) != ensure_nl(text);
+        let candidates_before = candidate_rules.len();
 
         for summary in rule_lines {
             let normalized = normalize_rule_text(&summary);
@@ -300,6 +304,17 @@ pub fn planned_instruction_rule_migration(files: &[Value], existing_rules: &[Val
                 "appliesTo": ["agent instructions", "project rules"],
                 "protection": { "edit": false, "delete": false }
             }));
+        }
+
+        let contributed_new = candidate_rules.len() > candidates_before;
+        if rewrite_differs || contributed_new {
+            rewrite_files.push(json!({ "path": path, "replacement": replacement }));
+            if !simple {
+                ambiguous_files.push(json!({
+                    "path": path,
+                    "reason": "preserving non-list prose outside the Architext rule pointer"
+                }));
+            }
         }
     }
 
@@ -324,9 +339,20 @@ pub fn planned_instruction_rule_migration(files: &[Value], existing_rules: &[Val
 /// `upsertRulePointer(text)`.
 pub fn upsert_rule_pointer(text: &str) -> String {
     let existing = text.trim_end();
-    if existing.contains(ARCHITEXT_RULE_POINTER_HEADING) {
-        // Replace the first managed section with pointerBody, trimEnd, + "\n"
-        let replaced = without_managed_section_first(existing, ARCHITEXT_RULE_POINTER_HEADING, POINTER_BODY);
+    if let Some(heading_pos) = existing.find(ARCHITEXT_RULE_POINTER_HEADING) {
+        // Replace the first managed section with pointerBody, trimEnd, + "\n".
+        // The splice consumes one newline before the heading, so re-supply the
+        // separator when the heading is not at the start of the file —
+        // otherwise re-application eats the blank line the append branch
+        // inserted and a freshly migrated file triggers one more rewrite
+        // (non-idempotence found by the convergence fixed-point test, B-2).
+        let replacement = if heading_pos > 0 {
+            format!("\n{POINTER_BODY}")
+        } else {
+            POINTER_BODY.to_string()
+        };
+        let replaced =
+            without_managed_section_first(existing, ARCHITEXT_RULE_POINTER_HEADING, &replacement);
         format!("{}\n", replaced.trim_end())
     } else {
         if existing.is_empty() {
@@ -459,5 +485,54 @@ mod tests {
         let existing = vec![json!({ "id": "e1", "summary": "Always check tests before committing any code changes", "order": 10 })];
         let result = planned_instruction_rule_migration(&files, &existing);
         assert_eq!(result["candidateRules"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn planned_migration_converges_on_fully_migrated_file() {
+        // code-rca B-2 (field-hit on roboticus): a file whose bullets are ALL
+        // already migrated and whose pointer section is already current must
+        // produce NO rewrite, NO ambiguous entry, NO repair changes — the old
+        // unconditional push made doctor re-advertise and phantom-apply the
+        // identical rewrite forever.
+        // The converged form is by definition the rewrite's own output: apply
+        // the pointer upsert once (as a real doctor run would write it) and
+        // feed that back — the fixed point must advertise nothing.
+        let original =
+            "# My project\n\nSome prose the maintainer wrote.\n\n- Always check tests before committing any code changes\n";
+        let text = upsert_rule_pointer(original);
+        let files = vec![json!({ "path": "AGENTS.md", "text": text })];
+        let existing = vec![json!({
+            "id": "e1",
+            "summary": "Always check tests before committing any code changes",
+            "order": 10
+        })];
+        let result = planned_instruction_rule_migration(&files, &existing);
+        assert_eq!(result["candidateRules"].as_array().unwrap().len(), 0);
+        assert_eq!(
+            result["rewriteFiles"].as_array().unwrap().len(),
+            0,
+            "byte-identical rewrite must not be advertised: {result}"
+        );
+        assert_eq!(result["ambiguousFiles"].as_array().unwrap().len(), 0);
+        assert_eq!(result["repairChanges"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn planned_migration_still_rewrites_when_pointer_missing() {
+        // Guard: all bullets deduped but NO pointer section yet — adding the
+        // pointer is a genuine one-time change and must still be advertised
+        // (it converges on the next run once the pointer is present).
+        let files = vec![json!({
+            "path": "AGENTS.md",
+            "text": "Prose.\n\n- Always check tests before committing any code changes\n"
+        })];
+        let existing = vec![json!({
+            "id": "e1",
+            "summary": "Always check tests before committing any code changes",
+            "order": 10
+        })];
+        let result = planned_instruction_rule_migration(&files, &existing);
+        assert_eq!(result["candidateRules"].as_array().unwrap().len(), 0);
+        assert_eq!(result["rewriteFiles"].as_array().unwrap().len(), 1);
     }
 }

@@ -55,18 +55,22 @@ impl DoctorRepair {
     }
 }
 
-/// One change from a repair category fn: the human summary plus the write
-/// error if applying it failed (always `None` under `--dry-run`).
+/// One change from a repair category fn: the human summary, the write error if
+/// applying it failed (always `None` under `--dry-run`), and — when the change
+/// touched a different file than the category's default — the actual path
+/// written, so the reported `file` never misleads (code-rca B-2: instruction
+/// rewrites were attributed to rules.json, hiding the true write target).
 #[derive(Debug, Clone)]
 pub struct RepairOutcome {
     pub summary: String,
     pub error: Option<String>,
+    pub file: Option<String>,
 }
 
 fn applied(summaries: Vec<String>, error: Option<String>) -> Vec<RepairOutcome> {
     summaries
         .into_iter()
-        .map(|summary| RepairOutcome { summary, error: error.clone() })
+        .map(|summary| RepairOutcome { summary, error: error.clone(), file: None })
         .collect()
 }
 
@@ -196,6 +200,7 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<RepairOutc
                                 summary: "backup of the unparseable release index failed; no release-truth repairs applied"
                                     .to_string(),
                                 error: Some(e),
+                                file: None,
                             }];
                         }
                     }
@@ -204,6 +209,7 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<RepairOutc
                 return vec![RepairOutcome {
                     summary: "create missing Release Truth history index".to_string(),
                     error,
+                    file: None,
                 }];
             }
         };
@@ -241,6 +247,7 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<RepairOutc
                                 "backup of {file} failed; no release-truth repairs applied"
                             ),
                             error: Some(e),
+                            file: None,
                         }];
                     }
                 }
@@ -256,6 +263,7 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<RepairOutc
                             "backup of {index_name} failed; no release-truth repairs applied"
                         ),
                         error: Some(e),
+                        file: None,
                     }];
                 }
             }
@@ -311,13 +319,14 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<RepairOutc
                         Some(file) => detail_errors.get(file).cloned(),
                         None => index_error.clone(),
                     };
-                    RepairOutcome { summary, error }
+                    RepairOutcome { summary, error, file: None }
                 })
                 .collect();
             if let Some(err) = advice_error {
                 outcomes.push(RepairOutcome {
                     summary: "record reconciliation advice in repair-advice.json".to_string(),
                     error: Some(err),
+                    file: None,
                 });
             }
             return outcomes;
@@ -448,38 +457,63 @@ pub fn repair_instruction_rules(target: &Path, dry_run: bool) -> Vec<RepairOutco
         .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
         .unwrap_or_default();
 
-    let mut error = None;
-    if !repair_changes.is_empty() && !dry_run {
-        // Add candidate rules
-        if let Some(candidates) = migration["candidateRules"].as_array() {
-            if !candidates.is_empty() {
-                let mut new_doc = rules_doc.clone();
-                let existing = new_doc["rules"].as_array_mut().unwrap();
-                for c in candidates {
-                    existing.push(c.clone());
-                }
-                error = write_json(&rules_path, &new_doc).err().map(|e| e.to_string());
-            }
+    if repair_changes.is_empty() {
+        return vec![];
+    }
+
+    // Per-change outcomes with real file attribution: candidate-rule changes
+    // write rules.json (the category default), each rewrite writes its own
+    // instruction file. Summaries must stay byte-equal to the advertised
+    // repairChanges (both derive from the same migration plan).
+    let mut outcomes: Vec<RepairOutcome> = Vec::new();
+
+    let mut rules_error = None;
+    let candidates = migration["candidateRules"].as_array().cloned().unwrap_or_default();
+    if !candidates.is_empty() && !dry_run {
+        let mut new_doc = rules_doc.clone();
+        let existing = new_doc["rules"].as_array_mut().unwrap();
+        for c in &candidates {
+            existing.push(c.clone());
         }
-        // Rewrite instruction files
-        if let Some(rewrites) = migration["rewriteFiles"].as_array() {
-            for rewrite in rewrites {
-                let path_str = match rewrite["path"].as_str() { Some(s) => s, None => continue };
-                let replacement = match rewrite["replacement"].as_str() { Some(s) => s, None => continue };
-                let full_path = target.join(path_str);
+        rules_error = write_json(&rules_path, &new_doc).err().map(|e| e.to_string());
+    }
+    for c in &candidates {
+        outcomes.push(RepairOutcome {
+            summary: format!(
+                "migrate instruction rule: {}",
+                c["title"].as_str().unwrap_or("")
+            ),
+            error: rules_error.clone(),
+            file: None,
+        });
+    }
+
+    for rewrite in migration["rewriteFiles"].as_array().into_iter().flatten() {
+        let Some(path_str) = rewrite["path"].as_str() else { continue };
+        let full_path = target.join(path_str);
+        let mut error = None;
+        if !dry_run {
+            if let Some(replacement) = rewrite["replacement"].as_str() {
                 let content = if replacement.ends_with('\n') {
                     replacement.to_string()
                 } else {
                     format!("{replacement}\n")
                 };
-                if let Err(e) = std::fs::write(&full_path, content.as_bytes()) {
-                    error.get_or_insert_with(|| e.to_string());
-                }
+                error = std::fs::write(&full_path, content.as_bytes())
+                    .err()
+                    .map(|e| e.to_string());
             }
         }
+        outcomes.push(RepairOutcome {
+            summary: format!(
+                "rewrite {path_str} to point at docs/architext/data/rules.json"
+            ),
+            error,
+            file: Some(full_path.to_string_lossy().to_string()),
+        });
     }
 
-    applied(repair_changes, error)
+    outcomes
 }
 
 fn collect_instruction_rule_source_files(target: &Path) -> Vec<Value> {
@@ -582,11 +616,11 @@ pub fn apply_doctor_repairs(
             "instruction-rules" => repair_instruction_rules(target, dry_run),
             _ => vec![],
         };
-        let file = repair_files(category);
+        let default_file = repair_files(category);
         for outcome in changes {
             applied.push(DoctorRepair {
                 category: category.clone(),
-                file: file.clone(),
+                file: outcome.file.unwrap_or_else(|| default_file.clone()),
                 summary: outcome.summary,
                 error: outcome.error,
             });
