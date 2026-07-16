@@ -434,17 +434,25 @@ fn collect_instruction_rule_source_files(target: &Path) -> Vec<Value> {
 // ─── build_release_detail_entries ────────────────────────────────────────────
 
 /// Discover release detail entries directly from the releases directory, for the
-/// case where no readable index exists to enumerate them. Every `*.json` file
-/// except the index itself is treated as a detail file; unreadable files are
-/// skipped. Sorted by file name for deterministic output.
+/// case where no readable index exists to enumerate them. (New Rust-side behavior
+/// closing an apply-side gap — the JS `applyDoctorRepairs` had no equivalent and
+/// skipped this repair.) A `*.json` file counts as a detail only if it parses and
+/// carries a non-empty string `id` and `version` — the scanned directory can hold
+/// unrelated JSON (manifest.json when the index lives in the data root, tool or
+/// editor artifacts), which must not be swept into the regenerated index. The
+/// index file is excluded by name; unreadable files are skipped. Sorted by file
+/// name for deterministic output.
 fn release_detail_entries_from_dir(release_dir: &Path, index_path: &Path) -> Value {
+    let index_file_name = index_path.file_name();
     let mut files: Vec<String> = std::fs::read_dir(release_dir)
         .into_iter()
         .flatten()
         .flatten()
         .filter_map(|entry| {
             let path = entry.path();
-            if path == index_path || path.extension().and_then(|e| e.to_str()) != Some("json") {
+            if path.file_name() == index_file_name
+                || path.extension().and_then(|e| e.to_str()) != Some("json")
+            {
                 return None;
             }
             path.file_name().and_then(|n| n.to_str()).map(|n| n.to_string())
@@ -455,6 +463,11 @@ fn release_detail_entries_from_dir(release_dir: &Path, index_path: &Path) -> Val
         .iter()
         .filter_map(|file| {
             let detail = read_json(&release_dir.join(file))?;
+            let looks_like_detail = detail["id"].as_str().is_some_and(|s| !s.is_empty())
+                && detail["version"].as_str().is_some_and(|s| !s.is_empty());
+            if !looks_like_detail {
+                return None;
+            }
             Some(json!({ "file": file, "detail": detail }))
         })
         .collect();
@@ -678,6 +691,62 @@ mod tests {
         let changes = repair_release_truth_data(td.path(), true);
         assert_eq!(changes, vec!["create missing Release Truth history index".to_string()]);
         assert!(!td.path().join("docs/architext/data/releases/index.json").exists());
+    }
+
+    #[test]
+    fn repair_release_truth_dir_scan_skips_non_release_json() {
+        // The dir scan must not ingest arbitrary JSON as release details: with the
+        // index configured in the data root, manifest.json itself sits in the
+        // scanned directory (QA repro), and stray tool/editor JSON can sit in
+        // releases/. Anything without a non-empty id AND version is not a detail.
+        let td = temp_dir();
+        write(
+            td.path(),
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "release-index.json" } }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/v1-0-0.json",
+            r#"{ "id": "v1-0-0", "version": "1.0.0", "name": "One", "status": "completed",
+                 "posture": "shipped", "lastUpdated": "2026-01-01T00:00:00.000Z", "summary": "First.",
+                 "scope": { "required": [], "planned": [], "stretch": [], "deferred": [], "outOfScope": [] },
+                 "workstreams": [], "blockers": [], "milestones": [], "dependencies": [], "evidence": [] }"#,
+        );
+        write(td.path(), "docs/architext/data/schema-notes.json", r#"{ "notes": "not a release" }"#);
+
+        let changes = repair_release_truth_data(td.path(), false);
+        assert_eq!(changes, vec!["create missing Release Truth history index".to_string()]);
+
+        let index = read_json(&td.path().join("docs/architext/data/release-index.json"))
+            .expect("index created");
+        let releases = index["releases"].as_array().unwrap();
+        assert_eq!(releases.len(), 1, "only the real release detail is indexed: {releases:?}");
+        assert_eq!(releases[0]["id"], "v1-0-0");
+        assert_eq!(index["currentReleaseId"], "v1-0-0");
+    }
+
+    #[test]
+    fn repair_release_truth_multi_release_picks_latest_current() {
+        let td = temp_dir();
+        write_release_truth_target(td.path(), None);
+        write(
+            td.path(),
+            "docs/architext/data/releases/v2-0-0.json",
+            r#"{ "id": "v2-0-0", "version": "2.0.0", "name": "Two", "status": "completed",
+                 "posture": "shipped", "releasedAt": "2026-02-01T00:00:00.000Z",
+                 "lastUpdated": "2026-02-01T00:00:00.000Z", "summary": "Second release.",
+                 "scope": { "required": [], "planned": [], "stretch": [], "deferred": [], "outOfScope": [] },
+                 "workstreams": [], "blockers": [], "milestones": [], "dependencies": [], "evidence": [] }"#,
+        );
+
+        let changes = repair_release_truth_data(td.path(), false);
+        assert_eq!(changes, vec!["create missing Release Truth history index".to_string()]);
+
+        let index = read_json(&td.path().join("docs/architext/data/releases/index.json"))
+            .expect("index created");
+        assert_eq!(index["releases"].as_array().unwrap().len(), 2);
+        assert_eq!(index["currentReleaseId"], "v2-0-0");
     }
 
     #[test]
