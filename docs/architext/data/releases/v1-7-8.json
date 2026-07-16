@@ -1,0 +1,120 @@
+{
+  "id": "v1-7-8",
+  "version": "1.7.8",
+  "name": "Architext 1.7.8 Doctor Recovery + Fail-Loud Repairs",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Doctor's release-truth repair becomes trustworthy end to end. Enumeration is a union of index-named and dir-discovered detail files shared by status and apply (release_truth_repair_plan), so a detail file on disk but omitted from the index — the roboticus field incident — now yields the previously unreachable 'add <id> to Release Truth history' repair, and advertised repairs always match applied ones. Imperfect indexed details are recovered rather than gated, dropped, or written with null fields: originals are backed up under timestamped .bak names (never clobbered, all-or-nothing — any backup failure aborts every write), missing fields are backfilled from the index summary then explicit defaults, and each recovery is recorded in docs/architext/data/repair-advice.json, whose standing instruction makes reconciling backup vs recovered content the maintaining agent's responsibility (surfaced via status/doctor output and the synced instruction contract). Repairs are fail-loud: every repair category reports write failures per change (DoctorRepair gains additive status/error), doctor and sync print FAILED entries and exit nonzero, and a failed write is never reported as applied. The recovery machinery lives in the new domain::release_recovery module.",
+  "targetDate": "2026-07-16",
+  "lastUpdated": "2026-07-16T17:30:00.000Z",
+  "updateSource": "All work merged to develop via swarm-reviewed PRs #259, #260, #261 (ten checkpoints, each QA+Audit reviewed with adversarial fixtures before advancing; one maintainer escalation E-1 resolved by directive: backup + best-effort unmarshal + normalized re-marshal + reconciliation advice). Core 157/157, CLI 38/38, serve suites green, clippy clean. E2E: 30-release fixture with planted stray JSON, data-root index, suffix-colliding detail names, read-only files — recovery, attribution, and abort semantics all verified against the built binary. Release pending: GitHub release v1.7.8 with binaries + SHA256SUMS not yet published.",
+  "scope": {
+    "required": [
+      {
+        "id": "release-truth-union-enumeration",
+        "title": "Status and apply share one release-truth repair plan; omitted on-disk details surface",
+        "kind": "bug-fix",
+        "summary": "Field-confirmed defect (roboticus): a detail file on disk but missing from an existing index was invisible — both status and apply enumerated detail files FROM the index, making the 'add <id> to Release Truth history' change unreachable while roadmap targetReleaseId refs failed validation. Enumeration is now a union (index-named files trusted, dir-discovered files through a strict shape filter requiring all seven summary-source fields non-blank), deduped by components-normalized path AND by id (validation has no duplicate-id check, so duplicates would persist as silent corruption). One shared release_truth_repair_plan feeds both sides, so advertised and applied repairs cannot diverge; a committed status/apply agreement test pins it.",
+        "evidence": [
+          "swarm-pr-259",
+          "swarm-pr-260",
+          "release-truth-regression-suite"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "doctor-trustworthiness",
+        "dependsOn": []
+      },
+      {
+        "id": "doctor-recovery-and-advice",
+        "title": "Backup + best-effort recovery + reconciliation advice for imperfect release details",
+        "kind": "feature",
+        "summary": "Maintainer directive E-1: incomplete or unparseable index-named details are recovered, not gated/dropped/null-written. Every file the repair overwrites is first backed up with a timestamped .bak name (names never clobber — -N suffix; backups-first all-or-nothing — any backup failure aborts every write loudly). Recovery keeps original fields, backfills from the index summary then explicit defaults (placeholder targetWindow for draft/planned/implementing; a fabricated releasedAt would be invented history, so completed-without-releasedAt stays a validation flag), and re-marshals schema-valid. Each recovery appends to docs/architext/data/repair-advice.json — file, backup path, backfilled fields, and a standing instruction that reconciling old vs new is the maintaining agent's responsibility; entries supersede per file, a corrupt ledger is backed up before reset, status/doctor print pending-advice counts, and the synced instruction section plus canonical AGENTS_APPENDIX document the contract (with a parity test pinning the Rust const to the markdown).",
+        "evidence": [
+          "swarm-pr-260",
+          "release-truth-regression-suite"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "doctor-trustworthiness",
+        "dependsOn": [
+          "release-truth-union-enumeration"
+        ]
+      },
+      {
+        "id": "fail-loud-repair-error-channel",
+        "title": "Repairs report write failures; a failed write is never claimed as applied",
+        "kind": "bug-fix",
+        "summary": "Every repair category fn returns per-change outcomes carrying the real write error (RepairOutcome); DoctorRepair serializes an additive status: applied|failed (+error) for CLI and serve consumers. Failures attach to exactly the change they defeat — matched on the full file key after review caught a suffix-collision mis-attribution that could mark successful writes as failed. backup_file reports the real OS error; the advice ledger reports its own write failures. doctor and sync print '(FAILED: err)' per entry and exit 1; validation output still runs after failed repairs so the operator sees the resulting data state (only the exit code gates). The recovery machinery was extracted into domain::release_recovery (T-2) before this landed.",
+        "evidence": [
+          "swarm-pr-261",
+          "release-truth-regression-suite"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "doctor-trustworthiness",
+        "dependsOn": [
+          "doctor-recovery-and-advice"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "doctor-trustworthiness",
+      "name": "Doctor trustworthiness",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Make doctor's release-truth repair honest end to end: see everything on disk, recover imperfect data reversibly with an explicit reconciliation contract, and never claim a repair that did not happen.",
+      "progress": 100,
+      "itemIds": [
+        "release-truth-union-enumeration",
+        "doctor-recovery-and-advice",
+        "fail-loud-repair-error-channel"
+      ],
+      "evidence": [
+        "swarm-pr-259",
+        "swarm-pr-260",
+        "swarm-pr-261",
+        "release-truth-regression-suite"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "swarm-pr-259",
+      "label": "PR #259 merged (create-missing-index repair + strict dir-scan filter), verify-rust green",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "swarm-pr-260",
+      "label": "PR #260 merged (union enumeration + E-1 recovery/backup/advice), verify-rust green",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "swarm-pr-261",
+      "label": "PR #261 merged (T-1 fail-loud error channel + T-2 release_recovery extraction), verify-rust green",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "release-truth-regression-suite",
+      "label": "26 release-truth/recovery/advice/attribution regression tests incl. unix read-only abort, MD5-level backup preservation, suffix-collision attribution, status/apply agreement (cargo test -p architext-core --lib)",
+      "kind": "test",
+      "status": "complete"
+    }
+  ]
+}

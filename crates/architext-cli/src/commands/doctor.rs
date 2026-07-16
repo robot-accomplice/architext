@@ -146,8 +146,20 @@ pub fn run(target: &Path, opts: &crate::args::ParsedArgs, version: &str) {
 
     let applied = apply_doctor_repairs(target, &status, false, false);
     println!("Applied doctor repairs:");
+    let mut any_failed = false;
     for repair in &applied {
-        println!("- {}: {}", repair.file, repair.summary);
+        match &repair.error {
+            None => println!("- {}: {}", repair.file, repair.summary),
+            Some(err) => {
+                any_failed = true;
+                println!("- {}: {} (FAILED: {err})", repair.file, repair.summary);
+            }
+        }
+    }
+    if any_failed {
+        // Still run validation below — its output is the operator's best signal
+        // for how broken the data currently is; only the exit code is gated.
+        eprintln!("Some doctor repairs failed; the files above were not (fully) repaired.");
     }
 
     let validation = if opts.skip_validate {
@@ -156,7 +168,7 @@ pub fn run(target: &Path, opts: &crate::args::ParsedArgs, version: &str) {
         validate_target(target)
     };
     println!("{}", validation["output"].as_str().unwrap_or(""));
-    if !validation["ok"].as_bool().unwrap_or(false) {
+    if any_failed || !validation["ok"].as_bool().unwrap_or(false) {
         process::exit(1);
     }
 }

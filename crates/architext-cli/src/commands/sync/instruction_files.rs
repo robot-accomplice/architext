@@ -45,6 +45,14 @@ the release detail file, with `releases/index.json` refreshed from those facts.\
 Keep Release Path labels concise and put long context in the selected release\n\
 item's detail data.\n\
 \n\
+When `architext doctor` recovers a damaged or incomplete data file it backs up\n\
+the original under a timestamped `.bak` name and records the recovery in\n\
+`docs/architext/data/repair-advice.json`. Reconciling recovered content is the\n\
+maintaining agent's responsibility: replace every backfilled placeholder with\n\
+real facts from the backup, the source code, and git history; run `architext\n\
+validate`; then delete the backup file and remove the resolved advice entry.\n\
+Do not treat recovered placeholders as reviewed facts.\n\
+\n\
 When planning a future release, use `docs/architext/data/roadmap.json` as the\n\
 roadmap source and Release Planning as the approval boundary. Selected roadmap\n\
 items keep `source: \"roadmap\"`; manually entered scope uses `source:\n\
@@ -261,6 +269,22 @@ pub fn upsert_instruction_file(target: &Path, file_name: &str, dry_run: bool) ->
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn appendix_matches_canonical_markdown() {
+        // APPENDIX is documented as the content of viewer/AGENTS_APPENDIX.md's
+        // ```markdown fence; this pins the single-source-of-truth invariant so
+        // the two can never silently diverge again (AUDIT cp-6).
+        let md = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../viewer/AGENTS_APPENDIX.md"
+        ))
+        .expect("viewer/AGENTS_APPENDIX.md readable");
+        let fence_start = md.find("```markdown").expect("markdown fence") + "```markdown".len();
+        let fence_end = md.rfind("```").expect("closing fence");
+        let canonical = md[fence_start..fence_end].trim();
+        assert_eq!(APPENDIX.trim(), canonical, "APPENDIX must match viewer/AGENTS_APPENDIX.md");
+    }
 
     #[test]
     fn empty_existing_creates_file() {

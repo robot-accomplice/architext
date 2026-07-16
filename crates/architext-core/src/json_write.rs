@@ -329,3 +329,21 @@ mod tests {
         assert_eq!(js(&v), expected);
     }
 }
+
+/// Shared lenient JSON file read: `None` on missing/unreadable/unparseable.
+pub(crate) fn read_json(path: &std::path::Path) -> Option<serde_json::Value> {
+    let text = std::fs::read_to_string(path).ok()?;
+    serde_json::from_str(&text).ok()
+}
+
+/// Shared JSON file write in the canonical Architext on-disk format.
+pub(crate) fn write_json(
+    path: &std::path::Path,
+    value: &serde_json::Value,
+) -> std::io::Result<()> {
+    let dir = path.parent().ok_or_else(|| {
+        std::io::Error::new(std::io::ErrorKind::InvalidInput, "path has no parent")
+    })?;
+    std::fs::create_dir_all(dir)?;
+    std::fs::write(path, write_json_string(value).as_bytes())
+}
