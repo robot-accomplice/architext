@@ -161,6 +161,14 @@ pub fn format_status_lines_verbose(status: &serde_json::Value) -> Vec<String> {
         push!("Generated artifacts tracked: none");
     }
 
+    if let Some(pending) = status["repairAdvice"]["pending"].as_u64().filter(|n| *n > 0) {
+        let path = status["repairAdvice"]["path"]
+            .as_str()
+            .unwrap_or("docs/architext/data/repair-advice.json");
+        let plural = if pending == 1 { "y" } else { "ies" };
+        push!("Repair advice: {pending} pending entr{plural} — reconcile {path}");
+    }
+
     if let Some(c4) = status.get("c4").filter(|v| !v.is_null()) {
         let issue_count = c4["issues"].as_array().map(|a| a.len()).unwrap_or(0);
         if issue_count > 0 {
