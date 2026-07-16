@@ -157,8 +157,9 @@ pub fn run(target: &Path, opts: &crate::args::ParsedArgs, version: &str) {
         }
     }
     if any_failed {
+        // Still run validation below — its output is the operator's best signal
+        // for how broken the data currently is; only the exit code is gated.
         eprintln!("Some doctor repairs failed; the files above were not (fully) repaired.");
-        process::exit(1);
     }
 
     let validation = if opts.skip_validate {
@@ -167,7 +168,7 @@ pub fn run(target: &Path, opts: &crate::args::ParsedArgs, version: &str) {
         validate_target(target)
     };
     println!("{}", validation["output"].as_str().unwrap_or(""));
-    if !validation["ok"].as_bool().unwrap_or(false) {
+    if any_failed || !validation["ok"].as_bool().unwrap_or(false) {
         process::exit(1);
     }
 }

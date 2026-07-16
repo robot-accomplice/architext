@@ -11,8 +11,10 @@
 //!   - `release-truth`    → `generated_release_index` (domain::release)
 //!   - `instruction-rules`→ `planned_instruction_rule_migration` (domain::instruction_rules)
 //!
-//! I/O lives here (fs reads + `write_json_string`). The output is a Vec of
-//! `DoctorRepair` records, one per change applied. Mirrors the JS return shape.
+//! I/O uses `json_write::{read_json, write_json}`; release-truth backup,
+//! advice-ledger, and enumeration I/O lives in `domain::release_recovery`.
+//! The output is a Vec of `DoctorRepair` records, one per change, each
+//! carrying `status: applied|failed` (additive over the JS return shape).
 
 use std::path::Path;
 
@@ -186,14 +188,16 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<RepairOutc
                 let mut error = None;
                 if !dry_run {
                     let _ = std::fs::create_dir_all(release_dir);
-                    if index_path.exists() && backup_file(&index_path).is_none() {
-                        // Never overwrite the (unparseable) original without a
-                        // backup — it may be hand-recoverable.
-                        return vec![RepairOutcome {
-                            summary: "backup of the unparseable release index failed; no release-truth repairs applied"
-                                .to_string(),
-                            error: Some("backup could not be created".to_string()),
-                        }];
+                    if index_path.exists() {
+                        if let Err(e) = backup_file(&index_path) {
+                            // Never overwrite the (unparseable) original without
+                            // a backup — it may be hand-recoverable.
+                            return vec![RepairOutcome {
+                                summary: "backup of the unparseable release index failed; no release-truth repairs applied"
+                                    .to_string(),
+                                error: Some(e),
+                            }];
+                        }
                     }
                     error = write_json(&index_path, &plan.generated).err().map(|e| e.to_string());
                 }
@@ -230,28 +234,30 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<RepairOutc
                     continue;
                 }
                 match backup_file(&path) {
-                    Some(name) => backups.push(Some(name)),
-                    None => {
+                    Ok(name) => backups.push(Some(name)),
+                    Err(e) => {
                         return vec![RepairOutcome {
                             summary: format!(
                                 "backup of {file} failed; no release-truth repairs applied"
                             ),
-                            error: Some("backup could not be created".to_string()),
+                            error: Some(e),
                         }];
                     }
                 }
             }
-            if plan.index_changed && backup_file(&index_path).is_none() {
-                let index_name = index_path
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_string())
-                    .unwrap_or_else(|| "release index".to_string());
-                return vec![RepairOutcome {
-                    summary: format!(
-                        "backup of {index_name} failed; no release-truth repairs applied"
-                    ),
-                    error: Some("backup could not be created".to_string()),
-                }];
+            if plan.index_changed {
+                if let Err(e) = backup_file(&index_path) {
+                    let index_name = index_path
+                        .file_name()
+                        .map(|n| n.to_string_lossy().to_string())
+                        .unwrap_or_else(|| "release index".to_string());
+                    return vec![RepairOutcome {
+                        summary: format!(
+                            "backup of {index_name} failed; no release-truth repairs applied"
+                        ),
+                        error: Some(e),
+                    }];
+                }
             }
 
             // Paths in the advice ledger are data-dir-relative; if the release
@@ -291,25 +297,20 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<RepairOutc
                 advice_error = append_repair_advice(&target_data_dir, advice_entries).err();
             }
 
-            // Attach each failure to the change it defeats: normalize changes
-            // carry their detail-write error, everything else (the index
-            // regeneration changes) carries the index-write error.
+            // Attach each failure to the change it defeats: a normalize change
+            // carries exactly its own detail-write error (matched on the full
+            // file key, never a substring — a suffix match mis-stamped
+            // successful siblings), everything else (the index regeneration
+            // changes) carries the index-write error.
             let mut outcomes: Vec<RepairOutcome> = plan
                 .changes
                 .into_iter()
                 .map(|summary| {
-                    let error = detail_errors
-                        .iter()
-                        .find(|(file, _)| summary.ends_with(file.as_str()))
-                        .filter(|_| summary.starts_with("normalize incomplete release detail"))
-                        .map(|(_, e)| e.clone())
-                        .or_else(|| {
-                            if summary.starts_with("normalize incomplete release detail") {
-                                None
-                            } else {
-                                index_error.clone()
-                            }
-                        });
+                    let error = match summary.strip_prefix("normalize incomplete release detail ")
+                    {
+                        Some(file) => detail_errors.get(file).cloned(),
+                        None => index_error.clone(),
+                    };
                     RepairOutcome { summary, error }
                 })
                 .collect();
@@ -605,6 +606,59 @@ mod tests {
 
     fn summaries(outcomes: &[RepairOutcome]) -> Vec<String> {
         outcomes.iter().map(|o| o.summary.clone()).collect()
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn write_errors_attach_to_the_right_file() {
+        // AUDIT/QA cp-9: the summary→error mapping used a suffix match, so a
+        // failing "release.json" stamped its error onto the successful
+        // "pre-release.json" too (whose summary ends with "release.json"),
+        // reporting a successful normalize as failed.
+        use std::os::unix::fs::PermissionsExt;
+        let td = temp_dir();
+        write(
+            td.path(),
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "releases/index.json" } }"#,
+        );
+        write(td.path(), "docs/architext/data/releases/release.json", r#"{ "id": "rel", "version": "1.0.0" }"#);
+        write(td.path(), "docs/architext/data/releases/pre-release.json", r#"{ "id": "pre", "version": "1.0.0" }"#);
+        write(
+            td.path(),
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "rel", "releases": [
+                 { "id": "rel", "file": "release.json", "version": "1.0.0" },
+                 { "id": "pre", "file": "pre-release.json", "version": "1.0.0" } ] }"#,
+        );
+        let releases_dir = td.path().join("docs/architext/data/releases");
+        // Only release.json is unwritable; pre-release.json must stay clean.
+        fs::set_permissions(
+            releases_dir.join("release.json"),
+            fs::Permissions::from_mode(0o444),
+        )
+        .unwrap();
+
+        let outcomes = repair_release_truth_data(td.path(), false);
+
+        fs::set_permissions(
+            releases_dir.join("release.json"),
+            fs::Permissions::from_mode(0o644),
+        )
+        .unwrap();
+        let failing = outcomes
+            .iter()
+            .find(|o| o.summary == "normalize incomplete release detail release.json")
+            .expect("outcome for release.json");
+        assert!(failing.error.is_some(), "failing file carries its error");
+        let succeeding = outcomes
+            .iter()
+            .find(|o| o.summary == "normalize incomplete release detail pre-release.json")
+            .expect("outcome for pre-release.json");
+        assert!(
+            succeeding.error.is_none(),
+            "successful file must not inherit a sibling's error: {succeeding:?}"
+        );
     }
 
     #[cfg(unix)]

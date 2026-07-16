@@ -251,10 +251,12 @@ pub(crate) fn append_repair_advice(
 ) -> Result<(), String> {
     let advice_path = target_data_dir.join("repair-advice.json");
     let existing = read_json(&advice_path).filter(|v| v["advice"].is_array());
-    if existing.is_none() && advice_path.exists() && backup_file(&advice_path).is_none() {
-        return Err(
-            "could not back up the corrupt repair-advice.json; advice not recorded".to_string(),
-        );
+    if existing.is_none() && advice_path.exists() {
+        if let Err(e) = backup_file(&advice_path) {
+            return Err(format!(
+                "could not back up the corrupt repair-advice.json ({e}); advice not recorded"
+            ));
+        }
     }
     let mut advice = existing.unwrap_or_else(|| json!({ "advice": [] }));
     let new_files: std::collections::HashSet<String> = new_entries
@@ -275,13 +277,16 @@ pub(crate) fn append_repair_advice(
 /// `*.json` dir scan. An existing backup is never clobbered: a `-N` suffix is
 /// appended until the name is free (same-second repairs would otherwise
 /// overwrite the earlier backup — the artifact this exists to preserve).
-/// Returns the backup file name on success.
-pub(crate) fn backup_file(path: &Path) -> Option<String> {
-    let (y, mo, d, h, mi, s) = secs_to_datetime(now_secs());
-    let base = format!(
-        "{}.{y:04}{mo:02}{d:02}T{h:02}{mi:02}{s:02}Z",
-        path.file_name()?.to_str()?
-    );
+/// Returns the backup file name, or the real I/O error so callers can report
+/// it with the same fidelity as write failures.
+pub(crate) fn backup_file(path: &Path) -> Result<String, String> {
+    let base = match path.file_name().and_then(|n| n.to_str()) {
+        Some(file_name) => {
+            let (y, mo, d, h, mi, s) = secs_to_datetime(now_secs());
+            format!("{file_name}.{y:04}{mo:02}{d:02}T{h:02}{mi:02}{s:02}Z")
+        }
+        None => return Err("path has no file name".to_string()),
+    };
     let mut name = format!("{base}.bak");
     let mut n = 1;
     while path.with_file_name(&name).exists() {
@@ -289,24 +294,23 @@ pub(crate) fn backup_file(path: &Path) -> Option<String> {
         n += 1;
     }
     let dest = path.with_file_name(&name);
-    std::fs::copy(path, &dest).ok()?;
-    Some(name)
+    std::fs::copy(path, &dest).map_err(|e| e.to_string())?;
+    Ok(name)
 }
 
 /// The full release-truth repair plan: what to say (changes), which details to
 /// recover (normalized), and the index to write (generated). Computed
 /// identically by the status side and the apply side so advertised and applied
 /// repairs cannot diverge.
-pub struct ReleaseTruthPlan {
+pub(crate) struct ReleaseTruthPlan {
     pub changes: Vec<String>,
     /// (release-dir-relative file, recovered detail, backfilled field names)
     pub normalized: Vec<(String, Value, Vec<String>)>,
-    pub entries: Value,
     pub generated: Value,
     pub index_changed: bool,
 }
 
-pub fn release_truth_repair_plan(
+pub(crate) fn release_truth_repair_plan(
     release_dir: &Path,
     index_path: &Path,
     index: &Value,
@@ -380,5 +384,5 @@ pub fn release_truth_repair_plan(
     let index_changed = !gen_changes.is_empty();
     changes.extend(gen_changes);
 
-    ReleaseTruthPlan { changes, normalized, entries, generated, index_changed }
+    ReleaseTruthPlan { changes, normalized, generated, index_changed }
 }
