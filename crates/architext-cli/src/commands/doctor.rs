@@ -10,7 +10,10 @@
 //!   5. if no doctor repairs → "Next: …prompt" (validation failed) or
 //!      "Next: architext serve".
 //!   6. `--dry-run` → "Dry run: no doctor repairs applied." and return.
-//!   7. else (confirmed via `--yes` or prompt) apply repairs (REUSING core's
+//!   7. without `--yes`, refuse when stdin is not a TTY (repairs mutate
+//!      tracked files; a non-interactive shell must opt in explicitly) and
+//!      never treat EOF at the prompt as consent. Once confirmed (via
+//!      `--yes` or an interactive prompt) apply repairs (REUSING core's
 //!      `apply_doctor_repairs`), print applied list, re-validate, exit 1 if the
 //!      post-repair validation fails.
 //!
@@ -18,7 +21,7 @@
 //! `architext_core::domain::doctor_repairs::apply_doctor_repairs`; it does not
 //! re-port detection or repair logic.
 
-use std::io::{self, Write};
+use std::io::{self, IsTerminal, Write};
 use std::path::Path;
 use std::process;
 
@@ -75,9 +78,16 @@ fn prompt_yes_no(question: &str, default_value: bool) -> bool {
     let suffix = if default_value { "Y/n" } else { "y/N" };
     print!("{question} [{suffix}] ");
     let _ = io::stdout().flush();
+    read_yes_no_answer(io::stdin().lock(), default_value)
+}
+
+fn read_yes_no_answer(mut input: impl io::BufRead, default_value: bool) -> bool {
     let mut line = String::new();
-    if io::stdin().read_line(&mut line).is_err() {
-        return default_value;
+    match input.read_line(&mut line) {
+        // EOF or a read error is not consent; only a typed answer (or a bare
+        // Enter from a live terminal) may accept a mutating repair.
+        Ok(0) | Err(_) => return false,
+        Ok(_) => {}
     }
     let answer = line.trim().to_lowercase();
     if answer.is_empty() {
@@ -122,6 +132,12 @@ pub fn run(target: &Path, opts: &crate::args::ParsedArgs, version: &str) {
         return;
     }
 
+    if !opts.yes && !io::stdin().is_terminal() {
+        println!("No doctor repairs applied: stdin is not a terminal.");
+        println!("Re-run with --yes to apply repairs, or --dry-run to preview them.");
+        return;
+    }
+
     let apply = opts.yes || prompt_yes_no("Apply deterministic doctor repairs?", true);
     if !apply {
         println!("No doctor repairs applied.");
@@ -142,5 +158,31 @@ pub fn run(target: &Path, opts: &crate::args::ParsedArgs, version: &str) {
     println!("{}", validation["output"].as_str().unwrap_or(""));
     if !validation["ok"].as_bool().unwrap_or(false) {
         process::exit(1);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::read_yes_no_answer;
+
+    #[test]
+    fn eof_is_never_consent() {
+        // A non-interactive stdin (EOF, no input at all) must decline even when
+        // the prompt default is "yes" — doctor repairs mutate tracked files.
+        assert!(!read_yes_no_answer(std::io::empty(), true));
+    }
+
+    #[test]
+    fn explicit_answers_are_respected() {
+        assert!(read_yes_no_answer("y\n".as_bytes(), false));
+        assert!(read_yes_no_answer("yes\n".as_bytes(), false));
+        assert!(!read_yes_no_answer("n\n".as_bytes(), true));
+        assert!(!read_yes_no_answer("nonsense\n".as_bytes(), true));
+    }
+
+    #[test]
+    fn bare_enter_takes_the_default() {
+        assert!(read_yes_no_answer("\n".as_bytes(), true));
+        assert!(!read_yes_no_answer("\n".as_bytes(), false));
     }
 }
