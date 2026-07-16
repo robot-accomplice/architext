@@ -577,8 +577,11 @@ mod tests {
             "status must advertise the add repair, got: {advertised:?}"
         );
 
-        let applied =
-            crate::domain::doctor_repairs::repair_release_truth_data(td.path(), false);
+        let applied: Vec<String> =
+            crate::domain::doctor_repairs::repair_release_truth_data(td.path(), false)
+                .into_iter()
+                .map(|o| o.summary)
+                .collect();
         assert_eq!(advertised, applied, "status and apply must agree");
     }
 

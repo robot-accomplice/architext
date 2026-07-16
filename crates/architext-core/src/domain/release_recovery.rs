@@ -245,11 +245,16 @@ then delete the backup file and remove this advice entry.";
 /// a file supersedes any earlier entry for the same file (whose backup
 /// reference may already be stale). The maintaining agent removes entries as
 /// it reconciles them.
-pub(crate) fn append_repair_advice(target_data_dir: &Path, new_entries: Vec<Value>) {
+pub(crate) fn append_repair_advice(
+    target_data_dir: &Path,
+    new_entries: Vec<Value>,
+) -> Result<(), String> {
     let advice_path = target_data_dir.join("repair-advice.json");
     let existing = read_json(&advice_path).filter(|v| v["advice"].is_array());
     if existing.is_none() && advice_path.exists() && backup_file(&advice_path).is_none() {
-        return;
+        return Err(
+            "could not back up the corrupt repair-advice.json; advice not recorded".to_string(),
+        );
     }
     let mut advice = existing.unwrap_or_else(|| json!({ "advice": [] }));
     let new_files: std::collections::HashSet<String> = new_entries
@@ -262,7 +267,7 @@ pub(crate) fn append_repair_advice(target_data_dir: &Path, new_entries: Vec<Valu
         });
         list.extend(new_entries);
     }
-    let _ = write_json(&advice_path, &advice);
+    write_json(&advice_path, &advice).map_err(|e| e.to_string())
 }
 
 /// Copy `path` to a timestamped sibling (`<name>.<yyyymmddThhmmssZ>.bak`)

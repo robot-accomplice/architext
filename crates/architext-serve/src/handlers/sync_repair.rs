@@ -67,7 +67,13 @@ pub async fn post_sync_repair(
                 if !applied.is_empty() {
                     lines.push("Applied doctor repairs:".to_string());
                     for r in &applied {
-                        lines.push(format!("- {}: {}", r.file, r.summary));
+                        match &r.error {
+                            None => lines.push(format!("- {}: {}", r.file, r.summary)),
+                            Some(err) => lines.push(format!(
+                                "- {}: {} (FAILED: {err})",
+                                r.file, r.summary
+                            )),
+                        }
                     }
                 }
             } else {

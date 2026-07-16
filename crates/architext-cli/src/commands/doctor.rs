@@ -146,8 +146,19 @@ pub fn run(target: &Path, opts: &crate::args::ParsedArgs, version: &str) {
 
     let applied = apply_doctor_repairs(target, &status, false, false);
     println!("Applied doctor repairs:");
+    let mut any_failed = false;
     for repair in &applied {
-        println!("- {}: {}", repair.file, repair.summary);
+        match &repair.error {
+            None => println!("- {}: {}", repair.file, repair.summary),
+            Some(err) => {
+                any_failed = true;
+                println!("- {}: {} (FAILED: {err})", repair.file, repair.summary);
+            }
+        }
+    }
+    if any_failed {
+        eprintln!("Some doctor repairs failed; the files above were not (fully) repaired.");
+        process::exit(1);
     }
 
     let validation = if opts.skip_validate {

@@ -282,8 +282,22 @@ fn perform_writes(
         } else {
             let repairs = apply_doctor_repairs(target, status, dry_run, skip_ir);
             println_single("Applied doctor repairs:");
+            let mut any_failed = false;
             for repair in &repairs {
-                println_single(&format!("- {}: {}", repair.file, repair.summary));
+                match &repair.error {
+                    None => println_single(&format!("- {}: {}", repair.file, repair.summary)),
+                    Some(err) => {
+                        any_failed = true;
+                        println_single(&format!(
+                            "- {}: {} (FAILED: {err})",
+                            repair.file, repair.summary
+                        ));
+                    }
+                }
+            }
+            if any_failed {
+                eprintln!("Some doctor repairs failed; the files above were not (fully) repaired.");
+                process::exit(1);
             }
         }
     } else if !installing && !doctor_repairs_selected && status["doctorRepairs"].as_array().map(|a| !a.is_empty()).unwrap_or(false) {
