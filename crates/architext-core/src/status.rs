@@ -4,7 +4,7 @@
 //! I/O lives here (fs + git); pure domain logic is composed from:
 //!   - `domain::c4_quality::{build_node_map, c4_issues_for_view, c4_drilldown_issues, repair_c4_views}`
 //!   - `domain::schema_migration::schema_migration_plan`
-//!   - `domain::doctor_repairs::release_truth_repair_plan` (shared with the apply side)
+//!   - `domain::release_recovery::release_truth_repair_plan` (shared with the apply side)
 //!   - `domain::instruction_rules::{planned_instruction_rule_migration, INSTRUCTION_RULE_FILES}`
 //!   - `validate_data_dir` (Rust validator)
 //!
@@ -18,7 +18,7 @@ use std::process::Command;
 use regex::Regex;
 use serde_json::{json, Map, Value};
 
-use crate::domain::{c4_quality, doctor_repairs, instruction_rules, schema_migration};
+use crate::domain::{c4_quality, instruction_rules, release_recovery, schema_migration};
 
 // ─── Constants (mirrors target-layout.mjs) ───────────────────────────────────
 
@@ -221,7 +221,7 @@ fn generated_release_history_changes(index_path: &Path, index_exists: bool) -> V
     // Shared repair plan (index-named ∪ dir-discovered enumeration, plus
     // incomplete-detail recovery) so status advertises exactly the changes the
     // apply side will make.
-    doctor_repairs::release_truth_repair_plan(release_dir, index_path, &index).changes
+    release_recovery::release_truth_repair_plan(release_dir, index_path, &index).changes
 }
 
 fn collect_release_truth_status(target: &Path) -> Option<Value> {
@@ -577,8 +577,11 @@ mod tests {
             "status must advertise the add repair, got: {advertised:?}"
         );
 
-        let applied =
-            crate::domain::doctor_repairs::repair_release_truth_data(td.path(), false);
+        let applied: Vec<String> =
+            crate::domain::doctor_repairs::repair_release_truth_data(td.path(), false)
+                .into_iter()
+                .map(|o| o.summary)
+                .collect();
         assert_eq!(advertised, applied, "status and apply must agree");
     }
 
