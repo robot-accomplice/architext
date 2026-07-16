@@ -662,6 +662,27 @@
       "file": "v1-7-6.json"
     },
     {
+      "id": "v1-7-8",
+      "version": "1.7.8",
+      "name": "Architext 1.7.8 Doctor Recovery + Fail-Loud Repairs",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-07-16",
+      "lastUpdated": "2026-07-16T17:30:00.000Z",
+      "summary": "Doctor's release-truth repair becomes trustworthy end to end. Enumeration is a union of index-named and dir-discovered detail files shared by status and apply (release_truth_repair_plan), so a detail file on disk but omitted from the index — the roboticus field incident — now yields the previously unreachable 'add <id> to Release Truth history' repair, and advertised repairs always match applied ones. Imperfect indexed details are recovered rather than gated, dropped, or written with null fields: originals are backed up under timestamped .bak names (never clobbered, all-or-nothing — any backup failure aborts every write), missing fields are backfilled from the index summary then explicit defaults, and each recovery is recorded in docs/architext/data/repair-advice.json, whose standing instruction makes reconciling backup vs recovered content the maintaining agent's responsibility (surfaced via status/doctor output and the synced instruction contract). Repairs are fail-loud: every repair category reports write failures per change (DoctorRepair gains additive status/error), doctor and sync print FAILED entries and exit nonzero, and a failed write is never reported as applied. The recovery machinery lives in the new domain::release_recovery module.",
+      "counts": {
+        "features": 1,
+        "bugFixes": 2,
+        "workstreams": 1,
+        "blockers": 0,
+        "complete": 3,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-7-8.json"
+    },
+    {
       "id": "v1-7-7",
       "version": "1.7.7",
       "name": "Architext 1.7.7 Doctor Non-Interactive Guard",
@@ -682,28 +703,6 @@
         "stretch": 0
       },
       "file": "v1-7-7.json"
-    },
-    {
-      "id": "v1-7-8",
-      "version": "1.7.8",
-      "name": "Architext 1.7.8 Doctor Recovery + Fail-Loud Repairs",
-      "status": "completed",
-      "posture": "shipped",
-      "targetDate": "2026-07-16",
-      "releasedAt": "2026-07-16T14:48:24.000Z",
-      "lastUpdated": "2026-07-16T14:48:24.000Z",
-      "summary": "Doctor's release-truth repair becomes trustworthy end to end. Enumeration is a union of index-named and dir-discovered detail files shared by status and apply (release_truth_repair_plan), so a detail file on disk but omitted from the index — the roboticus field incident — now yields the previously unreachable 'add <id> to Release Truth history' repair, and advertised repairs always match applied ones. Imperfect indexed details are recovered rather than gated, dropped, or written with null fields: originals are backed up under timestamped .bak names (never clobbered, all-or-nothing — any backup failure aborts every write), missing fields are backfilled from the index summary then explicit defaults, and each recovery is recorded in docs/architext/data/repair-advice.json, whose standing instruction makes reconciling backup vs recovered content the maintaining agent's responsibility (surfaced via status/doctor output and the synced instruction contract). Repairs are fail-loud: every repair category reports write failures per change (DoctorRepair gains additive status/error), doctor and sync print FAILED entries and exit nonzero, and a failed write is never reported as applied. The recovery machinery lives in the new domain::release_recovery module.",
-      "counts": {
-        "features": 1,
-        "bugFixes": 2,
-        "workstreams": 1,
-        "blockers": 0,
-        "complete": 3,
-        "inProgress": 0,
-        "planned": 0,
-        "stretch": 0
-      },
-      "file": "v1-7-8.json"
     }
   ]
 }
