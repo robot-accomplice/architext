@@ -437,11 +437,16 @@ fn collect_instruction_rule_source_files(target: &Path) -> Vec<Value> {
 /// case where no readable index exists to enumerate them. (New Rust-side behavior
 /// closing an apply-side gap — the JS `applyDoctorRepairs` had no equivalent and
 /// skipped this repair.) A `*.json` file counts as a detail only if it parses and
-/// carries a non-empty string `id` and `version` — the scanned directory can hold
-/// unrelated JSON (manifest.json when the index lives in the data root, tool or
-/// editor artifacts), which must not be swept into the regenerated index. The
-/// index file is excluded by name; unreadable files are skipped. Sorted by file
-/// name for deterministic output.
+/// carries every summary-source field (`id`, `version`, `name`, `status`,
+/// `posture`, `summary`, `lastUpdated`) as a non-blank string — the scanned
+/// directory can hold unrelated or half-written JSON (manifest.json when the
+/// index lives in the data root, tool or editor artifacts, partial stubs), which
+/// must not be swept into the regenerated index as null-field entries. The check
+/// is deliberately presence-only, not enum/pattern validation: a detail with an
+/// invalid status or id is malformed release HISTORY that post-repair validation
+/// must flag loudly, not data for this scan to silently drop. The index file is
+/// excluded by name; unreadable files are skipped. Sorted by file name for
+/// deterministic output.
 fn release_detail_entries_from_dir(release_dir: &Path, index_path: &Path) -> Value {
     let index_file_name = index_path.file_name();
     let mut files: Vec<String> = std::fs::read_dir(release_dir)
@@ -463,8 +468,9 @@ fn release_detail_entries_from_dir(release_dir: &Path, index_path: &Path) -> Val
         .iter()
         .filter_map(|file| {
             let detail = read_json(&release_dir.join(file))?;
-            let looks_like_detail = detail["id"].as_str().is_some_and(|s| !s.is_empty())
-                && detail["version"].as_str().is_some_and(|s| !s.is_empty());
+            let looks_like_detail = ["id", "version", "name", "status", "posture", "summary", "lastUpdated"]
+                .iter()
+                .all(|field| detail[*field].as_str().is_some_and(|s| !s.trim().is_empty()));
             if !looks_like_detail {
                 return None;
             }
@@ -714,6 +720,19 @@ mod tests {
                  "workstreams": [], "blockers": [], "milestones": [], "dependencies": [], "evidence": [] }"#,
         );
         write(td.path(), "docs/architext/data/schema-notes.json", r#"{ "notes": "not a release" }"#);
+        // Partial stubs carrying only some summary-source fields must be excluded
+        // too — indexing them writes null-field entries that fail schema validation.
+        write(
+            td.path(),
+            "docs/architext/data/draft-stub.json",
+            r#"{ "id": "draft", "version": "0.0.1" }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/blank-version.json",
+            r#"{ "id": "blank", "version": "   ", "name": "Blank", "status": "planned",
+                 "posture": "on-track", "summary": "s", "lastUpdated": "2026-01-01T00:00:00.000Z" }"#,
+        );
 
         let changes = repair_release_truth_data(td.path(), false);
         assert_eq!(changes, vec!["create missing Release Truth history index".to_string()]);
