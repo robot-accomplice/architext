@@ -271,6 +271,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn appendix_matches_canonical_markdown() {
+        // APPENDIX is documented as the content of viewer/AGENTS_APPENDIX.md's
+        // ```markdown fence; this pins the single-source-of-truth invariant so
+        // the two can never silently diverge again (AUDIT cp-6).
+        let md = std::fs::read_to_string(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../viewer/AGENTS_APPENDIX.md"
+        ))
+        .expect("viewer/AGENTS_APPENDIX.md readable");
+        let fence_start = md.find("```markdown").expect("markdown fence") + "```markdown".len();
+        let fence_end = md.rfind("```").expect("closing fence");
+        let canonical = md[fence_start..fence_end].trim();
+        assert_eq!(APPENDIX.trim(), canonical, "APPENDIX must match viewer/AGENTS_APPENDIX.md");
+    }
+
+    #[test]
     fn empty_existing_creates_file() {
         let result = replace_architext_section("", APPENDIX);
         assert!(result.starts_with("## Architext Architecture Documentation"));

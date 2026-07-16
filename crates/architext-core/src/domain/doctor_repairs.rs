@@ -170,8 +170,13 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<String> {
                 let plan = release_truth_repair_plan(release_dir, &index_path, &Value::Null);
                 if !dry_run {
                     let _ = std::fs::create_dir_all(release_dir);
-                    if index_path.exists() {
-                        let _ = backup_file(&index_path);
+                    if index_path.exists() && backup_file(&index_path).is_none() {
+                        // Never overwrite the (unparseable) original without a
+                        // backup — it may be hand-recoverable.
+                        return vec![
+                            "backup of the unparseable release index failed; no release-truth repairs applied"
+                                .to_string(),
+                        ];
                     }
                     let _ = write_json(&index_path, &plan.generated);
                 }
@@ -189,26 +194,61 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<String> {
             // and each recovery is recorded in repair-advice.json because
             // reconciling old (backup) vs new (recovered) content is the
             // maintaining agent's responsibility, not the repair's.
-            let mut advice_entries: Vec<Value> = Vec::new();
-            for (file, detail, backfilled) in &plan.normalized {
+            //
+            // Backups are taken FIRST, all-or-nothing: if any backup fails, no
+            // file is overwritten and the failure is the (loud) result —
+            // proceeding would destroy the only copy of an original, inverting
+            // the guarantee this feature exists to provide.
+            let mut backups: Vec<Option<String>> = Vec::new();
+            for (file, _, _) in &plan.normalized {
                 let path = release_dir.join(file);
-                let backup_name = if path.exists() { backup_file(&path) } else { None };
-                let _ = write_json(&path, detail);
-                let rel_dir = release_dir
-                    .strip_prefix(&target_data_dir)
-                    .unwrap_or_else(|_| Path::new(""));
+                if !path.exists() {
+                    backups.push(None);
+                    continue;
+                }
+                match backup_file(&path) {
+                    Some(name) => backups.push(Some(name)),
+                    None => {
+                        return vec![format!(
+                            "backup of {file} failed; no release-truth repairs applied"
+                        )];
+                    }
+                }
+            }
+            if plan.index_changed && backup_file(&index_path).is_none() {
+                let index_name = index_path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| "release index".to_string());
+                return vec![format!(
+                    "backup of {index_name} failed; no release-truth repairs applied"
+                )];
+            }
+
+            // Paths in the advice ledger are data-dir-relative; if the release
+            // dir unexpectedly falls outside the data dir, record the absolute
+            // path rather than a silently-wrong relative one.
+            let advice_path_for = |name: &str| -> String {
+                match release_dir.strip_prefix(&target_data_dir) {
+                    Ok(rel) => rel.join(name).to_string_lossy().to_string(),
+                    Err(_) => release_dir.join(name).to_string_lossy().to_string(),
+                }
+            };
+            let mut advice_entries: Vec<Value> = Vec::new();
+            for ((file, detail, backfilled), backup_name) in
+                plan.normalized.iter().zip(backups)
+            {
+                let _ = write_json(&release_dir.join(file), detail);
                 advice_entries.push(json!({
                     "kind": "release-detail-recovery",
-                    "file": rel_dir.join(file).to_string_lossy(),
-                    "backup": backup_name
-                        .map(|b| rel_dir.join(b).to_string_lossy().to_string()),
+                    "file": advice_path_for(file),
+                    "backup": backup_name.map(|b| advice_path_for(&b)),
                     "backfilledFields": backfilled,
                     "generatedAt": chrono_now(),
                     "instruction": RECONCILE_INSTRUCTION,
                 }));
             }
             if plan.index_changed {
-                let _ = backup_file(&index_path);
                 let _ = write_json(&index_path, &plan.generated);
             }
             if !advice_entries.is_empty() {
@@ -628,13 +668,26 @@ then delete the backup file and remove this advice entry.";
 
 /// Append recovery entries to `docs/architext/data/repair-advice.json`,
 /// creating it if absent and preserving unresolved entries from earlier runs.
-/// The maintaining agent removes entries as it reconciles them.
+/// A ledger that exists but does not parse as expected is backed up before the
+/// file is reset — and never clobbered if that backup fails. A new recovery of
+/// a file supersedes any earlier entry for the same file (whose backup
+/// reference may already be stale). The maintaining agent removes entries as
+/// it reconciles them.
 fn append_repair_advice(target_data_dir: &Path, new_entries: Vec<Value>) {
     let advice_path = target_data_dir.join("repair-advice.json");
-    let mut advice = read_json(&advice_path)
-        .filter(|v| v["advice"].is_array())
-        .unwrap_or_else(|| json!({ "advice": [] }));
+    let existing = read_json(&advice_path).filter(|v| v["advice"].is_array());
+    if existing.is_none() && advice_path.exists() && backup_file(&advice_path).is_none() {
+        return;
+    }
+    let mut advice = existing.unwrap_or_else(|| json!({ "advice": [] }));
+    let new_files: std::collections::HashSet<String> = new_entries
+        .iter()
+        .filter_map(|e| e["file"].as_str().map(|s| s.to_string()))
+        .collect();
     if let Some(list) = advice["advice"].as_array_mut() {
+        list.retain(|e| {
+            e["file"].as_str().map(|f| !new_files.contains(f)).unwrap_or(true)
+        });
         list.extend(new_entries);
     }
     let _ = write_json(&advice_path, &advice);
@@ -642,13 +695,22 @@ fn append_repair_advice(target_data_dir: &Path, new_entries: Vec<Value>) {
 
 /// Copy `path` to a timestamped sibling (`<name>.<yyyymmddThhmmssZ>.bak`)
 /// before it is overwritten. The `.bak` extension keeps backups out of the
-/// `*.json` dir scan. Returns the backup file name on success.
+/// `*.json` dir scan. An existing backup is never clobbered: a `-N` suffix is
+/// appended until the name is free (same-second repairs would otherwise
+/// overwrite the earlier backup — the artifact this exists to preserve).
+/// Returns the backup file name on success.
 fn backup_file(path: &Path) -> Option<String> {
     let (y, mo, d, h, mi, s) = secs_to_datetime(now_secs());
-    let name = format!(
-        "{}.{y:04}{mo:02}{d:02}T{h:02}{mi:02}{s:02}Z.bak",
+    let base = format!(
+        "{}.{y:04}{mo:02}{d:02}T{h:02}{mi:02}{s:02}Z",
         path.file_name()?.to_str()?
     );
+    let mut name = format!("{base}.bak");
+    let mut n = 1;
+    while path.with_file_name(&name).exists() {
+        name = format!("{base}-{n}.bak");
+        n += 1;
+    }
     let dest = path.with_file_name(&name);
     std::fs::copy(path, &dest).ok()?;
     Some(name)
@@ -1438,6 +1500,160 @@ mod tests {
 
         repair_release_truth_data(td.path(), true);
         assert!(!td.path().join("docs/architext/data/repair-advice.json").exists());
+    }
+
+    #[test]
+    fn backup_file_never_clobbers_an_existing_backup() {
+        // QA cp-6 (crit): two backups of the same file in the same second used
+        // the same name, and fs::copy silently overwrote the first — destroying
+        // the very artifact the backup exists to preserve.
+        let td = temp_dir();
+        let path = td.path().join("v0-1-0.json");
+        fs::write(&path, "first").unwrap();
+        let first = backup_file(&path).expect("first backup");
+        fs::write(&path, "second").unwrap();
+        let second = backup_file(&path).expect("second backup");
+
+        assert_ne!(first, second, "backup names must be unique");
+        assert_eq!(fs::read_to_string(td.path().join(&first)).unwrap(), "first");
+        assert_eq!(fs::read_to_string(td.path().join(&second)).unwrap(), "second");
+    }
+
+    #[test]
+    fn corrupt_advice_ledger_is_backed_up_not_clobbered() {
+        // AUDIT/QA cp-6: an unparseable repair-advice.json was silently reset,
+        // losing every pending reconciliation record without a trace.
+        let td = temp_dir();
+        write(
+            td.path(),
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "releases/index.json" } }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/v0-1-0.json",
+            r#"{ "id": "v0-1-0", "version": "0.1.0" }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "v0-1-0", "releases": [
+                 { "id": "v0-1-0", "file": "v0-1-0.json", "version": "0.1.0" } ] }"#,
+        );
+        write(td.path(), "docs/architext/data/repair-advice.json", "{ corrupt ledger");
+
+        repair_release_truth_data(td.path(), false);
+
+        let data_dir = td.path().join("docs/architext/data");
+        let ledger_backups: Vec<String> = std::fs::read_dir(&data_dir)
+            .unwrap()
+            .flatten()
+            .filter_map(|e| e.file_name().to_str().map(|s| s.to_string()))
+            .filter(|n| n.starts_with("repair-advice.json.") && n.ends_with(".bak"))
+            .collect();
+        assert_eq!(ledger_backups.len(), 1, "corrupt ledger must be backed up: {ledger_backups:?}");
+        assert_eq!(
+            fs::read_to_string(data_dir.join(&ledger_backups[0])).unwrap(),
+            "{ corrupt ledger"
+        );
+        let advice = read_json(&data_dir.join("repair-advice.json")).expect("fresh ledger");
+        assert_eq!(advice["advice"].as_array().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn advice_entries_for_the_same_file_are_superseded() {
+        // AUDIT cp-6: repeated recovery of the same file must supersede the
+        // stale entry (whose backup reference may be gone), not accumulate.
+        let td = temp_dir();
+        write(
+            td.path(),
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "releases/index.json" } }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/v0-1-0.json",
+            r#"{ "id": "v0-1-0", "version": "0.1.0" }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "v0-1-0", "releases": [
+                 { "id": "v0-1-0", "file": "v0-1-0.json", "version": "0.1.0" } ] }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/repair-advice.json",
+            r#"{ "advice": [
+                 { "kind": "release-detail-recovery", "file": "releases/v0-1-0.json",
+                   "backup": "releases/v0-1-0.json.20260101T000000Z.bak",
+                   "backfilledFields": ["summary"], "instruction": "stale" },
+                 { "kind": "release-detail-recovery", "file": "releases/other.json",
+                   "backup": "releases/other.json.20260101T000000Z.bak",
+                   "backfilledFields": ["summary"], "instruction": "keep me" } ] }"#,
+        );
+
+        repair_release_truth_data(td.path(), false);
+
+        let advice =
+            read_json(&td.path().join("docs/architext/data/repair-advice.json")).unwrap();
+        let entries = advice["advice"].as_array().unwrap();
+        assert_eq!(entries.len(), 2, "superseded, not accumulated: {entries:?}");
+        let for_file: Vec<&Value> = entries
+            .iter()
+            .filter(|e| e["file"] == "releases/v0-1-0.json")
+            .collect();
+        assert_eq!(for_file.len(), 1);
+        assert_ne!(for_file[0]["instruction"], "stale", "new entry replaces the stale one");
+        assert!(entries.iter().any(|e| e["file"] == "releases/other.json"));
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn backup_failure_aborts_every_write() {
+        // AUDIT cp-6 (high): if the backup cannot be taken, the repair must not
+        // overwrite anything — a failed backup followed by a write destroys the
+        // only copy of the original, inverting E-1's guarantee.
+        use std::os::unix::fs::PermissionsExt;
+        let td = temp_dir();
+        write(
+            td.path(),
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "releases/index.json" } }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/v0-1-0.json",
+            r#"{ "id": "v0-1-0", "version": "0.1.0" }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "v0-1-0", "releases": [
+                 { "id": "v0-1-0", "file": "v0-1-0.json", "version": "0.1.0" } ] }"#,
+        );
+        let releases_dir = td.path().join("docs/architext/data/releases");
+        let before = fs::read_to_string(releases_dir.join("v0-1-0.json")).unwrap();
+        // Read-only dir: the .bak cannot be created.
+        fs::set_permissions(&releases_dir, fs::Permissions::from_mode(0o555)).unwrap();
+
+        let changes = repair_release_truth_data(td.path(), false);
+
+        fs::set_permissions(&releases_dir, fs::Permissions::from_mode(0o755)).unwrap();
+        assert_eq!(changes.len(), 1);
+        assert!(
+            changes[0].contains("backup") && changes[0].contains("failed"),
+            "failure must be loud: {changes:?}"
+        );
+        assert_eq!(
+            fs::read_to_string(releases_dir.join("v0-1-0.json")).unwrap(),
+            before,
+            "original must be untouched"
+        );
+        assert!(
+            !td.path().join("docs/architext/data/repair-advice.json").exists(),
+            "no advice for repairs that did not happen"
+        );
     }
 
     #[test]
