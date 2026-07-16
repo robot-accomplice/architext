@@ -218,7 +218,12 @@ fn generated_release_history_changes(index_path: &Path, index_exists: bool) -> V
         None => return vec!["create missing Release Truth history index".to_string()],
     };
     let release_dir = index_path.parent().unwrap_or(index_path);
-    let detail_entries = build_release_detail_entries(release_dir, &index);
+    // Shared union enumeration (index-named ∪ dir-discovered) so status
+    // advertises exactly what the apply side will do — including the
+    // "add <id> to Release Truth history" case for on-disk details the
+    // index omits.
+    let detail_entries =
+        crate::domain::doctor_repairs::release_detail_entries(release_dir, index_path, &index);
     let generated = release::generated_release_index(&index, &detail_entries);
     let changes_val = release::release_index_generation_changes(&index, &generated);
     // changes_val is a JSON array of strings
@@ -226,23 +231,6 @@ fn generated_release_history_changes(index_path: &Path, index_exists: bool) -> V
         .as_array()
         .map(|arr| arr.iter().filter_map(|v| v.as_str().map(|s| s.to_string())).collect())
         .unwrap_or_default()
-}
-
-/// Build `detailEntries` Value array from index.releases → load each detail file.
-fn build_release_detail_entries(release_dir: &Path, index: &Value) -> Value {
-    let releases = match index["releases"].as_array() {
-        Some(arr) => arr,
-        None => return json!([]),
-    };
-    let entries: Vec<Value> = releases
-        .iter()
-        .filter_map(|summary| {
-            let file = summary["file"].as_str()?;
-            let detail = read_json_file(&release_dir.join(file))?;
-            Some(json!({ "file": file, "detail": detail }))
-        })
-        .collect();
-    Value::Array(entries)
 }
 
 fn collect_release_truth_status(target: &Path) -> Option<Value> {

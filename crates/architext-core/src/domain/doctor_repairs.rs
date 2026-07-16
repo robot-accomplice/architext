@@ -173,7 +173,7 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<String> {
                 return vec!["create missing Release Truth history index".to_string()];
             }
         };
-        let detail_entries = build_release_detail_entries(release_dir, &index);
+        let detail_entries = release_detail_entries(release_dir, &index_path, &index);
         let generated = release::generated_release_index(&index, &detail_entries);
         let changes_val = release::release_index_generation_changes(&index, &generated);
         let repair_changes: Vec<String> = changes_val
@@ -496,6 +496,37 @@ fn build_release_detail_entries(release_dir: &Path, index: &Value) -> Value {
     Value::Array(entries)
 }
 
+/// Enumerate release detail entries as the union of files the index names and
+/// details discovered on disk. Index-named files are authoritative — enumerated
+/// even when they would not pass the dir-scan's strict shape filter, so an
+/// imperfect-but-indexed detail surfaces via validation instead of silently
+/// vanishing from the index on regeneration. Dir-discovered files not named by
+/// the index (a detail added on disk but never indexed — the unreachable
+/// "add <id> to Release Truth history" case) go through the strict filter.
+/// Used by both the status side (`generated_release_history_changes`) and the
+/// apply side so advertised and applied repairs always agree.
+pub fn release_detail_entries(release_dir: &Path, index_path: &Path, index: &Value) -> Value {
+    let indexed = build_release_detail_entries(release_dir, index);
+    let mut entries = indexed.as_array().cloned().unwrap_or_default();
+    let named: std::collections::HashSet<String> = index["releases"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(|s| s["file"].as_str().map(|f| f.to_string()))
+        .collect();
+    for entry in release_detail_entries_from_dir(release_dir, index_path)
+        .as_array()
+        .into_iter()
+        .flatten()
+    {
+        let file = entry["file"].as_str().unwrap_or_default();
+        if !named.contains(file) {
+            entries.push(entry.clone());
+        }
+    }
+    Value::Array(entries)
+}
+
 // ─── doctorRepairCategories ───────────────────────────────────────────────────
 
 /// Port of `doctorRepairCategories(doctorRepairs)` — extracts unique categories in order.
@@ -766,6 +797,100 @@ mod tests {
             .expect("index created");
         assert_eq!(index["releases"].as_array().unwrap().len(), 2);
         assert_eq!(index["currentReleaseId"], "v2-0-0");
+    }
+
+    #[test]
+    fn repair_release_truth_adds_on_disk_detail_missing_from_index() {
+        // Field report (roboticus, 2026-07-16): a detail file on disk but omitted
+        // from an existing index was invisible — enumeration read files FROM the
+        // index, so the "add <id> to Release Truth history" repair was
+        // unreachable. The enumeration must union index-named files with
+        // dir-discovered ones.
+        let td = temp_dir();
+        write_release_truth_target(
+            td.path(),
+            Some(
+                r#"{ "currentReleaseId": "v1-0-0", "releases": [] }"#,
+            ),
+        );
+
+        let changes = repair_release_truth_data(td.path(), false);
+        assert!(
+            changes.iter().any(|c| c.contains("add v1-0-0 to Release Truth history")),
+            "expected add-change, got: {changes:?}"
+        );
+
+        let index = read_json(&td.path().join("docs/architext/data/releases/index.json"))
+            .expect("index rewritten");
+        assert_eq!(index["releases"][0]["id"], "v1-0-0");
+    }
+
+    #[test]
+    fn repair_release_truth_existing_index_scan_still_skips_junk() {
+        // The union scan must not weaken the cp-2/cp-3 contamination guarantees
+        // when the index exists: stray JSON stays out.
+        let td = temp_dir();
+        write_release_truth_target(
+            td.path(),
+            Some(r#"{ "currentReleaseId": "v1-0-0", "releases": [] }"#),
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/draft-stub.json",
+            r#"{ "id": "draft", "version": "0.0.1" }"#,
+        );
+
+        repair_release_truth_data(td.path(), false);
+        let index = read_json(&td.path().join("docs/architext/data/releases/index.json"))
+            .expect("index rewritten");
+        let ids: Vec<&str> = index["releases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|r| r["id"].as_str())
+            .collect();
+        assert_eq!(ids, vec!["v1-0-0"], "stub must not be indexed: {ids:?}");
+    }
+
+    #[test]
+    fn repair_release_truth_index_named_files_trusted_over_scan_filter() {
+        // Files the index itself names are authoritative: they stay enumerated
+        // even when they would not pass the dir-scan's strict shape filter
+        // (imperfect details must surface via validation, not vanish from the
+        // index on regeneration).
+        let td = temp_dir();
+        write(
+            td.path(),
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "releases/index.json" } }"#,
+        );
+        // Partial detail: would fail the strict filter (no posture/lastUpdated),
+        // but the index names it. Give the index a stale summary so regeneration
+        // has a change to make.
+        write(
+            td.path(),
+            "docs/architext/data/releases/v0-1-0.json",
+            r#"{ "id": "v0-1-0", "version": "0.1.0", "name": "Partial", "status": "planned",
+                 "summary": "stub", "scope": { "required": [] } }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "v0-1-0", "releases": [
+                 { "id": "v0-1-0", "file": "v0-1-0.json", "version": "0.1.0", "name": "STALE",
+                   "status": "planned", "summary": "stale" } ] }"#,
+        );
+
+        repair_release_truth_data(td.path(), false);
+        let index = read_json(&td.path().join("docs/architext/data/releases/index.json"))
+            .expect("index rewritten");
+        let ids: Vec<&str> = index["releases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|r| r["id"].as_str())
+            .collect();
+        assert_eq!(ids, vec!["v0-1-0"], "index-named file must stay enumerated: {ids:?}");
     }
 
     #[test]
