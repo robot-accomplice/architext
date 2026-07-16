@@ -156,14 +156,23 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<String> {
 
     if let Some(releases_rel) = manifest["files"]["releases"].as_str() {
         let index_path = target_data_dir.join(releases_rel);
-        if !index_path.exists() {
-            return vec![];
-        }
+        let release_dir = index_path.parent().unwrap_or(&index_path);
         let index = match read_json(&index_path) {
             Some(v) => v,
-            None => return vec![],
+            // Missing or unparseable index: regenerate it from the detail files on
+            // disk. Status advertises this case as "create missing Release Truth
+            // history index" (generatedReleaseHistoryChanges), so the applied
+            // change summary must match.
+            None => {
+                let detail_entries = release_detail_entries_from_dir(release_dir, &index_path);
+                let generated = release::generated_release_index(&Value::Null, &detail_entries);
+                if !dry_run {
+                    let _ = std::fs::create_dir_all(release_dir);
+                    let _ = write_json(&index_path, &generated);
+                }
+                return vec!["create missing Release Truth history index".to_string()];
+            }
         };
-        let release_dir = index_path.parent().unwrap_or(&index_path);
         let detail_entries = build_release_detail_entries(release_dir, &index);
         let generated = release::generated_release_index(&index, &detail_entries);
         let changes_val = release::release_index_generation_changes(&index, &generated);
@@ -424,6 +433,53 @@ fn collect_instruction_rule_source_files(target: &Path) -> Vec<Value> {
 
 // ─── build_release_detail_entries ────────────────────────────────────────────
 
+/// Discover release detail entries directly from the releases directory, for the
+/// case where no readable index exists to enumerate them. (New Rust-side behavior
+/// closing an apply-side gap — the JS `applyDoctorRepairs` had no equivalent and
+/// skipped this repair.) A `*.json` file counts as a detail only if it parses and
+/// carries every summary-source field (`id`, `version`, `name`, `status`,
+/// `posture`, `summary`, `lastUpdated`) as a non-blank string — the scanned
+/// directory can hold unrelated or half-written JSON (manifest.json when the
+/// index lives in the data root, tool or editor artifacts, partial stubs), which
+/// must not be swept into the regenerated index as null-field entries. The check
+/// is deliberately presence-only, not enum/pattern validation: a detail with an
+/// invalid status or id is malformed release HISTORY that post-repair validation
+/// must flag loudly, not data for this scan to silently drop. The index file is
+/// excluded by name; unreadable files are skipped. Sorted by file name for
+/// deterministic output.
+fn release_detail_entries_from_dir(release_dir: &Path, index_path: &Path) -> Value {
+    let index_file_name = index_path.file_name();
+    let mut files: Vec<String> = std::fs::read_dir(release_dir)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|entry| {
+            let path = entry.path();
+            if path.file_name() == index_file_name
+                || path.extension().and_then(|e| e.to_str()) != Some("json")
+            {
+                return None;
+            }
+            path.file_name().and_then(|n| n.to_str()).map(|n| n.to_string())
+        })
+        .collect();
+    files.sort();
+    let entries: Vec<Value> = files
+        .iter()
+        .filter_map(|file| {
+            let detail = read_json(&release_dir.join(file))?;
+            let looks_like_detail = ["id", "version", "name", "status", "posture", "summary", "lastUpdated"]
+                .iter()
+                .all(|field| detail[*field].as_str().is_some_and(|s| !s.trim().is_empty()));
+            if !looks_like_detail {
+                return None;
+            }
+            Some(json!({ "file": file, "detail": detail }))
+        })
+        .collect();
+    Value::Array(entries)
+}
+
 fn build_release_detail_entries(release_dir: &Path, index: &Value) -> Value {
     let releases = match index["releases"].as_array() {
         Some(arr) => arr,
@@ -594,5 +650,135 @@ mod tests {
         let status = json!({ "doctorRepairs": [] });
         let result = apply_doctor_repairs(td.path(), &status, false, false);
         assert!(result.is_empty());
+    }
+
+    fn write_release_truth_target(dir: &Path, with_index: Option<&str>) {
+        write(
+            dir,
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "releases/index.json" } }"#,
+        );
+        write(
+            dir,
+            "docs/architext/data/releases/v1-0-0.json",
+            r#"{ "id": "v1-0-0", "version": "1.0.0", "name": "One", "status": "completed",
+                 "posture": "shipped", "releasedAt": "2026-01-01T00:00:00.000Z",
+                 "lastUpdated": "2026-01-01T00:00:00.000Z", "summary": "First release.",
+                 "scope": { "required": [], "planned": [], "stretch": [], "deferred": [], "outOfScope": [] },
+                 "workstreams": [], "blockers": [], "milestones": [], "dependencies": [], "evidence": [] }"#,
+        );
+        if let Some(index) = with_index {
+            write(dir, "docs/architext/data/releases/index.json", index);
+        }
+    }
+
+    #[test]
+    fn repair_release_truth_creates_missing_index_from_details() {
+        // Status advertises "create missing Release Truth history index" when the
+        // configured index file is absent; the apply side must actually create it,
+        // not silently return no changes.
+        let td = temp_dir();
+        write_release_truth_target(td.path(), None);
+
+        let changes = repair_release_truth_data(td.path(), false);
+        assert_eq!(changes, vec!["create missing Release Truth history index".to_string()]);
+
+        let index = read_json(&td.path().join("docs/architext/data/releases/index.json"))
+            .expect("index.json created");
+        assert_eq!(index["currentReleaseId"], "v1-0-0");
+        assert_eq!(index["releases"][0]["file"], "v1-0-0.json");
+    }
+
+    #[test]
+    fn repair_release_truth_missing_index_dry_run_reports_without_writing() {
+        let td = temp_dir();
+        write_release_truth_target(td.path(), None);
+
+        let changes = repair_release_truth_data(td.path(), true);
+        assert_eq!(changes, vec!["create missing Release Truth history index".to_string()]);
+        assert!(!td.path().join("docs/architext/data/releases/index.json").exists());
+    }
+
+    #[test]
+    fn repair_release_truth_dir_scan_skips_non_release_json() {
+        // The dir scan must not ingest arbitrary JSON as release details: with the
+        // index configured in the data root, manifest.json itself sits in the
+        // scanned directory (QA repro), and stray tool/editor JSON can sit in
+        // releases/. Anything without a non-empty id AND version is not a detail.
+        let td = temp_dir();
+        write(
+            td.path(),
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "release-index.json" } }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/v1-0-0.json",
+            r#"{ "id": "v1-0-0", "version": "1.0.0", "name": "One", "status": "completed",
+                 "posture": "shipped", "lastUpdated": "2026-01-01T00:00:00.000Z", "summary": "First.",
+                 "scope": { "required": [], "planned": [], "stretch": [], "deferred": [], "outOfScope": [] },
+                 "workstreams": [], "blockers": [], "milestones": [], "dependencies": [], "evidence": [] }"#,
+        );
+        write(td.path(), "docs/architext/data/schema-notes.json", r#"{ "notes": "not a release" }"#);
+        // Partial stubs carrying only some summary-source fields must be excluded
+        // too — indexing them writes null-field entries that fail schema validation.
+        write(
+            td.path(),
+            "docs/architext/data/draft-stub.json",
+            r#"{ "id": "draft", "version": "0.0.1" }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/blank-version.json",
+            r#"{ "id": "blank", "version": "   ", "name": "Blank", "status": "planned",
+                 "posture": "on-track", "summary": "s", "lastUpdated": "2026-01-01T00:00:00.000Z" }"#,
+        );
+
+        let changes = repair_release_truth_data(td.path(), false);
+        assert_eq!(changes, vec!["create missing Release Truth history index".to_string()]);
+
+        let index = read_json(&td.path().join("docs/architext/data/release-index.json"))
+            .expect("index created");
+        let releases = index["releases"].as_array().unwrap();
+        assert_eq!(releases.len(), 1, "only the real release detail is indexed: {releases:?}");
+        assert_eq!(releases[0]["id"], "v1-0-0");
+        assert_eq!(index["currentReleaseId"], "v1-0-0");
+    }
+
+    #[test]
+    fn repair_release_truth_multi_release_picks_latest_current() {
+        let td = temp_dir();
+        write_release_truth_target(td.path(), None);
+        write(
+            td.path(),
+            "docs/architext/data/releases/v2-0-0.json",
+            r#"{ "id": "v2-0-0", "version": "2.0.0", "name": "Two", "status": "completed",
+                 "posture": "shipped", "releasedAt": "2026-02-01T00:00:00.000Z",
+                 "lastUpdated": "2026-02-01T00:00:00.000Z", "summary": "Second release.",
+                 "scope": { "required": [], "planned": [], "stretch": [], "deferred": [], "outOfScope": [] },
+                 "workstreams": [], "blockers": [], "milestones": [], "dependencies": [], "evidence": [] }"#,
+        );
+
+        let changes = repair_release_truth_data(td.path(), false);
+        assert_eq!(changes, vec!["create missing Release Truth history index".to_string()]);
+
+        let index = read_json(&td.path().join("docs/architext/data/releases/index.json"))
+            .expect("index created");
+        assert_eq!(index["releases"].as_array().unwrap().len(), 2);
+        assert_eq!(index["currentReleaseId"], "v2-0-0");
+    }
+
+    #[test]
+    fn repair_release_truth_regenerates_unparseable_index() {
+        // Status treats an unreadable index the same as a missing one; apply must too.
+        let td = temp_dir();
+        write_release_truth_target(td.path(), Some("{ not json"));
+
+        let changes = repair_release_truth_data(td.path(), false);
+        assert_eq!(changes, vec!["create missing Release Truth history index".to_string()]);
+
+        let index = read_json(&td.path().join("docs/architext/data/releases/index.json"))
+            .expect("index.json regenerated");
+        assert_eq!(index["currentReleaseId"], "v1-0-0");
     }
 }
