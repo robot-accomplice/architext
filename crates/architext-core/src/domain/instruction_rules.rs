@@ -1,4 +1,10 @@
-//! Pure port of `src/domain/lifecycle/instruction-rule-migration.mjs`.
+//! Port of `src/domain/lifecycle/instruction-rule-migration.mjs` (historical;
+//! the JS source is deleted), with two INTENTIONAL divergences from that
+//! reference (code-rca B-2, 2026-07-16): the migration plan carries a
+//! convergence gate (a rewrite is only planned when it would change the
+//! written bytes or contribute a new rule — the JS re-advertised forever),
+//! and `upsert_rule_pointer` is idempotent (the JS splice progressively ate
+//! the separator newline). Do not "fix back" toward JS parity.
 //!
 //! All functions operate on plain strings and `serde_json::Value`.
 //! I/O-free — callers supply file text.
@@ -277,11 +283,11 @@ pub fn planned_instruction_rule_migration(files: &[Value], existing_rules: &[Val
         // contributes a not-yet-migrated rule below. The unconditional push
         // made doctor re-advertise and phantom-apply the identical rewrite on
         // every run for any already-migrated file (bullets never leave the
-        // file by design, so this branch re-entered forever). Compare with the
-        // trailing newline the writer ensures, so a missing final newline
-        // still converges after one real write.
-        let ensure_nl = |s: &str| if s.ends_with('\n') { s.to_string() } else { format!("{s}\n") };
-        let rewrite_differs = ensure_nl(&replacement) != ensure_nl(text);
+        // file by design, so this branch re-entered forever). The comparison
+        // uses the SAME normalization the writer applies, so a missing final
+        // newline still converges after one real write.
+        let rewrite_differs =
+            ensure_trailing_newline(&replacement) != ensure_trailing_newline(text);
         let candidates_before = candidate_rules.len();
 
         for summary in rule_lines {
@@ -336,17 +342,34 @@ pub fn planned_instruction_rule_migration(files: &[Value], existing_rules: &[Val
     })
 }
 
+/// The exact write-time normalization: the convergence gate's correctness
+/// depends on comparing with precisely the bytes the writer will produce, so
+/// the gate (above) and the writer (`doctor_repairs::repair_instruction_rules`)
+/// MUST share this one function — a divergence silently reintroduces the B-2
+/// phantom-repair loop.
+pub fn ensure_trailing_newline(s: &str) -> String {
+    if s.ends_with('\n') {
+        s.to_string()
+    } else {
+        format!("{s}\n")
+    }
+}
+
 /// `upsertRulePointer(text)`.
 pub fn upsert_rule_pointer(text: &str) -> String {
     let existing = text.trim_end();
     if let Some(heading_pos) = existing.find(ARCHITEXT_RULE_POINTER_HEADING) {
         // Replace the first managed section with pointerBody, trimEnd, + "\n".
-        // The splice consumes one newline before the heading, so re-supply the
-        // separator when the heading is not at the start of the file —
-        // otherwise re-application eats the blank line the append branch
-        // inserted and a freshly migrated file triggers one more rewrite
-        // (non-idempotence found by the convergence fixed-point test, B-2).
-        let replacement = if heading_pos > 0 {
+        // The splice consumes one preceding newline when (and only when) the
+        // byte before the heading is '\n' — mirror EXACTLY that condition when
+        // re-supplying the separator, or a heading substring found mid-line
+        // would gain a newline never present in the source (AUDIT cp-11 F-1).
+        // Without the re-supplied separator, re-application eats the blank
+        // line the append branch inserted and a freshly migrated file triggers
+        // one more rewrite (non-idempotence found by the fixed-point test).
+        let splice_consumes_newline =
+            heading_pos > 0 && existing.as_bytes()[heading_pos - 1] == b'\n';
+        let replacement = if splice_consumes_newline {
             format!("\n{POINTER_BODY}")
         } else {
             POINTER_BODY.to_string()
@@ -515,6 +538,28 @@ mod tests {
         );
         assert_eq!(result["ambiguousFiles"].as_array().unwrap().len(), 0);
         assert_eq!(result["repairChanges"].as_array().unwrap().len(), 0);
+    }
+
+    #[test]
+    fn upsert_pointer_midline_heading_gains_no_phantom_newline() {
+        // AUDIT cp-11 F-1: heading detection is a plain find(), so the heading
+        // text can match mid-line. The separator re-supply must mirror the
+        // splice's own preceding-byte==\n condition, not heading position —
+        // otherwise a newline never present in the source appears.
+        let text = format!("prose mentioning {ARCHITEXT_RULE_POINTER_HEADING} inline\n- a rule\n");
+        let once = upsert_rule_pointer(&text);
+        assert!(
+            !once.contains(&format!(" \n{ARCHITEXT_RULE_POINTER_HEADING}")),
+            "no injected newline before a mid-line heading match: {once:?}"
+        );
+        // And the result must still be a fixed point.
+        assert_eq!(upsert_rule_pointer(&once), once, "idempotent on mid-line shape");
+    }
+
+    #[test]
+    fn upsert_pointer_heading_at_file_start_is_fixed_point() {
+        let text = format!("{POINTER_BODY}\n");
+        assert_eq!(upsert_rule_pointer(&text), text);
     }
 
     #[test]

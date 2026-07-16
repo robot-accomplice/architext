@@ -494,11 +494,8 @@ pub fn repair_instruction_rules(target: &Path, dry_run: bool) -> Vec<RepairOutco
         let mut error = None;
         if !dry_run {
             if let Some(replacement) = rewrite["replacement"].as_str() {
-                let content = if replacement.ends_with('\n') {
-                    replacement.to_string()
-                } else {
-                    format!("{replacement}\n")
-                };
+                // Shared with the convergence gate — see ensure_trailing_newline.
+                let content = instruction_rules::ensure_trailing_newline(replacement);
                 error = std::fs::write(&full_path, content.as_bytes())
                     .err()
                     .map(|e| e.to_string());
@@ -692,6 +689,47 @@ mod tests {
         assert!(
             succeeding.error.is_none(),
             "successful file must not inherit a sibling's error: {succeeding:?}"
+        );
+    }
+
+    #[test]
+    fn instruction_rules_repair_converges_on_second_run() {
+        // AUDIT cp-11 F-2: the gate's byte comparison and the writer's
+        // normalization share one helper; this integration test pins the
+        // load-bearing invariant end to end — apply once against a real temp
+        // dir, then a second run must return no outcomes with the tree
+        // byte-identical (the B-2 phantom-repair loop).
+        let td = temp_dir();
+        write(td.path(), "docs/architext/data/rules.json", r#"{ "rules": [] }"#);
+        write(
+            td.path(),
+            "AGENTS.md",
+            "# Project\n\nProse.\n\n- Always check tests before committing any code changes\n",
+        );
+
+        let first = repair_instruction_rules(td.path(), false);
+        assert!(!first.is_empty(), "first run migrates");
+        assert!(first.iter().all(|o| o.error.is_none()), "{first:?}");
+        // Rewrites attribute to the real file, not the category default.
+        assert!(
+            first
+                .iter()
+                .any(|o| o.file.as_deref().is_some_and(|f| f.ends_with("AGENTS.md"))),
+            "rewrite outcome carries the written path: {first:?}"
+        );
+        let agents_after_first = fs::read_to_string(td.path().join("AGENTS.md")).unwrap();
+        let rules_after_first =
+            fs::read_to_string(td.path().join("docs/architext/data/rules.json")).unwrap();
+
+        let second = repair_instruction_rules(td.path(), false);
+        assert!(second.is_empty(), "second run must converge: {second:?}");
+        assert_eq!(
+            fs::read_to_string(td.path().join("AGENTS.md")).unwrap(),
+            agents_after_first
+        );
+        assert_eq!(
+            fs::read_to_string(td.path().join("docs/architext/data/rules.json")).unwrap(),
+            rules_after_first
         );
     }
 
