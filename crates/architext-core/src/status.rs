@@ -5,6 +5,7 @@
 //!   - `domain::c4_quality::{build_node_map, c4_issues_for_view, c4_drilldown_issues, repair_c4_views}`
 //!   - `domain::schema_migration::schema_migration_plan`
 //!   - `domain::release::{generated_release_index, release_index_generation_changes}`
+//!   - `domain::doctor_repairs::release_detail_entries` (shared with the apply side)
 //!   - `domain::instruction_rules::{planned_instruction_rule_migration, INSTRUCTION_RULE_FILES}`
 //!   - `validate_data_dir` (Rust validator)
 //!
@@ -18,7 +19,7 @@ use std::process::Command;
 use regex::Regex;
 use serde_json::{json, Map, Value};
 
-use crate::domain::{c4_quality, instruction_rules, release, schema_migration};
+use crate::domain::{c4_quality, doctor_repairs, instruction_rules, release, schema_migration};
 
 // ─── Constants (mirrors target-layout.mjs) ───────────────────────────────────
 
@@ -222,8 +223,7 @@ fn generated_release_history_changes(index_path: &Path, index_exists: bool) -> V
     // advertises exactly what the apply side will do — including the
     // "add <id> to Release Truth history" case for on-disk details the
     // index omits.
-    let detail_entries =
-        crate::domain::doctor_repairs::release_detail_entries(release_dir, index_path, &index);
+    let detail_entries = doctor_repairs::release_detail_entries(release_dir, index_path, &index);
     let generated = release::generated_release_index(&index, &detail_entries);
     let changes_val = release::release_index_generation_changes(&index, &generated);
     // changes_val is a JSON array of strings
@@ -530,6 +530,50 @@ mod tests {
 
     fn temp_dir() -> TempDir {
         tempfile::tempdir().expect("tempdir")
+    }
+
+    // ─── status/apply agreement (shared release enumeration) ─────────────────
+
+    #[test]
+    fn status_advertises_add_for_on_disk_detail_missing_from_index() {
+        // The status side must advertise exactly what the apply side will do:
+        // a detail file on disk but omitted from the index yields the
+        // "add <id> to Release Truth history" change on BOTH sides (they share
+        // doctor_repairs::release_detail_entries). Field-confirmed defect
+        // (roboticus 2026-07-16): status said "Doctor repairs: none" here.
+        let td = temp_dir();
+        let write = |rel: &str, content: &str| {
+            let p = td.path().join(rel);
+            fs::create_dir_all(p.parent().unwrap()).unwrap();
+            fs::write(&p, content).unwrap();
+        };
+        write(
+            "docs/architext/data/manifest.json",
+            r#"{ "schemaVersion": "1.5.0", "files": { "releases": "releases/index.json" } }"#,
+        );
+        write(
+            "docs/architext/data/releases/v1-0-0.json",
+            r#"{ "id": "v1-0-0", "version": "1.0.0", "name": "One", "status": "completed",
+                 "posture": "shipped", "releasedAt": "2026-01-01T00:00:00.000Z",
+                 "lastUpdated": "2026-01-01T00:00:00.000Z", "summary": "First release.",
+                 "scope": { "required": [], "planned": [], "stretch": [], "deferred": [], "outOfScope": [] },
+                 "workstreams": [], "blockers": [], "milestones": [], "dependencies": [], "evidence": [] }"#,
+        );
+        write(
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "v1-0-0", "releases": [] }"#,
+        );
+
+        let index_path = td.path().join("docs/architext/data/releases/index.json");
+        let advertised = generated_release_history_changes(&index_path, true);
+        assert!(
+            advertised.iter().any(|c| c.contains("add v1-0-0 to Release Truth history")),
+            "status must advertise the add repair, got: {advertised:?}"
+        );
+
+        let applied =
+            crate::domain::doctor_repairs::repair_release_truth_data(td.path(), false);
+        assert_eq!(advertised, applied, "status and apply must agree");
     }
 
     // ─── gitignore-missing diff ────────────────────────────────────────────────

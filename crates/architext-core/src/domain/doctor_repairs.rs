@@ -164,7 +164,9 @@ pub fn repair_release_truth_data(target: &Path, dry_run: bool) -> Vec<String> {
             // history index" (generatedReleaseHistoryChanges), so the applied
             // change summary must match.
             None => {
-                let detail_entries = release_detail_entries_from_dir(release_dir, &index_path);
+                // Same union enumerator as the exists-branch (empty named set) so
+                // id-dedup semantics are uniform across both paths.
+                let detail_entries = release_detail_entries(release_dir, &index_path, &Value::Null);
                 let generated = release::generated_release_index(&Value::Null, &detail_entries);
                 if !dry_run {
                     let _ = std::fs::create_dir_all(release_dir);
@@ -505,14 +507,29 @@ fn build_release_detail_entries(release_dir: &Path, index: &Value) -> Value {
 /// "add <id> to Release Truth history" case) go through the strict filter.
 /// Used by both the status side (`generated_release_history_changes`) and the
 /// apply side so advertised and applied repairs always agree.
+///
+/// Dedup is by normalized joined path (the index may spell a file
+/// "./v1.json" or point into a subdirectory) AND by release id (index-named
+/// entries win, then sorted scan order) — validation has no duplicate-id
+/// check, so an id entering twice would be written as silent corruption.
 pub fn release_detail_entries(release_dir: &Path, index_path: &Path, index: &Value) -> Value {
+    // Components-normalized join: drops "." segments so "./v1.json" and
+    // "v1.json" compare equal, and subdirectory spellings stay distinct.
+    let normalize = |file: &str| -> std::path::PathBuf {
+        release_dir.join(file).components().collect()
+    };
+
     let indexed = build_release_detail_entries(release_dir, index);
     let mut entries = indexed.as_array().cloned().unwrap_or_default();
-    let named: std::collections::HashSet<String> = index["releases"]
+    let named_paths: std::collections::HashSet<std::path::PathBuf> = index["releases"]
         .as_array()
         .into_iter()
         .flatten()
-        .filter_map(|s| s["file"].as_str().map(|f| f.to_string()))
+        .filter_map(|s| s["file"].as_str().map(normalize))
+        .collect();
+    let mut seen_ids: std::collections::HashSet<String> = entries
+        .iter()
+        .filter_map(|e| e["detail"]["id"].as_str().map(|s| s.to_string()))
         .collect();
     for entry in release_detail_entries_from_dir(release_dir, index_path)
         .as_array()
@@ -520,9 +537,14 @@ pub fn release_detail_entries(release_dir: &Path, index_path: &Path, index: &Val
         .flatten()
     {
         let file = entry["file"].as_str().unwrap_or_default();
-        if !named.contains(file) {
-            entries.push(entry.clone());
+        if named_paths.contains(&normalize(file)) {
+            continue;
         }
+        let id = entry["detail"]["id"].as_str().unwrap_or_default();
+        if !seen_ids.insert(id.to_string()) {
+            continue;
+        }
+        entries.push(entry.clone());
     }
     Value::Array(entries)
 }
@@ -891,6 +913,75 @@ mod tests {
             .filter_map(|r| r["id"].as_str())
             .collect();
         assert_eq!(ids, vec!["v0-1-0"], "index-named file must stay enumerated: {ids:?}");
+    }
+
+    #[test]
+    fn repair_release_truth_dot_prefixed_index_file_not_double_enumerated() {
+        // QA cp-4: the index may spell a file "./v1-0-0.json" (schema allows any
+        // string); the dir scan names it "v1-0-0.json". Dedup must compare
+        // normalized paths, not raw strings, or the same file is enumerated
+        // twice and the regenerated index carries duplicate ids.
+        let td = temp_dir();
+        write_release_truth_target(td.path(), None);
+        write(
+            td.path(),
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "v1-0-0", "releases": [
+                 { "id": "v1-0-0", "file": "./v1-0-0.json", "version": "1.0.0", "name": "STALE",
+                   "status": "completed", "summary": "stale" } ] }"#,
+        );
+
+        repair_release_truth_data(td.path(), false);
+        let index = read_json(&td.path().join("docs/architext/data/releases/index.json"))
+            .expect("index rewritten");
+        let ids: Vec<&str> = index["releases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|r| r["id"].as_str())
+            .collect();
+        assert_eq!(ids, vec!["v1-0-0"], "same file must not enter twice: {ids:?}");
+    }
+
+    #[test]
+    fn repair_release_truth_same_id_different_file_not_duplicated() {
+        // QA cp-4: a dir-discovered detail sharing an id with an index-named one
+        // (e.g. a leftover copy after a rename) must not produce duplicate-id
+        // index entries — validation has no dup-id check, so doctor would be
+        // writing silent corruption. Index-named wins.
+        let td = temp_dir();
+        write_release_truth_target(td.path(), None);
+        write(
+            td.path(),
+            "docs/architext/data/releases/copy-of-v1-0-0.json",
+            r#"{ "id": "v1-0-0", "version": "1.0.0", "name": "Copy", "status": "completed",
+                 "posture": "shipped", "releasedAt": "2026-01-01T00:00:00.000Z",
+                 "lastUpdated": "2026-01-01T00:00:00.000Z", "summary": "leftover copy.",
+                 "scope": { "required": [], "planned": [], "stretch": [], "deferred": [], "outOfScope": [] },
+                 "workstreams": [], "blockers": [], "milestones": [], "dependencies": [], "evidence": [] }"#,
+        );
+        write(
+            td.path(),
+            "docs/architext/data/releases/index.json",
+            r#"{ "currentReleaseId": "v1-0-0", "releases": [
+                 { "id": "v1-0-0", "file": "v1-0-0.json", "version": "1.0.0", "name": "STALE",
+                   "status": "completed", "summary": "stale" } ] }"#,
+        );
+
+        repair_release_truth_data(td.path(), false);
+        let index = read_json(&td.path().join("docs/architext/data/releases/index.json"))
+            .expect("index rewritten");
+        let entries: Vec<(&str, &str)> = index["releases"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|r| Some((r["id"].as_str()?, r["file"].as_str()?)))
+            .collect();
+        assert_eq!(
+            entries,
+            vec![("v1-0-0", "v1-0-0.json")],
+            "index-named file wins; no duplicate ids: {entries:?}"
+        );
     }
 
     #[test]
