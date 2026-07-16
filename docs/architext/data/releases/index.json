@@ -448,6 +448,7 @@
       "status": "completed",
       "posture": "shipped",
       "targetWindow": "After 1.6.0",
+      "releasedAt": "2026-06-10T16:36:00.000Z",
       "lastUpdated": "2026-06-11T05:00:00.000Z",
       "summary": "Architext 1.6.1 carries the repository-intelligence and architecture-annotation work originally slated for 1.6.0, adds user-configurable diagram parameters (persisted in ~/.architext config), folds in the App-component decomposition and crowded-face routing refinements deferred from 1.6.0, and includes minor UI cleanup.",
       "counts": {
@@ -460,8 +461,7 @@
         "planned": 0,
         "stretch": 0
       },
-      "file": "v1-6-1.json",
-      "releasedAt": "2026-06-10T16:36:00.000Z"
+      "file": "v1-6-1.json"
     },
     {
       "id": "v1-6-2",
@@ -470,6 +470,7 @@
       "status": "completed",
       "posture": "shipped",
       "targetDate": "2026-06-11",
+      "releasedAt": "2026-06-11T06:25:00.000Z",
       "lastUpdated": "2026-06-11T06:25:00.000Z",
       "summary": "Patch release that replaces the static route-planning spinner with honest live progress (phase labels, edge counts, routes-considered counter, elapsed clock) and repairs the roadmap release reference that broke deep validation.",
       "counts": {
@@ -482,8 +483,7 @@
         "planned": 0,
         "stretch": 0
       },
-      "file": "v1-6-2.json",
-      "releasedAt": "2026-06-11T06:25:00.000Z"
+      "file": "v1-6-2.json"
     },
     {
       "id": "v1-6-3",
@@ -492,6 +492,7 @@
       "status": "completed",
       "posture": "shipped",
       "targetDate": "2026-06-11",
+      "releasedAt": "2026-06-11T11:13:07.864Z",
       "lastUpdated": "2026-06-11T11:25:00.000Z",
       "summary": "Dense diagrams render instantly: architext serve precomputes every flow x view route plan in Node (where planning is ~20x faster than the browser) under strict input-key parity, and the viewer fetches finished plans with full in-browser fallback. Routing performance is now gated by a ratchet whose baseline only moves toward improvement, slow plans persist their per-phase timing breakdowns, winner selection is 1.27x faster with byte-identical routes, and the README/public face refresh is a release rule.",
       "counts": {
@@ -504,8 +505,7 @@
         "planned": 0,
         "stretch": 0
       },
-      "file": "v1-6-3.json",
-      "releasedAt": "2026-06-11T11:13:07.864Z"
+      "file": "v1-6-3.json"
     },
     {
       "id": "v1-7-0",
@@ -514,6 +514,7 @@
       "status": "completed",
       "posture": "shipped",
       "targetWindow": "After 1.6.3 (1.6.x exhausted)",
+      "releasedAt": "2026-06-20T07:06:41.767Z",
       "lastUpdated": "2026-06-20T00:00:00.000Z",
       "summary": "Reimplement the entire product in Rust with NO Node dependency surviving — runtime AND build. One Rust routing core (native + WASM); validation, serve layer, and lifecycle ported; AND the React/Vite viewer rewritten as a Rust → WASM UI (Leptos/Dioxus/Yew, no JSX/Vite/npm) reusing the engine directly and implementing the Stitch design language. Native installers are the Node-free default; npm is an opt-in compatibility bridge only. Minor release: JSON data contract and CLI surface preserved exactly, proven by a byte-parity migration gate and a validation conformance corpus. Migration tooling (parity harness, ajv conformance, JS tests) is transitional and deleted with the JS code.",
       "counts": {
@@ -526,8 +527,7 @@
         "planned": 0,
         "stretch": 0
       },
-      "file": "v1-7-0.json",
-      "releasedAt": "2026-06-20T07:06:41.767Z"
+      "file": "v1-7-0.json"
     },
     {
       "id": "v1-7-1",
@@ -660,6 +660,27 @@
         "stretch": 0
       },
       "file": "v1-7-6.json"
+    },
+    {
+      "id": "v1-7-7",
+      "version": "1.7.7",
+      "name": "Architext 1.7.7 Doctor Non-Interactive Guard",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-07-16",
+      "lastUpdated": "2026-07-16T08:35:00.000Z",
+      "summary": "Safety patch for `architext doctor`. The doctor repair confirmation defaulted to Yes and treated EOF on stdin as the default answer, so any non-interactive shell (agent session, CI, cron, piped stdin) silently consented to deterministic repairs that mutate tracked data files — observed writing docs/architext/data/releases/index.json from a headless session. Doctor now refuses to apply repairs when stdin is not a terminal unless --yes is passed explicitly: it reports that repairs are pending and points at --yes / --dry-run without writing anything. Inside the interactive prompt, EOF or a read error now declines instead of taking the default. Intentional behavior change: `echo y | architext doctor` no longer consents; scripts must use --yes.",
+      "counts": {
+        "features": 0,
+        "bugFixes": 2,
+        "workstreams": 1,
+        "blockers": 0,
+        "complete": 1,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-7-7.json"
     }
   ]
 }

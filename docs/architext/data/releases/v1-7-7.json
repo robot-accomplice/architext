@@ -1,0 +1,90 @@
+{
+  "id": "v1-7-7",
+  "version": "1.7.7",
+  "name": "Architext 1.7.7 Doctor Non-Interactive Guard",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Safety patch for `architext doctor`. The doctor repair confirmation defaulted to Yes and treated EOF on stdin as the default answer, so any non-interactive shell (agent session, CI, cron, piped stdin) silently consented to deterministic repairs that mutate tracked data files — observed writing docs/architext/data/releases/index.json from a headless session. Doctor now refuses to apply repairs when stdin is not a terminal unless --yes is passed explicitly: it reports that repairs are pending and points at --yes / --dry-run without writing anything. Inside the interactive prompt, EOF or a read error now declines instead of taking the default. Intentional behavior change: `echo y | architext doctor` no longer consents; scripts must use --yes.",
+  "targetDate": "2026-07-16",
+  "lastUpdated": "2026-07-16T08:35:00.000Z",
+  "updateSource": "Fix merged to develop via PR #254 (verify-rust green, 7m8s). Root-caused and reproduced RED on a fixture copy with a pending release-truth repair: `doctor </dev/null` printed the prompt and entered the apply path. After the fix, EOF stdin, piped y, and --dry-run all leave the tree untouched while --yes still applies. Consent parsing extracted to read_yes_no_answer with unit tests (EOF, explicit y/n, bare-Enter default); CLI suite 37/37, clippy clean. Release pending: GitHub release v1.7.7 with native binaries + SHA256SUMS not yet published.",
+  "scope": {
+    "required": [
+      {
+        "id": "doctor-non-interactive-guard",
+        "title": "doctor never auto-accepts its repair prompt in a non-interactive shell",
+        "kind": "bug-fix",
+        "summary": "Root cause: prompt_yes_no defaulted to Yes and read_line at EOF returned an empty answer that fell through to the default, making 'no terminal attached' indistinguishable from 'user pressed Enter to accept'. Fix in crates/architext-cli/src/commands/doctor.rs: (1) when stdin is not a TTY and --yes was not passed, doctor refuses to prompt at all — it reports repairs are pending and exits without writing, pointing at --yes / --dry-run; (2) EOF or a read error at the prompt declines instead of taking the default (a live TTY can still send Ctrl-D); (3) consent parsing extracted to read_yes_no_answer and unit-tested. Behavior change: piped stdin (echo y |) no longer consents — non-interactive callers must pass --yes.",
+        "evidence": [
+          "doctor-consent-unit-tests",
+          "doctor-four-mode-fixture-check",
+          "pr-254-verify-rust"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "cli-safety",
+        "dependsOn": []
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [
+      {
+        "id": "doctor-create-missing-release-index",
+        "title": "Apply side skips the advertised 'create missing Release Truth history index' repair",
+        "kind": "bug-fix",
+        "summary": "Discovered while verifying this fix: doctor's status side advertises a 'create missing Release Truth history index' repair when manifest.files.releases points at an absent index file, but repair_release_truth_data returns an empty change list in that case — so `doctor --yes` prints 'Applied doctor repairs:' with no entries and the file is never created. Deferred because it is a separate apply-side defect requiring its own index-regeneration logic and tests, independent of the consent guard shipped here; it does not weaken the guard and carries no data-loss risk (nothing is written). Queued as the first work item for a /swarm session.",
+        "evidence": [],
+        "status": "deferred",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "cli-safety",
+        "dependsOn": []
+      }
+    ],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "cli-safety",
+      "name": "CLI safety",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Make doctor's mutating repair path require explicit consent: TTY-or---yes gate plus EOF-declines prompt semantics.",
+      "progress": 100,
+      "itemIds": [
+        "doctor-non-interactive-guard"
+      ],
+      "evidence": [
+        "doctor-consent-unit-tests",
+        "doctor-four-mode-fixture-check",
+        "pr-254-verify-rust"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "doctor-consent-unit-tests",
+      "label": "read_yes_no_answer unit tests: EOF never consents, explicit y/n respected, bare Enter takes the default (cargo test -p architext-cli, 37/37)",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "doctor-four-mode-fixture-check",
+      "label": "Four-mode fixture verification on a data copy with a pending release-truth repair: EOF stdin, piped y, and --dry-run leave the tree untouched; --yes applies",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "pr-254-verify-rust",
+      "label": "PR #254 verify-rust CI green (7m8s) and merged to develop",
+      "kind": "build",
+      "status": "complete"
+    }
+  ]
+}
