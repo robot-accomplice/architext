@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-7-6",
+  "currentReleaseId": "v1-7-7",
   "releases": [
     {
       "id": "v1-1-2",
@@ -665,10 +665,11 @@
       "id": "v1-7-7",
       "version": "1.7.7",
       "name": "Architext 1.7.7 Doctor Non-Interactive Guard",
-      "status": "implementing",
-      "posture": "release-candidate",
+      "status": "completed",
+      "posture": "shipped",
       "targetDate": "2026-07-16",
-      "lastUpdated": "2026-07-16T08:35:00.000Z",
+      "releasedAt": "2026-07-16T08:52:04.000Z",
+      "lastUpdated": "2026-07-16T08:52:04.000Z",
       "summary": "Safety patch for `architext doctor`. The doctor repair confirmation defaulted to Yes and treated EOF on stdin as the default answer, so any non-interactive shell (agent session, CI, cron, piped stdin) silently consented to deterministic repairs that mutate tracked data files — observed writing docs/architext/data/releases/index.json from a headless session. Doctor now refuses to apply repairs when stdin is not a terminal unless --yes is passed explicitly: it reports that repairs are pending and points at --yes / --dry-run without writing anything. Inside the interactive prompt, EOF or a read error now declines instead of taking the default. Intentional behavior change: `echo y | architext doctor` no longer consents; scripts must use --yes.",
       "counts": {
         "features": 0,
