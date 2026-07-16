@@ -2,12 +2,12 @@
   "id": "v1-7-8",
   "version": "1.7.8",
   "name": "Architext 1.7.8 Doctor Recovery + Fail-Loud Repairs",
-  "status": "implementing",
-  "posture": "release-candidate",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Doctor's release-truth repair becomes trustworthy end to end. Enumeration is a union of index-named and dir-discovered detail files shared by status and apply (release_truth_repair_plan), so a detail file on disk but omitted from the index — the roboticus field incident — now yields the previously unreachable 'add <id> to Release Truth history' repair, and advertised repairs always match applied ones. Imperfect indexed details are recovered rather than gated, dropped, or written with null fields: originals are backed up under timestamped .bak names (never clobbered, all-or-nothing — any backup failure aborts every write), missing fields are backfilled from the index summary then explicit defaults, and each recovery is recorded in docs/architext/data/repair-advice.json, whose standing instruction makes reconciling backup vs recovered content the maintaining agent's responsibility (surfaced via status/doctor output and the synced instruction contract). Repairs are fail-loud: every repair category reports write failures per change (DoctorRepair gains additive status/error), doctor and sync print FAILED entries and exit nonzero, and a failed write is never reported as applied. The recovery machinery lives in the new domain::release_recovery module.",
   "targetDate": "2026-07-16",
-  "lastUpdated": "2026-07-16T17:30:00.000Z",
-  "updateSource": "All work merged to develop via swarm-reviewed PRs #259, #260, #261 (ten checkpoints, each QA+Audit reviewed with adversarial fixtures before advancing; one maintainer escalation E-1 resolved by directive: backup + best-effort unmarshal + normalized re-marshal + reconciliation advice). Core 157/157, CLI 38/38, serve suites green, clippy clean. E2E: 30-release fixture with planted stray JSON, data-root index, suffix-colliding detail names, read-only files — recovery, attribution, and abort semantics all verified against the built binary. Release pending: GitHub release v1.7.8 with binaries + SHA256SUMS not yet published.",
+  "lastUpdated": "2026-07-16T14:48:24.000Z",
+  "updateSource": "Shipped 2026-07-16: GitHub release v1.7.8 published 2026-07-16T14:48:24Z with all five native binaries + SHA256SUMS attached by publish.yml. Install path verified end to end: darwin-arm64 asset downloaded, SHA256 matched the manifest, binary reports 1.7.8. All scope merged via swarm-reviewed PRs #259/#260/#261 with ten reviewed checkpoints; core 157/157, cli 38/38, serve green, clippy clean.",
   "scope": {
     "required": [
       {
@@ -116,5 +116,6 @@
       "kind": "test",
       "status": "complete"
     }
-  ]
+  ],
+  "releasedAt": "2026-07-16T14:48:24.000Z"
 }
