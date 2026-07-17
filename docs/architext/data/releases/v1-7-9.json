@@ -1,0 +1,103 @@
+{
+  "id": "v1-7-9",
+  "version": "1.7.9",
+  "name": "Architext 1.7.9 Convergent Instruction-Rules Repairs",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Fixes the doctor phantom-repair loop field-reported by a consuming repository on 1.7.8: the instruction-rules category re-advertised and re-applied byte-identical AGENTS.md/CLAUDE.md rewrites on every run, forever. The migration plan now carries a convergence gate — a rewrite is planned only when it would actually change the written bytes (via a normalization helper shared with the writer, so gate and writer cannot drift) or when the file contributes a not-yet-migrated rule — converging doctor, sync, and the serve repair endpoint at one chokepoint. The pointer-section splice is idempotent (it previously ate the separator newline its own append branch inserts, so a freshly migrated file triggered one extra rewrite; both historical spacings are now fixed points, so no existing consumer file churns on upgrade). Repair attribution names the file actually written on both the advertised (doctor --json/status) and applied sides — rewrites no longer report as rules.json, the diagnostic blind spot that obscured the field investigation. First fix produced end to end under the code-rca skill: reproduced RED at CLI and function level, falsifiable fixed-point test, three distinct defects enumerated instead of one.",
+  "targetDate": "2026-07-16",
+  "lastUpdated": "2026-07-16T20:00:00.000Z",
+  "updateSource": "All scope merged to develop via swarm-reviewed PR #268 (checkpoints cp-11 + cp-12; QA adversarial-fixture rounds + Audit + verify passes, all findings resolved). Root cause established by a code-rca-gated RCA subagent from a roboticus-derived fixture (byte-verified phantom writes). GREEN: fixed-point/mid-line/heading-at-start/pointer-missing/repair-twice tests; core 162/162, cli 38/38, serve green, clippy clean; 3 consecutive CLI runs converge (runs 2-3 report zero repairs, tree byte-identical). Release pending: GitHub release v1.7.9 with binaries + SHA256SUMS not yet published. CEREMONY ON HOLD at the open release PR per maintainer directive (new-skill handover).",
+  "scope": {
+    "required": [
+      {
+        "id": "instruction-rules-convergence",
+        "title": "Instruction-rules repairs converge: no phantom re-advertise/re-apply",
+        "kind": "bug-fix",
+        "summary": "planned_instruction_rule_migration pushed rewriteFiles/ambiguousFiles unconditionally, so any already-migrated instruction file re-triggered the identical rewrite on every doctor/sync run (real but byte-identical writes reported as applied — field-hit on a consuming repo). The plan now gates each file on (rewrite would change the written bytes, using ensure_trailing_newline shared with the writer) OR (the file contributed a new candidate rule after dedup). Fixed-point regression tests pin convergence; a repair-twice-on-tempdir integration test pins the gate/writer normalization invariant end to end.",
+        "evidence": [
+          "swarm-pr-268",
+          "instruction-rules-regression-suite"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "doctor-trustworthiness",
+        "dependsOn": []
+      },
+      {
+        "id": "pointer-splice-idempotence",
+        "title": "Pointer-section splice is idempotent across both historical spacings",
+        "kind": "bug-fix",
+        "summary": "upsert_rule_pointer was not a fixed point of its own output: the managed-section splice consumed the separator newline the append branch inserts, so a freshly migrated file planned one more rewrite, and the separator re-supply initially keyed on heading position rather than the splice's own preceding-byte condition (review-caught: a heading substring matched mid-line would have gained a newline never present in the source). The splice now mirrors exactly its own consumption condition; both blank-line and no-blank-line historical spacings are fixed points, so no consumer file churns on upgrade. Module doc records the intentional divergence from the historical JS port (which had the same non-idempotence) so it is not 'fixed back'.",
+        "evidence": [
+          "swarm-pr-268",
+          "instruction-rules-regression-suite"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "doctor-trustworthiness",
+        "dependsOn": [
+          "instruction-rules-convergence"
+        ]
+      },
+      {
+        "id": "repair-file-attribution",
+        "title": "Repairs attribute to the file actually written, advertised and applied",
+        "kind": "bug-fix",
+        "summary": "Instruction-file rewrites were attributed to rules.json — a hardcoded per-category display path — on both the advertised list (doctor --json/status) and the applied list, hiding the true write target during the field investigation (a diagnostic blind spot repaired as part of the RCA per the code-rca contract). RepairOutcome carries the written path through apply, and the status side derives the path from the change itself; rewrites now report AGENTS.md/CLAUDE.md.",
+        "evidence": [
+          "swarm-pr-268",
+          "instruction-rules-regression-suite"
+        ],
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "doctor-trustworthiness",
+        "dependsOn": []
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "doctor-trustworthiness",
+      "name": "Doctor trustworthiness",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "on-track",
+      "summary": "Continues the 1.7.8 arc: every repair category converges (advertise → apply → silence) and reports honestly which file it touched.",
+      "progress": 100,
+      "itemIds": [
+        "instruction-rules-convergence",
+        "pointer-splice-idempotence",
+        "repair-file-attribution"
+      ],
+      "evidence": [
+        "swarm-pr-268",
+        "instruction-rules-regression-suite"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "swarm-pr-268",
+      "label": "PR #268 merged to develop (cp-11 + cp-12, swarm-reviewed, verify-rust green)",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "instruction-rules-regression-suite",
+      "label": "Convergence regression suite: fixed-point, mid-line heading, heading-at-start, pointer-missing guard, repair-twice-on-tempdir; 3-run CLI convergence byte-verified (cargo test -p architext-core --lib)",
+      "kind": "test",
+      "status": "complete"
+    }
+  ]
+}
