@@ -377,6 +377,36 @@
       "priority": "low",
       "section": "CLI Lifecycle Refactor",
       "dateAdded": "2026-06-22T00:00:00.000Z"
+    },
+    {
+      "id": "doctor-nonrepairable-findings",
+      "title": "Doctor surfaces non-repairable validation defects as first-class findings",
+      "kind": "feature",
+      "section": "CLI Lifecycle Refactor",
+      "status": "planned",
+      "priority": "medium",
+      "dateAdded": "2026-07-16T15:45:00.000Z",
+      "summary": "Field report (Roboticus Holistic Swarm, 2026-07-16, on 1.7.8): doctor printed repairs: 2 while the run failed on four release-data referential defects it does not touch — dangling workstreamId refs and completed-without-releasedAt only surfaced via the trailing validate output. Add a NON-REPAIRABLE FINDINGS section to doctor: defects doctor detects but deliberately will not auto-fix (a ship date is a historical fact; workstream resolution is a judgment call — fabricating either violates the recovery contract), each with a one-line why-not and what the maintainer must decide. Keeps the deterministic-repairs boundary intact while making doctor the one-stop health report."
+    },
+    {
+      "id": "doctor-index-rewrite-fail-closed-question",
+      "title": "Design question: should doctor refuse the index rewrite while release details fail validation?",
+      "kind": "architecture",
+      "section": "CLI Lifecycle Refactor",
+      "status": "planned",
+      "priority": "low",
+      "dateAdded": "2026-07-16T15:45:00.000Z",
+      "summary": "Raised by the Roboticus Holistic Swarm field report (2026-07-16). Initial position AGAINST fail-closed: index regeneration is a faithful projection, so regenerating from semantically-invalid details MIRRORS the invalidity (the same run flags it via validate) rather than corrupting; 1.7.8 backups + all-or-nothing make the write reversible, and fail-closed would block all index convergence mid-remediation. Flips only on evidence of a concrete scenario where the mirror-write is worse than refusing. Keep as an explicit open question rather than silently settled."
+    },
+    {
+      "id": "duplicate-release-id-conflict-surfacing",
+      "title": "Surface duplicate release-id collisions instead of silently unindexing the loser",
+      "kind": "bug-fix",
+      "section": "CLI Lifecycle Refactor",
+      "status": "planned",
+      "priority": "high",
+      "dateAdded": "2026-07-16T16:30:00.000Z",
+      "summary": "Field-review question from the Roboticus Holistic Swarm (2026-07-16), empirically CONFIRMED on 1.7.8: when two different detail files share a release id, release_truth_repair_plan dedup indexes the winner (index-named first, then sorted scan order) and silently skips the loser — the file survives on disk but is invisible to the index AND to validation (which enumerates detail files via the index). This is the one shape strictly worse than refusing the index rewrite: silent, and the same-run validate cannot see it. The dedup itself is correct (writing duplicate ids would be corruption); the gap is surfacing. Fix direction: a validation check for detail-shaped files on disk that are not referenced by the index (catches id-collision losers AND any other unindexed residue post-doctor), and/or a duplicate-id conflict entry in the planned doctor non-repairable-findings channel. Must not become an advertised repair string (nothing deterministic fixes it; it would re-advertise forever and break second-run stability)."
     }
   ]
 }
