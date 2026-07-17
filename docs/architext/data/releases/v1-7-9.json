@@ -2,12 +2,12 @@
   "id": "v1-7-9",
   "version": "1.7.9",
   "name": "Architext 1.7.9 Convergent Instruction-Rules Repairs",
-  "status": "implementing",
-  "posture": "release-candidate",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Fixes the doctor phantom-repair loop field-reported by a consuming repository on 1.7.8: the instruction-rules category re-advertised and re-applied byte-identical AGENTS.md/CLAUDE.md rewrites on every run, forever. The migration plan now carries a convergence gate — a rewrite is planned only when it would actually change the written bytes (via a normalization helper shared with the writer, so gate and writer cannot drift) or when the file contributes a not-yet-migrated rule — converging doctor, sync, and the serve repair endpoint at one chokepoint. The pointer-section splice is idempotent (it previously ate the separator newline its own append branch inserts, so a freshly migrated file triggered one extra rewrite; both historical spacings are now fixed points, so no existing consumer file churns on upgrade). Repair attribution names the file actually written on both the advertised (doctor --json/status) and applied sides — rewrites no longer report as rules.json, the diagnostic blind spot that obscured the field investigation. First fix produced end to end under the code-rca skill: reproduced RED at CLI and function level, falsifiable fixed-point test, three distinct defects enumerated instead of one.",
   "targetDate": "2026-07-16",
-  "lastUpdated": "2026-07-16T20:00:00.000Z",
-  "updateSource": "All scope merged to develop via swarm-reviewed PR #268 (checkpoints cp-11 + cp-12; QA adversarial-fixture rounds + Audit + verify passes, all findings resolved). Root cause established by a code-rca-gated RCA subagent from a roboticus-derived fixture (byte-verified phantom writes). GREEN: fixed-point/mid-line/heading-at-start/pointer-missing/repair-twice tests; core 162/162, cli 38/38, serve green, clippy clean; 3 consecutive CLI runs converge (runs 2-3 report zero repairs, tree byte-identical). Release pending: GitHub release v1.7.9 with binaries + SHA256SUMS not yet published. CEREMONY ON HOLD at the open release PR per maintainer directive (new-skill handover).",
+  "lastUpdated": "2026-07-17T10:23:03.000Z",
+  "updateSource": "Shipped 2026-07-17: GitHub release v1.7.9 published 2026-07-17T10:23:03Z with all five native binaries + SHA256SUMS attached by publish.yml. Install path verified end to end: darwin-arm64 asset downloaded, SHA256 matched the manifest, binary reports 1.7.9. Ceremony held at the open release PR per maintainer directive (code-rca skill handover), then completed on his go. All scope merged via swarm-reviewed PR #268 (cp-11+cp-12); core 162/162, cli 38/38, serve green, clippy clean; 3-run CLI convergence byte-verified.",
   "scope": {
     "required": [
       {
@@ -99,5 +99,6 @@
       "kind": "test",
       "status": "complete"
     }
-  ]
+  ],
+  "releasedAt": "2026-07-17T10:23:03.000Z"
 }
