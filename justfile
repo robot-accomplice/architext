@@ -17,6 +17,27 @@ release-check:
 release-doc-check:
     rg -n "semver-|currentVersion:|Release Truth|Rules|1\\.[0-9]+\\.[0-9]+" README.md viewer/README.md docs/architecture src || true
 
+# Run the FULL verify-rust CI job locally, same steps in the same order as
+# .github/workflows/ci.yml — the pre-merge gate without the push-and-wait.
+# Keep this recipe in lockstep with ci.yml when the workflow changes.
+# ~5-10 min warm cache. Fails fast on the first red step.
+ci-local:
+    @echo "[1/7] cargo test --workspace"
+    cargo test --workspace
+    @echo "[2/7] routing corpus fitness + perf ratchet"
+    cargo test -p architext-routing --test corpus_fitness
+    @echo "[3/7] clippy wasm viewer (-D warnings)"
+    cargo clippy -p architext-viewer --target wasm32-unknown-unknown -- -D warnings
+    @echo "[4/7] trunk build (release viewer)"
+    trunk build --release --config crates/architext-viewer/Trunk.toml
+    @echo "[5/7] architext validate ."
+    cargo run --quiet -p architext-cli -- validate .
+    @echo "[6/7] rust serve smoke"
+    bash scripts/rust-serve-smoke.sh
+    @echo "[7/7] bare-binary embedded serve smoke"
+    bash scripts/rust-serve-embedded-smoke.sh
+    @echo "ci-local GREEN — matches verify-rust"
+
 # Show the most recent CI runs for the repository.
 ci:
     gh run list --limit 10 --json databaseId,headSha,status,conclusion,workflowName,displayTitle,url,createdAt,event
