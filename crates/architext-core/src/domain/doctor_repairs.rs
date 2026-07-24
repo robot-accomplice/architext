@@ -27,7 +27,7 @@ use crate::domain::release_recovery::{
 use crate::domain::{c4_quality, instruction_rules, schema_migration};
 use crate::json_write::{read_json, write_json};
 
-pub const DATA_SCHEMA_VERSION: &str = "1.5.0";
+pub const DATA_SCHEMA_VERSION: &str = "1.6.0";
 
 /// A single repair action applied (extends the JS `{ category, file, summary }`
 /// shape with an additive `status`/`error`: a failed write must never be
