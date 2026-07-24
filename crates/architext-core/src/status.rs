@@ -333,6 +333,30 @@ fn collect_instruction_rule_status(target: &Path) -> Option<Value> {
     Some(instruction_rules::planned_instruction_rule_migration(&files, existing_rules))
 }
 
+// ─── collectCodeGraphStatus ───────────────────────────────────────────────────
+
+fn collect_code_graph_status(target: &Path) -> Option<Value> {
+    let manifest_path = data_dir(target).join("manifest.json");
+    if !manifest_path.exists() {
+        return None;
+    }
+    let manifest = read_json_file(&manifest_path)?;
+    let file_present = data_dir(target).join("code-graph.json").exists();
+    let configured = manifest["files"]["codeGraph"].is_string();
+    let repair_changes: Vec<Value> = if file_present && !configured {
+        vec![Value::String(
+            "register manifest.files.codeGraph for present code-graph.json".to_string(),
+        )]
+    } else {
+        vec![]
+    };
+    Some(json!({
+        "present": file_present,
+        "configured": configured,
+        "repairChanges": repair_changes
+    }))
+}
+
 // ─── doctorRepairsForStatus ───────────────────────────────────────────────────
 
 /// Port of `doctorRepairsForStatus(status)` from `doctor-repairs.mjs`.
@@ -388,6 +412,18 @@ fn doctor_repairs_for_status(status: &Value) -> Value {
                 "id": format!("instruction-rules:{s}"),
                 "category": "instruction-rules",
                 "file": file,
+                "summary": s
+            }));
+        }
+    }
+
+    // codeGraph
+    for change in status["codeGraph"]["repairChanges"].as_array().into_iter().flatten() {
+        if let Some(s) = change.as_str() {
+            repairs.push(json!({
+                "id": format!("code-graph:{s}"),
+                "category": "code-graph",
+                "file": "docs/architext/data/code-graph.json",
                 "summary": s
             }));
         }
@@ -450,6 +486,7 @@ pub fn collect_status(target: &Path, version: &str, run_validation: bool) -> Val
     let release_truth = if installed { collect_release_truth_status(target).unwrap_or(Value::Null) } else { Value::Null };
     let manifest_status = if installed { collect_manifest_status(target).unwrap_or(Value::Null) } else { Value::Null };
     let instruction_rules = if installed { collect_instruction_rule_status(target).unwrap_or(Value::Null) } else { Value::Null };
+    let code_graph = if installed { collect_code_graph_status(target).unwrap_or(Value::Null) } else { Value::Null };
 
     // gitignoreMissing
     let gitignore_text = read_text_file(&target.join(".gitignore"));
@@ -508,6 +545,7 @@ pub fn collect_status(target: &Path, version: &str, run_validation: bool) -> Val
         "instructionRules": instruction_rules,
         "c4": c4,
         "releaseTruth": release_truth,
+        "codeGraph": code_graph,
         "repairAdvice": repair_advice_status(&target_data_dir),
         "validation": validation
     });
