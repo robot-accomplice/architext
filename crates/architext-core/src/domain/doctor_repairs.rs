@@ -893,6 +893,48 @@ mod tests {
     }
 
     #[test]
+    fn repair_code_graph_registration_dry_run_does_not_write() {
+        // Mirrors repair_manifest_data_outdated_dry_run: dry_run must report the
+        // intended repair without touching the file on disk.
+        let dir = temp_dir();
+        let root = dir.path();
+        write(root, "docs/architext/data/manifest.json",
+            r#"{"schemaVersion":"1.6.0","project":{"id":"x","name":"X","summary":"s"},"generatedAt":"2026-01-01T00:00:00.000Z","defaultViewId":"v","files":{"nodes":"nodes.json"}}"#);
+        write(root, "docs/architext/data/code-graph.json",
+            r#"{"contract_version":"magma-code-graph/1","generator":"magma/0.2.0","language":"go","module":"m","sha":"a","tree":"clean","fidelity":"rta","computable":true,"functions":[],"calls":[],"modules":[],"module_calls":[]}"#);
+
+        let out = repair_code_graph_registration(root, true);
+        assert_eq!(out.len(), 1, "dry run must still report the intended repair; got {:?}", out);
+        assert!(out[0].error.is_none(), "repair errored: {:?}", out[0].error);
+
+        let manifest: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join("docs/architext/data/manifest.json")).unwrap()).unwrap();
+        assert!(
+            manifest["files"]["codeGraph"].is_null(),
+            "dry run must not write; manifest.files.codeGraph should still be absent, got: {manifest}"
+        );
+    }
+
+    #[test]
+    fn repair_code_graph_registration_idempotent_when_already_registered() {
+        // Once registered, a second run (e.g. a re-run of doctor/sync) must be a
+        // no-op — it must not re-report or re-write an already-configured key.
+        let dir = temp_dir();
+        let root = dir.path();
+        write(root, "docs/architext/data/manifest.json",
+            r#"{"schemaVersion":"1.6.0","project":{"id":"x","name":"X","summary":"s"},"generatedAt":"2026-01-01T00:00:00.000Z","defaultViewId":"v","files":{"nodes":"nodes.json","codeGraph":"code-graph.json"}}"#);
+        write(root, "docs/architext/data/code-graph.json",
+            r#"{"contract_version":"magma-code-graph/1","generator":"magma/0.2.0","language":"go","module":"m","sha":"a","tree":"clean","fidelity":"rta","computable":true,"functions":[],"calls":[],"modules":[],"module_calls":[]}"#);
+        let before = std::fs::read_to_string(root.join("docs/architext/data/manifest.json")).unwrap();
+
+        let out = repair_code_graph_registration(root, false);
+        assert!(out.is_empty(), "already-registered manifest must yield no repair; got {:?}", out);
+
+        let after = std::fs::read_to_string(root.join("docs/architext/data/manifest.json")).unwrap();
+        assert_eq!(before, after, "manifest must be byte-unchanged when already registered");
+    }
+
+    #[test]
     fn repair_c4_no_files() {
         let td = temp_dir();
         let changes = repair_c4_data(td.path(), false);
