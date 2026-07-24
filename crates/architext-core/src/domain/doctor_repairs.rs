@@ -438,10 +438,20 @@ fn write_starter_release_data(releases_dir: &Path) -> Option<String> {
 
 // ─── repairCodeGraphRegistration ──────────────────────────────────────────────
 
+/// Default filename for the optional code-graph document (relative to the
+/// data dir). Shared with `status.rs` so both sides of the status↔apply
+/// contract name the same file.
+pub const DEFAULT_CODE_GRAPH_FILE: &str = "code-graph.json";
+
+/// Summary text for the code-graph registration repair. Shared with
+/// `status.rs` so the status advertisement and the applied repair agree
+/// verbatim (see `code_graph_status_and_repair_summaries_agree` below).
+pub const CODE_GRAPH_REGISTER_SUMMARY: &str =
+    "register manifest.files.codeGraph for present code-graph.json";
+
 /// Register `manifest.files.codeGraph` when `code-graph.json` is present on disk
 /// but unlisted. Never creates or rewrites the code-graph file — Magma owns it.
 pub fn repair_code_graph_registration(target: &Path, dry_run: bool) -> Vec<RepairOutcome> {
-    const DEFAULT_CODE_GRAPH_FILE: &str = "code-graph.json";
     let dir = data_dir(target);
     let manifest_path = dir.join("manifest.json");
     let file_present = dir.join(DEFAULT_CODE_GRAPH_FILE).exists();
@@ -460,7 +470,7 @@ pub fn repair_code_graph_registration(target: &Path, dry_run: bool) -> Vec<Repai
         return vec![]; // nothing to register
     }
 
-    let summary = "register manifest.files.codeGraph for present code-graph.json".to_string();
+    let summary = CODE_GRAPH_REGISTER_SUMMARY.to_string();
     let mut error = None;
     if !dry_run {
         let mut new_manifest = manifest.clone();

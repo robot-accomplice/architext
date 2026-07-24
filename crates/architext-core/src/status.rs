@@ -18,7 +18,7 @@ use std::process::Command;
 use regex::Regex;
 use serde_json::{json, Map, Value};
 
-use crate::domain::doctor_repairs::DATA_SCHEMA_VERSION;
+use crate::domain::doctor_repairs::{CODE_GRAPH_REGISTER_SUMMARY, DATA_SCHEMA_VERSION, DEFAULT_CODE_GRAPH_FILE};
 use crate::domain::{c4_quality, instruction_rules, release_recovery, schema_migration};
 
 // ─── Constants (mirrors target-layout.mjs) ───────────────────────────────────
@@ -340,12 +340,10 @@ fn collect_code_graph_status(target: &Path) -> Option<Value> {
         return None;
     }
     let manifest = read_json_file(&manifest_path)?;
-    let file_present = data_dir(target).join("code-graph.json").exists();
+    let file_present = data_dir(target).join(DEFAULT_CODE_GRAPH_FILE).exists();
     let configured = manifest["files"]["codeGraph"].is_string();
     let repair_changes: Vec<Value> = if file_present && !configured {
-        vec![Value::String(
-            "register manifest.files.codeGraph for present code-graph.json".to_string(),
-        )]
+        vec![Value::String(CODE_GRAPH_REGISTER_SUMMARY.to_string())]
     } else {
         vec![]
     };
@@ -626,6 +624,34 @@ mod tests {
                 .map(|o| o.summary)
                 .collect();
         assert_eq!(advertised, applied, "status and apply must agree");
+    }
+
+    #[test]
+    fn code_graph_status_and_repair_summaries_agree() {
+        // The status side must advertise exactly what the apply side will do:
+        // a present code-graph.json with manifest.files.codeGraph unset yields
+        // the same registration summary on BOTH sides (they share
+        // doctor_repairs::CODE_GRAPH_REGISTER_SUMMARY). Guards against the two
+        // sides drifting if one is edited without the other.
+        let td = temp_dir();
+        let data_dir = td.path().join("docs/architext/data");
+        fs::create_dir_all(&data_dir).unwrap();
+        fs::write(
+            data_dir.join("manifest.json"),
+            r#"{ "schemaVersion": "1.6.0", "files": { "nodes": "nodes.json" } }"#,
+        )
+        .unwrap();
+        fs::write(data_dir.join("code-graph.json"), r#"{ "contract_version": "magma-code-graph/1" }"#)
+            .unwrap();
+
+        let status = collect_code_graph_status(td.path()).expect("status");
+        let advertised = status["repairChanges"][0].as_str().expect("advertised summary");
+
+        let applied = crate::domain::doctor_repairs::repair_code_graph_registration(td.path(), false);
+        let applied_summary = applied[0].summary.as_str();
+
+        assert_eq!(advertised, applied_summary, "status and apply must agree");
+        assert_eq!(advertised, CODE_GRAPH_REGISTER_SUMMARY);
     }
 
     #[test]

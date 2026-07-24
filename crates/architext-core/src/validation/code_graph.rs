@@ -10,9 +10,11 @@ use std::path::Path;
 
 use serde_json::Value;
 
-/// Contract id Architext consumes. Major is the leading integer segment.
+/// Contract id Architext consumes. This string encodes MAJOR only — minor/patch
+/// contract revisions do not change it — so an exact match against this
+/// constant IS the major gate, and it accepts higher-minor documents by
+/// construction. An unknown major is rejected loudly below.
 const CONTRACT_ID: &str = "magma-code-graph/1";
-const CONTRACT_MAJOR: &str = "magma-code-graph/1";
 
 /// Read a JSON file, pushing an error on failure. Returns None on failure.
 fn read_json(path: &Path, errors: &mut Vec<String>) -> Option<Value> {
@@ -24,12 +26,6 @@ fn read_json(path: &Path, errors: &mut Vec<String>) -> Option<Value> {
             None
         }
     }
-}
-
-/// The major token of a `name/MAJOR` contract version (everything up to and
-/// including the final `/MAJOR`, which for this contract encodes major only).
-fn contract_major(cv: &str) -> &str {
-    cv
 }
 
 /// Push an error for every duplicate `id` among `items`.
@@ -66,7 +62,7 @@ pub fn validate_code_graph(data_dir: &Path, errors: &mut Vec<String>) {
 
     // --- contract-version gating (single source of the version error) --------
     let cv = doc.get("contract_version").and_then(Value::as_str).unwrap_or("");
-    if contract_major(cv) != CONTRACT_MAJOR {
+    if cv != CONTRACT_ID {
         errors.push(format!(
             "code-graph contract_version \"{cv}\" is unsupported; this build consumes \"{CONTRACT_ID}\""
         ));
