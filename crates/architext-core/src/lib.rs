@@ -82,6 +82,13 @@ mod tests {
             .join(name)
     }
 
+    fn repo_data_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent().unwrap()
+            .parent().unwrap()
+            .join("docs").join("architext").join("data")
+    }
+
     /// RED → GREEN: invalid-schema-missing-field must be rejected.
     /// The nodes.json in this fixture is missing the required `type` field.
     #[test]
@@ -238,5 +245,12 @@ mod tests {
                 e == "code-graph module_call.to references unknown module id \"m-ghost\""),
             "expected dangling module_call error; got: {:?}", outcome.errors
         );
+    }
+
+    #[test]
+    fn code_graph_absent_passes() {
+        // The self-hosted data dir has no code-graph.json; validate must pass.
+        let outcome = validate_data_dir(&repo_data_dir(), &schema_dir());
+        assert!(outcome.ok, "absent code-graph must pass; errors: {:?}", outcome.errors);
     }
 }
