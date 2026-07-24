@@ -207,4 +207,36 @@ mod tests {
             "expected version error; got: {:?}", outcome.errors
         );
     }
+
+    #[test]
+    fn code_graph_duplicate_function_id_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-duplicate-function-id"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e| e == "code-graph functions contains duplicate id \"m-add\""),
+            "expected duplicate-function-id error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn code_graph_dangling_module_function_id_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-dangling-module-function-id"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "code-graph module m.function_ids references unknown function id \"m-ghost\""),
+            "expected dangling module.function_ids error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn code_graph_dangling_module_call_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-dangling-module-call"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "code-graph module_call.to references unknown module id \"m-ghost\""),
+            "expected dangling module_call error; got: {:?}", outcome.errors
+        );
+    }
 }
