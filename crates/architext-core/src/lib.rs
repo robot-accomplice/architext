@@ -167,4 +167,16 @@ mod tests {
         let outcome = validate_data_dir(&data_dir, &schema_dir());
         assert!(outcome.ok, "expected acceptance; errors: {:?}", outcome.errors);
     }
+
+    #[test]
+    fn valid_code_graph_passes() {
+        let outcome = validate_data_dir(&fixture("valid-code-graph"), &schema_dir());
+        assert!(outcome.ok, "expected pass; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn code_graph_digit_leading_id_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-bad-id"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+    }
 }
