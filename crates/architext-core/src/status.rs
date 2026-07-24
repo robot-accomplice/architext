@@ -18,11 +18,10 @@ use std::process::Command;
 use regex::Regex;
 use serde_json::{json, Map, Value};
 
+use crate::domain::doctor_repairs::DATA_SCHEMA_VERSION;
 use crate::domain::{c4_quality, instruction_rules, release_recovery, schema_migration};
 
 // ─── Constants (mirrors target-layout.mjs) ───────────────────────────────────
-
-const DATA_SCHEMA_VERSION: &str = "1.5.0";
 
 const INSTRUCTION_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md"];
 const GENERATED_IGNORES: &[&str] = &["docs/architext/dist/", "docs/architext/.architext-write.lock/"];
@@ -627,6 +626,32 @@ mod tests {
                 .map(|o| o.summary)
                 .collect();
         assert_eq!(advertised, applied, "status and apply must agree");
+    }
+
+    #[test]
+    fn expected_schema_version_matches_doctor_repairs_canonical_const() {
+        // status.rs and doctor_repairs.rs must agree on the expected schema
+        // version — they used to diverge (status.rs had a private 1.5.0 copy
+        // while doctor_repairs.rs's pub const moved to 1.6.0), which made
+        // `architext status`/`doctor` compute an inconsistent migration plan.
+        // status.rs now imports the single canonical constant, so a manifest
+        // already on DATA_SCHEMA_VERSION must report itself up to date.
+        let td = temp_dir();
+        let manifest = format!(
+            r#"{{ "schemaVersion": "{DATA_SCHEMA_VERSION}", "files": {{ "releases": "releases/index.json" }} }}"#
+        );
+        let manifest_dir = td.path().join("docs/architext/data");
+        fs::create_dir_all(&manifest_dir).unwrap();
+        fs::write(manifest_dir.join("manifest.json"), manifest).unwrap();
+
+        let status = collect_status(td.path(), "0.0.0", false);
+        assert_eq!(status["manifest"]["expectedSchemaVersion"], DATA_SCHEMA_VERSION);
+        assert_eq!(status["manifest"]["schemaVersion"], DATA_SCHEMA_VERSION);
+        assert_eq!(
+            status["manifest"]["migrationPlan"]["pending"].as_array().map(|a| a.len()),
+            Some(0),
+            "manifest already at DATA_SCHEMA_VERSION must have no pending schema migration"
+        );
     }
 
     #[test]
