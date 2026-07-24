@@ -25,6 +25,7 @@ pub fn validate_data_dir(data_dir: &Path, schema_dir: &Path) -> ValidationOutcom
     let mut errors = Vec::new();
     validation::schema::validate_schema(data_dir, schema_dir, &mut errors);
     validation::references::validate_references(data_dir, &mut errors);
+    validation::code_graph::validate_code_graph(data_dir, &mut errors);
 
     // Load manifest to check for optional releases/roadmap sections.
     let manifest = read_manifest(data_dir);
@@ -178,5 +179,32 @@ mod tests {
     fn code_graph_digit_leading_id_is_rejected() {
         let outcome = validate_data_dir(&fixture("invalid-code-graph-bad-id"), &schema_dir());
         assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn code_graph_dangling_call_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-dangling-call"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "code-graph call.to references unknown function id \"m-nonexistent\""),
+            "expected dangling-call error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn code_graph_refusal_is_valid() {
+        let outcome = validate_data_dir(&fixture("valid-code-graph-refusal"), &schema_dir());
+        assert!(outcome.ok, "refusal must be valid; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn code_graph_unknown_major_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-bad-major"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e| e.contains("contract_version") && e.contains("unsupported")),
+            "expected version error; got: {:?}", outcome.errors
+        );
     }
 }
