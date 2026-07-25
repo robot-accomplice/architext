@@ -2841,3 +2841,28 @@ button.blast-chip { cursor: pointer; }
     -webkit-print-color-adjust: exact;
   }
 }
+
+/* ─── Code Graph mode ──────────────────────────────────────────────────── */
+.code-graph { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+
+.code-graph__empty,
+.code-graph__pending {
+  margin: auto;
+  max-width: 44ch;
+  padding: calc(var(--pad) * 2);
+  text-align: center;
+  color: var(--dim);
+}
+.code-graph__empty-title { margin: 0 0 8px; font-size: 1rem; color: var(--ink); }
+.code-graph__empty-body { margin: 0 0 12px; line-height: 1.5; }
+.code-graph__empty-cmd {
+  margin: 0 0 12px;
+  padding: 8px 10px;
+  overflow-x: auto;
+  text-align: left;
+  border-radius: 6px;
+  background: var(--panel-2);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+}
+.code-graph__empty-note { margin: 0; font-size: 0.82rem; opacity: 0.8; }

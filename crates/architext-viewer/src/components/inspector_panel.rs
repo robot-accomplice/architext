@@ -254,6 +254,17 @@ pub fn InspectorPanel() -> impl IntoView {
                 let summary_card = match mode {
                     Mode::Rules => Some(("Rules", data.rules.len(),
                         data.rules.first().map(|r| r.title.clone()))),
+                    Mode::CodeGraph => Some((
+                        "Code graph",
+                        data.code_graph.as_ref()
+                            .and_then(|r| r.as_ref().ok())
+                            .and_then(|cg| cg.modules.as_ref())
+                            .map(|m| m.len())
+                            .unwrap_or(0),
+                        data.code_graph.as_ref()
+                            .and_then(|r| r.as_ref().ok())
+                            .map(|cg| cg.module.clone()),
+                    )),
                     Mode::ReleaseTruth => Some(("Releases", data.release_index.as_ref()
                         .map(|r| r.releases.len()).unwrap_or(0),
                         data.release_index.as_ref()
