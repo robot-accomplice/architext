@@ -28,10 +28,10 @@
       "category": "technical",
       "severity": "medium",
       "status": "open",
-      "summary": "Target data created by an older CLI may fail validation under a newer package-owned schema.",
-      "mitigations": ["Report CLI and metadata versions in doctor", "Keep data migrations explicit and dry-runnable", "Do not rewrite architecture facts silently"],
-      "relatedNodes": ["schema-validator", "package-schemas", "target-data-files"],
-      "relatedFlows": ["architecture-maintenance", "copied-install-migration"]
+      "summary": "Target data created by an older CLI may fail validation under a newer package-owned schema. Separately, Magma's code-graph.json carries its own contract_version (magma-code-graph/1); a contract major the installed CLI does not yet recognize also fails validation.",
+      "mitigations": ["Report CLI and metadata versions in doctor", "Keep data migrations explicit and dry-runnable", "Do not rewrite architecture facts silently", "Reject an unknown code-graph contract major before checking document shape (validation/code_graph.rs)"],
+      "relatedNodes": ["schema-validator", "package-schemas", "target-data-files", "magma"],
+      "relatedFlows": ["architecture-maintenance", "copied-install-migration", "code-graph-ingestion"]
     },
     {
       "id": "package-runtime-drift",
