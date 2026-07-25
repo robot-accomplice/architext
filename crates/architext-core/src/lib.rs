@@ -199,10 +199,37 @@ mod tests {
         );
     }
 
+    /// A refusal must validate, and the fixture is a VERBATIM real refusal
+    /// emitted by magma (pointed at a Rust repo) — not a hand-authored guess.
+    ///
+    /// WHY that matters: the hand-authored fixture this replaced carried
+    /// `"fidelity": "rta"`, which is nonsense for a document where nothing was
+    /// analysed. Real output emits `""`, and the schema's `minLength: 1` on
+    /// `fidelity` rejected it — a defect no invented fixture could surface.
+    /// `fidelity`/`module` are legitimately empty in a refusal, so the envelope
+    /// must not require content in them. Do not re-add a minimum length.
     #[test]
     fn code_graph_refusal_is_valid() {
         let outcome = validate_data_dir(&fixture("valid-code-graph-refusal"), &schema_dir());
         assert!(outcome.ok, "refusal must be valid; errors: {:?}", outcome.errors);
+    }
+
+    /// Guards the specific field that broke on real output: an empty
+    /// `fidelity` must be accepted, independently of the rest of the fixture.
+    #[test]
+    fn code_graph_accepts_empty_fidelity_in_a_refusal() {
+        let doc = std::fs::read_to_string(
+            fixture("valid-code-graph-refusal").join("code-graph.json"),
+        )
+        .expect("refusal fixture readable");
+        let parsed: serde_json::Value = serde_json::from_str(&doc).expect("fixture is JSON");
+        assert_eq!(
+            parsed["fidelity"], "",
+            "the refusal fixture must keep an EMPTY fidelity — that is the real \
+             producer shape this test exists to guard",
+        );
+        let outcome = validate_data_dir(&fixture("valid-code-graph-refusal"), &schema_dir());
+        assert!(outcome.ok, "empty fidelity must validate; errors: {:?}", outcome.errors);
     }
 
     #[test]

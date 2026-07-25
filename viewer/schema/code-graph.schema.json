@@ -14,7 +14,7 @@
     "module": { "type": "string" },
     "sha": { "type": "string" },
     "tree": { "type": "string", "enum": ["clean", "dirty"] },
-    "fidelity": { "type": "string", "minLength": 1 },
+    "fidelity": { "type": "string" },
     "computable": { "type": "boolean" },
     "not_computable_reason": { "type": "string" },
     "functions": { "type": ["array", "null"], "items": { "$ref": "#/$defs/function" } },
