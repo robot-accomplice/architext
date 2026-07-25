@@ -57,8 +57,7 @@ pub fn CodeGraphSvg(
                 <marker id=DYNAMIC_ARROW_ID viewBox="0 0 10 10" refX="9" refY="5"
                     markerWidth="8" markerHeight="8" markerUnits="userSpaceOnUse"
                     orient="auto-start-reverse">
-                    <path d="M 0 0 L 10 5 L 0 10" class="cg-arrowhead cg-arrowhead--dynamic"
-                        fill="none"></path>
+                    <path d="M 0 0 L 10 5 L 0 10" class="cg-arrowhead cg-arrowhead--dynamic"></path>
                 </marker>
             </defs>
             <g class="code-graph-svg__transform" transform=transform>

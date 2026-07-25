@@ -9,9 +9,53 @@
 //! direction and reachability readable. There is deliberately no crossing
 //! minimisation — legibility here comes from layering and from bounding the node
 //! count per tier (modules first, one module's functions on drill-down).
-use std::collections::{BTreeMap, HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
 use crate::data::models::{CodeGraph, CodeGraphFunction, CodeGraphSignature};
+
+/// SVG node-card text metrics (mirrors `wrap_name` in `diagram/node.rs`): pure
+/// string math against the card width, no DOM measurement. `LABEL_PAD_X`
+/// matches the `x="10"` offset both `<text>` elements use in
+/// `components::code_graph_svg`; the char-width constants are tuned to the
+/// label's 13px and sublabel's 10px font sizes (`.cg-node__label` /
+/// `.cg-node__sublabel` in styles.css) so a repo-relative Go `file:line`
+/// path — the NORMAL case on the function tier — truncates instead of
+/// spilling across the 190px card border.
+const LABEL_PAD_X: f64 = 10.0;
+const LABEL_CHAR_W: f64 = 13.0 * 0.55;
+const SUBLABEL_CHAR_W: f64 = 10.0 * 0.5;
+
+/// Max characters that fit `node_w` at the given per-character advance.
+fn max_chars(node_w: f64, char_w: f64) -> usize {
+    (((node_w - 2.0 * LABEL_PAD_X) / char_w).floor() as usize).max(1)
+}
+
+/// Ellipsis-truncate `s` to at most `cap` characters (char count, not bytes —
+/// same convention as `wrap_name`). Strings within the cap pass through
+/// untouched.
+fn truncate_ellipsis(s: &str, cap: usize) -> String {
+    if s.chars().count() <= cap {
+        return s.to_string();
+    }
+    let keep = cap.saturating_sub(1).max(1);
+    let mut out: String = s.chars().take(keep).collect();
+    out.push('…');
+    out
+}
+
+/// Ids from `all_ids` that never appear as the `to` side of `pairs` — the
+/// edge-derived root fallback shared by both tiers when no declared root
+/// exists (module `fan_in == 0` / function `root`). A module or function can
+/// carry `fan_in > 0` from calls elsewhere in the repo while still having no
+/// caller WITHIN this subgraph; without this, `roots` comes up empty and
+/// `assign_layers` collapses every id into one layer.
+fn ids_not_called<'a>(
+    all_ids: impl Iterator<Item = &'a str>,
+    pairs: &[(String, String)],
+) -> Vec<String> {
+    let called: HashSet<&str> = pairs.iter().map(|(_, to)| to.as_str()).collect();
+    all_ids.filter(|id| !called.contains(id)).map(|s| s.to_string()).collect()
+}
 
 /// Resolved layout dimensions. Mirrors `SequenceConfig`'s role.
 #[derive(Debug, Clone, PartialEq)]
@@ -259,8 +303,17 @@ pub fn build_module_layout(cg: &CodeGraph, cfg: &GraphConfig) -> GraphLayout {
     let pairs: Vec<(String, String)> =
         calls.iter().map(|c| (c.from.clone(), c.to.clone())).collect();
     // Roots: modules nothing calls into (fan_in is the module-graph degree).
-    let roots: Vec<String> =
+    let mut roots: Vec<String> =
         modules.iter().filter(|m| m.fan_in == 0).map(|m| m.id.clone()).collect();
+    if roots.is_empty() {
+        // A pure inter-module cycle can leave fan_in > 0 for every module —
+        // fall back to the edges actually seen here (mirrors the function
+        // tier below) instead of silently collapsing every module into one
+        // layer. If that ALSO comes up empty (a true full cycle), `roots`
+        // stays empty and `assign_layers`'s trailing-layer catch-all still
+        // places every node — just in one undifferentiated column.
+        roots = ids_not_called(modules.iter().map(|m| m.id.as_str()), &pairs);
+    }
 
     let layer = assign_layers(&ids, &roots, &pairs);
     let (pos, content_width, content_height) = place(&ids, &layer, cfg);
@@ -271,10 +324,13 @@ pub fn build_module_layout(cg: &CodeGraph, cfg: &GraphConfig) -> GraphLayout {
             let (x, y) = *pos.get(&m.id)?;
             Some(GraphNode {
                 id: m.id.clone(),
-                label: m.pkg.clone(),
-                sublabel: format!(
-                    "{} fn · {} dead · {} test-only",
-                    m.counts.functions, m.counts.dead, m.counts.test_only
+                label: truncate_ellipsis(&m.pkg, max_chars(cfg.node_w, LABEL_CHAR_W)),
+                sublabel: truncate_ellipsis(
+                    &format!(
+                        "{} fn · {} dead · {} test-only",
+                        m.counts.functions, m.counts.dead, m.counts.test_only
+                    ),
+                    max_chars(cfg.node_w, SUBLABEL_CHAR_W),
                 ),
                 x,
                 y,
@@ -316,14 +372,17 @@ pub fn build_function_layout(cg: &CodeGraph, module_id: &str, cfg: &GraphConfig)
         return GraphLayout::default();
     };
 
-    let members: Vec<&CodeGraphFunction> = functions
-        .iter()
-        .filter(|f| module.function_ids.iter().any(|id| id == &f.id))
-        .collect();
+    // Set lookups, not per-function/per-call linear scans: Magma targets Go
+    // repos where 10k functions / 40k calls is ordinary, re-evaluated on every
+    // `state.data` tick (SSE reload), not just on drill.
+    let member_ids: HashSet<&str> = module.function_ids.iter().map(|id| id.as_str()).collect();
+    let members: Vec<&CodeGraphFunction> =
+        functions.iter().filter(|f| member_ids.contains(f.id.as_str())).collect();
     if members.is_empty() {
         return GraphLayout::default();
     }
     let ids: Vec<String> = members.iter().map(|f| f.id.clone()).collect();
+    let ids_set: HashSet<&str> = ids.iter().map(|s| s.as_str()).collect();
 
     let empty = Vec::new();
     let inner: Vec<&crate::data::models::CodeGraphCall> = cg
@@ -331,7 +390,7 @@ pub fn build_function_layout(cg: &CodeGraph, module_id: &str, cfg: &GraphConfig)
         .as_ref()
         .unwrap_or(&empty)
         .iter()
-        .filter(|c| ids.iter().any(|i| i == &c.from) && ids.iter().any(|i| i == &c.to))
+        .filter(|c| ids_set.contains(c.from.as_str()) && ids_set.contains(c.to.as_str()))
         .collect();
     let pairs: Vec<(String, String)> =
         inner.iter().map(|c| (c.from.clone(), c.to.clone())).collect();
@@ -340,11 +399,7 @@ pub fn build_function_layout(cg: &CodeGraph, module_id: &str, cfg: &GraphConfig)
     let mut roots: Vec<String> =
         members.iter().filter(|f| f.root).map(|f| f.id.clone()).collect();
     if roots.is_empty() {
-        roots = members
-            .iter()
-            .filter(|f| !pairs.iter().any(|(_, to)| to == &f.id))
-            .map(|f| f.id.clone())
-            .collect();
+        roots = ids_not_called(members.iter().map(|f| f.id.as_str()), &pairs);
     }
 
     let layer = assign_layers(&ids, &roots, &pairs);
@@ -356,8 +411,11 @@ pub fn build_function_layout(cg: &CodeGraph, module_id: &str, cfg: &GraphConfig)
             let (x, y) = *pos.get(&f.id)?;
             Some(GraphNode {
                 id: f.id.clone(),
-                label: f.symbol.clone(),
-                sublabel: format!("{}:{}", f.file, f.line),
+                label: truncate_ellipsis(&f.symbol, max_chars(cfg.node_w, LABEL_CHAR_W)),
+                sublabel: truncate_ellipsis(
+                    &format!("{}:{}", f.file, f.line),
+                    max_chars(cfg.node_w, SUBLABEL_CHAR_W),
+                ),
                 x,
                 y,
                 w: cfg.node_w,
@@ -540,6 +598,56 @@ mod tests {
         let layout = build_module_layout(&cg, &GraphConfig::default());
         assert_eq!(layout.nodes.len(), 2, "both cycle members must be placed");
         assert_eq!(layout.edges.len(), 2);
+        // WHY: the old assertions (len only) CANNOT fail when layering breaks
+        // — a total collapse still has 2 nodes and 2 edges. A true 2-node
+        // cycle has no callee-free module even under the edge-derived
+        // fallback, so both correctly land in the same layer/column; assert
+        // that explicitly, plus that they still get distinct rows rather
+        // than literally overlapping.
+        let x = layout.nodes.iter().find(|n| n.id == "x").expect("module x");
+        let y = layout.nodes.iter().find(|n| n.id == "y").expect("module y");
+        assert_eq!(x.x, y.x, "a true full cycle has no ordering — one column");
+        assert_ne!(x.y, y.y, "same-layer members must still get distinct rows");
+    }
+
+    #[test]
+    fn module_root_fallback_uses_edges_when_fan_in_is_never_zero() {
+        // WHY: a real Magma graph can have fan_in > 0 for every module (an
+        // inter-module cycle elsewhere in the repo) while THIS subgraph
+        // (a -> b -> c) has a clear caller order. Before the fix, `roots`
+        // (filtered on fan_in == 0) came up empty and EVERY module collapsed
+        // into layer 0 — the silent layering collapse from the review. This
+        // must go RED without the edge-derived fallback and GREEN with it.
+        let cg: CodeGraph = serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1",
+            "generator": "g", "language": "go", "module": "m",
+            "sha": "s", "tree": "clean", "fidelity": "rta", "computable": true,
+            "functions": [], "calls": [],
+            "modules": [
+                {"id": "a", "pkg": "a", "function_ids": [],
+                 "counts": {"functions": 0, "dead": 0, "test_only": 0}, "fan_in": 1, "fan_out": 1},
+                {"id": "b", "pkg": "b", "function_ids": [],
+                 "counts": {"functions": 0, "dead": 0, "test_only": 0}, "fan_in": 1, "fan_out": 1},
+                {"id": "c", "pkg": "c", "function_ids": [],
+                 "counts": {"functions": 0, "dead": 0, "test_only": 0}, "fan_in": 1, "fan_out": 0}
+            ],
+            "module_calls": [
+                {"from": "a", "to": "b", "count": 1, "has_dynamic": false},
+                {"from": "b", "to": "c", "count": 1, "has_dynamic": false}
+            ]
+        })).expect("fixture parses");
+
+        let layout = build_module_layout(&cg, &GraphConfig::default());
+        let a = layout.nodes.iter().find(|n| n.id == "a").expect("module a");
+        let b = layout.nodes.iter().find(|n| n.id == "b").expect("module b");
+        let c = layout.nodes.iter().find(|n| n.id == "c").expect("module c");
+        assert!(
+            a.x < b.x && b.x < c.x,
+            "edge-derived root fallback must still layer callers left of callees: {} {} {}",
+            a.x,
+            b.x,
+            c.x
+        );
     }
 
     #[test]
@@ -632,6 +740,53 @@ mod tests {
             "params": [], "results": [{"type": "error"}]
         })).unwrap();
         assert_eq!(format_signature(&one), "() error");
+    }
+
+    #[test]
+    fn long_function_sublabel_is_ellipsis_truncated() {
+        // WHY: repo-relative Go paths (`file:line`) are the NORMAL case on
+        // the function tier and routinely overflow the 190px node card at
+        // 10px font — this is the review's IMPORTANT #1 (label spill across
+        // the card border), fixed in the model so it stays unit-testable.
+        let cg: CodeGraph = serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1",
+            "generator": "g", "language": "go", "module": "m",
+            "sha": "s", "tree": "clean", "fidelity": "rta", "computable": true,
+            "functions": [
+                {"id": "p-long", "symbol": "Handle", "pkg": "p",
+                 "file": "internal/service/reconciliation/orchestrator/handler.go", "line": 482,
+                 "kind": "func", "exported": true, "test": false, "root": true,
+                 "generated": false, "reachable": true, "prod_reachable": true,
+                 "signature": {"params": [], "results": []}, "fan_in": 0, "fan_out": 0},
+                {"id": "p-short", "symbol": "Run", "pkg": "p", "file": "p.go", "line": 3,
+                 "kind": "func", "exported": true, "test": false, "root": true,
+                 "generated": false, "reachable": true, "prod_reachable": true,
+                 "signature": {"params": [], "results": []}, "fan_in": 0, "fan_out": 0}
+            ],
+            "calls": [],
+            "modules": [
+                {"id": "p", "pkg": "p", "function_ids": ["p-long", "p-short"],
+                 "counts": {"functions": 2, "dead": 0, "test_only": 0}, "fan_in": 0, "fan_out": 0}
+            ],
+            "module_calls": []
+        })).expect("fixture parses");
+
+        let layout = build_function_layout(&cg, "p", &GraphConfig::default());
+        let long = layout.nodes.iter().find(|n| n.id == "p-long").expect("p-long");
+        let short = layout.nodes.iter().find(|n| n.id == "p-short").expect("p-short");
+
+        let raw_long = "internal/service/reconciliation/orchestrator/handler.go:482";
+        assert!(
+            long.sublabel.ends_with('…'),
+            "long path must be ellipsis-truncated, got {:?}",
+            long.sublabel
+        );
+        assert!(
+            long.sublabel.chars().count() < raw_long.chars().count(),
+            "truncated sublabel must actually be shorter: {:?}",
+            long.sublabel
+        );
+        assert_eq!(short.sublabel, "p.go:3", "short path must pass through untouched");
     }
 
     #[test]

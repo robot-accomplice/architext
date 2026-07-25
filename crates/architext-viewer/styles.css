@@ -2858,8 +2858,7 @@ button.blast-chip { cursor: pointer; }
 /* ─── Code Graph mode ──────────────────────────────────────────────────── */
 .code-graph { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 
-.code-graph__empty,
-.code-graph__pending {
+.code-graph__empty {
   margin: auto;
   max-width: 44ch;
   padding: calc(var(--pad) * 2);
@@ -2894,8 +2893,10 @@ button.blast-chip { cursor: pointer; }
    of closing into the same solid triangle as the static marker. */
 .cg-arrowhead--dynamic { fill: none; stroke: var(--edge); stroke-width: 1.5; }
 
-.cg-node { cursor: default; }
-.cg-node--drillable { cursor: pointer; }
+/* Every card is clickable — module tier drills, function tier selects — so
+   both get the pointer cursor (mirrors `.flow-node`'s blanket rule); there is
+   no separate `--drillable` cursor to keep the fine tier from looking inert. */
+.cg-node { cursor: pointer; }
 .cg-node__card {
   fill: var(--panel-2);
   stroke: var(--line);

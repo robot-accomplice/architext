@@ -63,11 +63,14 @@ pub fn CodeGraphPanel() -> impl IntoView {
     // mouseleave also ends the drag — otherwise it "sticks" when the pointer
     // exits the viewport mid-drag (same reason canvas_panel.rs does this).
     let end_drag = move |_: ev::MouseEvent| dragging.set(false);
-    let reset_view = move |_| {
+    // Shared by the reset button, the "Modules" crumb, and drilling into a
+    // module — each of those reframes the view for a new tier/level.
+    let reset_pan_zoom = move || {
         pan_x.set(0.0);
         pan_y.set(0.0);
         zoom.set(1.0);
     };
+    let reset_view = move |_| reset_pan_zoom();
 
     view! {
         <div class="code-graph">
@@ -134,9 +137,7 @@ pub fn CodeGraphPanel() -> impl IntoView {
                                     on:click=move |_| {
                                         drill.set(None);
                                         selected.set(None);
-                                        pan_x.set(0.0);
-                                        pan_y.set(0.0);
-                                        zoom.set(1.0);
+                                        reset_pan_zoom();
                                     }
                                 >
                                     "Modules"
@@ -179,9 +180,7 @@ pub fn CodeGraphPanel() -> impl IntoView {
                                                     // reset the view so the new tier is framed.
                                                     drill.set(Some(id));
                                                     selected.set(None);
-                                                    pan_x.set(0.0);
-                                                    pan_y.set(0.0);
-                                                    zoom.set(1.0);
+                                                    reset_pan_zoom();
                                                 } else {
                                                     selected.set(Some(id));
                                                 }
@@ -198,10 +197,17 @@ pub fn CodeGraphPanel() -> impl IntoView {
                             <div class="cg-detail">
                                 {move || {
                                     let Some(id) = selected.get() else {
+                                        // Module tier: clicking a node DRILLS rather than
+                                        // selects, so there is never a module selection to
+                                        // show detail for — say so instead of the generic
+                                        // function-tier hint.
+                                        let hint = if drill.get().is_none() {
+                                            "Click a module to drill into its functions."
+                                        } else {
+                                            "Select a node to see its detail."
+                                        };
                                         return view! {
-                                            <p class="cg-detail__hint">
-                                                "Select a node to see its detail."
-                                            </p>
+                                            <p class="cg-detail__hint">{hint}</p>
                                         }.into_view();
                                     };
                                     let data = state.data.get();
@@ -211,9 +217,16 @@ pub fn CodeGraphPanel() -> impl IntoView {
                                     let Some(f) = cg.functions.as_ref()
                                         .and_then(|fs| fs.iter().find(|f| f.id == id))
                                     else {
-                                        // Module tier: no per-function detail.
+                                        // Module-tier selection is impossible (clicking a
+                                        // module drills, it never sets `selected`), so this
+                                        // is reachable only when an SSE data reload swaps in
+                                        // a new graph while `selected` still holds a function
+                                        // id absent from it. Say so plainly rather than
+                                        // printing the bare opaque id.
                                         return view! {
-                                            <p class="cg-detail__hint">{id}</p>
+                                            <p class="cg-detail__hint">
+                                                {format!("Function \"{id}\" is no longer in the code graph.")}
+                                            </p>
                                         }.into_view();
                                     };
                                     let badges = reach_badges(f);
