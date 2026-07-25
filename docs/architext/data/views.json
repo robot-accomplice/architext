@@ -9,7 +9,8 @@
         { "id": "users", "name": "Users", "nodeIds": ["maintainer", "llm-agent"] },
         { "id": "cli", "name": "CLI", "nodeIds": ["architext-cli", "cli-adapters", "lifecycle-domain", "architecture-model-domain", "schema-validator"] },
         { "id": "package", "name": "Package", "nodeIds": ["serve-server", "viewer-runtime", "viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine", "package-schemas", "package-artifacts"] },
-        { "id": "target", "name": "Target Repository", "nodeIds": ["target-repository", "target-data-files", "static-dist"] }
+        { "id": "target", "name": "Target Repository", "nodeIds": ["target-repository", "target-data-files", "static-dist"] },
+        { "id": "external", "name": "External Producers", "nodeIds": ["magma"] }
       ]
     },
     {
@@ -20,7 +21,8 @@
       "lanes": [
         { "id": "actors", "name": "Actors", "nodeIds": ["maintainer", "llm-agent"] },
         { "id": "package-owned", "name": "Package-Owned Runtime", "nodeIds": ["architext-cli", "schema-validator", "package-schemas", "cli-adapters", "lifecycle-domain", "architecture-model-domain", "serve-server", "viewer-runtime", "viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine"] },
-        { "id": "repo-owned", "name": "Repo-Owned Data", "nodeIds": ["target-repository", "target-data-files", "static-dist"] }
+        { "id": "repo-owned", "name": "Repo-Owned Data", "nodeIds": ["target-repository", "target-data-files", "static-dist"] },
+        { "id": "external", "name": "External Producers", "nodeIds": ["magma"] }
       ]
     },
     {
@@ -32,7 +34,8 @@
         { "id": "work-origin", "name": "Work Origin", "nodeIds": ["maintainer", "llm-agent"] },
         { "id": "cli-lifecycle", "name": "CLI Lifecycle", "nodeIds": ["architext-cli", "cli-adapters", "lifecycle-domain"] },
         { "id": "architecture-data", "name": "Architecture Data", "nodeIds": ["architecture-model-domain", "schema-validator", "target-data-files", "target-repository"] },
-        { "id": "viewer-review", "name": "Viewer Review", "nodeIds": ["serve-server", "viewer-runtime", "viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine", "static-dist"] }
+        { "id": "viewer-review", "name": "Viewer Review", "nodeIds": ["serve-server", "viewer-runtime", "viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine", "static-dist"] },
+        { "id": "external", "name": "External Producers", "nodeIds": ["magma"] }
       ]
     },
     {
@@ -41,7 +44,7 @@
       "type": "sequence",
       "summary": "Ordered lifecycle command interactions for the selected Architext flow.",
       "lanes": [
-        { "id": "participants", "name": "Participants", "nodeIds": ["maintainer", "llm-agent", "architext-cli", "schema-validator", "serve-server", "viewer-runtime", "target-repository", "target-data-files", "static-dist"] }
+        { "id": "participants", "name": "Participants", "nodeIds": ["maintainer", "llm-agent", "architext-cli", "schema-validator", "serve-server", "viewer-runtime", "target-repository", "target-data-files", "static-dist", "magma"] }
       ]
     },
     {
@@ -99,7 +102,8 @@
       "lanes": [
         { "id": "operators", "name": "Operators", "nodeIds": ["maintainer", "llm-agent"] },
         { "id": "managed-runtime", "name": "Managed Runtime", "nodeIds": ["architext-cli", "cli-adapters", "lifecycle-domain", "architecture-model-domain", "schema-validator", "serve-server", "viewer-runtime", "viewer-adapters", "viewer-presentation", "diagram-planner", "routing-engine"] },
-        { "id": "owned-data", "name": "Owned Data", "nodeIds": ["target-repository", "target-data-files", "static-dist"] }
+        { "id": "owned-data", "name": "Owned Data", "nodeIds": ["target-repository", "target-data-files", "static-dist"] },
+        { "id": "external", "name": "External Producers", "nodeIds": ["magma"] }
       ]
     }
   ]

@@ -29,6 +29,12 @@
       "name": "Validation output",
       "sensitivity": "low",
       "handling": "Use to repair JSON references and schema mismatches before claiming documentation is current."
+    },
+    {
+      "id": "code-graph-model",
+      "name": "Code graph model",
+      "sensitivity": "low",
+      "handling": "Produced externally by Magma (contract magma-code-graph/1); Architext validates contract version and referential integrity but never authors or edits the file directly."
     }
   ]
 }
