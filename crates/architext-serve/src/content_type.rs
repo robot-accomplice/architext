@@ -4,7 +4,10 @@
 
 use std::path::Path;
 
-/// Return the `Content-Type` value for a file path, matching the JS `contentTypes` map exactly.
+/// Return the `Content-Type` value for a file path, based on the JS `contentTypes` map plus
+/// `wasm`/`woff2` (missing from the original JS map — the viewer serves both, and their absence
+/// here forces browsers off the `WebAssembly.instantiateStreaming` fast path and mislabels
+/// vendored fonts).
 /// Falls back to `application/octet-stream` for unknown extensions.
 pub fn content_type_for_path(path: &Path) -> &'static str {
     match path.extension().and_then(|e| e.to_str()) {
@@ -13,6 +16,8 @@ pub fn content_type_for_path(path: &Path) -> &'static str {
         Some("js") => "text/javascript; charset=utf-8",
         Some("json") => "application/json; charset=utf-8",
         Some("svg") => "image/svg+xml; charset=utf-8",
+        Some("wasm") => "application/wasm",
+        Some("woff2") => "font/woff2",
         _ => "application/octet-stream",
     }
 }
@@ -49,6 +54,19 @@ mod tests {
     #[test]
     fn svg_maps_correctly() {
         assert_eq!(content_type_for_path(Path::new("icon.svg")), "image/svg+xml; charset=utf-8");
+    }
+
+    #[test]
+    fn wasm_maps_correctly() {
+        assert_eq!(
+            content_type_for_path(Path::new("architext-viewer_bg.wasm")),
+            "application/wasm"
+        );
+    }
+
+    #[test]
+    fn woff2_maps_correctly() {
+        assert_eq!(content_type_for_path(Path::new("hanken-grotesk-400.woff2")), "font/woff2");
     }
 
     #[test]
