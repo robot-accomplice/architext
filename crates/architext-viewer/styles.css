@@ -2928,3 +2928,20 @@ button.blast-chip { cursor: pointer; }
    "Modules" button, which stays clickable to reset the view. */
 span.code-graph__crumb.is-active { cursor: default; }
 .code-graph__crumb-sep { color: var(--dim); opacity: 0.6; }
+
+.cg-detail { border-top: var(--hairline) solid var(--line); padding: 10px var(--pad); max-height: 34%; overflow-y: auto; }
+.cg-detail__hint { margin: 0; color: var(--dim); font-size: 0.85rem; }
+.cg-detail__symbol { margin: 0 0 4px; font-size: 0.95rem; color: var(--ink); }
+.cg-detail__sig {
+  display: block;
+  margin-bottom: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--muted);
+  overflow-x: auto;
+}
+.cg-detail__meta { margin: 0 0 2px; font-size: 0.78rem; color: var(--muted); }
+.cg-detail__doc { margin: 6px 0 0; font-size: 0.82rem; }
+.cg-detail__badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+/* Reuses the existing .chip / .chip--state pill; only the tint channel differs. */
+.cg-chip { cursor: help; }

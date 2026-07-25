@@ -11,7 +11,7 @@
 //! count per tier (modules first, one module's functions on drill-down).
 use std::collections::{BTreeMap, HashMap, VecDeque};
 
-use crate::data::models::{CodeGraph, CodeGraphFunction};
+use crate::data::models::{CodeGraph, CodeGraphFunction, CodeGraphSignature};
 
 /// Resolved layout dimensions. Mirrors `SequenceConfig`'s role.
 #[derive(Debug, Clone, PartialEq)]
@@ -388,6 +388,26 @@ pub fn build_function_layout(cg: &CodeGraph, module_id: &str, cfg: &GraphConfig)
     GraphLayout { content_width, content_height, nodes, edges }
 }
 
+/// Render a Go-style signature: `(a int, string) (int, error)`.
+/// A single unparenthesised result matches how Go itself prints one.
+pub fn format_signature(sig: &CodeGraphSignature) -> String {
+    let params = sig
+        .params
+        .iter()
+        .map(|p| match &p.name {
+            Some(n) => format!("{n} {}", p.param_type),
+            None => p.param_type.clone(),
+        })
+        .collect::<Vec<_>>()
+        .join(", ");
+    let results: Vec<&str> = sig.results.iter().map(|r| r.result_type.as_str()).collect();
+    match results.len() {
+        0 => format!("({params})"),
+        1 => format!("({params}) {}", results[0]),
+        _ => format!("({params}) ({})", results.join(", ")),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -593,6 +613,25 @@ mod tests {
         // markers
         assert!(f(true, true, false, true, false).contains(&Reach::Root));
         assert!(f(true, true, false, false, true).contains(&Reach::Generated));
+    }
+
+    #[test]
+    fn signature_renders_named_and_unnamed_params() {
+        use crate::data::models::CodeGraphSignature;
+        let sig: CodeGraphSignature = serde_json::from_value(serde_json::json!({
+            "params": [{"name": "a", "type": "int"}, {"type": "string"}],
+            "results": [{"type": "int"}, {"type": "error"}]
+        })).unwrap();
+        assert_eq!(format_signature(&sig), "(a int, string) (int, error)");
+
+        let empty: CodeGraphSignature =
+            serde_json::from_value(serde_json::json!({"params": [], "results": []})).unwrap();
+        assert_eq!(format_signature(&empty), "()");
+
+        let one: CodeGraphSignature = serde_json::from_value(serde_json::json!({
+            "params": [], "results": [{"type": "error"}]
+        })).unwrap();
+        assert_eq!(format_signature(&one), "() error");
     }
 
     #[test]

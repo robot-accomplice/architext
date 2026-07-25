@@ -13,7 +13,9 @@
 //!   4. a graph                 → the diagram (Task 4 onward)
 use leptos::*;
 
-use crate::code_graph_model::{build_function_layout, build_module_layout, GraphConfig};
+use crate::code_graph_model::{
+    build_function_layout, build_module_layout, format_signature, reach_badges, GraphConfig,
+};
 use crate::components::code_graph_svg::CodeGraphSvg;
 use crate::state::use_app_state;
 
@@ -193,6 +195,54 @@ pub fn CodeGraphPanel() -> impl IntoView {
                                     </div>
                                 }.into_view()
                             }}
+                            <div class="cg-detail">
+                                {move || {
+                                    let Some(id) = selected.get() else {
+                                        return view! {
+                                            <p class="cg-detail__hint">
+                                                "Select a node to see its detail."
+                                            </p>
+                                        }.into_view();
+                                    };
+                                    let data = state.data.get();
+                                    let Some(Ok(cg)) = data.code_graph.as_ref() else {
+                                        return ().into_view();
+                                    };
+                                    let Some(f) = cg.functions.as_ref()
+                                        .and_then(|fs| fs.iter().find(|f| f.id == id))
+                                    else {
+                                        // Module tier: no per-function detail.
+                                        return view! {
+                                            <p class="cg-detail__hint">{id}</p>
+                                        }.into_view();
+                                    };
+                                    let badges = reach_badges(f);
+                                    let sig = format_signature(&f.signature);
+                                    let loc = format!("{}:{}", f.file, f.line);
+                                    let fan = format!("fan-in {} · fan-out {}", f.fan_in, f.fan_out);
+                                    let doc = f.doc.clone();
+                                    view! {
+                                        <div class="cg-detail__body">
+                                            <h3 class="cg-detail__symbol">{f.symbol.clone()}</h3>
+                                            <code class="cg-detail__sig">{sig}</code>
+                                            <p class="cg-detail__meta">{loc}</p>
+                                            <p class="cg-detail__meta">{fan}</p>
+                                            {doc.map(|d| view! { <p class="cg-detail__doc">{d}</p> })}
+                                            <div class="cg-detail__badges">
+                                                {badges.into_iter().map(|b| view! {
+                                                    <span
+                                                        class="chip chip--state cg-chip"
+                                                        style=format!("color:{}", b.color_var())
+                                                        title=b.tooltip()
+                                                    >
+                                                        {b.label()}
+                                                    </span>
+                                                }).collect_view()}
+                                            </div>
+                                        </div>
+                                    }.into_view()
+                                }}
+                            </div>
                         }.into_view()
                     }
                 }
