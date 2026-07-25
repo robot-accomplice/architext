@@ -2909,3 +2909,19 @@ button.blast-chip { cursor: pointer; }
 .cg-badge { stroke: none; }
 
 .code-graph__controls { display: flex; gap: 4px; justify-content: flex-end; padding: 6px; }
+
+.code-graph__crumbs { display: flex; align-items: center; gap: 6px; padding: 8px 10px; }
+.code-graph__crumb {
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--dim);
+  font: inherit;
+  cursor: pointer;
+}
+.code-graph__crumb.is-active { color: var(--accent); }
+/* The drilled-into module name is a plain (non-clickable) span — unlike the
+   "Modules" button, which stays clickable to reset the view. */
+span.code-graph__crumb.is-active { cursor: default; }
+.code-graph__crumb-sep { color: var(--dim); opacity: 0.6; }

@@ -13,7 +13,7 @@
 //!   4. a graph                 → the diagram (Task 4 onward)
 use leptos::*;
 
-use crate::code_graph_model::{build_module_layout, GraphConfig};
+use crate::code_graph_model::{build_function_layout, build_module_layout, GraphConfig};
 use crate::components::code_graph_svg::CodeGraphSvg;
 use crate::state::use_app_state;
 
@@ -31,6 +31,8 @@ pub fn CodeGraphPanel() -> impl IntoView {
     let pan_y = create_rw_signal(0.0_f64);
     let zoom = create_rw_signal(1.0_f64);
     let selected = create_rw_signal::<Option<String>>(None);
+    // None = coarse (module) tier; Some(module_id) = that module's functions.
+    let drill = create_rw_signal::<Option<String>>(None);
 
     let zoom_by = move |factor: f64| {
         zoom.update(|z| *z = (*z * factor).clamp(ZOOM_MIN, ZOOM_MAX));
@@ -113,42 +115,84 @@ pub fn CodeGraphPanel() -> impl IntoView {
                             </div>
                         }.into_view()
                     }
-                    // 4. A real graph — the module-tier diagram, pan/zoomable.
+                    // 4. A real graph — module tier by default, drilling into one
+                    //    module's functions on click. The breadcrumb always
+                    //    renders (even when a tier's layout is empty) so a user
+                    //    who drills into an empty module is never stranded.
                     Some(Ok(cg)) => {
-                        let layout = build_module_layout(cg, &GraphConfig::default());
-                        if layout.nodes.is_empty() {
-                            return view! {
-                                <div class="code-graph__empty">
-                                    <h2 class="code-graph__empty-title">"Empty code graph"</h2>
-                                    <p class="code-graph__empty-body">
-                                        "The producer returned a graph with no modules."
-                                    </p>
-                                </div>
-                            }.into_view();
-                        }
+                        let layout = match drill.get() {
+                            None => build_module_layout(cg, &GraphConfig::default()),
+                            Some(ref m) => build_function_layout(cg, m, &GraphConfig::default()),
+                        };
                         view! {
-                            <div
-                                class="code-graph__viewport"
-                                on:wheel=on_wheel
-                                on:mousedown=on_mouse_down
-                                on:mousemove=on_mouse_move
-                                on:mouseup=end_drag
-                                on:mouseleave=end_drag
-                            >
-                                <CodeGraphSvg
-                                    layout=layout
-                                    pan_x=pan_x
-                                    pan_y=pan_y
-                                    zoom=zoom
-                                    selected=selected
-                                    on_select=Callback::new(move |id: String| selected.set(Some(id)))
-                                />
-                            </div>
-                            <div class="code-graph__controls">
-                                <button on:click=move |_| zoom_by(1.0 / ZOOM_STEP)>"−"</button>
-                                <button on:click=reset_view title="Reset view">"⤢"</button>
-                                <button on:click=move |_| zoom_by(ZOOM_STEP)>"+"</button>
-                            </div>
+                            <nav class="code-graph__crumbs" aria-label="Code graph level">
+                                <button
+                                    class="code-graph__crumb"
+                                    class:is-active=move || drill.get().is_none()
+                                    on:click=move |_| {
+                                        drill.set(None);
+                                        selected.set(None);
+                                        pan_x.set(0.0);
+                                        pan_y.set(0.0);
+                                        zoom.set(1.0);
+                                    }
+                                >
+                                    "Modules"
+                                </button>
+                                {move || drill.get().map(|_| view! {
+                                    <span class="code-graph__crumb-sep">"›"</span>
+                                })}
+                                {move || drill.get().map(|m| view! {
+                                    <span class="code-graph__crumb is-active">{m}</span>
+                                })}
+                            </nav>
+                            {if layout.nodes.is_empty() {
+                                view! {
+                                    <div class="code-graph__empty">
+                                        <h2 class="code-graph__empty-title">"Nothing to show"</h2>
+                                        <p class="code-graph__empty-body">
+                                            "This level has no nodes to draw."
+                                        </p>
+                                    </div>
+                                }.into_view()
+                            } else {
+                                view! {
+                                    <div
+                                        class="code-graph__viewport"
+                                        on:wheel=on_wheel
+                                        on:mousedown=on_mouse_down
+                                        on:mousemove=on_mouse_move
+                                        on:mouseup=end_drag
+                                        on:mouseleave=end_drag
+                                    >
+                                        <CodeGraphSvg
+                                            layout=layout
+                                            pan_x=pan_x
+                                            pan_y=pan_y
+                                            zoom=zoom
+                                            selected=selected
+                                            on_select=Callback::new(move |id: String| {
+                                                if drill.get_untracked().is_none() {
+                                                    // Coarse tier: descend into the module and
+                                                    // reset the view so the new tier is framed.
+                                                    drill.set(Some(id));
+                                                    selected.set(None);
+                                                    pan_x.set(0.0);
+                                                    pan_y.set(0.0);
+                                                    zoom.set(1.0);
+                                                } else {
+                                                    selected.set(Some(id));
+                                                }
+                                            })
+                                        />
+                                    </div>
+                                    <div class="code-graph__controls">
+                                        <button on:click=move |_| zoom_by(1.0 / ZOOM_STEP)>"−"</button>
+                                        <button on:click=reset_view title="Reset view">"⤢"</button>
+                                        <button on:click=move |_| zoom_by(ZOOM_STEP)>"+"</button>
+                                    </div>
+                                }.into_view()
+                            }}
                         }.into_view()
                     }
                 }

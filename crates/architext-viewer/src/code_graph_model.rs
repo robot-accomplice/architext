@@ -523,6 +523,51 @@ mod tests {
     }
 
     #[test]
+    fn function_tier_pure_cycle_places_every_node() {
+        // WHY: the module-tier cycle test above does not exercise the FUNCTION
+        // tier's root-selection fallback. Here every function calls another
+        // (a pure cycle), so no function has `root: true` AND every function
+        // has a caller — both root sources come up empty. `assign_layers`
+        // must still place every function instead of hanging or dropping any.
+        let cg: CodeGraph = serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1",
+            "generator": "g", "language": "go", "module": "m",
+            "sha": "s", "tree": "clean", "fidelity": "rta", "computable": true,
+            "functions": [
+                {"id": "p-one", "symbol": "One", "pkg": "p", "file": "p.go", "line": 1,
+                 "kind": "func", "exported": true, "test": false, "root": false,
+                 "generated": false, "reachable": true, "prod_reachable": true,
+                 "signature": {"params": [], "results": []}, "fan_in": 1, "fan_out": 1},
+                {"id": "p-two", "symbol": "Two", "pkg": "p", "file": "p.go", "line": 9,
+                 "kind": "func", "exported": true, "test": false, "root": false,
+                 "generated": false, "reachable": true, "prod_reachable": true,
+                 "signature": {"params": [], "results": []}, "fan_in": 1, "fan_out": 1},
+                {"id": "p-three", "symbol": "Three", "pkg": "p", "file": "p.go", "line": 17,
+                 "kind": "func", "exported": true, "test": false, "root": false,
+                 "generated": false, "reachable": true, "prod_reachable": true,
+                 "signature": {"params": [], "results": []}, "fan_in": 1, "fan_out": 1}
+            ],
+            "calls": [
+                {"from": "p-one", "to": "p-two", "site_file": "p.go", "site_line": 2, "kind": "static"},
+                {"from": "p-two", "to": "p-three", "site_file": "p.go", "site_line": 10, "kind": "static"},
+                {"from": "p-three", "to": "p-one", "site_file": "p.go", "site_line": 18, "kind": "static"}
+            ],
+            "modules": [
+                {"id": "p", "pkg": "p", "function_ids": ["p-one", "p-two", "p-three"],
+                 "counts": {"functions": 3, "dead": 0, "test_only": 0}, "fan_in": 0, "fan_out": 0}
+            ],
+            "module_calls": []
+        })).expect("fixture parses");
+
+        let layout = build_function_layout(&cg, "p", &GraphConfig::default());
+
+        let ids: Vec<&str> = layout.nodes.iter().map(|n| n.id.as_str()).collect();
+        assert_eq!(ids.len(), 3, "every function in the pure cycle must still be placed: {ids:?}");
+        assert!(ids.contains(&"p-one") && ids.contains(&"p-two") && ids.contains(&"p-three"));
+        assert_eq!(layout.edges.len(), 3, "all three intra-module calls must be kept");
+    }
+
+    #[test]
     fn reach_badges_follow_the_contract_predicates() {
         // WHY: these predicates are the contract's, not ours — dead and
         // test_only are defined by Magma and must not drift.
