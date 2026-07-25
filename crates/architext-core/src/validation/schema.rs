@@ -54,6 +54,7 @@ const FILE_SCHEMAS: &[FileSchema] = &[
     FileSchema { key: "rules",              schema_file: "rules.schema.json",              required: false },
     FileSchema { key: "roadmap",            schema_file: "roadmap.schema.json",            required: false },
     FileSchema { key: "notes",              schema_file: "notes.schema.json",              required: false },
+    FileSchema { key: "codeGraph",          schema_file: "code-graph.schema.json",         required: false },
 ];
 
 /// Read and parse a JSON file, returning an error string on failure.

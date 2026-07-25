@@ -25,6 +25,7 @@ pub fn validate_data_dir(data_dir: &Path, schema_dir: &Path) -> ValidationOutcom
     let mut errors = Vec::new();
     validation::schema::validate_schema(data_dir, schema_dir, &mut errors);
     validation::references::validate_references(data_dir, &mut errors);
+    validation::code_graph::validate_code_graph(data_dir, &mut errors);
 
     // Load manifest to check for optional releases/roadmap sections.
     let manifest = read_manifest(data_dir);
@@ -79,6 +80,13 @@ mod tests {
             .join("tests")
             .join("conformance")
             .join(name)
+    }
+
+    fn repo_data_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent().unwrap()
+            .parent().unwrap()
+            .join("docs").join("architext").join("data")
     }
 
     /// RED → GREEN: invalid-schema-missing-field must be rejected.
@@ -166,5 +174,83 @@ mod tests {
             .join("data");
         let outcome = validate_data_dir(&data_dir, &schema_dir());
         assert!(outcome.ok, "expected acceptance; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn valid_code_graph_passes() {
+        let outcome = validate_data_dir(&fixture("valid-code-graph"), &schema_dir());
+        assert!(outcome.ok, "expected pass; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn code_graph_digit_leading_id_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-bad-id"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn code_graph_dangling_call_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-dangling-call"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "code-graph call.to references unknown function id \"m-nonexistent\""),
+            "expected dangling-call error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn code_graph_refusal_is_valid() {
+        let outcome = validate_data_dir(&fixture("valid-code-graph-refusal"), &schema_dir());
+        assert!(outcome.ok, "refusal must be valid; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn code_graph_unknown_major_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-bad-major"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e| e.contains("contract_version") && e.contains("unsupported")),
+            "expected version error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn code_graph_duplicate_function_id_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-duplicate-function-id"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e| e == "code-graph functions contains duplicate id \"m-add\""),
+            "expected duplicate-function-id error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn code_graph_dangling_module_function_id_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-dangling-module-function-id"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "code-graph module m.function_ids references unknown function id \"m-ghost\""),
+            "expected dangling module.function_ids error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn code_graph_dangling_module_call_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-dangling-module-call"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "code-graph module_call.to references unknown module id \"m-ghost\""),
+            "expected dangling module_call error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn code_graph_absent_passes() {
+        // The self-hosted data dir has no code-graph.json; validate must pass.
+        let outcome = validate_data_dir(&repo_data_dir(), &schema_dir());
+        assert!(outcome.ok, "absent code-graph must pass; errors: {:?}", outcome.errors);
     }
 }

@@ -1,0 +1,15 @@
+{
+  "contract_version": "magma-code-graph/1",
+  "generator": "magma/0.2.0",
+  "language": "python",
+  "module": "",
+  "sha": "",
+  "tree": "clean",
+  "fidelity": "rta",
+  "computable": false,
+  "not_computable_reason": "unsupported language: python",
+  "functions": null,
+  "calls": null,
+  "modules": null,
+  "module_calls": null
+}

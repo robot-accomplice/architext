@@ -18,11 +18,10 @@ use std::process::Command;
 use regex::Regex;
 use serde_json::{json, Map, Value};
 
+use crate::domain::doctor_repairs::{CODE_GRAPH_REGISTER_SUMMARY, DATA_SCHEMA_VERSION, DEFAULT_CODE_GRAPH_FILE};
 use crate::domain::{c4_quality, instruction_rules, release_recovery, schema_migration};
 
 // ─── Constants (mirrors target-layout.mjs) ───────────────────────────────────
-
-const DATA_SCHEMA_VERSION: &str = "1.5.0";
 
 const INSTRUCTION_FILES: &[&str] = &["AGENTS.md", "CLAUDE.md"];
 const GENERATED_IGNORES: &[&str] = &["docs/architext/dist/", "docs/architext/.architext-write.lock/"];
@@ -333,6 +332,28 @@ fn collect_instruction_rule_status(target: &Path) -> Option<Value> {
     Some(instruction_rules::planned_instruction_rule_migration(&files, existing_rules))
 }
 
+// ─── collectCodeGraphStatus ───────────────────────────────────────────────────
+
+fn collect_code_graph_status(target: &Path) -> Option<Value> {
+    let manifest_path = data_dir(target).join("manifest.json");
+    if !manifest_path.exists() {
+        return None;
+    }
+    let manifest = read_json_file(&manifest_path)?;
+    let file_present = data_dir(target).join(DEFAULT_CODE_GRAPH_FILE).exists();
+    let configured = manifest["files"]["codeGraph"].is_string();
+    let repair_changes: Vec<Value> = if file_present && !configured {
+        vec![Value::String(CODE_GRAPH_REGISTER_SUMMARY.to_string())]
+    } else {
+        vec![]
+    };
+    Some(json!({
+        "present": file_present,
+        "configured": configured,
+        "repairChanges": repair_changes
+    }))
+}
+
 // ─── doctorRepairsForStatus ───────────────────────────────────────────────────
 
 /// Port of `doctorRepairsForStatus(status)` from `doctor-repairs.mjs`.
@@ -388,6 +409,18 @@ fn doctor_repairs_for_status(status: &Value) -> Value {
                 "id": format!("instruction-rules:{s}"),
                 "category": "instruction-rules",
                 "file": file,
+                "summary": s
+            }));
+        }
+    }
+
+    // codeGraph
+    for change in status["codeGraph"]["repairChanges"].as_array().into_iter().flatten() {
+        if let Some(s) = change.as_str() {
+            repairs.push(json!({
+                "id": format!("code-graph:{s}"),
+                "category": "code-graph",
+                "file": "docs/architext/data/code-graph.json",
                 "summary": s
             }));
         }
@@ -450,6 +483,7 @@ pub fn collect_status(target: &Path, version: &str, run_validation: bool) -> Val
     let release_truth = if installed { collect_release_truth_status(target).unwrap_or(Value::Null) } else { Value::Null };
     let manifest_status = if installed { collect_manifest_status(target).unwrap_or(Value::Null) } else { Value::Null };
     let instruction_rules = if installed { collect_instruction_rule_status(target).unwrap_or(Value::Null) } else { Value::Null };
+    let code_graph = if installed { collect_code_graph_status(target).unwrap_or(Value::Null) } else { Value::Null };
 
     // gitignoreMissing
     let gitignore_text = read_text_file(&target.join(".gitignore"));
@@ -508,6 +542,7 @@ pub fn collect_status(target: &Path, version: &str, run_validation: bool) -> Val
         "instructionRules": instruction_rules,
         "c4": c4,
         "releaseTruth": release_truth,
+        "codeGraph": code_graph,
         "repairAdvice": repair_advice_status(&target_data_dir),
         "validation": validation
     });
@@ -589,6 +624,60 @@ mod tests {
                 .map(|o| o.summary)
                 .collect();
         assert_eq!(advertised, applied, "status and apply must agree");
+    }
+
+    #[test]
+    fn code_graph_status_and_repair_summaries_agree() {
+        // The status side must advertise exactly what the apply side will do:
+        // a present code-graph.json with manifest.files.codeGraph unset yields
+        // the same registration summary on BOTH sides (they share
+        // doctor_repairs::CODE_GRAPH_REGISTER_SUMMARY). Guards against the two
+        // sides drifting if one is edited without the other.
+        let td = temp_dir();
+        let data_dir = td.path().join("docs/architext/data");
+        fs::create_dir_all(&data_dir).unwrap();
+        fs::write(
+            data_dir.join("manifest.json"),
+            r#"{ "schemaVersion": "1.6.0", "files": { "nodes": "nodes.json" } }"#,
+        )
+        .unwrap();
+        fs::write(data_dir.join("code-graph.json"), r#"{ "contract_version": "magma-code-graph/1" }"#)
+            .unwrap();
+
+        let status = collect_code_graph_status(td.path()).expect("status");
+        let advertised = status["repairChanges"][0].as_str().expect("advertised summary");
+
+        let applied = crate::domain::doctor_repairs::repair_code_graph_registration(td.path(), false);
+        let applied_summary = applied[0].summary.as_str();
+
+        assert_eq!(advertised, applied_summary, "status and apply must agree");
+        assert_eq!(advertised, CODE_GRAPH_REGISTER_SUMMARY);
+    }
+
+    #[test]
+    fn expected_schema_version_matches_doctor_repairs_canonical_const() {
+        // status.rs and doctor_repairs.rs must agree on the expected schema
+        // version — they used to diverge (status.rs had a private 1.5.0 copy
+        // while doctor_repairs.rs's pub const moved to 1.6.0), which made
+        // `architext status`/`doctor` compute an inconsistent migration plan.
+        // status.rs now imports the single canonical constant, so a manifest
+        // already on DATA_SCHEMA_VERSION must report itself up to date.
+        let td = temp_dir();
+        let manifest = format!(
+            r#"{{ "schemaVersion": "{DATA_SCHEMA_VERSION}", "files": {{ "releases": "releases/index.json" }} }}"#
+        );
+        let manifest_dir = td.path().join("docs/architext/data");
+        fs::create_dir_all(&manifest_dir).unwrap();
+        fs::write(manifest_dir.join("manifest.json"), manifest).unwrap();
+
+        let status = collect_status(td.path(), "0.0.0", false);
+        assert_eq!(status["manifest"]["expectedSchemaVersion"], DATA_SCHEMA_VERSION);
+        assert_eq!(status["manifest"]["schemaVersion"], DATA_SCHEMA_VERSION);
+        assert_eq!(
+            status["manifest"]["migrationPlan"]["pending"].as_array().map(|a| a.len()),
+            Some(0),
+            "manifest already at DATA_SCHEMA_VERSION must have no pending schema migration"
+        );
     }
 
     #[test]
