@@ -117,6 +117,14 @@
   --sens-medium: #ffd21f;
   --sens-low:    #849495;
 
+  /* ── Candidate reachability scale (code-graph badges) — its own ordinal ramp,
+     NOT a --c4-* role hue and NOT --accent (rule 1), exactly as --sev-* /
+     --sens-* were split out. */
+  --reach-root: #4c9f70;
+  --reach-generated: #7a8699;
+  --reach-test-only: #c9963f;
+  --reach-dead: #c2564b;
+
   /* ── State / accent treatment (DESIGN.md rule 1) ──────────────────────────
      STATE (active / selected / primary action) is a dedicated signal — a
      border / ring / inner-glow on --accent — NOT a --c4-* role hue. --accent is
@@ -216,6 +224,11 @@
   --sens-high:    #d3253f;
   --sens-medium:  #a87800;
   --sens-low:     #6b7a80;
+
+  --reach-root: #1f7a4c;
+  --reach-generated: #5a6870;
+  --reach-test-only: #8a6423;
+  --reach-dead: #a83f36;
 
   --accent-base: #0a9e72;
   --accent: var(--accent-base);
@@ -2866,3 +2879,33 @@ button.blast-chip { cursor: pointer; }
   font-size: 0.82rem;
 }
 .code-graph__empty-note { margin: 0; font-size: 0.82rem; opacity: 0.8; }
+
+.code-graph__viewport { flex: 1; min-height: 0; overflow: hidden; cursor: grab; }
+.code-graph__viewport:active { cursor: grabbing; }
+.code-graph-svg { width: 100%; height: 100%; display: block; }
+
+.cg-edge { stroke: var(--edge, currentColor); opacity: 0.75; }
+/* Dynamic dispatch differs by MARKER + opacity, never by dash — flow
+   connectors are uniformly solid; dashing is a sequence-diagram device. */
+.cg-edge--dynamic { opacity: 0.55; }
+.cg-arrowhead { fill: currentColor; }
+.cg-arrowhead--dynamic { stroke: currentColor; stroke-width: 1.5; }
+
+.cg-node { cursor: default; }
+.cg-node--drillable { cursor: pointer; }
+.cg-node__card {
+  fill: var(--panel-2);
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.cg-node.is-active .cg-node__card {
+  stroke: var(--accent);
+  stroke-width: 2;
+  filter: drop-shadow(0 0 6px var(--accent-glow));
+}
+.cg-node__label { font-size: 13px; fill: var(--ink); }
+.cg-node__sublabel,
+.cg-node__fan { font-size: 10px; fill: var(--dim); }
+.cg-badge { stroke: none; }
+
+.code-graph__controls { display: flex; gap: 4px; justify-content: flex-end; padding: 6px; }

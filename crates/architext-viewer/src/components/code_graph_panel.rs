@@ -13,11 +13,57 @@
 //!   4. a graph                 → the diagram (Task 4 onward)
 use leptos::*;
 
+use crate::code_graph_model::{build_module_layout, GraphConfig};
+use crate::components::code_graph_svg::CodeGraphSvg;
 use crate::state::use_app_state;
+
+// Zoom bounds + step (mirrors `canvas_panel.rs` — centralized, not magic
+// literals at call sites).
+const ZOOM_MIN: f64 = 0.1;
+const ZOOM_MAX: f64 = 4.0;
+const ZOOM_STEP: f64 = 1.2;
 
 #[component]
 pub fn CodeGraphPanel() -> impl IntoView {
     let state = use_app_state();
+
+    let pan_x = create_rw_signal(0.0_f64);
+    let pan_y = create_rw_signal(0.0_f64);
+    let zoom = create_rw_signal(1.0_f64);
+    let selected = create_rw_signal::<Option<String>>(None);
+
+    let zoom_by = move |factor: f64| {
+        zoom.update(|z| *z = (*z * factor).clamp(ZOOM_MIN, ZOOM_MAX));
+    };
+    let on_wheel = move |ev: ev::WheelEvent| {
+        ev.prevent_default();
+        let factor = if ev.delta_y() < 0.0 { ZOOM_STEP } else { 1.0 / ZOOM_STEP };
+        zoom_by(factor);
+    };
+    let dragging = create_rw_signal(false);
+    let last = create_rw_signal((0.0_f64, 0.0_f64));
+    let on_mouse_down = move |ev: ev::MouseEvent| {
+        dragging.set(true);
+        last.set((ev.client_x() as f64, ev.client_y() as f64));
+    };
+    let on_mouse_move = move |ev: ev::MouseEvent| {
+        if !dragging.get() {
+            return;
+        }
+        let (lx, ly) = last.get();
+        let (cx, cy) = (ev.client_x() as f64, ev.client_y() as f64);
+        pan_x.update(|p| *p += cx - lx);
+        pan_y.update(|p| *p += cy - ly);
+        last.set((cx, cy));
+    };
+    // mouseleave also ends the drag — otherwise it "sticks" when the pointer
+    // exits the viewport mid-drag (same reason canvas_panel.rs does this).
+    let end_drag = move |_: ev::MouseEvent| dragging.set(false);
+    let reset_view = move |_| {
+        pan_x.set(0.0);
+        pan_y.set(0.0);
+        zoom.set(1.0);
+    };
 
     view! {
         <div class="code-graph">
@@ -67,10 +113,44 @@ pub fn CodeGraphPanel() -> impl IntoView {
                             </div>
                         }.into_view()
                     }
-                    // 4. A real graph — the diagram lands here in Task 4.
-                    Some(Ok(_)) => view! {
-                        <div class="code-graph__pending">"Graph rendering arrives in Task 4."</div>
-                    }.into_view(),
+                    // 4. A real graph — the module-tier diagram, pan/zoomable.
+                    Some(Ok(cg)) => {
+                        let layout = build_module_layout(cg, &GraphConfig::default());
+                        if layout.nodes.is_empty() {
+                            return view! {
+                                <div class="code-graph__empty">
+                                    <h2 class="code-graph__empty-title">"Empty code graph"</h2>
+                                    <p class="code-graph__empty-body">
+                                        "The producer returned a graph with no modules."
+                                    </p>
+                                </div>
+                            }.into_view();
+                        }
+                        view! {
+                            <div
+                                class="code-graph__viewport"
+                                on:wheel=on_wheel
+                                on:mousedown=on_mouse_down
+                                on:mousemove=on_mouse_move
+                                on:mouseup=end_drag
+                                on:mouseleave=end_drag
+                            >
+                                <CodeGraphSvg
+                                    layout=layout
+                                    pan_x=pan_x
+                                    pan_y=pan_y
+                                    zoom=zoom
+                                    selected=selected
+                                    on_select=Callback::new(move |id: String| selected.set(Some(id)))
+                                />
+                            </div>
+                            <div class="code-graph__controls">
+                                <button on:click=move |_| zoom_by(1.0 / ZOOM_STEP)>"−"</button>
+                                <button on:click=reset_view title="Reset view">"⤢"</button>
+                                <button on:click=move |_| zoom_by(ZOOM_STEP)>"+"</button>
+                            </div>
+                        }.into_view()
+                    }
                 }
             }}
         </div>
