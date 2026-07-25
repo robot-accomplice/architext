@@ -2888,8 +2888,11 @@ button.blast-chip { cursor: pointer; }
 /* Dynamic dispatch differs by MARKER + opacity, never by dash — flow
    connectors are uniformly solid; dashing is a sequence-diagram device. */
 .cg-edge--dynamic { opacity: 0.55; }
-.cg-arrowhead { fill: currentColor; }
-.cg-arrowhead--dynamic { stroke: currentColor; stroke-width: 1.5; }
+.cg-arrowhead { fill: var(--edge); stroke: var(--edge); }
+/* Same specificity as .cg-arrowhead (one class each) but declared after it,
+   so this fill wins the cascade and the open chevron stays unfilled instead
+   of closing into the same solid triangle as the static marker. */
+.cg-arrowhead--dynamic { fill: none; stroke: var(--edge); stroke-width: 1.5; }
 
 .cg-node { cursor: default; }
 .cg-node--drillable { cursor: pointer; }
