@@ -2855,57 +2855,12 @@ button.blast-chip { cursor: pointer; }
   }
 }
 
-/* ─── Code Graph mode ──────────────────────────────────────────────────── */
-.code-graph { display: flex; flex-direction: column; height: 100%; min-height: 0; }
-
-.code-graph__empty {
-  margin: auto;
-  max-width: 44ch;
-  padding: calc(var(--pad) * 2);
-  text-align: center;
-  color: var(--dim);
-}
-.code-graph__empty-title { margin: 0 0 8px; font-size: 1rem; color: var(--ink); }
-.code-graph__empty-body { margin: 0 0 12px; line-height: 1.5; }
-.code-graph__empty-cmd {
-  margin: 0 0 12px;
-  padding: 8px 10px;
-  overflow-x: auto;
-  text-align: left;
-  border-radius: 6px;
-  background: var(--panel-2);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-}
-.code-graph__empty-note { margin: 0; font-size: 0.82rem; opacity: 0.8; }
-
-.code-graph__viewport { flex: 1; min-height: 0; overflow: hidden; cursor: grab; }
-.code-graph__viewport:active { cursor: grabbing; }
-
-.code-graph__controls { display: flex; gap: 4px; justify-content: flex-end; padding: 6px; }
-
-.code-graph__crumbs { display: flex; align-items: center; gap: 6px; padding: 8px 10px; }
-.code-graph__crumb {
-  padding: 2px 6px;
-  border: 0;
-  border-radius: 4px;
-  background: none;
-  color: var(--dim);
-  font: inherit;
-  cursor: pointer;
-}
-.code-graph__crumb.is-active { color: var(--accent); }
-/* The drilled-into module name is a plain (non-clickable) span — unlike the
-   "Modules" button, which stays clickable to reset the view. */
-span.code-graph__crumb.is-active { cursor: default; }
-.code-graph__crumb-sep { color: var(--dim); opacity: 0.6; }
-
 /* Reuses the existing .chip / .chip--state pill; only the tint channel differs. */
 .cg-chip { cursor: help; }
 
 /* ─── Code Graph WebGL view (Plan C) ──────────────────────────────────────
-   The WebGL2 code-graph surface (`code_graph_view.rs`). Reuses the existing
-   pill-button toolbar language (`.code-graph__crumb`) and design tokens; the
+   The WebGL2 code-graph surface (`code_graph_view.rs`). It styles its own
+   `.code-graph-view__toolbar` controls with the shared design tokens; the
    canvas keeps its own dark backdrop, matching the renderer's clear color. */
 .code-graph-view { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .code-graph-view__surface { display: flex; flex-direction: column; flex: 1; min-height: 0; }
