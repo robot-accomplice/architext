@@ -427,7 +427,9 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             full_upload();
 
             if settling {
-                status.set(format!("{n} nodes / {edge_count} edges — layout settling…"));
+                status.set(format!(
+                    "{n} nodes / {edge_count} edges — layout settling… (click-to-select deferred until settled)"
+                ));
             } else {
                 status.set(format!("{n} nodes / {edge_count} edges"));
             }
@@ -482,14 +484,23 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                             });
                         let positions = d.positions_f32();
                         let (ticks, max) = (d.ticks_run(), d.max_ticks());
-                        if let Some(v) = vs.borrow_mut().as_mut() {
+                        // Build the status line INSIDE the borrow but set the
+                        // signal AFTER it is released — a signal write runs
+                        // dependent effects synchronously, and one of those
+                        // borrowing `vs` here would double-borrow the RefCell.
+                        let status_line = if let Some(v) = vs.borrow_mut().as_mut() {
                             v.positions = positions;
-                            if *alive.borrow() {
-                                status.set(format!(
-                                    "{} nodes / {} edges — settling layout (tick {ticks}/{max})",
-                                    v.graph.node_count(),
-                                    v.graph.directed_edges.len()
-                                ));
+                            Some(format!(
+                                "{} nodes / {} edges — settling layout (tick {ticks}/{max}) — click-to-select deferred",
+                                v.graph.node_count(),
+                                v.graph.directed_edges.len()
+                            ))
+                        } else {
+                            None
+                        };
+                        if *alive.borrow() {
+                            if let Some(line) = status_line {
+                                status.set(line);
                             }
                         }
                         if done {
@@ -697,6 +708,34 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 v.recompute_cull();
             }
             full_upload();
+        });
+    }
+
+    // --- TRUE CLEAR for the inspector's "‹ back to code graph" (Task 8) ---
+    // The inspector can only clear the MIRROR signal
+    // (`AppState::selected_code_graph_node`); without this effect the next
+    // `sync_and_upload` — e.g. the 400 ms auto-play tick — re-mirrors the
+    // still-selected canvas node and the clear never sticks. When the mirror
+    // goes to None while the canvas still holds a selection, drop the canvas
+    // selection too (this also deselects visually). No ping-pong: a canvas
+    // click writes Some (early return here), and `sync_and_upload`'s equality
+    // guard won't re-set a mirror that already matches.
+    {
+        let vs = vs.clone();
+        let sync_and_upload = sync_and_upload.clone();
+        let alive = alive.clone();
+        create_render_effect(move |_| {
+            if state.selected_code_graph_node.get().is_some() || !*alive.borrow() {
+                return;
+            }
+            let had_selection = vs
+                .borrow_mut()
+                .as_mut()
+                .and_then(|v| v.selected.take())
+                .is_some();
+            if had_selection {
+                sync_and_upload();
+            }
         });
     }
 
