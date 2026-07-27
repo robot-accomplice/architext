@@ -16,7 +16,10 @@
 //! - "Showing N of M" renders whenever anything is culled.
 //! - Selection stays PANEL-LOCAL: a code-graph index is never written to
 //!   `AppState::selected_node` (different id-space — the inspector resolves
-//!   that against `data.nodes`).
+//!   that against `data.nodes`). Task 6 adds a one-way MIRROR: the selected
+//!   node's Magma id (plus its tier) is copied to
+//!   `AppState::selected_code_graph_node` so the inspector can render detail,
+//!   via the same `sync_and_upload`/`full_upload` mirrors as the footer label.
 //!
 //! RENDER-LOOP CANCELLATION (carried forward verbatim from the spike):
 //! `canvas_panel.rs`'s outer mode-render closure can re-evaluate more than
@@ -55,7 +58,7 @@ use crate::code_graph_view_model::{build_graph, fit_zoom, AnimMode, Tier, ViewSt
 use crate::data::models::CodeGraph;
 use crate::force_layout::ForceConfig;
 use crate::gl::renderer::Renderer;
-use crate::state::use_app_state;
+use crate::state::{use_app_state, CodeGraphSelection};
 
 /// Per-frame millisecond budget for progressive layout ticks (Task 5). At
 /// 17,561 nodes one tick costs ~15-20 ms, so the budget usually buys one
@@ -107,6 +110,7 @@ pub fn CodeGraphView() -> impl IntoView {
 
 #[component]
 fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
+    let state = use_app_state();
     let canvas_ref = create_node_ref::<Canvas>();
     let tier = create_rw_signal(Tier::Functions);
     let status = create_rw_signal(String::new());
@@ -141,6 +145,21 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         move || *alive.borrow_mut() = false
     });
 
+    // Map a full-graph index back to its Magma id for the inspector mirror
+    // (Task 6). Positional correspondence: `build_graph` pushes one node per
+    // function/module in collection order, so index `i` IS `functions[i]` /
+    // `modules[i]` — the same correspondence the footer label already trusts
+    // via `graph.labels[i]`.
+    let selection_id = {
+        let cg = cg.clone();
+        move |t: Tier, i: usize| -> Option<String> {
+            match t {
+                Tier::Functions => cg.functions.as_ref()?.get(i).map(|f| f.id.clone()),
+                Tier::Modules => cg.modules.as_ref()?.get(i).map(|m| m.id.clone()),
+            }
+        }
+    };
+
     // DYNAMIC upload only (selection/animation/scrub path) + mirror the
     // display facts into signals. Called imperatively after every mutation
     // site instead of on a tracked dependency — the RefCell is the truth,
@@ -149,6 +168,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let gpu = gpu.clone();
         let vs = vs.clone();
         let alive = alive.clone();
+        let selection_id = selection_id.clone();
         move || {
             if let (Some(g), Some(v)) = (gpu.borrow().as_ref(), vs.borrow().as_ref()) {
                 g.upload_dynamic(&v.node_state(), &v.edge_state());
@@ -160,6 +180,17 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 selected_label.set(v.selected.map(|i| (v.graph.labels[i].clone(), v.graph.degree[i])));
                 anim_depth_sig.set(v.anim_current_depth);
                 anim_max_sig.set(v.anim_max_depth);
+                // Inspector mirror (Task 6): None when nothing is selected, so
+                // a cleared canvas selection clears the inspector detail too.
+                // The equality guard matters: this closure also runs per
+                // layout-settle frame, and an unconditional `set` would
+                // re-render the inspector body every frame with the same value.
+                let t = tier.get_untracked();
+                let next =
+                    v.selected.and_then(|i| selection_id(t, i)).map(|id| CodeGraphSelection { tier: t, id });
+                if state.selected_code_graph_node.get_untracked() != next {
+                    state.set_selected_code_graph_node(next);
+                }
             }
         }
     };
@@ -171,6 +202,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let gpu = gpu.clone();
         let vs = vs.clone();
         let alive = alive.clone();
+        let selection_id = selection_id.clone();
         move || {
             {
                 let mut gpu_guard = gpu.borrow_mut();
@@ -192,6 +224,17 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                     v.graph.directed_edges.len(),
                 ));
                 selected_label.set(v.selected.map(|i| (v.graph.labels[i].clone(), v.graph.degree[i])));
+                // Inspector mirror (Task 6): runs on the cull/tier paths too,
+                // so a filter that culls the selection (or a tier switch,
+                // which rebuilds `vs` with `selected: None`) also clears the
+                // inspector detail. Same equality guard as `sync_and_upload`:
+                // this runs per layout-settle frame.
+                let t = tier.get_untracked();
+                let next =
+                    v.selected.and_then(|i| selection_id(t, i)).map(|id| CodeGraphSelection { tier: t, id });
+                if state.selected_code_graph_node.get_untracked() != next {
+                    state.set_selected_code_graph_node(next);
+                }
             }
         }
     };
