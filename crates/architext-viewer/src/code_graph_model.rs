@@ -11,7 +11,8 @@
 //! count per tier (modules first, one module's functions on drill-down).
 use std::collections::{BTreeMap, HashMap, HashSet, VecDeque};
 
-use crate::data::models::{CodeGraph, CodeGraphFunction, CodeGraphSignature};
+use crate::code_graph_graph::{reach_badges, Reach};
+use crate::data::models::{CodeGraph, CodeGraphFunction};
 
 /// SVG node-card text metrics (mirrors `wrap_name` in `diagram/node.rs`): pure
 /// string math against the card width, no DOM measurement. `LABEL_PAD_X`
@@ -71,76 +72,6 @@ impl Default for GraphConfig {
     fn default() -> Self {
         Self { node_w: 190.0, node_h: 62.0, layer_gap: 90.0, node_gap: 22.0, margin: 40.0 }
     }
-}
-
-/// A CANDIDATE reachability classification.
-///
-/// Candidates, never verdicts: reflection, `encoding/json` interface
-/// dispatch, cgo, and externally-invoked entrypoints all hide callers from
-/// static analysis, so an unreached function is not proof of dead code.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Reach {
-    Root,
-    Generated,
-    TestOnly,
-    Dead,
-}
-
-impl Reach {
-    pub fn label(self) -> &'static str {
-        match self {
-            Reach::Root => "root",
-            Reach::Generated => "generated",
-            Reach::TestOnly => "test-only",
-            Reach::Dead => "dead",
-        }
-    }
-
-    /// The CSS custom property carrying this badge's tint.
-    ///
-    /// A dedicated `--reach-*` scale: these are neither a role identity hue
-    /// (`--c4-*`) nor a state signal (`--accent`), so per DESIGN.md rule 1 they
-    /// get their own channel — exactly as `--sev-*` / `--sens-*` were split out.
-    pub fn color_var(self) -> &'static str {
-        match self {
-            Reach::Root => "var(--reach-root)",
-            Reach::Generated => "var(--reach-generated)",
-            Reach::TestOnly => "var(--reach-test-only)",
-            Reach::Dead => "var(--reach-dead)",
-        }
-    }
-
-    /// Hover text. For the two INFERRED classifications this must name the
-    /// blind spots, so a badge is never read as a verdict.
-    pub fn tooltip(self) -> &'static str {
-        match self {
-            Reach::Root => "Entrypoint: invoked from outside the analysed module.",
-            Reach::Generated => "Generated code — excluded from dead-code candidates.",
-            Reach::TestOnly => "CANDIDATE: reached only from tests. Reflection, encoding/json \
-                interfaces, cgo and external entrypoints can hide production callers.",
-            Reach::Dead => "CANDIDATE: no static caller found. Reflection, encoding/json \
-                interfaces, cgo and external entrypoints can hide callers — verify before deleting.",
-        }
-    }
-}
-
-/// The candidate classifications for one function, per the contract's own
-/// predicates (`dead` and `test_only` are Magma's definitions — do not drift).
-pub fn reach_badges(f: &CodeGraphFunction) -> Vec<Reach> {
-    let mut out = Vec::new();
-    if f.root {
-        out.push(Reach::Root);
-    }
-    if f.generated {
-        out.push(Reach::Generated);
-    }
-    if !f.reachable && !f.generated && !f.root {
-        out.push(Reach::Dead);
-    }
-    if f.reachable && !f.prod_reachable && !f.test && !f.root && !f.generated {
-        out.push(Reach::TestOnly);
-    }
-    out
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -446,26 +377,6 @@ pub fn build_function_layout(cg: &CodeGraph, module_id: &str, cfg: &GraphConfig)
     GraphLayout { content_width, content_height, nodes, edges }
 }
 
-/// Render a Go-style signature: `(a int, string) (int, error)`.
-/// A single unparenthesised result matches how Go itself prints one.
-pub fn format_signature(sig: &CodeGraphSignature) -> String {
-    let params = sig
-        .params
-        .iter()
-        .map(|p| match &p.name {
-            Some(n) => format!("{n} {}", p.param_type),
-            None => p.param_type.clone(),
-        })
-        .collect::<Vec<_>>()
-        .join(", ");
-    let results: Vec<&str> = sig.results.iter().map(|r| r.result_type.as_str()).collect();
-    match results.len() {
-        0 => format!("({params})"),
-        1 => format!("({params}) {}", results[0]),
-        _ => format!("({params}) ({})", results.join(", ")),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -696,53 +607,6 @@ mod tests {
     }
 
     #[test]
-    fn reach_badges_follow_the_contract_predicates() {
-        // WHY: these predicates are the contract's, not ours — dead and
-        // test_only are defined by Magma and must not drift.
-        let f = |reachable, prod, test, root, generated| {
-            let v = serde_json::json!({
-                "id": "f", "symbol": "F", "pkg": "p", "file": "f.go", "line": 1,
-                "kind": "func", "exported": true, "test": test, "root": root,
-                "generated": generated, "reachable": reachable, "prod_reachable": prod,
-                "signature": {"params": [], "results": []}, "fan_in": 0, "fan_out": 0
-            });
-            let f: crate::data::models::CodeGraphFunction = serde_json::from_value(v).unwrap();
-            reach_badges(&f)
-        };
-
-        // dead = !reachable && !generated && !root
-        assert!(f(false, false, false, false, false).contains(&Reach::Dead));
-        assert!(!f(false, false, false, true, false).contains(&Reach::Dead), "a root is never dead");
-        assert!(!f(false, false, false, false, true).contains(&Reach::Dead), "generated is never dead");
-        // test_only = reachable && !prod_reachable && !test && !root && !generated
-        assert!(f(true, false, false, false, false).contains(&Reach::TestOnly));
-        assert!(!f(true, false, true, false, false).contains(&Reach::TestOnly), "a test is not test-only");
-        assert!(!f(true, true, false, false, false).contains(&Reach::TestOnly), "prod-reachable is not test-only");
-        // markers
-        assert!(f(true, true, false, true, false).contains(&Reach::Root));
-        assert!(f(true, true, false, false, true).contains(&Reach::Generated));
-    }
-
-    #[test]
-    fn signature_renders_named_and_unnamed_params() {
-        use crate::data::models::CodeGraphSignature;
-        let sig: CodeGraphSignature = serde_json::from_value(serde_json::json!({
-            "params": [{"name": "a", "type": "int"}, {"type": "string"}],
-            "results": [{"type": "int"}, {"type": "error"}]
-        })).unwrap();
-        assert_eq!(format_signature(&sig), "(a int, string) (int, error)");
-
-        let empty: CodeGraphSignature =
-            serde_json::from_value(serde_json::json!({"params": [], "results": []})).unwrap();
-        assert_eq!(format_signature(&empty), "()");
-
-        let one: CodeGraphSignature = serde_json::from_value(serde_json::json!({
-            "params": [], "results": [{"type": "error"}]
-        })).unwrap();
-        assert_eq!(format_signature(&one), "() error");
-    }
-
-    #[test]
     fn long_function_sublabel_is_ellipsis_truncated() {
         // WHY: repo-relative Go paths (`file:line`) are the NORMAL case on
         // the function tier and routinely overflow the 190px node card at
@@ -789,18 +653,4 @@ mod tests {
         assert_eq!(short.sublabel, "p.go:3", "short path must pass through untouched");
     }
 
-    #[test]
-    fn every_badge_tooltip_says_it_is_a_candidate_for_the_inferred_ones() {
-        // WHY: dead/test-only are STATIC-ANALYSIS CANDIDATES. A tooltip that
-        // reads as a verdict invites someone to delete live code.
-        for r in [Reach::Dead, Reach::TestOnly] {
-            let t = r.tooltip().to_lowercase();
-            assert!(t.contains("candidate"), "{:?} tooltip must say candidate: {t}", r);
-            assert!(t.contains("reflection"), "{:?} tooltip must name a blind spot: {t}", r);
-        }
-        for r in [Reach::Root, Reach::Generated, Reach::TestOnly, Reach::Dead] {
-            assert!(!r.label().is_empty());
-            assert!(r.color_var().starts_with("var(--reach-"), "{:?} needs its own scale", r);
-        }
-    }
 }

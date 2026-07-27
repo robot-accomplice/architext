@@ -13,9 +13,8 @@
 //!   4. a graph                 → the diagram (Task 4 onward)
 use leptos::*;
 
-use crate::code_graph_model::{
-    build_function_layout, build_module_layout, format_signature, reach_badges, GraphConfig,
-};
+use crate::code_graph_graph::{format_signature, reach_badges};
+use crate::code_graph_model::{build_function_layout, build_module_layout, GraphConfig, GraphLayout};
 use crate::components::code_graph_svg::CodeGraphSvg;
 use crate::state::use_app_state;
 

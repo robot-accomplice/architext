@@ -13,6 +13,7 @@
 //! - `components`— one component per file
 //! - `theme`     — enumerated design facts (the nine modes)
 pub mod blast_radius;
+pub mod code_graph_graph;
 pub mod code_graph_model;
 pub mod components;
 pub mod data;
