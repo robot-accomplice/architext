@@ -43,6 +43,17 @@ web-sys = { version = "0.3", features = [
     "Window",
     "Document",
     "Storage",
+    # Code-graph WebGL2 renderer (src/gl): raw WebGL2 via web-sys, zero JS.
+    # `HtmlCanvasElement` is already implied transitively by leptos::html::Canvas
+    # elsewhere, declared here explicitly since the renderer calls
+    # `get_context`/`width`/`height` on it directly.
+    "HtmlCanvasElement",
+    "WebGl2RenderingContext",
+    "WebGlProgram",
+    "WebGlShader",
+    "WebGlBuffer",
+    "WebGlVertexArrayObject",
+    "WebGlUniformLocation",
 ] }
 
 # Same-origin async fetch of the Architext data docs (/data/**, /api/config)

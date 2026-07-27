@@ -10,6 +10,7 @@
 //! - `state`     — `AppState` (signals) provided via Leptos context
 //! - `selection` — thin adapter over `architext_routing` view-selection
 //! - `diagram`   — in-process plan compute + SVG render (flows mode)
+//! - `gl`        — WebGL2 instanced renderer for the code graph (Plan C)
 //! - `components`— one component per file
 //! - `theme`     — enumerated design facts (the nine modes)
 pub mod blast_radius;
@@ -20,6 +21,7 @@ pub mod data;
 pub mod diagram;
 pub mod flow_step_display;
 pub mod force_layout;
+pub mod gl;
 pub mod release_planning_model;
 pub mod release_truth;
 pub mod repo_tree_model;
