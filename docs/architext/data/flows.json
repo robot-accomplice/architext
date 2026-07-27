@@ -542,7 +542,7 @@
           "to": "viewer-runtime",
           "kind": "self",
           "action": "renderCodeGraphMode",
-          "summary": "Mode::CodeGraph renders a layered module/function diagram with candidate reachability badges (root, generated, test-only, dead); selection stays panel-local and is never written into the shared node-selection state the inspector uses.",
+          "summary": "Mode::CodeGraph renders the graph as a WebGL2 canvas — progressive Barnes-Hut layout, filters that cull excluded nodes/edges from the GPU upload (prod-reachable only by default), and a roots/callers/callees call-order animation — with candidate reachability badges (root, generated, test-only, dead); selection stays panel-local and is never written into the shared node-selection state the inspector uses.",
           "data": [
             "code-graph-model"
           ]
