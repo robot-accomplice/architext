@@ -660,4 +660,169 @@ mod tests {
         assert_eq!(vs.anim_depth[0], 2, "who reaches helper: handler, then main");
         assert_eq!(vs.anim_current_depth, 0);
     }
+
+    // --- ≥1000-node interconnected-graph tests ------------------------------
+    //
+    // WHY ≥1000 (maintainer requirement): every render defect this feature
+    // shipped was invisible on small fixtures — cull-set drift, interleave
+    // shape errors, and wavefront double-visits only bite at real scale.
+    // The generator is the shared deterministic one from
+    // `code_graph_graph::tests_support` (same as the Task 1/2 scale tests).
+
+    /// A 1000-function document over the shared `interconnected(1000, 3)`
+    /// edge set. Classes are assigned deterministically (every 10th node
+    /// dead, every 10th test-only, the rest prod) so the default filter's
+    /// cull accounting is exactly checkable, and every 5th call is dynamic
+    /// so both edge kinds flow through.
+    fn fixture_1000() -> (CodeGraph, usize) {
+        use crate::code_graph_graph::tests_support;
+        let (n, edges) = tests_support::interconnected(1000, 3);
+        let functions: Vec<serde_json::Value> = (0..n)
+            .map(|i| {
+                let dead = i % 10 == 1;
+                let test = i % 10 == 3;
+                serde_json::json!({
+                    "id": format!("f{i}"), "symbol": format!("pkg.fn{i}"), "pkg": "pkg",
+                    "file": "f.go", "line": i + 1, "kind": "func", "exported": false,
+                    "test": test, "root": i == 0, "generated": false,
+                    "reachable": !dead, "prod_reachable": !dead && !test,
+                    "signature": {"params": [], "results": []},
+                    "fan_in": 0, "fan_out": 0
+                })
+            })
+            .collect();
+        let calls: Vec<serde_json::Value> = edges
+            .iter()
+            .enumerate()
+            .map(|(k, &(a, b))| {
+                serde_json::json!({
+                    "from": format!("f{a}"), "to": format!("f{b}"),
+                    "site_file": "f.go", "site_line": 1,
+                    "kind": if k % 5 == 0 { "dynamic" } else { "static" }
+                })
+            })
+            .collect();
+        let doc: CodeGraph = serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1", "generator": "magma",
+            "language": "go", "module": "example.com/x", "sha": "a",
+            "tree": "clean", "fidelity": "rta", "computable": true,
+            "functions": functions, "calls": calls
+        }))
+        .expect("1000-node fixture parses");
+        (doc, n)
+    }
+
+    /// FilterState with every class and edge kind shown — the full-scale
+    /// upload case (all 1000 nodes reach the GPU).
+    fn show_everything() -> FilterState {
+        FilterState {
+            show_prod_reachable: true,
+            show_dead: true,
+            show_test_only: true,
+            show_generated: true,
+            show_static: true,
+            show_dynamic: true,
+        }
+    }
+
+    #[test]
+    fn cull_at_1000_interconnected_nodes_is_consistent_and_accounts_counts() {
+        let (doc, n) = fixture_1000();
+        let g = build_graph(&doc, Tier::Functions);
+        assert_eq!(g.node_count(), n);
+        assert!(g.directed_edges.len() > n, "the fixture is interconnected");
+
+        let c = cull(&g, &FilterState::default());
+        // "showing N of M" accounting: the default filter shows prod-reachable
+        // only, and the visible map, the node list, and the flag slices must
+        // all agree on N.
+        let expected_nodes = g.prod_reachable.iter().filter(|&&p| p).count();
+        assert_eq!(c.nodes.len(), expected_nodes, "default filter shows prod-reachable only");
+        assert!(c.nodes.len() < n, "the default filter must actually cull at scale");
+        assert_eq!(
+            c.visible.iter().filter(|&&v| v).count(),
+            c.nodes.len(),
+            "visible map and surviving node list agree"
+        );
+        assert!(c.nodes.iter().all(|&i| c.visible[i] && g.prod_reachable[i]));
+
+        // Every surviving edge has both endpoints surviving, and every edge
+        // whose endpoints survive IS in the set (no drift in either direction).
+        for &(a, b, _) in &c.edges {
+            assert!(c.visible[a] && c.visible[b], "edge endpoint was culled but the edge survived");
+        }
+        let expected_edges = g
+            .directed_edges
+            .iter()
+            .filter(|&&(a, b, _)| c.visible[a] && c.visible[b])
+            .count();
+        assert_eq!(c.edges.len(), expected_edges, "cull drops exactly the endpoint-culled edges");
+    }
+
+    #[test]
+    fn dynamic_state_interleaves_are_exact_4f32_per_instance_at_1000_nodes() {
+        let (doc, n) = fixture_1000();
+        let g = build_graph(&doc, Tier::Functions);
+        let c = cull(&g, &show_everything());
+        assert_eq!(c.nodes.len(), n, "show-everything uploads the full graph");
+        assert!(c.edges.len() > n, "full-scale edge upload");
+
+        // Nodes: [alpha, glow, colorMix, 0] per uploaded instance.
+        let ns = node_state(&g, &c, None, AnimMode::Off, &[], 0);
+        assert_eq!(ns.len(), c.nodes.len() * 4, "exactly 4 f32 per uploaded node");
+        for slot in ns.chunks_exact(4) {
+            assert!(
+                slot[0].is_finite() && slot[1].is_finite() && slot[2].is_finite(),
+                "node state must stay finite at scale"
+            );
+            assert_eq!(slot[3], 0.0, "node padding slot stays zero");
+        }
+
+        // Edges: [alpha, colorMix, 0, 0] per uploaded instance.
+        let es = edge_state(&c, None, AnimMode::Off, &[], 0);
+        assert_eq!(es.len(), c.edges.len() * 4, "exactly 4 f32 per uploaded edge");
+        for slot in es.chunks_exact(4) {
+            assert!(slot[0].is_finite() && slot[1].is_finite(), "edge state must stay finite");
+            assert_eq!(slot[2], 0.0, "edge padding slots stay zero");
+            assert_eq!(slot[3], 0.0, "edge padding slots stay zero");
+        }
+    }
+
+    #[test]
+    fn wavefront_depth_field_at_1000_nodes_assigns_each_node_once() {
+        let (doc, n) = fixture_1000();
+        let g = build_graph(&doc, Tier::Functions);
+        assert_eq!(g.roots, vec![0], "the fixture has exactly one root");
+
+        let layers = g.index.bfs(Direction::Outbound, &g.roots);
+        let depth = depth_field(n, &layers);
+        assert_eq!(depth.len(), n, "the depth field spans the full graph");
+
+        // Every node gets a depth or the -1 sentinel, and no node is visited
+        // twice (a duplicate would silently overwrite and desync the counts).
+        let layered: usize = layers.iter().map(|l| l.len()).sum();
+        let reached = depth.iter().filter(|&&d| d >= 0).count();
+        assert_eq!(layered, reached, "no node appears in two BFS layers");
+        assert_eq!(
+            reached + depth.iter().filter(|&&d| d == -1).count(),
+            n,
+            "every node is assigned a depth or the sentinel"
+        );
+        assert!(reached > 900, "the interconnected fixture is mostly reachable, got {reached}");
+        for (d, layer) in layers.iter().enumerate() {
+            for &i in layer {
+                assert_eq!(depth[i], d as i32, "depth matches the layer index");
+            }
+        }
+
+        // The wavefront composes with the cull at scale without going
+        // non-finite (culled nodes keep a depth; they just aren't drawn).
+        let c = cull(&g, &FilterState::default());
+        let ns = node_state(&g, &c, None, AnimMode::Roots, &depth, 1);
+        assert_eq!(ns.len(), c.nodes.len() * 4);
+        assert!(ns.iter().all(|v| v.is_finite()), "animated node state stays finite at scale");
+        let es = edge_state(&c, None, AnimMode::Roots, &depth, 1);
+        assert_eq!(es.len(), c.edges.len() * 4);
+        assert!(es.iter().all(|v| v.is_finite()), "animated edge state stays finite at scale");
+    }
 }
