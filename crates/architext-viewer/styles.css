@@ -2881,36 +2881,6 @@ button.blast-chip { cursor: pointer; }
 
 .code-graph__viewport { flex: 1; min-height: 0; overflow: hidden; cursor: grab; }
 .code-graph__viewport:active { cursor: grabbing; }
-.code-graph-svg { width: 100%; height: 100%; display: block; }
-
-.cg-edge { stroke: var(--edge, currentColor); opacity: 0.75; }
-/* Dynamic dispatch differs by MARKER + opacity, never by dash — flow
-   connectors are uniformly solid; dashing is a sequence-diagram device. */
-.cg-edge--dynamic { opacity: 0.55; }
-.cg-arrowhead { fill: var(--edge); stroke: var(--edge); }
-/* Same specificity as .cg-arrowhead (one class each) but declared after it,
-   so this fill wins the cascade and the open chevron stays unfilled instead
-   of closing into the same solid triangle as the static marker. */
-.cg-arrowhead--dynamic { fill: none; stroke: var(--edge); stroke-width: 1.5; }
-
-/* Every card is clickable — module tier drills, function tier selects — so
-   both get the pointer cursor (mirrors `.flow-node`'s blanket rule); there is
-   no separate `--drillable` cursor to keep the fine tier from looking inert. */
-.cg-node { cursor: pointer; }
-.cg-node__card {
-  fill: var(--panel-2);
-  stroke: var(--line);
-  stroke-width: 1;
-}
-.cg-node.is-active .cg-node__card {
-  stroke: var(--accent);
-  stroke-width: 2;
-  filter: drop-shadow(0 0 6px var(--accent-glow));
-}
-.cg-node__label { font-size: 13px; fill: var(--ink); }
-.cg-node__sublabel,
-.cg-node__fan { font-size: 10px; fill: var(--dim); }
-.cg-badge { stroke: none; }
 
 .code-graph__controls { display: flex; gap: 4px; justify-content: flex-end; padding: 6px; }
 
@@ -2930,28 +2900,13 @@ button.blast-chip { cursor: pointer; }
 span.code-graph__crumb.is-active { cursor: default; }
 .code-graph__crumb-sep { color: var(--dim); opacity: 0.6; }
 
-.cg-detail { border-top: var(--hairline) solid var(--line); padding: 10px var(--pad); max-height: 34%; overflow-y: auto; }
-.cg-detail__hint { margin: 0; color: var(--dim); font-size: 0.85rem; }
-.cg-detail__symbol { margin: 0 0 4px; font-size: 0.95rem; color: var(--ink); }
-.cg-detail__sig {
-  display: block;
-  margin-bottom: 6px;
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--muted);
-  overflow-x: auto;
-}
-.cg-detail__meta { margin: 0 0 2px; font-size: 0.78rem; color: var(--muted); }
-.cg-detail__doc { margin: 6px 0 0; font-size: 0.82rem; }
-.cg-detail__badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 /* Reuses the existing .chip / .chip--state pill; only the tint channel differs. */
 .cg-chip { cursor: help; }
 
 /* ─── Code Graph WebGL view (Plan C) ──────────────────────────────────────
    The WebGL2 code-graph surface (`code_graph_view.rs`). Reuses the existing
-   pill-button toolbar language (`.code-graph__crumb` / `.code-graph__filter-btn`)
-   and design tokens; the canvas keeps its own dark backdrop, matching the
-   renderer's clear color. */
+   pill-button toolbar language (`.code-graph__crumb`) and design tokens; the
+   canvas keeps its own dark backdrop, matching the renderer's clear color. */
 .code-graph-view { display: flex; flex-direction: column; height: 100%; min-height: 0; }
 .code-graph-view__surface { display: flex; flex-direction: column; flex: 1; min-height: 0; }
 .code-graph-view__empty { padding: var(--pad); color: var(--muted); }

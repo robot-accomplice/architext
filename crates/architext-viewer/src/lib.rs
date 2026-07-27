@@ -16,7 +16,6 @@
 pub mod blast_radius;
 pub mod code_graph_graph;
 pub mod code_graph_layout;
-pub mod code_graph_model;
 pub mod code_graph_view_model;
 pub mod components;
 pub mod data;

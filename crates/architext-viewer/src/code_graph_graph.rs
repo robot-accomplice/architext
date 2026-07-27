@@ -8,9 +8,7 @@
 //! are not reinvented here, only the layering.
 //!
 //! `Reach`, `reach_badges`, and `format_signature` also live here — moved
-//! (not duplicated) from `code_graph_model.rs`, which the inspector still
-//! depends on for layout but which is scheduled for deletion once the WebGL
-//! renderer replaces the SVG/CSS one.
+//! (not duplicated) from the retired SVG-era `code_graph_model.rs`.
 use crate::data::models::{CodeGraphFunction, CodeGraphSignature};
 
 // ─── adjacency + BFS wavefront ─────────────────────────────────────────────
@@ -173,7 +171,7 @@ impl FilterState {
     }
 }
 
-// ─── reachability badges (moved from `code_graph_model.rs`) ────────────────
+// ─── reachability badges (from the retired `code_graph_model.rs`) ──────────
 
 /// A CANDIDATE reachability classification.
 ///
@@ -380,7 +378,7 @@ mod tests {
         assert!(f.edge_visible(false) && !f.edge_visible(true));
     }
 
-    // --- Reach / reach_badges / format_signature (moved from code_graph_model.rs) ---
+    // --- Reach / reach_badges / format_signature (from the retired code_graph_model.rs) ---
 
     #[test]
     fn reach_badges_follow_the_contract_predicates() {
