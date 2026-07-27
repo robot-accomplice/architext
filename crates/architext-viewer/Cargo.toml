@@ -54,6 +54,10 @@ web-sys = { version = "0.3", features = [
     "WebGlBuffer",
     "WebGlVertexArrayObject",
     "WebGlUniformLocation",
+    # Task 5 progressive layout: the RAF layout slice budgets its ticks
+    # against `performance.now()` and the time-to-first-paint /
+    # time-to-settled instrumentation reads the same clock.
+    "Performance",
 ] }
 
 # Same-origin async fetch of the Architext data docs (/data/**, /api/config)

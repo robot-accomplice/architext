@@ -29,6 +29,7 @@ pub struct Body {
 /// everything to the centroid). The temperature cap bounds worst-case
 /// displacement regardless of force magnitude, which is what makes this
 /// version stable at both 205 and 17,561 nodes with the SAME constants.
+#[derive(Clone, Copy)]
 pub struct ForceConfig {
     pub theta: f64,
     /// Ideal edge length. Deliberately independent of node count: the
@@ -281,78 +282,128 @@ pub struct SimResult {
     pub ticks_run: usize,
 }
 
-/// Run the simulation to convergence (or `cfg.max_ticks`), starting from a
-/// seeded random circle so no two bodies start coincident. `edges` are
-/// (from_index, to_index) pairs into `0..node_count`.
-pub fn simulate(node_count: usize, edges: &[(usize, usize)], seed: u64, cfg: &ForceConfig) -> SimResult {
-    if node_count == 0 {
-        return SimResult { positions: Vec::new(), tree: QuadTree { root: QNode::Empty }, ticks_run: 0 };
+/// A live, steppable simulation — the SAME physics as [`simulate`], driven
+/// one tick at a time so a caller (the code-graph view's animation frame,
+/// via `code_graph_layout::LayoutDriver`) can slice the layout across frames
+/// instead of blocking the main thread on one long run.
+///
+/// DETERMINISM: every piece of mutable state lives in this struct, the RNG is
+/// consumed entirely during seeding, and `step()` performs exactly the FP
+/// operations the old uninterrupted loop did, in the same order. Slicing
+/// changes WHEN ticks run, never WHAT they compute — N ticks across arbitrary
+/// per-frame budgets are bit-identical to N ticks in one run.
+pub struct Simulation {
+    bodies: Vec<Body>,
+    /// Cloned (not borrowed) so the simulation outlives the caller's edge
+    /// slice without a lifetime — 49k pairs is ~0.8 MB, noise next to the
+    /// per-tick quadtree churn.
+    edges: Vec<(usize, usize)>,
+    cfg: ForceConfig,
+    /// `cfg.gravity` pre-scaled by node count (see [`Simulation::new`]).
+    gravity: f64,
+    initial_temperature: f64,
+    /// Ticks executed so far — also the cooling-schedule index.
+    tick: usize,
+    /// Converged early (max displacement under `convergence_eps`).
+    converged: bool,
+}
+
+impl Simulation {
+    /// Seed the bodies and precompute the derived constants. Runs NO ticks —
+    /// tick 0's positions are the seeded circle, which the view paints
+    /// immediately (time-to-first-paint is one frame, not one layout).
+    pub fn new(node_count: usize, edges: &[(usize, usize)], seed: u64, cfg: &ForceConfig) -> Self {
+        let mut rng = SplitMix64::new(seed);
+        // Seed on a circle scaled to node count (area ~ n), not all at one point —
+        // Barnes-Hut repulsion from a shared origin is a degenerate 0/0 direction.
+        let radius = (node_count as f64).sqrt() * cfg.k;
+        let bodies: Vec<Body> = (0..node_count)
+            .map(|_| {
+                let angle = rng.next_f64(0.0, std::f64::consts::TAU);
+                let r = rng.next_f64(0.0, radius);
+                Body { x: r * angle.cos(), y: r * angle.sin() }
+            })
+            .collect();
+
+        // Barnes-Hut repulsion on an isolated (or near-isolated) body is
+        // approximately k^2 * node_count / d at range — a monopole pull from the
+        // WHOLE rest of the graph. A fixed-per-body gravity constant can't
+        // counter that: it stays flat while aggregate repulsion grows with n, so
+        // low-degree nodes drift further out as the graph gets bigger (observed:
+        // a 205-node module graph sent an outlier to ~5700 units while the
+        // connected bulk sat in a ~300-unit clump). Scaling gravity BY node_count
+        // cancels the n-dependence, giving an isolated node's equilibrium
+        // distance (k / sqrt(gravity)) that no longer grows with graph size.
+        let gravity = cfg.gravity * node_count as f64;
+
+        Self {
+            bodies,
+            edges: edges.to_vec(),
+            cfg: *cfg,
+            gravity,
+            initial_temperature: cfg.k * 2.0,
+            tick: 0,
+            converged: false,
+        }
     }
-    let mut rng = SplitMix64::new(seed);
-    // Seed on a circle scaled to node count (area ~ n), not all at one point —
-    // Barnes-Hut repulsion from a shared origin is a degenerate 0/0 direction.
-    let radius = (node_count as f64).sqrt() * cfg.k;
-    let mut bodies: Vec<Body> = (0..node_count)
-        .map(|_| {
-            let angle = rng.next_f64(0.0, std::f64::consts::TAU);
-            let r = rng.next_f64(0.0, radius);
-            Body { x: r * angle.cos(), y: r * angle.sin() }
-        })
-        .collect();
 
-    // Classic FR cooling schedule: a per-tick displacement cap ("temperature")
-    // that falls linearly to zero over `max_ticks`. This is what keeps the
-    // simulation stable regardless of force magnitude — a body can never jump
-    // further than the current temperature in one tick, so early (large)
-    // forces from the random initial layout can't fling anything to infinity,
-    // and late (small) temperature settles the layout instead of jittering.
-    let initial_temperature = cfg.k * 2.0;
+    /// No more ticks will run: converged early, or `max_ticks` exhausted.
+    pub fn is_done(&self) -> bool {
+        self.converged || self.tick >= self.cfg.max_ticks
+    }
 
-    // Barnes-Hut repulsion on an isolated (or near-isolated) body is
-    // approximately k^2 * node_count / d at range — a monopole pull from the
-    // WHOLE rest of the graph. A fixed-per-body gravity constant can't
-    // counter that: it stays flat while aggregate repulsion grows with n, so
-    // low-degree nodes drift further out as the graph gets bigger (observed:
-    // a 205-node module graph sent an outlier to ~5700 units while the
-    // connected bulk sat in a ~300-unit clump). Scaling gravity BY node_count
-    // cancels the n-dependence, giving an isolated node's equilibrium
-    // distance (k / sqrt(gravity)) that no longer grows with graph size.
-    let gravity = cfg.gravity * node_count as f64;
+    pub fn ticks_run(&self) -> usize {
+        self.tick
+    }
 
-    let mut ticks_run = 0;
-    for tick in 0..cfg.max_ticks {
-        ticks_run += 1;
-        let points: Vec<(f64, f64)> = bodies.iter().map(|b| (b.x, b.y)).collect();
+    /// Advance one tick. Returns `true` if a tick ran, `false` if the
+    /// simulation was already done (further calls are no-ops). The tick body
+    /// is the old `simulate` loop body verbatim — same quadtree rebuild, same
+    /// force order, same temperature schedule, same convergence check.
+    pub fn step(&mut self) -> bool {
+        if self.is_done() {
+            return false;
+        }
+        let node_count = self.bodies.len();
+        let points: Vec<(f64, f64)> = self.bodies.iter().map(|b| (b.x, b.y)).collect();
         let tree = QuadTree::build(&points);
 
         let mut fx = vec![0.0; node_count];
         let mut fy = vec![0.0; node_count];
 
-        for (i, b) in bodies.iter().enumerate() {
-            let (rx, ry) = tree.repulsion_at(i, b.x, b.y, cfg);
+        for (i, b) in self.bodies.iter().enumerate() {
+            let (rx, ry) = tree.repulsion_at(i, b.x, b.y, &self.cfg);
             fx[i] += rx;
             fy[i] += ry;
             // Centering gravity keeps a disconnected component from drifting
             // off to infinity under pure repulsion (see `gravity` above).
-            fx[i] -= b.x * gravity;
-            fy[i] -= b.y * gravity;
+            fx[i] -= b.x * self.gravity;
+            fy[i] -= b.y * self.gravity;
         }
-        for &(a, b) in edges {
+        for &(a, b) in &self.edges {
             if a == b || a >= node_count || b >= node_count {
                 continue;
             }
             // FR attraction kernel: d^2 / k.
-            let (dx, dy, dist) = delta(bodies[b].x, bodies[b].y, bodies[a].x, bodies[a].y);
-            let f = (dist * dist) / cfg.k;
+            let (dx, dy, dist) = delta(self.bodies[b].x, self.bodies[b].y, self.bodies[a].x, self.bodies[a].y);
+            let f = (dist * dist) / self.cfg.k;
             fx[a] += dx / dist * f;
             fy[a] += dy / dist * f;
             fx[b] -= dx / dist * f;
             fy[b] -= dy / dist * f;
         }
 
-        let temperature = initial_temperature * (1.0 - tick as f64 / cfg.max_ticks as f64).max(0.0);
+        // Classic FR cooling schedule: a per-tick displacement cap
+        // ("temperature") that falls linearly to zero over `max_ticks`. This
+        // is what keeps the simulation stable regardless of force magnitude —
+        // a body can never jump further than the current temperature in one
+        // tick, so early (large) forces from the random initial layout can't
+        // fling anything to infinity, and late (small) temperature settles
+        // the layout instead of jittering.
+        let temperature =
+            self.initial_temperature * (1.0 - self.tick as f64 / self.cfg.max_ticks as f64).max(0.0);
         let mut max_disp = 0.0_f64;
-        for (i, b) in bodies.iter_mut().enumerate() {
+        for (i, b) in self.bodies.iter_mut().enumerate() {
             let disp = (fx[i] * fx[i] + fy[i] * fy[i]).sqrt().max(0.001);
             // Cap the move at the current temperature — direction from the
             // force, magnitude never exceeding what this tick's "heat" allows.
@@ -361,14 +412,44 @@ pub fn simulate(node_count: usize, edges: &[(usize, usize)], seed: u64, cfg: &Fo
             b.y += fy[i] / disp * step;
             max_disp = max_disp.max(step);
         }
-        if max_disp < cfg.convergence_eps {
-            break;
+        self.tick += 1;
+        if max_disp < self.cfg.convergence_eps {
+            self.converged = true;
         }
+        true
     }
 
-    let positions: Vec<(f64, f64)> = bodies.iter().map(|b| (b.x, b.y)).collect();
+    /// Current positions, index-aligned with the input node count.
+    pub fn positions(&self) -> Vec<(f64, f64)> {
+        self.bodies.iter().map(|b| (b.x, b.y)).collect()
+    }
+
+    /// Current positions in the render upload layout (f32 pairs).
+    pub fn positions_f32(&self) -> Vec<(f32, f32)> {
+        self.bodies.iter().map(|b| (b.x as f32, b.y as f32)).collect()
+    }
+
+    /// Hit-test quadtree over the CURRENT positions. O(n log n) — callers
+    /// building it per frame should reconsider; the view builds it once on
+    /// settle (and once over the seeded positions for the pre-settle window).
+    pub fn hit_tree(&self) -> QuadTree {
+        QuadTree::build(&self.positions())
+    }
+}
+
+/// Run the simulation to convergence (or `cfg.max_ticks`) in one blocking
+/// call — the pre-Task-5 entry point, now a thin wrapper over [`Simulation`]
+/// so tests and small-scale callers keep working unchanged. `edges` are
+/// (from_index, to_index) pairs into `0..node_count`.
+pub fn simulate(node_count: usize, edges: &[(usize, usize)], seed: u64, cfg: &ForceConfig) -> SimResult {
+    if node_count == 0 {
+        return SimResult { positions: Vec::new(), tree: QuadTree { root: QNode::Empty }, ticks_run: 0 };
+    }
+    let mut sim = Simulation::new(node_count, edges, seed, cfg);
+    while sim.step() {}
+    let positions = sim.positions();
     let tree = QuadTree::build(&positions);
-    SimResult { positions, tree, ticks_run }
+    SimResult { positions, tree, ticks_run: sim.ticks_run() }
 }
 
 #[cfg(test)]

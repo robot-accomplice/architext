@@ -357,6 +357,11 @@ pub struct ViewState {
     /// Hit-test tree over the FULL graph (culled hits are rejected via
     /// `cull.visible`, keeping the tree — and the layout — filter-stable).
     pub tree: QuadTree,
+    /// True while the progressive layout (Task 5) is still ticking: the
+    /// painted positions refresh every frame but `tree` still covers the
+    /// PRE-settle positions, so click hit-testing is gated off until the
+    /// layout settles and the tree is rebuilt over the final positions.
+    pub layout_settling: bool,
     pub pan_x: f32,
     pub pan_y: f32,
     pub zoom: f32,
@@ -390,6 +395,7 @@ impl ViewState {
             graph,
             positions,
             tree,
+            layout_settling: false,
             pan_x,
             pan_y,
             zoom,
