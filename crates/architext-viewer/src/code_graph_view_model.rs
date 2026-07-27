@@ -789,8 +789,8 @@ mod tests {
         assert_eq!(es.len(), c.edges.len() * 4, "exactly 4 f32 per uploaded edge");
         for slot in es.chunks_exact(4) {
             assert!(slot[0].is_finite() && slot[1].is_finite(), "edge state must stay finite");
-            assert_eq!(slot[2], 0.0, "edge padding slots stay zero");
-            assert_eq!(slot[3], 0.0, "edge padding slots stay zero");
+            assert_eq!(slot[2], 0.0, "edge padding slot 2 stays zero");
+            assert_eq!(slot[3], 0.0, "edge padding slot 3 stays zero");
         }
     }
 
