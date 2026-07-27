@@ -4,6 +4,7 @@ pub mod c4_breadcrumb;
 pub mod canvas_panel;
 pub mod code_graph_panel;
 pub mod code_graph_svg;
+pub mod code_graph_view;
 pub mod config_field;
 pub mod config_panel;
 pub mod data_risks_panel;

@@ -2946,3 +2946,55 @@ span.code-graph__crumb.is-active { cursor: default; }
 .cg-detail__badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 /* Reuses the existing .chip / .chip--state pill; only the tint channel differs. */
 .cg-chip { cursor: help; }
+
+/* ─── Code Graph WebGL view (Plan C) ──────────────────────────────────────
+   The WebGL2 code-graph surface (`code_graph_view.rs`). Reuses the existing
+   pill-button toolbar language (`.code-graph__crumb` / `.code-graph__filter-btn`)
+   and design tokens; the canvas keeps its own dark backdrop, matching the
+   renderer's clear color. */
+.code-graph-view { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.code-graph-view__surface { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.code-graph-view__empty { padding: var(--pad); color: var(--muted); }
+.code-graph-view__empty h2 { margin: 0 0 8px; font-size: 1rem; color: var(--ink); }
+.code-graph-view__empty p { margin: 0 0 12px; line-height: 1.5; }
+.code-graph-view__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  color: var(--dim);
+}
+.code-graph-view__toolbar button {
+  padding: 2px 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: 4px;
+  background: none;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.code-graph-view__toolbar button.is-active { color: var(--accent); border-color: var(--accent); }
+.code-graph-view__label { font-size: 0.78rem; color: var(--dim); }
+.code-graph-view__status { font-size: 0.78rem; color: var(--muted); }
+.code-graph-view__fps { margin-left: auto; font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); }
+/* Culling notice — renders whenever the filters exclude any node or edge;
+   accent so a cull is never silent. */
+.code-graph-view__notice { font-size: 0.78rem; color: var(--accent); }
+.code-graph-view__check { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--dim); cursor: pointer; }
+.code-graph-view__toolbar--anim input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--accent); }
+.code-graph-view__canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: grab; background: #08090b; }
+.code-graph-view__canvas:active { cursor: grabbing; }
+.code-graph-view__footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-top: var(--hairline) solid var(--line);
+  font-size: 0.78rem;
+  color: var(--dim);
+}
+.code-graph-view__selected { color: var(--accent); }

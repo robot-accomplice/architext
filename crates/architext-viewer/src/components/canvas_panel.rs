@@ -23,7 +23,7 @@ use architext_routing::plan_request::build_flow_plan_request;
 
 use crate::components::blast_radius_panel::BlastRadiusPanel;
 use crate::components::c4_breadcrumb::C4Breadcrumb;
-use crate::components::code_graph_panel::CodeGraphPanel;
+use crate::components::code_graph_view::CodeGraphView;
 use crate::components::legend::Legend;
 use crate::components::release_truth_panel::ReleaseTruthPanel;
 use crate::components::repo_tree::RepoTree;
@@ -649,7 +649,7 @@ pub fn CanvasPanel() -> impl IntoView {
                         // center region; the rest keep the explanatory placard.
                         None => match state.mode.get() {
                             Mode::RepoTree => view! { <RepoTree/> }.into_view(),
-                            Mode::CodeGraph => view! { <CodeGraphPanel/> }.into_view(),
+                            Mode::CodeGraph => view! { <CodeGraphView/> }.into_view(),
                             Mode::Rules => view! { <RulesPanel/> }.into_view(),
                             Mode::BlastRadius => view! { <BlastRadiusPanel/> }.into_view(),
                             Mode::ReleaseTruth => view! { <ReleaseTruthPanel/> }.into_view(),
