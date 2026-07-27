@@ -18,6 +18,7 @@ pub mod components;
 pub mod data;
 pub mod diagram;
 pub mod flow_step_display;
+pub mod force_layout;
 pub mod release_planning_model;
 pub mod release_truth;
 pub mod repo_tree_model;
