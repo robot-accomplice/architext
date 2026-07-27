@@ -33,6 +33,19 @@
 //! closure is intentionally leaked (`mem::forget`); the flipped `alive`
 //! makes its next frame return early WITHOUT re-scheduling, killing the loop.
 //!
+//! The `alive` guard has one hole it cannot cover: leptos 0.6 `create_effect`
+//! defers the effect's FIRST run to a microtask wrapped in
+//! `with_owner(owner).unwrap()` — if the teardown above disposes the owner
+//! before that microtask runs, the unwrap panics (`OwnerDisposed`) BEFORE the
+//! effect body (and its `alive` check) executes. Symbolicated from a debug
+//! wasm build in Task 8: repeated `RuntimeError: unreachable` traps on Code
+//! Graph mode entry, one per torn-down instance per effect. So every effect
+//! in this component is a `create_render_effect`, whose first run is
+//! SYNCHRONOUS — the owner is provably alive inside the component body, and
+//! later re-runs only come from live signal subscriptions (disposed effects
+//! are unsubscribed). The first run early-returns on `canvas_ref.get()`
+//! being `None` either way, so behaviour is unchanged.
+//!
 //! PROGRESSIVE LAYOUT (Plan C Task 5): the Barnes-Hut layout no longer runs
 //! as one blocking `simulate` call (measured 6.5–27 s of frozen main thread
 //! at 17,561 nodes). The tier effect only SEEDS the layout
@@ -359,7 +372,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let first_paint_logged = first_paint_logged.clone();
         let user_moved_camera = user_moved_camera.clone();
         let set_anim_mode = set_anim_mode.clone();
-        create_effect(move |_| {
+        create_render_effect(move |_| {
             let t = tier.get();
             let Some(canvas) = canvas_ref.get() else { return };
             if !*alive.borrow() {
@@ -674,7 +687,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let vs = vs.clone();
         let full_upload = full_upload.clone();
         let alive = alive.clone();
-        create_effect(move |_| {
+        create_render_effect(move |_| {
             let f = filter.get();
             if !*alive.borrow() {
                 return;
