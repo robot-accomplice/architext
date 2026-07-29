@@ -475,18 +475,56 @@ pub fn advance_hop(
     }
 }
 
-/// Fit-to-viewport zoom for a fresh layout, against the 90th-percentile
-/// extent (a handful of low-degree outliers sit at the gravity equilibrium
-/// ring and must not dictate the zoom alone — spike-proven framing).
-pub fn fit_zoom(positions: &[(f32, f32)], w: f32, h: f32) -> f32 {
-    let fit_bound = |mut vals: Vec<f32>| -> f32 {
+/// The 10th/90th-percentile bounding box of `positions`, on each axis
+/// independently (NOT distance-from-origin — see `fit_camera`'s doc for why
+/// that distinction matters) — a handful of low-degree outliers sit at the
+/// gravity equilibrium ring and must not dictate the framing alone
+/// (spike-proven). Degenerates gracefully: empty input collapses to a
+/// zero-width box at the origin; a single point collapses to a zero-width
+/// box centred on it — `fit_camera` widens either to a 1-unit minimum so
+/// neither divides by zero.
+fn robust_bounds(positions: &[(f32, f32)]) -> (f32, f32, f32, f32) {
+    let bound = |mut vals: Vec<f32>| -> (f32, f32) {
+        if vals.is_empty() {
+            return (0.0, 0.0);
+        }
         vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let idx = ((vals.len() as f32 - 1.0) * 0.90).round().max(0.0) as usize;
-        vals.get(idx).copied().unwrap_or(1.0).max(1.0)
+        let lo_idx = ((vals.len() as f32 - 1.0) * 0.10).round().max(0.0) as usize;
+        let hi_idx = ((vals.len() as f32 - 1.0) * 0.90).round().max(0.0) as usize;
+        (vals[lo_idx], vals[hi_idx])
     };
-    let max_x = fit_bound(positions.iter().map(|(x, _)| x.abs()).collect());
-    let max_y = fit_bound(positions.iter().map(|(_, y)| y.abs()).collect());
-    (w / (max_x * 2.2)).min(h / (max_y * 2.2)).clamp(0.02, 3.0)
+    let (lo_x, hi_x) = bound(positions.iter().map(|(x, _)| *x).collect());
+    let (lo_y, hi_y) = bound(positions.iter().map(|(_, y)| *y).collect());
+    (lo_x, hi_x, lo_y, hi_y)
+}
+
+/// The centre of the robust bounding box (see `robust_bounds`) — the point
+/// `fit_camera` places at the viewport centre. Exposed (not just inlined)
+/// so tests can assert the camera actually centres on it.
+pub fn centroid(positions: &[(f32, f32)]) -> (f32, f32) {
+    let (lo_x, hi_x, lo_y, hi_y) = robust_bounds(positions);
+    ((lo_x + hi_x) / 2.0, (lo_y + hi_y) / 2.0)
+}
+
+/// Fit-to-viewport camera (zoom AND pan) for a fresh layout. Replaces the
+/// old `fit_zoom`, which measured the 90th percentile of `|x|`/`|y|` —
+/// distance FROM THE ORIGIN — and so silently assumed the layout was
+/// centred there; any drift of the actual centroid off-origin (asymmetric
+/// graphs, gravity-equilibrium drift) showed up as off-centre framing even
+/// though the zoom level was reasonable.
+///
+/// Zoom fits the robust bounding box (see `robust_bounds`) into `w x h`
+/// with the same 1.1x margin the old `fit_zoom` used, clamped to the same
+/// `0.02..3.0` range. Pan places that box's centre at the viewport centre.
+pub fn fit_camera(positions: &[(f32, f32)], w: f32, h: f32) -> (f32, f32, f32) {
+    let (lo_x, hi_x, lo_y, hi_y) = robust_bounds(positions);
+    let box_w = (hi_x - lo_x).max(1.0);
+    let box_h = (hi_y - lo_y).max(1.0);
+    let zoom = (w / (box_w * 1.1)).min(h / (box_h * 1.1)).clamp(0.02, 3.0);
+    let (cx, cy) = ((lo_x + hi_x) / 2.0, (lo_y + hi_y) / 2.0);
+    let pan_x = w / 2.0 - cx * zoom;
+    let pan_y = h / 2.0 - cy * zoom;
+    (zoom, pan_x, pan_y)
 }
 
 /// The imperative per-frame state. Kept out of Leptos signals by the view —
@@ -871,11 +909,72 @@ mod tests {
     }
 
     #[test]
-    fn fit_zoom_is_bounded_and_handles_empty_input() {
+    fn fit_camera_is_bounded_and_handles_empty_input() {
         let positions = vec![(0.0, 0.0), (100.0, 50.0), (-100.0, -50.0)];
-        let z = fit_zoom(&positions, 1600.0, 1000.0);
+        let (z, _, _) = fit_camera(&positions, 1600.0, 1000.0);
         assert!((0.02..=3.0).contains(&z), "zoom clamped, got {z}");
-        assert_eq!(fit_zoom(&[], 1600.0, 1000.0), 3.0, "empty layout clamps to max");
+        // Preserved from `fit_zoom`: an empty layout collapses to a unit
+        // box, which clamps zoom to the 3.0 max — still the least
+        // surprising choice for "nothing to frame" (matches the old
+        // behaviour exactly). Pan for an empty/degenerate box centres the
+        // (zero) content at the viewport centre rather than drifting.
+        let (z_empty, pan_x, pan_y) = fit_camera(&[], 1600.0, 1000.0);
+        assert_eq!(z_empty, 3.0, "empty layout still clamps to max zoom");
+        assert_eq!((pan_x, pan_y), (800.0, 500.0), "empty layout centres the viewport");
+    }
+
+    /// WHY: fit must frame the content wherever it actually sits. The old
+    /// `fit_zoom` measured |x|,|y| from the origin, so a layout whose
+    /// centroid drifted (gravity equilibrium, asymmetric graphs) framed
+    /// off-centre even though the zoom level was reasonable.
+    #[test]
+    fn fit_camera_centres_on_content_not_the_origin() {
+        // A cluster deliberately far from the origin.
+        let positions: Vec<(f32, f32)> =
+            (0..1000).map(|i| (1000.0 + (i % 30) as f32, 500.0 + (i / 30) as f32)).collect();
+        let (zoom, pan_x, pan_y) = fit_camera(&positions, 1600.0, 1000.0);
+        assert!(zoom > 0.0 && zoom.is_finite());
+        // The content centroid must land at the viewport centre.
+        let (cx, cy) = centroid(&positions);
+        let screen_x = cx * zoom + pan_x;
+        let screen_y = cy * zoom + pan_y;
+        assert!((screen_x - 800.0).abs() < 1.0, "content centre x at {screen_x}, want 800");
+        assert!((screen_y - 500.0).abs() < 1.0, "content centre y at {screen_y}, want 500");
+    }
+
+    #[test]
+    fn fit_camera_handles_empty_and_degenerate_input() {
+        let (z, _, _) = fit_camera(&[], 1600.0, 1000.0);
+        assert!(z.is_finite() && z > 0.0);
+        let single = vec![(42.0, 42.0)];
+        let (z2, _, _) = fit_camera(&single, 1600.0, 1000.0);
+        assert!(z2.is_finite() && z2 > 0.0, "a single node must not divide by zero");
+    }
+
+    /// A handful of far-flung outliers (the gravity-equilibrium ring, per
+    /// `robust_bounds`' doc) sit alongside a tight, ≥1000-node cluster.
+    /// Neither the zoom nor the pan may be dictated by the outliers — both
+    /// must still frame the cluster.
+    #[test]
+    fn fit_camera_outliers_dont_dictate_the_framing() {
+        let mut positions: Vec<(f32, f32)> =
+            (0..1000).map(|i| ((i % 40) as f32 - 20.0, (i / 40) as f32 - 12.0)).collect();
+        // <1% of the node count — enough to previously wreck the fit, not
+        // enough to survive the 90th-percentile trim.
+        for k in 0..5 {
+            positions.push((5000.0 + k as f32, -5000.0 - k as f32));
+        }
+        let (zoom, pan_x, pan_y) = fit_camera(&positions, 1600.0, 1000.0);
+        // The cluster spans roughly 40x24 units, which fits well past the
+        // 3.0 zoom ceiling — so a trimmed box should clamp at the max. If
+        // the outliers dictated the box instead, zoom would collapse to
+        // ~0.16 (fitting a ~10,000-unit span) — nowhere near the clamp.
+        assert_eq!(zoom, 3.0, "outliers must not crush the zoom below the clamp max, got {zoom}");
+        let (cx, cy) = centroid(&positions);
+        let screen_x = cx * zoom + pan_x;
+        let screen_y = cy * zoom + pan_y;
+        assert!((screen_x - 800.0).abs() < 1.0, "cluster centre x at {screen_x}, want 800");
+        assert!((screen_y - 500.0).abs() < 1.0, "cluster centre y at {screen_y}, want 500");
     }
 
     #[test]

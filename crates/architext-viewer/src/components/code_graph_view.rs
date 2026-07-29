@@ -67,7 +67,7 @@ use wasm_bindgen::JsCast;
 
 use crate::code_graph_graph::FilterState;
 use crate::code_graph_layout::LayoutDriver;
-use crate::code_graph_view_model::{build_graph, fit_zoom, should_autoplay, AnimMode, Tier, ViewState};
+use crate::code_graph_view_model::{build_graph, fit_camera, should_autoplay, AnimMode, Tier, ViewState};
 use crate::data::models::CodeGraph;
 use crate::force_layout::ForceConfig;
 use crate::gl::renderer::Renderer;
@@ -492,7 +492,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // first frame paints a real graph, not a spinner.
             let positions = driver.positions_f32();
             let (w, h) = (canvas.width() as f32, canvas.height() as f32);
-            let zoom = fit_zoom(&positions, w, h);
+            let (zoom, pan_x, pan_y) = fit_camera(&positions, w, h);
             let settling = !driver.is_done();
 
             // `vs` MUST be replaced BEFORE any of the signal writes below:
@@ -504,7 +504,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // kept fixed). The initial hit-test tree covers the seeded
             // positions; the RAF loop replaces it with the settled tree.
             let mut new_vs =
-                ViewState::new(graph, positions, driver.hit_tree(), w / 2.0, h / 2.0, zoom, prefers_reduced_motion());
+                ViewState::new(graph, positions, driver.hit_tree(), pan_x, pan_y, zoom, prefers_reduced_motion());
             new_vs.layout_settling = settling;
             *vs.borrow_mut() = Some(new_vs);
             *layout.borrow_mut() = Some(driver);
@@ -611,11 +611,14 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                             // refit keeps it legibly visible throughout.
                             if refit {
                                 if let Some(canvas) = canvas_ref.get_untracked() {
-                                    v.zoom = fit_zoom(
+                                    let (zoom, pan_x, pan_y) = fit_camera(
                                         &v.positions,
                                         canvas.width() as f32,
                                         canvas.height() as f32,
                                     );
+                                    v.zoom = zoom;
+                                    v.pan_x = pan_x;
+                                    v.pan_y = pan_y;
                                 }
                             }
                             Some((

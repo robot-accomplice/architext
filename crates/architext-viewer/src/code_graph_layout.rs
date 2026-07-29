@@ -204,8 +204,8 @@ mod tests {
     }
 
     /// The largest absolute x or y coordinate across all positions — the
-    /// same quantity `fit_zoom`'s 90th-percentile bound approximates, close
-    /// enough to demonstrate the order-of-magnitude contraction above.
+    /// same quantity `fit_camera`'s robust-bounding-box extent approximates,
+    /// close enough to demonstrate the order-of-magnitude contraction above.
     fn max_abs_extent(positions: &[(f32, f32)]) -> f32 {
         positions
             .iter()
