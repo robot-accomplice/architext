@@ -67,7 +67,7 @@ use wasm_bindgen::JsCast;
 
 use crate::code_graph_graph::FilterState;
 use crate::code_graph_layout::LayoutDriver;
-use crate::code_graph_view_model::{build_graph, fit_zoom, AnimMode, Tier, ViewState};
+use crate::code_graph_view_model::{build_graph, fit_zoom, should_autoplay, AnimMode, Tier, ViewState};
 use crate::data::models::CodeGraph;
 use crate::force_layout::ForceConfig;
 use crate::gl::renderer::Renderer;
@@ -688,7 +688,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                     // an obvious pause and stop & reset so it is never
                     // imposed. Modules stay static (no per-module root flags
                     // to sweep from).
-                    if tier.get_untracked() == Tier::Functions {
+                    if should_autoplay(tier.get_untracked()) {
                         set_anim_mode(AnimMode::Roots);
                         play();
                     }

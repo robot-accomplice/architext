@@ -51,6 +51,16 @@ pub enum Tier {
     Functions,
 }
 
+/// Whether entering `tier` should auto-play the roots animation once its
+/// layout settles. Maintainer spec: the function tier only — modules stay
+/// static (small and legible without a wavefront). Pulled out as its own
+/// pure predicate so the trigger condition is unit-testable without a
+/// browser: the view (`code_graph_view.rs`) calls this instead of inlining
+/// the tier comparison at the RAF-loop settle site.
+pub fn should_autoplay(tier: Tier) -> bool {
+    tier == Tier::Functions
+}
+
 /// Call-order animation wavefront: `Roots` sweeps from the entrypoints,
 /// `Outbound`/`Inbound` sweep from the selected node (callees / callers).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -879,6 +889,18 @@ mod tests {
         assert_eq!(vs.anim_depth[2], 0, "inbound seeds at the selection");
         assert_eq!(vs.anim_depth[0], 2, "who reaches helper: handler, then main");
         assert_eq!(vs.anim_current_depth, 0);
+    }
+
+    #[test]
+    fn should_autoplay_arms_only_the_function_tier() {
+        // Maintainer spec, shipped-but-unverified until now: entering the
+        // function tier auto-plays the roots animation; modules stay static
+        // (small and legible without a wavefront). `code_graph_view.rs`
+        // calls this exact predicate at the layout-settle site instead of
+        // inlining the tier comparison, so the trigger condition is
+        // unit-testable without a browser.
+        assert!(should_autoplay(Tier::Functions));
+        assert!(!should_autoplay(Tier::Modules));
     }
 
     #[test]
