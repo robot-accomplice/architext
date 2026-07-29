@@ -2894,6 +2894,36 @@ button.blast-chip { cursor: pointer; }
    accent so a cull is never silent. */
 .code-graph-view__notice { font-size: 0.78rem; color: var(--accent); }
 .code-graph-view__check { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--dim); cursor: pointer; }
+/* Progressive-layout busy indicator — the PRIMARY signal that the app is
+   working, not broken, while the force layout settles (the 11px status
+   line alone was not enough: see the code-graph-view module docs). */
+.code-graph-view__settle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px var(--pad);
+  background: var(--panel-2);
+  border-bottom: var(--hairline) solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+.code-graph-view__settle-label { color: var(--ink); white-space: nowrap; }
+.code-graph-view__settle-bar {
+  position: relative;
+  flex: 0 0 auto;
+  width: 160px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.code-graph-view__settle-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  border-radius: 3px;
+}
+.code-graph-view__settle-detail { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .code-graph-view__toolbar--anim input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 .code-graph-view__canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: grab; background: #08090b; }
 .code-graph-view__canvas:active { cursor: grabbing; }

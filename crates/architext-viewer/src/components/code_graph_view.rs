@@ -94,6 +94,18 @@ const LAYOUT_FRAME_BUDGET_MS: f64 = 12.0;
 /// against the alternative of a canvas frozen forever.
 const STALL_RESUME_THRESHOLD_MS: f64 = 500.0;
 
+/// Live settle-progress facts for the Phase 3 progress UI — a plain mirror
+/// of the layout driver's tick/time state, refreshed every ticked RAF
+/// frame. `None` while the layout is idle (not yet started, or settled).
+#[derive(Clone, Copy, PartialEq)]
+struct SettleProgress {
+    ticks: usize,
+    max_ticks: usize,
+    elapsed_ms: f64,
+    node_count: usize,
+    edge_count: usize,
+}
+
 /// Outer surface: mirrors the 4-surface shape of the code-graph panel this
 /// replaces (no document / unreadable / refusal / real graph).
 #[component]
@@ -147,6 +159,10 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // "Showing N of M" notice renders whenever anything is culled.
     let counts = create_rw_signal((0usize, 0usize, 0usize, 0usize));
     let filter = create_rw_signal(FilterState::default());
+    // Phase 3 progress UI: `None` while idle, `Some` and refreshed every
+    // ticked frame while a layout is settling — the primary busy signal
+    // (bar + counts + elapsed/ETA), status/fps stay as secondary detail.
+    let settle_progress = create_rw_signal::<Option<SettleProgress>>(None);
     let anim_mode_sig = create_rw_signal(AnimMode::Off);
     let anim_depth_sig = create_rw_signal(0i32);
     let anim_max_sig = create_rw_signal(0i32);
@@ -418,6 +434,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             let edge_count = graph.directed_edges.len();
             let seed = 1_469_598_103_934_665_603u64; // fixed — reproducible layout
             let driver = LayoutDriver::new(n, &graph.layout_edges, seed, &ForceConfig::default());
+            let max_ticks = driver.max_ticks();
             // Tick-0 positions (the seeded circle) upload IMMEDIATELY so the
             // first frame paints a real graph, not a spinner.
             let positions = driver.positions_f32();
@@ -447,8 +464,16 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 status.set(format!(
                     "{n} nodes / {edge_count} edges — layout settling… (click-to-select deferred until settled)"
                 ));
+                settle_progress.set(Some(SettleProgress {
+                    ticks: 0,
+                    max_ticks,
+                    elapsed_ms: 0.0,
+                    node_count: n,
+                    edge_count,
+                }));
             } else {
                 status.set(format!("{n} nodes / {edge_count} edges"));
+                settle_progress.set(None);
             }
             filter.set(FilterState::default());
             // AUTO-PLAY ON OPEN is deferred to the settle (RAF loop below):
@@ -494,7 +519,8 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // Spend up to LAYOUT_FRAME_BUDGET_MS ticking the seeded layout,
             // then hand the frame back to input/paint. Positions are
             // re-uploaded every ticked frame so the user WATCHES the graph
-            // settle; the status line mirrors tick progress.
+            // settle; the status line and `settle_progress` mirror tick
+            // progress.
             let mut ticked = false;
             let mut settled_ticks: Option<usize> = None;
             {
@@ -514,7 +540,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                         // signal AFTER it is released — a signal write runs
                         // dependent effects synchronously, and one of those
                         // borrowing `vs` here would double-borrow the RefCell.
-                        let status_line = if let Some(v) = vs.borrow_mut().as_mut() {
+                        let frame_facts = if let Some(v) = vs.borrow_mut().as_mut() {
                             v.positions = positions;
                             // Re-fit the camera on EVERY ticked frame, not
                             // just tick 0 and the final settle: the sim's
@@ -535,17 +561,29 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                                     );
                                 }
                             }
-                            Some(format!(
-                                "{} nodes / {} edges — settling layout (tick {ticks}/{max}) — click-to-select deferred",
+                            Some((
+                                format!(
+                                    "{} nodes / {} edges — settling layout (tick {ticks}/{max}) — click-to-select deferred",
+                                    v.graph.node_count(),
+                                    v.graph.directed_edges.len()
+                                ),
                                 v.graph.node_count(),
-                                v.graph.directed_edges.len()
+                                v.graph.directed_edges.len(),
                             ))
                         } else {
                             None
                         };
                         if *alive.borrow() {
-                            if let Some(line) = status_line {
+                            if let Some((line, node_count, edge_count)) = frame_facts {
                                 status.set(line);
+                                settle_progress.set(Some(SettleProgress {
+                                    ticks,
+                                    max_ticks: max,
+                                    elapsed_ms: perf.as_ref().map(|p| p.now()).unwrap_or(0.0)
+                                        - layout_t0.get(),
+                                    node_count,
+                                    edge_count,
+                                }));
                             }
                         }
                         if done {
@@ -575,6 +613,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                         .map(|v| (v.graph.node_count(), v.graph.directed_edges.len()))
                         .unwrap_or((0, 0));
                     status.set(format!("{n} nodes / {e} edges — {ticks} ticks"));
+                    settle_progress.set(None);
                     let elapsed = perf.as_ref().map(|p| p.now() - layout_t0.get()).unwrap_or(0.0);
                     leptos::logging::log!(
                         "[code-graph-view] layout settled: ticks={ticks} time-to-settled={elapsed:.0}ms"
@@ -831,6 +870,34 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 }}
                 <span class="code-graph-view__fps">{move || fps_label.get()}</span>
             </div>
+            {move || settle_progress.get().map(|p| {
+                let pct = if p.max_ticks > 0 {
+                    (p.ticks as f64 / p.max_ticks as f64 * 100.0).clamp(0.0, 100.0)
+                } else {
+                    100.0
+                };
+                let elapsed_s = p.elapsed_ms / 1000.0;
+                let remaining_ticks = p.max_ticks.saturating_sub(p.ticks) as f64;
+                let eta_s = if p.ticks > 0 {
+                    (p.elapsed_ms / p.ticks as f64) * remaining_ticks / 1000.0
+                } else {
+                    0.0
+                };
+                view! {
+                    <div class="code-graph-view__settle" role="status" aria-live="polite">
+                        <span class="code-graph-view__settle-label">"Laying out graph…"</span>
+                        <div class="code-graph-view__settle-bar">
+                            <div class="code-graph-view__settle-fill" style=format!("width: {pct:.1}%")></div>
+                        </div>
+                        <span class="code-graph-view__settle-detail">
+                            {format!(
+                                "{} nodes / {} edges — tick {}/{} — {elapsed_s:.1}s elapsed, ~{eta_s:.1}s remaining",
+                                p.node_count, p.edge_count, p.ticks, p.max_ticks
+                            )}
+                        </span>
+                    </div>
+                }
+            })}
             <div class="code-graph-view__toolbar code-graph-view__toolbar--filters">
                 <span class="code-graph-view__label">"Show:"</span>
                 <label class="code-graph-view__check">
