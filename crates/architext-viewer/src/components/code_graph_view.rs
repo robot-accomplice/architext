@@ -94,11 +94,35 @@ const LAYOUT_FRAME_BUDGET_MS: f64 = 12.0;
 /// against the alternative of a canvas frozen forever.
 const STALL_RESUME_THRESHOLD_MS: f64 = 500.0;
 
-/// Live settle-progress facts for the Phase 3 progress UI — a plain mirror
-/// of the layout driver's tick/time state, refreshed every ticked RAF
-/// frame. `None` while the layout is idle (not yet started, or settled).
+/// Live render-pipeline progress facts for the staged progress panel —
+/// covers the two stages of tier entry that are genuinely observable from
+/// this component:
+///   1. "Building graph model" (`build_graph`) — a single synchronous call,
+///      so it has no sub-progress; `build_ms` is its real measured wall-clock
+///      cost and it reads as DONE the instant this struct exists (the call
+///      already returned before `Some(RenderProgress)` is ever constructed).
+///   2. "Laying out graph" — the ~400-tick force settle, mirrored from the
+///      layout driver's tick/time state every ticked RAF frame (unchanged
+///      from the prior single-stage instrumentation).
+///
+/// `None` while idle (tier not yet settling, or already settled) — the panel
+/// only exists while stage 2 has real work left to show.
+///
+/// A third candidate stage, loading/parsing `code-graph.json`, is NOT
+/// tracked here: that fetch+deserialize happens in `data::fetch::
+/// load_architecture_data` before the viewer even mounts (gated by the
+/// app-level `LoadingScreen`, not this component), so it is not observable
+/// from inside the code-graph view. A fourth candidate, GPU upload/first
+/// paint, is folded into stage 2 rather than given its own row: the upload
+/// re-runs every settle tick as part of the existing frame-budget slice
+/// (`full_upload` in the RAF loop below), so it is never a separate,
+/// independently-timed phase — inventing a bar for it would just duplicate
+/// stage 2's.
 #[derive(Clone, Copy, PartialEq)]
-struct SettleProgress {
+struct RenderProgress {
+    /// Real measured cost of the `build_graph` call for this tier — always
+    /// "done" by the time this struct is observed (see above).
+    build_ms: f64,
     ticks: usize,
     max_ticks: usize,
     elapsed_ms: f64,
@@ -159,10 +183,11 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // "Showing N of M" notice renders whenever anything is culled.
     let counts = create_rw_signal((0usize, 0usize, 0usize, 0usize));
     let filter = create_rw_signal(FilterState::default());
-    // Phase 3 progress UI: `None` while idle, `Some` and refreshed every
+    // Staged progress panel: `None` while idle, `Some` and refreshed every
     // ticked frame while a layout is settling — the primary busy signal
-    // (bar + counts + elapsed/ETA), status/fps stay as secondary detail.
-    let settle_progress = create_rw_signal::<Option<SettleProgress>>(None);
+    // (centred panel, per-stage bars), status/fps stay as secondary detail
+    // in the toolbar.
+    let render_progress = create_rw_signal::<Option<RenderProgress>>(None);
     let anim_mode_sig = create_rw_signal(AnimMode::Off);
     let anim_depth_sig = create_rw_signal(0i32);
     let anim_max_sig = create_rw_signal(0i32);
@@ -429,7 +454,14 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
 
             *interval.borrow_mut() = None; // stop the previous tier's animation
 
+            // Real, measured cost of stage 1 ("Building graph model") — see
+            // `RenderProgress` docs for why this is the whole stage (no
+            // sub-progress: `build_graph` is one synchronous call) and why
+            // it always reads DONE by the time the panel can show it.
+            let perf = web_sys::window().and_then(|w| w.performance());
+            let t_build0 = perf.as_ref().map(|p| p.now()).unwrap_or(0.0);
             let graph = build_graph(&cg, t);
+            let build_ms = perf.as_ref().map(|p| p.now()).unwrap_or(0.0) - t_build0;
             let n = graph.node_count();
             let edge_count = graph.directed_edges.len();
             let seed = 1_469_598_103_934_665_603u64; // fixed — reproducible layout
@@ -464,7 +496,8 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 status.set(format!(
                     "{n} nodes / {edge_count} edges — layout settling… (click-to-select deferred until settled)"
                 ));
-                settle_progress.set(Some(SettleProgress {
+                render_progress.set(Some(RenderProgress {
+                    build_ms,
                     ticks: 0,
                     max_ticks,
                     elapsed_ms: 0.0,
@@ -473,7 +506,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 }));
             } else {
                 status.set(format!("{n} nodes / {edge_count} edges"));
-                settle_progress.set(None);
+                render_progress.set(None);
             }
             filter.set(FilterState::default());
             // AUTO-PLAY ON OPEN is deferred to the settle (RAF loop below):
@@ -519,7 +552,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // Spend up to LAYOUT_FRAME_BUDGET_MS ticking the seeded layout,
             // then hand the frame back to input/paint. Positions are
             // re-uploaded every ticked frame so the user WATCHES the graph
-            // settle; the status line and `settle_progress` mirror tick
+            // settle; the status line and `render_progress` mirror tick
             // progress.
             let mut ticked = false;
             let mut settled_ticks: Option<usize> = None;
@@ -576,7 +609,14 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                         if *alive.borrow() {
                             if let Some((line, node_count, edge_count)) = frame_facts {
                                 status.set(line);
-                                settle_progress.set(Some(SettleProgress {
+                                // Stage 1's measured cost doesn't change tick
+                                // to tick — carry it forward from whatever
+                                // the tier effect seeded so this per-tick
+                                // update doesn't need its own copy of it.
+                                let build_ms =
+                                    render_progress.get_untracked().map(|p| p.build_ms).unwrap_or(0.0);
+                                render_progress.set(Some(RenderProgress {
+                                    build_ms,
                                     ticks,
                                     max_ticks: max,
                                     elapsed_ms: perf.as_ref().map(|p| p.now()).unwrap_or(0.0)
@@ -613,7 +653,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                         .map(|v| (v.graph.node_count(), v.graph.directed_edges.len()))
                         .unwrap_or((0, 0));
                     status.set(format!("{n} nodes / {e} edges — {ticks} ticks"));
-                    settle_progress.set(None);
+                    render_progress.set(None);
                     let elapsed = perf.as_ref().map(|p| p.now() - layout_t0.get()).unwrap_or(0.0);
                     leptos::logging::log!(
                         "[code-graph-view] layout settled: ticks={ticks} time-to-settled={elapsed:.0}ms"
@@ -870,34 +910,6 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 }}
                 <span class="code-graph-view__fps">{move || fps_label.get()}</span>
             </div>
-            {move || settle_progress.get().map(|p| {
-                let pct = if p.max_ticks > 0 {
-                    (p.ticks as f64 / p.max_ticks as f64 * 100.0).clamp(0.0, 100.0)
-                } else {
-                    100.0
-                };
-                let elapsed_s = p.elapsed_ms / 1000.0;
-                let remaining_ticks = p.max_ticks.saturating_sub(p.ticks) as f64;
-                let eta_s = if p.ticks > 0 {
-                    (p.elapsed_ms / p.ticks as f64) * remaining_ticks / 1000.0
-                } else {
-                    0.0
-                };
-                view! {
-                    <div class="code-graph-view__settle" role="status" aria-live="polite">
-                        <span class="code-graph-view__settle-label">"Laying out graph…"</span>
-                        <div class="code-graph-view__settle-bar">
-                            <div class="code-graph-view__settle-fill" style=format!("width: {pct:.1}%")></div>
-                        </div>
-                        <span class="code-graph-view__settle-detail">
-                            {format!(
-                                "{} nodes / {} edges — tick {}/{} — {elapsed_s:.1}s elapsed, ~{eta_s:.1}s remaining",
-                                p.node_count, p.edge_count, p.ticks, p.max_ticks
-                            )}
-                        </span>
-                    </div>
-                }
-            })}
             <div class="code-graph-view__toolbar code-graph-view__toolbar--filters">
                 <span class="code-graph-view__label">"Show:"</span>
                 <label class="code-graph-view__check">
@@ -974,18 +986,63 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                         on:click={let f = set_anim_mode.clone(); move |_| f(AnimMode::Off)}>"⏹ stop & reset"</button>
                 </Show>
             </div>
-            <canvas
-                node_ref=canvas_ref
-                width="1600"
-                height="1000"
-                class="code-graph-view__canvas"
-                on:mousedown=on_mouse_down
-                on:mousemove=on_mouse_move
-                on:mouseup=end_drag.clone()
-                on:mouseleave=end_drag
-                on:wheel=on_wheel
-                on:click=on_click
-            ></canvas>
+            <div class="code-graph-view__canvas-wrap">
+                <canvas
+                    node_ref=canvas_ref
+                    width="1600"
+                    height="1000"
+                    class="code-graph-view__canvas"
+                    on:mousedown=on_mouse_down
+                    on:mousemove=on_mouse_move
+                    on:mouseup=end_drag.clone()
+                    on:mouseleave=end_drag
+                    on:wheel=on_wheel
+                    on:click=on_click
+                ></canvas>
+                {move || render_progress.get().map(|p| {
+                    let pct = if p.max_ticks > 0 {
+                        (p.ticks as f64 / p.max_ticks as f64 * 100.0).clamp(0.0, 100.0)
+                    } else {
+                        100.0
+                    };
+                    let elapsed_s = p.elapsed_ms / 1000.0;
+                    let remaining_ticks = p.max_ticks.saturating_sub(p.ticks) as f64;
+                    let eta_s = if p.ticks > 0 {
+                        (p.elapsed_ms / p.ticks as f64) * remaining_ticks / 1000.0
+                    } else {
+                        0.0
+                    };
+                    view! {
+                        <div class="code-graph-view__progress" role="status" aria-live="polite">
+                            <div class="code-graph-view__progress-stage is-done">
+                                <div class="code-graph-view__progress-stage-head">
+                                    <span class="code-graph-view__progress-stage-label">"Building graph model"</span>
+                                    <span class="code-graph-view__progress-stage-detail">
+                                        {format!("{} nodes / {} edges — {:.0}ms", p.node_count, p.edge_count, p.build_ms)}
+                                    </span>
+                                </div>
+                                <div class="code-graph-view__progress-bar">
+                                    <div class="code-graph-view__progress-fill" style="width: 100%"></div>
+                                </div>
+                            </div>
+                            <div class="code-graph-view__progress-stage is-active">
+                                <div class="code-graph-view__progress-stage-head">
+                                    <span class="code-graph-view__progress-stage-label">"Laying out graph"</span>
+                                    <span class="code-graph-view__progress-stage-detail">
+                                        {format!(
+                                            "tick {}/{} — {elapsed_s:.1}s elapsed, ~{eta_s:.1}s remaining",
+                                            p.ticks, p.max_ticks
+                                        )}
+                                    </span>
+                                </div>
+                                <div class="code-graph-view__progress-bar">
+                                    <div class="code-graph-view__progress-fill" style=format!("width: {pct:.1}%")></div>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                })}
+            </div>
             <div class="code-graph-view__footer">
                 {move || selected_label.get().map(|(label, degree)| view! {
                     <span class="code-graph-view__selected">

@@ -2894,39 +2894,62 @@ button.blast-chip { cursor: pointer; }
    accent so a cull is never silent. */
 .code-graph-view__notice { font-size: 0.78rem; color: var(--accent); }
 .code-graph-view__check { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--dim); cursor: pointer; }
-/* Progressive-layout busy indicator — the PRIMARY signal that the app is
-   working, not broken, while the force layout settles (the 11px status
-   line alone was not enough: see the code-graph-view module docs). */
-.code-graph-view__settle {
+.code-graph-view__toolbar--anim input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--accent); }
+/* Canvas wrap — a positioned ancestor so the staged progress panel below can
+   float centred OVER the canvas instead of docked in the toolbar chrome. */
+.code-graph-view__canvas-wrap { position: relative; flex: 1; min-height: 0; display: flex; }
+.code-graph-view__canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: grab; background: #08090b; }
+.code-graph-view__canvas:active { cursor: grabbing; }
+/* Staged, centred progress panel — the PRIMARY signal that the app is
+   working, not broken, while the graph model builds and the force layout
+   settles (the 11px status line alone was not enough: see the
+   code-graph-view module docs). Free-floating over the canvas, one row per
+   observable render stage, each with its own title + bar; a completed
+   stage's bar reads full, the active stage's bar tracks real progress.
+   Tonal layering + a hairline border (DESIGN.md's elevation language, not a
+   heavy shadow). `pointer-events: none` so it never blocks canvas
+   pan/zoom/click — same non-blocking behaviour as the row it replaces. */
+.code-graph-view__progress {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px var(--pad);
-  background: var(--panel-2);
-  border-bottom: var(--hairline) solid var(--line);
+  flex-direction: column;
+  gap: 12px;
+  min-width: 320px;
+  max-width: 420px;
+  padding: var(--pad) calc(var(--pad) * 1.5);
+  background: var(--popover);
+  border: var(--hairline) solid var(--line);
+  border-radius: 6px;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  pointer-events: none;
 }
-.code-graph-view__settle-label { color: var(--ink); white-space: nowrap; }
-.code-graph-view__settle-bar {
+.code-graph-view__progress-stage { display: flex; flex-direction: column; gap: 6px; }
+.code-graph-view__progress-stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.code-graph-view__progress-stage-label { color: var(--ink); font-size: 0.85rem; white-space: nowrap; }
+.code-graph-view__progress-stage-detail {
+  color: var(--muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.code-graph-view__progress-bar {
   position: relative;
-  flex: 0 0 auto;
-  width: 160px;
   height: 6px;
   border-radius: 3px;
   background: var(--line);
   overflow: hidden;
 }
-.code-graph-view__settle-fill {
+.code-graph-view__progress-fill {
   position: absolute;
   inset: 0 auto 0 0;
   background: var(--accent);
   border-radius: 3px;
 }
-.code-graph-view__settle-detail { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.code-graph-view__toolbar--anim input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--accent); }
-.code-graph-view__canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: grab; background: #08090b; }
-.code-graph-view__canvas:active { cursor: grabbing; }
 .code-graph-view__footer {
   display: flex;
   align-items: center;
