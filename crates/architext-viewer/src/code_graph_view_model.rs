@@ -498,12 +498,42 @@ fn robust_bounds(positions: &[(f32, f32)]) -> (f32, f32, f32, f32) {
     (lo_x, hi_x, lo_y, hi_y)
 }
 
-/// The centre of the robust bounding box (see `robust_bounds`) — the point
-/// `fit_camera` places at the viewport centre. Exposed (not just inlined)
-/// so tests can assert the camera actually centres on it.
+/// The centre of the robust bounding box (see `robust_bounds`) — the BOX
+/// centre. Historically what `fit_camera` panned to; kept (and still
+/// public) as a reference statistic for tests to compare against, now that
+/// `fit_camera`'s pan target is `density_centre` instead (see its doc and
+/// `fit_camera`'s for why the two are deliberately different statistics).
 pub fn centroid(positions: &[(f32, f32)]) -> (f32, f32) {
     let (lo_x, hi_x, lo_y, hi_y) = robust_bounds(positions);
     ((lo_x + hi_x) / 2.0, (lo_y + hi_y) / 2.0)
+}
+
+/// The density-weighted centre — the median of x and of y independently,
+/// over the FULL (untrimmed) position set — `fit_camera`'s PAN target.
+///
+/// Chosen over a mean/centroid: on a hub-and-ring topology (a dense hub
+/// plus a large one-sided ring of low-degree, mostly-disconnected modules
+/// that settle onto the gravity-equilibrium ring — see `robust_bounds`'
+/// doc) a mean is dragged toward the ring by every one of its nodes' exact
+/// distance from the mass, same as the box centre (`centroid`) — no
+/// improvement. A median resists this by construction: as long as the ring
+/// is under ~50% of the node count, no amount of one-sided distance moves
+/// the median off the hub, whereas the box's 10th/90th-percentile bounds
+/// (and a mean) shift with any lopsided minority. Degenerates the same way
+/// `robust_bounds` does: empty input collapses to the origin, a single
+/// point collapses to itself.
+pub fn density_centre(positions: &[(f32, f32)]) -> (f32, f32) {
+    let median = |mut vals: Vec<f32>| -> f32 {
+        if vals.is_empty() {
+            return 0.0;
+        }
+        vals.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let idx = ((vals.len() as f32 - 1.0) * 0.5).round().max(0.0) as usize;
+        vals[idx]
+    };
+    let mx = median(positions.iter().map(|(x, _)| *x).collect());
+    let my = median(positions.iter().map(|(_, y)| *y).collect());
+    (mx, my)
 }
 
 /// Fit-to-viewport camera (zoom AND pan) for a fresh layout. Replaces the
@@ -515,13 +545,26 @@ pub fn centroid(positions: &[(f32, f32)]) -> (f32, f32) {
 ///
 /// Zoom fits the robust bounding box (see `robust_bounds`) into `w x h`
 /// with the same 1.1x margin the old `fit_zoom` used, clamped to the same
-/// `0.02..3.0` range. Pan places that box's centre at the viewport centre.
+/// `0.02..3.0` range — outliers up to the 90th percentile stay on screen.
+/// This statistic is UNCHANGED by the pan fix below; outliers must remain
+/// framed, they simply stop dictating the CENTRE.
+///
+/// Pan places the density-weighted centre (see `density_centre`) at the
+/// viewport centre — deliberately a DIFFERENT statistic from the box the
+/// zoom above measures. On this codebase's real corpus (a dense hub plus a
+/// ring of disconnected modules) the box centre is dragged toward whichever
+/// side carries more ring nodes, so the hub — the visual mass the user is
+/// actually looking at — sits off-centre with empty space opposite it; the
+/// median resists that because it takes close to half the node count
+/// sitting one-sided to move it. Centring on the mass (pan) and framing the
+/// extent (zoom) are different jobs — do not unify them back into one
+/// statistic; conflating them is exactly what produced the original bug.
 pub fn fit_camera(positions: &[(f32, f32)], w: f32, h: f32) -> (f32, f32, f32) {
     let (lo_x, hi_x, lo_y, hi_y) = robust_bounds(positions);
     let box_w = (hi_x - lo_x).max(1.0);
     let box_h = (hi_y - lo_y).max(1.0);
     let zoom = (w / (box_w * 1.1)).min(h / (box_h * 1.1)).clamp(0.02, 3.0);
-    let (cx, cy) = ((lo_x + hi_x) / 2.0, (lo_y + hi_y) / 2.0);
+    let (cx, cy) = density_centre(positions);
     let pan_x = w / 2.0 - cx * zoom;
     let pan_y = h / 2.0 - cy * zoom;
     (zoom, pan_x, pan_y)
@@ -975,6 +1018,104 @@ mod tests {
         let screen_y = cy * zoom + pan_y;
         assert!((screen_x - 800.0).abs() < 1.0, "cluster centre x at {screen_x}, want 800");
         assert!((screen_y - 500.0).abs() < 1.0, "cluster centre y at {screen_y}, want 500");
+    }
+
+    /// A dense hub cluster (850 nodes, tightly packed near the origin) plus
+    /// a one-sided scatter of far outliers (150 nodes, ~15% of the graph —
+    /// the gravity-equilibrium ring `robust_bounds`' doc describes) sitting
+    /// on the +x side at a moderate distance. Large enough a fraction to
+    /// survive the 10th/90th-percentile trim and drag the BOX centre off
+    /// the cluster, but nowhere near the ~50% needed to drag the MEDIAN off
+    /// it — the real hub-and-ring shape (dense hub + a mostly-disconnected
+    /// module ring settling one-sided) that motivated switching the PAN
+    /// target from the box centre to the density centre.
+    fn hub_and_ring_positions() -> Vec<(f32, f32)> {
+        let cluster = (0..850).map(|i| {
+            let x = (i % 34) as f32 - 17.0; // 34 distinct values, -17..16
+            let y = (i / 34) as f32 - 12.5; // 25 rows, -12.5..11.5
+            (x, y)
+        });
+        let ring = (0..150).map(|i| {
+            let x = 60.0 + (i % 30) as f32; // one-sided: always well clear of the cluster
+            let y = (i / 30) as f32 - 2.5; // narrow band, kept small vs. the cluster's y spread
+            (x, y)
+        });
+        cluster.chain(ring).collect()
+    }
+
+    /// THE required behaviour change: on the hub-and-ring shape above, the
+    /// 10th/90th-percentile BOX centre (`centroid`) is dragged toward the
+    /// one-sided ring, but the density-weighted centre (`density_centre`,
+    /// median x/y) is not — it stays on the hub, which is the visual mass
+    /// the user is actually looking at. Expresses the INTENT (the dense
+    /// mass is centred), not just a magic screen coordinate.
+    #[test]
+    fn fit_camera_density_centring_beats_box_centring_on_hub_and_ring() {
+        let positions = hub_and_ring_positions();
+        let (w, h) = (1600.0_f32, 1000.0_f32);
+        let (zoom, pan_x, pan_y) = fit_camera(&positions, w, h);
+
+        let (mx, my) = density_centre(&positions);
+        let screen_mx = mx * zoom + pan_x;
+        let screen_my = my * zoom + pan_y;
+        assert!(
+            (screen_mx - w / 2.0).abs() < 2.0,
+            "density centre x at {screen_mx}, want ~{}",
+            w / 2.0
+        );
+        assert!(
+            (screen_my - h / 2.0).abs() < 2.0,
+            "density centre y at {screen_my}, want ~{}",
+            h / 2.0
+        );
+
+        // The box centre must still be measurably off-centre on THIS
+        // fixture — proving the two statistics genuinely diverge here, not
+        // that the fixture happens to make them coincide.
+        let (bx, _by) = centroid(&positions);
+        let screen_bx = bx * zoom + pan_x;
+        let box_err = (screen_bx - w / 2.0).abs();
+        assert!(
+            box_err > 50.0,
+            "box centre should be measurably dragged off-centre by the ring, got err {box_err}"
+        );
+    }
+
+    /// The zoom bound (10th/90th-percentile box) must be untouched by the
+    /// pan-target change: every ring node — the outliers the box's extent
+    /// was sized to admit — must still land inside the viewport once
+    /// panned to the density centre, proving the centring fix did not
+    /// shrink the frame to compensate.
+    #[test]
+    fn fit_camera_outliers_still_land_in_viewport_after_density_centring() {
+        let positions = hub_and_ring_positions();
+        let (w, h) = (1600.0_f32, 1000.0_f32);
+        let (zoom, pan_x, pan_y) = fit_camera(&positions, w, h);
+
+        for &(x, y) in positions.iter().skip(850) {
+            // ring nodes only
+            let sx = x * zoom + pan_x;
+            let sy = y * zoom + pan_y;
+            assert!(
+                (0.0..=w).contains(&sx),
+                "ring node x={x} maps to sx={sx}, off-viewport (zoom={zoom}, pan_x={pan_x})"
+            );
+            assert!(
+                (0.0..=h).contains(&sy),
+                "ring node y={y} maps to sy={sy}, off-viewport (zoom={zoom}, pan_y={pan_y})"
+            );
+        }
+    }
+
+    #[test]
+    fn density_centre_handles_empty_and_degenerate_input() {
+        let (mx, my) = density_centre(&[]);
+        assert!(mx.is_finite() && my.is_finite(), "empty input must not divide by zero or NaN");
+        assert_eq!((mx, my), (0.0, 0.0), "empty input collapses to the origin, same as the box stats");
+
+        let single = [(42.0, -7.0)];
+        let (mx2, my2) = density_centre(&single);
+        assert_eq!((mx2, my2), (42.0, -7.0), "a single node's median is itself");
     }
 
     #[test]
