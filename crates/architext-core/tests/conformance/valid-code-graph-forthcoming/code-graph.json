@@ -1,0 +1,94 @@
+{
+  "contract_version": "magma-code-graph/1",
+  "generator": "magma/0.2.0",
+  "language": "rust",
+  "module": "example.com/m",
+  "sha": "abc1234",
+  "tree": "clean",
+  "fidelity": "semantic",
+  "computable": true,
+  "functions": [
+    {
+      "id": "m-main",
+      "symbol": "main",
+      "pkg": "m",
+      "file": "main.go",
+      "line": 7,
+      "kind": "func",
+      "exported": false,
+      "test": false,
+      "root": true,
+      "generated": false,
+      "reachable": true,
+      "prod_reachable": true,
+      "signature": {
+        "params": [],
+        "results": []
+      },
+      "fan_in": 0,
+      "fan_out": 1
+    },
+    {
+      "id": "m-add",
+      "symbol": "Add",
+      "pkg": "m",
+      "file": "main.go",
+      "line": 3,
+      "kind": "func",
+      "exported": true,
+      "test": false,
+      "root": false,
+      "generated": false,
+      "reachable": true,
+      "prod_reachable": true,
+      "signature": {
+        "params": [
+          {
+            "name": "a",
+            "type": "int"
+          },
+          {
+            "name": "b",
+            "type": "int"
+          }
+        ],
+        "results": [
+          {
+            "type": "int"
+          }
+        ]
+      },
+      "doc": "Add returns the sum of a and b.",
+      "fan_in": 1,
+      "fan_out": 0
+    }
+  ],
+  "calls": [
+    {
+      "from": "m-main",
+      "to": "m-add",
+      "site_file": "main.go",
+      "site_line": 7,
+      "kind": "static"
+    }
+  ],
+  "modules": [
+    {
+      "id": "m",
+      "pkg": "m",
+      "function_ids": [
+        "m-add",
+        "m-main"
+      ],
+      "counts": {
+        "functions": 2,
+        "dead": 0,
+        "test_only": 0
+      },
+      "fan_in": 0,
+      "fan_out": 0
+    }
+  ],
+  "module_calls": [],
+  "executed_target_code": true
+}

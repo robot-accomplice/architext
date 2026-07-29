@@ -16,6 +16,7 @@
     "tree": { "type": "string", "enum": ["clean", "dirty"] },
     "fidelity": { "type": "string" },
     "computable": { "type": "boolean" },
+    "executed_target_code": { "type": "boolean" },
     "not_computable_reason": { "type": "string" },
     "functions": { "type": ["array", "null"], "items": { "$ref": "#/$defs/function" } },
     "calls": { "type": ["array", "null"], "items": { "$ref": "#/$defs/call" } },

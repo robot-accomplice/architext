@@ -214,6 +214,30 @@ mod tests {
         assert!(outcome.ok, "refusal must be valid; errors: {:?}", outcome.errors);
     }
 
+    /// Forward-compatibility with magma's announced additions: Rust artifacts
+    /// will carry `fidelity: "semantic"` and a new `executed_target_code`
+    /// boolean (Go analysis reads; Rust analysis executes build scripts and
+    /// proc macros, so it is a trust-boundary fact, not a fidelity nuance).
+    ///
+    /// WHY THIS TEST EXISTS: magma reported both as "additive, validates
+    /// unchanged". That is true of `fidelity: "semantic"` — a new VALUE on an
+    /// existing property — but was NOT true of `executed_target_code`, a new
+    /// PROPERTY, because this schema sets `additionalProperties: false`. It was
+    /// reproduced failing with
+    ///   `codeGraph: Additional properties are not allowed ('executed_target_code' was unexpected)`
+    /// before the property was declared. Caught before magma shipped it; had it
+    /// landed first, every artifact they produced would have failed validation
+    /// on day one — the same shape as the `tree`-carrying-the-SHA defect.
+    #[test]
+    fn code_graph_accepts_magmas_forthcoming_fields() {
+        let outcome = validate_data_dir(&fixture("valid-code-graph-forthcoming"), &schema_dir());
+        assert!(
+            outcome.ok,
+            "fidelity=semantic + executed_target_code must validate; errors: {:?}",
+            outcome.errors,
+        );
+    }
+
     /// Guards the specific field that broke on real output: an empty
     /// `fidelity` must be accepted, independently of the rest of the fixture.
     #[test]
