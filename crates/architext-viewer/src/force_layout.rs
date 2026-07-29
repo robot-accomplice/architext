@@ -163,6 +163,16 @@ impl QuadTree {
         query_node(&self.root, x, y, max_r, &mut best);
         best.map(|(idx, _)| idx)
     }
+
+    /// Build a hit-test tree directly over externally-supplied f32 positions
+    /// (Plan D Task 2: a layout-cache hit has settled positions but no live
+    /// `Simulation` to ask for a tree). `build` stays private to this module;
+    /// this is the one sanctioned entry point for rebuilding a tree from
+    /// scratch outside it.
+    pub fn from_positions_f32(positions: &[(f32, f32)]) -> Self {
+        let points: Vec<(f64, f64)> = positions.iter().map(|&(x, y)| (x as f64, y as f64)).collect();
+        Self::build(&points)
+    }
 }
 
 const MAX_DEPTH: u32 = 40;

@@ -23,6 +23,7 @@ pub mod diagram;
 pub mod flow_step_display;
 pub mod force_layout;
 pub mod gl;
+pub mod layout_cache;
 pub mod release_planning_model;
 pub mod release_truth;
 pub mod repo_tree_model;

@@ -69,8 +69,9 @@ use crate::code_graph_graph::FilterState;
 use crate::code_graph_layout::LayoutDriver;
 use crate::code_graph_view_model::{build_graph, fit_camera, should_autoplay, AnimMode, Tier, ViewState};
 use crate::data::models::CodeGraph;
-use crate::force_layout::ForceConfig;
+use crate::force_layout::{ForceConfig, QuadTree};
 use crate::gl::renderer::Renderer;
+use crate::layout_cache::{LayoutCache, LayoutKey};
 use crate::state::{use_app_state, CodeGraphSelection};
 
 /// Per-frame millisecond budget for progressive layout ticks (Task 5). At
@@ -213,6 +214,15 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // `Cell`s for the instrumentation/camera bookkeeping — nothing reads
     // them reactively (same rationale as the drag `Cell`s below).
     let layout: Rc<RefCell<Option<LayoutDriver>>> = Rc::new(RefCell::new(None));
+    // Plan D Task 2: settled layouts keyed on (sha, tree, tier), scoped to
+    // this component instance (a viewer session, not a persistent store —
+    // see `layout_cache` module docs). `cg_sha`/`cg_tree` are cloned out of
+    // the loaded envelope now because `cg` itself is moved into the
+    // tier-entry effect below, but the RAF loop (defined after it) also
+    // needs them to `put` on settle completion.
+    let layout_cache: Rc<RefCell<LayoutCache>> = Rc::new(RefCell::new(LayoutCache::default()));
+    let cg_sha = cg.sha.clone();
+    let cg_tree = cg.tree.clone();
     let layout_t0: Rc<Cell<f64>> = Rc::new(Cell::new(0.0));
     let first_paint_logged: Rc<Cell<bool>> = Rc::new(Cell::new(false));
     let user_moved_camera: Rc<Cell<bool>> = Rc::new(Cell::new(false));
@@ -447,10 +457,14 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let alive = alive.clone();
         let full_upload = full_upload.clone();
         let layout = layout.clone();
+        let layout_cache = layout_cache.clone();
+        let cg_sha = cg_sha.clone();
+        let cg_tree = cg_tree.clone();
         let layout_t0 = layout_t0.clone();
         let first_paint_logged = first_paint_logged.clone();
         let user_moved_camera = user_moved_camera.clone();
         let set_anim_mode = set_anim_mode.clone();
+        let play = play.clone();
         create_render_effect(move |_| {
             let t = tier.get();
             let Some(canvas) = canvas_ref.get() else { return };
@@ -485,56 +499,106 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             let build_ms = perf.as_ref().map(|p| p.now()).unwrap_or(0.0) - t_build0;
             let n = graph.node_count();
             let edge_count = graph.directed_edges.len();
-            let seed = 1_469_598_103_934_665_603u64; // fixed — reproducible layout
-            let driver = LayoutDriver::new(n, &graph.layout_edges, seed, &ForceConfig::default());
-            let max_ticks = driver.max_ticks();
-            // Tick-0 positions (the seeded circle) upload IMMEDIATELY so the
-            // first frame paints a real graph, not a spinner.
-            let positions = driver.positions_f32();
             let (w, h) = (canvas.width() as f32, canvas.height() as f32);
-            let (zoom, pan_x, pan_y) = fit_camera(&positions, w, h);
-            let settling = !driver.is_done();
 
-            // `vs` MUST be replaced BEFORE any of the signal writes below:
-            // each `.set()` synchronously re-runs the filter effect (which
-            // re-uploads, sized from `vs`). Writing the signals first let
-            // that reentrant upload fire while `vs` still held the PREVIOUS
-            // tier's counts against buffers just reallocated to the NEW
-            // tier's size — a `bufferSubData` overflow (the spike's bug,
-            // kept fixed). The initial hit-test tree covers the seeded
-            // positions; the RAF loop replaces it with the settled tree.
-            let mut new_vs =
-                ViewState::new(graph, positions, driver.hit_tree(), pan_x, pan_y, zoom, prefers_reduced_motion());
-            new_vs.layout_settling = settling;
-            *vs.borrow_mut() = Some(new_vs);
-            *layout.borrow_mut() = Some(driver);
+            // Plan D Task 2: a settled layout for this exact (sha, tree,
+            // tier) has already been computed once this session — reuse it
+            // instead of re-running ~400 ticks to arrive at the provably same
+            // answer (the layout is a pure deterministic function of
+            // (edges, seed, tick_count); see `layout_cache` module docs).
+            let cache_key = LayoutKey::new(cg_sha.clone(), cg_tree.clone(), t);
+            let cache_hit = layout_cache.borrow().get(&cache_key).map(|p| p.to_vec());
+
             user_moved_camera.set(false);
             first_paint_logged.set(false);
-            layout_t0.set(web_sys::window().and_then(|w| w.performance()).map(|p| p.now()).unwrap_or(0.0));
-            leptos::logging::log!("[code-graph-view] layout seeded: nodes={n} edges={edge_count} settling={settling}");
-            full_upload();
+            layout_t0.set(perf.as_ref().map(|p| p.now()).unwrap_or(0.0));
 
-            if settling {
-                status.set(format!(
-                    "{n} nodes / {edge_count} edges — layout settling… (click-to-select deferred until settled)"
-                ));
-                render_progress.set(Some(RenderProgress {
-                    build_ms,
-                    ticks: 0,
-                    max_ticks,
-                    elapsed_ms: 0.0,
-                    node_count: n,
-                    edge_count,
-                }));
-            } else {
+            if let Some(positions) = cache_hit {
+                // HIT: skip the settle entirely — no driver, no progress
+                // panel, no re-seed, no animation restart. Straight to
+                // interactive, camera fit over the cached positions.
+                let (zoom, pan_x, pan_y) = fit_camera(&positions, w, h);
+                let tree = QuadTree::from_positions_f32(&positions);
+                let mut new_vs =
+                    ViewState::new(graph, positions, tree, pan_x, pan_y, zoom, prefers_reduced_motion());
+                new_vs.layout_settling = false;
+                *vs.borrow_mut() = Some(new_vs);
+                *layout.borrow_mut() = None; // nothing to tick — already settled
+                leptos::logging::log!(
+                    "[code-graph-view] layout cache HIT: nodes={n} edges={edge_count} tier={t:?}"
+                );
+                full_upload();
                 status.set(format!("{n} nodes / {edge_count} edges"));
                 render_progress.set(None);
+                filter.set(FilterState::default());
+                // A cache hit still honours auto-play on the function tier —
+                // there is no settle event to hang it off, so trigger it here
+                // directly instead of deferring to the RAF loop.
+                if should_autoplay(t) {
+                    set_anim_mode(AnimMode::Roots);
+                    play();
+                } else {
+                    set_anim_mode(AnimMode::Off);
+                }
+            } else {
+                // MISS: settle as today.
+                let seed = 1_469_598_103_934_665_603u64; // fixed — reproducible layout
+                let driver = LayoutDriver::new(n, &graph.layout_edges, seed, &ForceConfig::default());
+                let max_ticks = driver.max_ticks();
+                // Tick-0 positions (the seeded circle) upload IMMEDIATELY so
+                // the first frame paints a real graph, not a spinner.
+                let positions = driver.positions_f32();
+                let (zoom, pan_x, pan_y) = fit_camera(&positions, w, h);
+                let settling = !driver.is_done();
+
+                // `vs` MUST be replaced BEFORE any of the signal writes below:
+                // each `.set()` synchronously re-runs the filter effect (which
+                // re-uploads, sized from `vs`). Writing the signals first let
+                // that reentrant upload fire while `vs` still held the
+                // PREVIOUS tier's counts against buffers just reallocated to
+                // the NEW tier's size — a `bufferSubData` overflow (the
+                // spike's bug, kept fixed). The initial hit-test tree covers
+                // the seeded positions; the RAF loop replaces it with the
+                // settled tree.
+                let mut new_vs = ViewState::new(
+                    graph,
+                    positions,
+                    driver.hit_tree(),
+                    pan_x,
+                    pan_y,
+                    zoom,
+                    prefers_reduced_motion(),
+                );
+                new_vs.layout_settling = settling;
+                *vs.borrow_mut() = Some(new_vs);
+                *layout.borrow_mut() = Some(driver);
+                leptos::logging::log!(
+                    "[code-graph-view] layout seeded: nodes={n} edges={edge_count} settling={settling}"
+                );
+                full_upload();
+
+                if settling {
+                    status.set(format!(
+                        "{n} nodes / {edge_count} edges — layout settling… (click-to-select deferred until settled)"
+                    ));
+                    render_progress.set(Some(RenderProgress {
+                        build_ms,
+                        ticks: 0,
+                        max_ticks,
+                        elapsed_ms: 0.0,
+                        node_count: n,
+                        edge_count,
+                    }));
+                } else {
+                    status.set(format!("{n} nodes / {edge_count} edges"));
+                    render_progress.set(None);
+                }
+                filter.set(FilterState::default());
+                // AUTO-PLAY ON OPEN is deferred to the settle (RAF loop
+                // below): starting the wavefront while positions churn would
+                // sweep the animation across a graph that is still moving.
+                set_anim_mode(AnimMode::Off);
             }
-            filter.set(FilterState::default());
-            // AUTO-PLAY ON OPEN is deferred to the settle (RAF loop below):
-            // starting the wavefront while positions churn would sweep the
-            // animation across a graph that is still moving.
-            set_anim_mode(AnimMode::Off);
         });
     }
 
@@ -548,6 +612,9 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let vs = vs.clone();
         let alive = alive.clone();
         let layout = layout.clone();
+        let layout_cache = layout_cache.clone();
+        let cg_sha = cg_sha.clone();
+        let cg_tree = cg_tree.clone();
         let full_upload = full_upload.clone();
         let sync_and_upload = sync_and_upload.clone();
         let set_anim_mode = set_anim_mode.clone();
@@ -580,6 +647,10 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // progress.
             let mut ticked = false;
             let mut settled_ticks: Option<usize> = None;
+            // Plan D Task 2: the positions to `put` into the layout cache
+            // once this settle completes — cloned only on the settling
+            // frame (once per tier, not once per tick).
+            let mut positions_for_cache: Option<Vec<(f32, f32)>> = None;
             {
                 let mut drv_guard = layout.borrow_mut();
                 if let Some(d) = drv_guard.as_mut() {
@@ -590,6 +661,9 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                                 perf.as_ref().map(|p| p.now()).unwrap_or(0.0)
                             });
                         let positions = d.positions_f32();
+                        if done {
+                            positions_for_cache = Some(positions.clone());
+                        }
                         let (ticks, max) = (d.ticks_run(), d.max_ticks());
                         // Never stomp a camera the user already moved.
                         let refit = !user_moved_camera.get();
@@ -671,6 +745,13 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 // Static buffers carry positions, so every slice re-uploads
                 // them (the cull sets are unchanged — same nodes, new spots).
                 full_upload();
+            }
+            if let Some(positions) = positions_for_cache {
+                // Plan D Task 2: remember this settle so the NEXT entry into
+                // this (sha, tree, tier) is a cache hit instead of another
+                // ~400-tick recompute of the same, provably identical answer.
+                let key = LayoutKey::new(cg_sha.clone(), cg_tree.clone(), tier.get_untracked());
+                layout_cache.borrow_mut().put(key, positions);
             }
             if let Some(ticks) = settled_ticks {
                 if *alive.borrow() {
