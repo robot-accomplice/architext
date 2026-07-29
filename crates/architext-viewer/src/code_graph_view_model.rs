@@ -24,10 +24,24 @@ use crate::code_graph_graph::{Direction, FilterState, GraphIndex};
 use crate::data::models::CodeGraph;
 use crate::force_layout::QuadTree;
 
-// Un-reached nodes during animation must "recede hard" (spike brief).
-const ANIM_FADE_ALPHA: f32 = 0.025;
 const TRAIL_ALPHA: f32 = 0.35;
 const SELECT_FADE_ALPHA: f32 = 0.05;
+
+/// Readable-trace pacing (maintainer directive, verbatim: "let's start with
+/// readable trace... 'draw' them at that pace from one node to the next").
+/// Roughly 1-2s per hop — slow enough to follow one call into the next,
+/// short enough to watch a full run (BFS depth ~5 on the real corpus) to the
+/// end. The single central constant `advance_hop` paces against; there is no
+/// per-mode override because all three animation modes (roots/outbound/
+/// inbound) are the same kind of BFS wavefront.
+pub const HOP_DURATION_MS: f64 = 1500.0;
+
+/// `prefers-reduced-motion: reduce` fallback cadence: matches the pre-rework
+/// behaviour exactly — a whole depth layer reveals at once, no per-edge
+/// growth. Kept as its own constant (not reused from `HOP_DURATION_MS`) since
+/// the two paths are independently tunable and the reduced-motion contract is
+/// "the CURRENT instant reveal", not "the new pace without growth".
+pub const REDUCED_MOTION_HOP_DURATION_MS: f64 = 400.0;
 
 /// The two granularities the view renders. Functions is the default tier
 /// (the one that auto-plays the roots animation on open).
@@ -186,32 +200,83 @@ pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
     }
 }
 
-/// The result of applying a [`FilterState`] to a graph: WHAT GETS UPLOADED.
-/// `nodes`/`edges` hold FULL-graph indices; `visible` is the full-graph node
-/// lookup (hit-testing must not select a culled node through the full-graph
-/// quadtree, and a selection culled by a filter change is cleared).
+/// The result of applying a [`FilterState`] (and, while an animation is
+/// running, a [`Wavefront`]) to a graph: WHAT GETS UPLOADED. `nodes`/`edges`
+/// hold FULL-graph indices; `visible` is the full-graph node lookup
+/// (hit-testing must not select a culled node through the full-graph
+/// quadtree, and a selection culled by a filter or wavefront change is
+/// cleared). When a `Wavefront` narrowed the set, `edges` is reordered
+/// lower-depth-endpoint-first (see [`Wavefront`]'s doc) — callers that don't
+/// pass one keep the original call-direction order untouched.
 pub struct Cull {
     pub visible: Vec<bool>,
     pub nodes: Vec<usize>,
     pub edges: Vec<(usize, usize, bool)>,
 }
 
+/// The animation-wavefront restriction layered on top of a [`FilterState`]
+/// cull — the "cull un-reached nodes, don't just fade them" requirement.
+/// `depth`/`current` are the same full-graph depth field and current-hop
+/// depth `ViewState` already tracks; `growth` is `false` under
+/// `prefers-reduced-motion` and collapses the in-flight (partially drawn)
+/// band into a cull too, so a reduced-motion run reveals whole hops at once
+/// with no partially-grown edge ever uploaded.
+#[derive(Clone, Copy)]
+pub struct Wavefront<'a> {
+    pub depth: &'a [i32],
+    pub current: i32,
+    pub growth: bool,
+}
+
 /// Compute the cull sets. A node survives if the filter shows its class; an
 /// edge survives if BOTH endpoints survive and the filter shows its kind.
-pub fn cull(graph: &GraphModel, filter: &FilterState) -> Cull {
-    let visible = filter.visible_nodes(
+///
+/// With `wave: Some(_)`, nodes are further restricted to ones the wavefront
+/// has FULLY reached (`0 <= depth <= current`) — an unreached node is not
+/// uploaded at all, never merely faded. Edges get one extra allowance beyond
+/// that: the "in-flight" edge for the CURRENT hop (one endpoint already
+/// reached, the other exactly one hop ahead) survives too, reordered
+/// lower-depth-endpoint-first so `edge_state`'s `progress` value and the GPU
+/// shader agree on which end the line grows FROM — regardless of the call
+/// direction or which BFS direction produced the depths. Anything further
+/// ahead than that is culled outright.
+pub fn cull(graph: &GraphModel, filter: &FilterState, wave: Option<Wavefront>) -> Cull {
+    let filter_visible = filter.visible_nodes(
         &graph.prod_reachable,
         &graph.dead,
         &graph.test_only,
         &graph.generated,
     );
+    let visible: Vec<bool> = match &wave {
+        None => filter_visible.clone(),
+        Some(w) => filter_visible
+            .iter()
+            .enumerate()
+            .map(|(i, &fv)| fv && w.depth[i] >= 0 && w.depth[i] <= w.current)
+            .collect(),
+    };
     let nodes: Vec<usize> = (0..graph.node_count()).filter(|&i| visible[i]).collect();
-    let edges: Vec<(usize, usize, bool)> = graph
-        .directed_edges
-        .iter()
-        .copied()
-        .filter(|&(a, b, dynamic)| visible[a] && visible[b] && filter.edge_visible(dynamic))
-        .collect();
+
+    let mut edges: Vec<(usize, usize, bool)> = Vec::new();
+    for &(a, b, dynamic) in &graph.directed_edges {
+        if !(filter_visible[a] && filter_visible[b] && filter.edge_visible(dynamic)) {
+            continue;
+        }
+        match &wave {
+            None => edges.push((a, b, dynamic)),
+            Some(w) => {
+                let (da, db) = (w.depth[a], w.depth[b]);
+                if da < 0 || db < 0 {
+                    continue; // never reached by the BFS at all
+                }
+                let (lo_i, hi_i, lo_d, hi_d) = if da <= db { (a, b, da, db) } else { (b, a, db, da) };
+                let in_flight = hi_d == w.current + 1 && lo_d <= w.current && w.growth;
+                if hi_d <= w.current || in_flight {
+                    edges.push((lo_i, hi_i, dynamic));
+                }
+            }
+        }
+    }
     Cull { visible, nodes, edges }
 }
 
@@ -254,6 +319,12 @@ pub fn static_interleaves(
 /// wavefront and the selection highlight into one pass so they compose
 /// instead of fighting. (No filter fold: culled nodes are not uploaded at
 /// all — that is the whole point of the cull.)
+///
+/// When `anim_mode != Off`, `c` is assumed to already be a
+/// [`cull`]-with-[`Wavefront`] result: every uploaded node satisfies
+/// `0 <= anim_depth[g] <= anim_current` by construction (an unreached node
+/// is never in `c.nodes` at all — see `cull`'s doc — so there is no "fade
+/// the rest of the haze" branch here to fight with the real cull upstream).
 pub fn node_state(
     graph: &GraphModel,
     c: &Cull,
@@ -266,10 +337,7 @@ pub fn node_state(
     for &g in &c.nodes {
         let (mut alpha, mut glow, mut mix) = (0.85_f32, 0.0_f32, 0.0_f32);
         if anim_mode != AnimMode::Off {
-            let d = anim_depth[g];
-            if d < 0 || d > anim_current {
-                alpha = ANIM_FADE_ALPHA;
-            } else if d == anim_current {
+            if anim_depth[g] == anim_current {
                 alpha = 1.0;
                 glow = 0.9;
                 mix = 1.0;
@@ -294,26 +362,41 @@ pub fn node_state(
     out
 }
 
-/// Per-uploaded-edge `[alpha, colorMix, 0, 0]`. The base alpha drops at
-/// scale (>4000 visible edges) so a dense tier stays readable — same
-/// threshold as the spike.
+/// Per-uploaded-edge `[alpha, colorMix, progress, 0]`. The base alpha drops
+/// at scale (>4000 visible edges) so a dense tier stays readable — same
+/// threshold as the spike. `progress` (slot 2, previously always-zero
+/// padding — see `gl/shaders.rs`'s `EDGE_VS`) is the GPU interpolation
+/// factor the vertex shader draws the line to, `mix(loDepthEnd, hiDepthEnd,
+/// progress)`: `1.0` for every edge outside an active animation (fully
+/// drawn — unchanged visual for the Off/selection paths) and for any edge
+/// already fully behind the wavefront, and the live `hop_progress` for the
+/// single in-flight band `cull`-with-[`Wavefront`] admits (one endpoint at
+/// `anim_current`, the other one hop ahead) — the "draw a line from one node
+/// to the next" requirement. `c.edges` is assumed lower-depth-endpoint-first
+/// (guaranteed by `cull` whenever a `Wavefront` was passed), so `a` is always
+/// the line's grow-FROM end while animating.
 pub fn edge_state(
     c: &Cull,
     selected: Option<usize>,
     anim_mode: AnimMode,
     anim_depth: &[i32],
     anim_current: i32,
+    hop_progress: f32,
 ) -> Vec<f32> {
     let base = if c.edges.len() > 4000 { 0.05 } else { 0.28 };
     let mut out = Vec::with_capacity(c.edges.len() * 4);
     for &(a, b, _) in &c.edges {
-        let (mut alpha, mut mix) = (base, 0.0_f32);
+        let (mut alpha, mut mix, mut progress) = (base, 0.0_f32, 1.0_f32);
         if anim_mode != AnimMode::Off {
-            let (da, db) = (anim_depth[a], anim_depth[b]);
-            let both_reached = da >= 0 && db >= 0 && da <= anim_current && db <= anim_current;
-            if !both_reached {
-                alpha = ANIM_FADE_ALPHA;
-            } else if da == anim_current || db == anim_current {
+            let hi_depth = anim_depth[a].max(anim_depth[b]);
+            if hi_depth == anim_current + 1 {
+                // In-flight: the one hop this wavefront is currently drawing
+                // toward. `progress` stays the live hop fraction; every other
+                // branch leaves it at the 1.0 default (fully drawn).
+                alpha = 0.9;
+                mix = 1.0;
+                progress = hop_progress;
+            } else if hi_depth == anim_current {
                 alpha = 0.9;
                 mix = 1.0;
             } else {
@@ -328,9 +411,42 @@ pub fn edge_state(
                 alpha = SELECT_FADE_ALPHA * 0.5;
             }
         }
-        out.extend_from_slice(&[alpha, mix, 0.0, 0.0]);
+        out.extend_from_slice(&[alpha, mix, progress, 0.0]);
     }
     out
+}
+
+/// Pure timing step for the wavefront (called once per RAF frame while
+/// playing): advances `hop_progress` by `dt_ms / hop_duration_ms`, rolling
+/// over into `current_depth` (clamped to `max_depth`) whenever progress
+/// reaches 1.0 — possibly several hops at once if `dt_ms` is unusually large
+/// (e.g. a backgrounded tab's RAF loop resuming after a stall; see
+/// `STALL_RESUME_THRESHOLD_MS` in `code_graph_view.rs`). Returns
+/// `(new_depth, new_hop_progress, finished)`; once `finished` is true the
+/// wavefront has reached `max_depth` and `hop_progress` is pinned at 0 —
+/// there is no next hop to draw a partial line toward, so playback should
+/// stop rather than free-spin.
+pub fn advance_hop(
+    current_depth: i32,
+    hop_progress: f32,
+    max_depth: i32,
+    dt_ms: f64,
+    hop_duration_ms: f64,
+) -> (i32, f32, bool) {
+    if current_depth >= max_depth || hop_duration_ms <= 0.0 {
+        return (current_depth.max(max_depth), 0.0, true);
+    }
+    let mut depth = current_depth;
+    let mut progress = hop_progress + (dt_ms / hop_duration_ms) as f32;
+    while progress >= 1.0 && depth < max_depth {
+        progress -= 1.0;
+        depth += 1;
+    }
+    if depth >= max_depth {
+        (depth, 0.0, true)
+    } else {
+        (depth, progress.max(0.0), false)
+    }
 }
 
 /// Fit-to-viewport zoom for a fresh layout, against the 90th-percentile
@@ -376,6 +492,17 @@ pub struct ViewState {
     pub anim_depth: Vec<i32>,
     pub anim_max_depth: i32,
     pub anim_current_depth: i32,
+    /// Progress (0..1) through the hop from `anim_current_depth` toward
+    /// `anim_current_depth + 1` — the GPU-shader interpolation factor for the
+    /// one in-flight edge band `cull` admits while playing. Always `0.0`
+    /// outside an active hop (mode off, paused-at-a-clean-boundary via
+    /// step/scrub, or finished).
+    pub anim_hop_progress: f32,
+    /// `prefers-reduced-motion: reduce`, read once when the tier's layout is
+    /// (re)seeded (`code_graph_view.rs`) — gates both the pacing constant
+    /// `advance_animation` uses and whether `cull` admits the in-flight
+    /// partial-progress band at all (see `Wavefront::growth`).
+    pub reduced_motion: bool,
 }
 
 impl ViewState {
@@ -388,9 +515,10 @@ impl ViewState {
         pan_x: f32,
         pan_y: f32,
         zoom: f32,
+        reduced_motion: bool,
     ) -> Self {
         let filter = FilterState::default();
-        let cull = cull(&graph, &filter);
+        let cull = cull(&graph, &filter, None);
         Self {
             graph,
             positions,
@@ -406,13 +534,23 @@ impl ViewState {
             anim_depth: Vec::new(),
             anim_max_depth: 0,
             anim_current_depth: 0,
+            anim_hop_progress: 0.0,
+            reduced_motion,
         }
     }
 
-    /// Re-apply the current filter (after a checkbox flip). A selection
-    /// culled by the new filter is cleared — it is no longer on the canvas.
+    /// Re-apply the current filter (after a checkbox flip) AND, while an
+    /// animation is running, the current wavefront depth/progress — the two
+    /// restrictions compose (a filter change while mid-animation must not
+    /// resurrect edges the wavefront hasn't reached). A selection culled by
+    /// either one is cleared — it is no longer on the canvas.
     pub fn recompute_cull(&mut self) {
-        self.cull = cull(&self.graph, &self.filter);
+        let wave = (self.anim_mode != AnimMode::Off).then_some(Wavefront {
+            depth: &self.anim_depth,
+            current: self.anim_current_depth,
+            growth: !self.reduced_motion,
+        });
+        self.cull = cull(&self.graph, &self.filter, wave);
         if let Some(s) = self.selected {
             if !self.cull.visible[s] {
                 self.selected = None;
@@ -421,7 +559,9 @@ impl ViewState {
     }
 
     /// Re-run the BFS wavefront for the current animation mode (seeds: the
-    /// roots, or the selected node for Outbound/Inbound).
+    /// roots, or the selected node for Outbound/Inbound), reset to a clean
+    /// depth-0 boundary, and re-cull to match (mode Off drops the wavefront
+    /// restriction entirely, back to filter-only).
     pub fn recompute_bfs(&mut self) {
         let n = self.graph.node_count();
         let layers = match self.anim_mode {
@@ -441,6 +581,40 @@ impl ViewState {
         self.anim_max_depth = layers.len().saturating_sub(1) as i32;
         self.anim_depth = depth_field(n, &layers);
         self.anim_current_depth = 0;
+        self.anim_hop_progress = 0.0;
+        self.recompute_cull();
+    }
+
+    /// Jump the wavefront straight to `depth` (step ⏮/⏭ or the scrub slider)
+    /// — always a CLEAN boundary: `anim_hop_progress` resets to 0, so no
+    /// edge is left mid-growth. Re-culls to match (the visible node/edge set
+    /// changes at the new depth), same as a mode/selection reseed.
+    pub fn set_anim_depth(&mut self, depth: i32) {
+        self.anim_current_depth = depth.clamp(0, self.anim_max_depth);
+        self.anim_hop_progress = 0.0;
+        self.recompute_cull();
+    }
+
+    /// Advance the wavefront by `dt_ms` of playback time (one RAF frame while
+    /// playing) — the pure timing/pacing logic lives in [`advance_hop`], gated
+    /// by `reduced_motion` for which cadence constant applies. Returns
+    /// `(boundary_crossed, finished)`: `boundary_crossed` tells the caller
+    /// whether the node/edge SET changed (a `recompute_cull` ran, so a full
+    /// re-upload of the STATIC buffers is needed) or only `anim_hop_progress`
+    /// moved (a DYNAMIC-only re-upload suffices); `finished` tells the caller
+    /// to stop playback.
+    pub fn advance_animation(&mut self, dt_ms: f64) -> (bool, bool) {
+        let hop_ms =
+            if self.reduced_motion { REDUCED_MOTION_HOP_DURATION_MS } else { HOP_DURATION_MS };
+        let (depth, progress, finished) =
+            advance_hop(self.anim_current_depth, self.anim_hop_progress, self.anim_max_depth, dt_ms, hop_ms);
+        let boundary_crossed = depth != self.anim_current_depth;
+        self.anim_current_depth = depth;
+        self.anim_hop_progress = progress;
+        if boundary_crossed {
+            self.recompute_cull();
+        }
+        (boundary_crossed, finished)
     }
 
     pub fn static_interleaves(&self) -> (Vec<f32>, Vec<f32>) {
@@ -465,6 +639,7 @@ impl ViewState {
             self.anim_mode,
             &self.anim_depth,
             self.anim_current_depth,
+            self.anim_hop_progress,
         )
     }
 }
@@ -528,7 +703,7 @@ mod tests {
     fn default_filter_culls_to_prod_reachable_and_drops_their_edges() {
         // THE required behaviour change: culling REMOVES, it does not fade.
         let g = build_graph(&fixture(), Tier::Functions);
-        let c = cull(&g, &FilterState::default());
+        let c = cull(&g, &FilterState::default(), None);
         assert_eq!(c.nodes, vec![0, 1], "dead + test nodes are culled by default");
         assert_eq!(c.edges.len(), 1, "edges touching culled nodes are culled too");
         assert_eq!(c.edges[0], (0, 1, false), "only main→handler survives");
@@ -545,9 +720,9 @@ mod tests {
             show_static: true,
             show_dynamic: true,
         };
-        assert_eq!(cull(&g, &f).edges.len(), 3, "everything shown");
+        assert_eq!(cull(&g, &f, None).edges.len(), 3, "everything shown");
         f.show_dynamic = false;
-        let c = cull(&g, &f);
+        let c = cull(&g, &f, None);
         assert_eq!(c.edges.len(), 2, "the dynamic edge is culled");
         assert!(c.edges.iter().all(|&(_, _, d)| !d));
     }
@@ -567,7 +742,7 @@ mod tests {
     fn node_state_interleave_matches_the_gpu_contract() {
         // 4 f32 per uploaded node: [alpha, glow, colorMix, 0].
         let g = build_graph(&fixture(), Tier::Functions);
-        let c = cull(&g, &FilterState::default());
+        let c = cull(&g, &FilterState::default(), None);
         let s = node_state(&g, &c, None, AnimMode::Off, &[], 0);
         assert_eq!(s.len(), c.nodes.len() * 4);
         assert_eq!(&s[0..4], &[0.85, 0.0, 0.0, 0.0], "base state, no selection/anim");
@@ -576,7 +751,7 @@ mod tests {
     #[test]
     fn node_state_selection_highlights_self_and_neighbours() {
         let g = build_graph(&fixture(), Tier::Functions);
-        let c = cull(&g, &FilterState::default());
+        let c = cull(&g, &FilterState::default(), None);
         // Select handler (graph idx 1); its uploaded neighbour is main (0).
         let s = node_state(&g, &c, Some(1), AnimMode::Off, &[], 0);
         let slot_main = &s[0..4];
@@ -586,34 +761,73 @@ mod tests {
     }
 
     #[test]
-    fn node_state_animation_wavefront_recedes_unreached() {
+    fn wavefront_cull_admits_reached_and_in_flight_only_and_recedes_never_uploads() {
+        // THE required behaviour change (maintainer: "what happened to
+        // culling the background items"): un-reached nodes/edges are not
+        // uploaded at all while an animation runs — no fade branch to check.
         let g = build_graph(&fixture(), Tier::Functions);
-        let c = cull(&g, &FilterState::default());
-        // Wavefront from main, currently at depth 0: main glows, handler (depth
-        // 1, not yet reached) recedes hard.
+        let depth = depth_field(4, &g.index.bfs(Direction::Outbound, &[0])); // main=0,handler=1,helper=2,tests=-1
+        let base = cull(&g, &FilterState::default(), None);
+
+        // At current_depth 0: only main (depth 0) is reached; handler (depth
+        // 1) is the in-flight target this hop, so main→handler survives as
+        // the growing edge, but handler itself is not uploaded yet.
+        let c0 = cull(&g, &FilterState::default(), Some(Wavefront { depth: &depth, current: 0, growth: true }));
+        assert_eq!(c0.nodes, vec![0], "handler hasn't fully arrived yet — not uploaded");
+        assert_eq!(c0.edges, vec![(0, 1, false)], "the in-flight edge is admitted, lo-depth-first");
+
+        // At current_depth 1: main and handler are both reached; the dead
+        // helper (depth 2, filtered out by the default reachability filter
+        // regardless) stays absent, and main→handler is now fully behind the
+        // wavefront (still present, no longer "in-flight").
+        let c1 = cull(&g, &FilterState::default(), Some(Wavefront { depth: &depth, current: 1, growth: true }));
+        assert_eq!(c1.nodes, vec![0, 1]);
+        assert_eq!(c1.edges, vec![(0, 1, false)]);
+
+        // With growth disabled (prefers-reduced-motion): the in-flight band
+        // collapses into a cull too — at current_depth 0 NEITHER node 1 nor
+        // the edge toward it appears; base filter cull is untouched.
+        let reduced =
+            cull(&g, &FilterState::default(), Some(Wavefront { depth: &depth, current: 0, growth: false }));
+        assert_eq!(reduced.nodes, vec![0]);
+        assert!(reduced.edges.is_empty(), "no partial edge without growth");
+        assert_eq!(base.nodes, vec![0, 1], "the filter-only cull is unaffected by any of this");
+    }
+
+    #[test]
+    fn edge_state_in_flight_progress_tracks_hop_progress_others_stay_full() {
+        let g = build_graph(&fixture(), Tier::Functions);
         let depth = depth_field(4, &g.index.bfs(Direction::Outbound, &[0]));
-        let s = node_state(&g, &c, None, AnimMode::Roots, &depth, 0);
-        assert_eq!(&s[0..4], &[1.0, 0.9, 1.0, 0.0], "current depth glows");
-        assert_eq!(s[4], ANIM_FADE_ALPHA, "ahead of the wavefront recedes");
-        let s = node_state(&g, &c, None, AnimMode::Roots, &depth, 1);
-        assert_eq!(&s[0..4], &[TRAIL_ALPHA, 0.0, 0.6, 0.0], "behind the wavefront trails");
+        let c = cull(&g, &FilterState::default(), Some(Wavefront { depth: &depth, current: 0, growth: true }));
+        // Only edge (0,1) is uploaded (see the cull test above) and it is
+        // in-flight at current_depth 0 — progress must equal hop_progress,
+        // not the Off-path default of 1.0.
+        let s = edge_state(&c, None, AnimMode::Roots, &depth, 0, 0.37);
+        assert_eq!(s.len(), 4);
+        assert_eq!(s[2], 0.37, "in-flight edge progress mirrors hop_progress exactly");
+
+        // Once main→handler is fully behind the wavefront (current_depth 1),
+        // its progress is pinned at 1.0 regardless of hop_progress.
+        let c1 = cull(&g, &FilterState::default(), Some(Wavefront { depth: &depth, current: 1, growth: true }));
+        let s1 = edge_state(&c1, None, AnimMode::Roots, &depth, 1, 0.9);
+        assert_eq!(s1[2], 1.0, "a fully-reached edge is always fully drawn");
     }
 
     #[test]
     fn edge_state_interleave_and_selection_accent() {
         let g = build_graph(&fixture(), Tier::Functions);
-        let c = cull(&g, &FilterState::default());
-        let s = edge_state(&c, None, AnimMode::Off, &[], 0);
+        let c = cull(&g, &FilterState::default(), None);
+        let s = edge_state(&c, None, AnimMode::Off, &[], 0, 0.0);
         assert_eq!(s.len(), c.edges.len() * 4, "4 f32 per uploaded edge");
-        assert_eq!(&s[0..4], &[0.28, 0.0, 0.0, 0.0], "small-graph base alpha");
-        let s = edge_state(&c, Some(1), AnimMode::Off, &[], 0);
-        assert_eq!(&s[0..4], &[0.9, 1.0, 0.0, 0.0], "edge touching the selection accents");
+        assert_eq!(&s[0..4], &[0.28, 0.0, 1.0, 0.0], "small-graph base alpha, fully drawn (Off)");
+        let s = edge_state(&c, Some(1), AnimMode::Off, &[], 0, 0.0);
+        assert_eq!(&s[0..4], &[0.9, 1.0, 1.0, 0.0], "edge touching the selection accents, fully drawn");
     }
 
     #[test]
     fn static_interleaves_follow_the_upload_layout() {
         let g = build_graph(&fixture(), Tier::Functions);
-        let c = cull(&g, &FilterState::default());
+        let c = cull(&g, &FilterState::default(), None);
         let positions = vec![(0.0, 0.0), (10.0, 0.0), (20.0, 0.0), (30.0, 0.0)];
         let (npr, ee) = static_interleaves(&g, &c, &positions);
         assert_eq!(npr.len(), c.nodes.len() * 3, "[x, y, radius] per node");
@@ -635,7 +849,7 @@ mod tests {
         let g = build_graph(&fixture(), Tier::Functions);
         let sim = simulate(4, &g.layout_edges, 42, &ForceConfig { max_ticks: 5, ..ForceConfig::default() });
         let positions: Vec<(f32, f32)> = sim.positions.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
-        let mut vs = ViewState::new(g, positions, sim.tree, 0.0, 0.0, 1.0);
+        let mut vs = ViewState::new(g, positions, sim.tree, 0.0, 0.0, 1.0, false);
         // Select the dead node while everything is shown, then cull it away.
         vs.filter.show_dead = true;
         vs.recompute_cull();
@@ -651,7 +865,7 @@ mod tests {
         let g = build_graph(&fixture(), Tier::Functions);
         let sim = simulate(4, &g.layout_edges, 42, &ForceConfig { max_ticks: 5, ..ForceConfig::default() });
         let positions: Vec<(f32, f32)> = sim.positions.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
-        let mut vs = ViewState::new(g, positions, sim.tree, 0.0, 0.0, 1.0);
+        let mut vs = ViewState::new(g, positions, sim.tree, 0.0, 0.0, 1.0, false);
 
         vs.anim_mode = AnimMode::Roots;
         vs.recompute_bfs();
@@ -665,6 +879,122 @@ mod tests {
         assert_eq!(vs.anim_depth[2], 0, "inbound seeds at the selection");
         assert_eq!(vs.anim_depth[0], 2, "who reaches helper: handler, then main");
         assert_eq!(vs.anim_current_depth, 0);
+    }
+
+    #[test]
+    fn advance_hop_reaches_a_hop_boundary_in_the_expected_frame_count() {
+        // Readable-trace pacing check: at a healthy 60fps (~16.67ms/frame)
+        // and HOP_DURATION_MS = 1500ms, a hop should take roughly
+        // 1500 / 16.667 = 90 frames to cross — the concrete number that
+        // makes "roughly 1-2s per hop" true in practice, not just in the
+        // constant's value. A ±1 frame tolerance absorbs f32 accumulation
+        // rounding, not a real pacing defect.
+        let frame_ms = 1000.0 / 60.0;
+        let (mut depth, mut progress) = (0i32, 0.0f32);
+        let mut frames = 0usize;
+        loop {
+            let (d, p, _finished) = advance_hop(depth, progress, 5, frame_ms, HOP_DURATION_MS);
+            frames += 1;
+            if d != depth {
+                break;
+            }
+            depth = d;
+            progress = p;
+        }
+        let expected = (HOP_DURATION_MS / frame_ms).ceil() as i64;
+        assert!(
+            (frames as i64 - expected).abs() <= 1,
+            "a hop should cross in ~{expected} frames at 60fps/{HOP_DURATION_MS}ms-per-hop, got {frames}"
+        );
+        assert!((45..=100).contains(&frames), "readable trace ~1.5s at 60fps is ~90 frames, got {frames}");
+    }
+
+    #[test]
+    fn advance_hop_progress_is_monotonic_within_a_hop_and_crosses_every_boundary() {
+        // Within a hop, `hop_progress` only ever climbs — never resets or
+        // regresses frame-over-frame, so the edge growing this hop never
+        // visibly snaps backward. Rollovers carry the overshoot remainder
+        // (not a hard-reset 0) so the pacing does not drift from wall-clock
+        // time across many hops — the CLEAN 0 guarantee is `set_anim_depth`'s
+        // (explicit step/scrub) job, exercised separately below.
+        let frame_ms = 1000.0 / 60.0;
+        let (mut depth, mut progress) = (0i32, 0.0f32);
+        let mut last_progress = -1.0f32;
+        let mut crossings = 0;
+        for _ in 0..400 {
+            let (d, p, finished) = advance_hop(depth, progress, 3, frame_ms, HOP_DURATION_MS);
+            assert!((0.0..1.0).contains(&p) || finished, "hop_progress stays a valid fraction");
+            if d == depth {
+                assert!(p > last_progress, "progress must strictly increase frame over frame within a hop");
+            } else {
+                crossings += 1;
+            }
+            depth = d;
+            last_progress = p; // a fresh hop's own monotonic run starts from this frame's value
+            progress = p;
+            if finished {
+                break;
+            }
+        }
+        assert_eq!(crossings, 3, "every hop up to max_depth 3 crosses exactly once");
+        assert_eq!(depth, 3);
+    }
+
+    #[test]
+    fn stepping_and_scrubbing_land_on_clean_depth_boundaries_and_reset_progress() {
+        let g = build_graph(&fixture(), Tier::Functions);
+        let sim = simulate(4, &g.layout_edges, 42, &ForceConfig { max_ticks: 5, ..ForceConfig::default() });
+        let positions: Vec<(f32, f32)> = sim.positions.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
+        let mut vs = ViewState::new(g, positions, sim.tree, 0.0, 0.0, 1.0, false);
+        vs.anim_mode = AnimMode::Roots;
+        vs.recompute_bfs();
+
+        // Simulate mid-hop playback progress, then step — the step/scrub
+        // path must land on an exact depth with hop_progress reset to 0,
+        // never carrying the partial hop forward (the "clean depth
+        // boundaries" requirement for step/scrub).
+        vs.anim_hop_progress = 0.73;
+        vs.set_anim_depth(1);
+        assert_eq!(vs.anim_current_depth, 1);
+        assert_eq!(vs.anim_hop_progress, 0.0, "a step/scrub always lands on a clean boundary");
+        let expected =
+            cull(&vs.graph, &vs.filter, Some(Wavefront { depth: &vs.anim_depth, current: 1, growth: true }));
+        assert_eq!(vs.cull.nodes, expected.nodes, "the re-cull matches a plain depth-1 boundary");
+        assert_eq!(vs.cull.edges, expected.edges, "no in-flight edge lingers from the pre-step progress");
+
+        // Out-of-range depths clamp rather than panicking.
+        vs.set_anim_depth(999);
+        assert_eq!(vs.anim_current_depth, vs.anim_max_depth);
+        vs.set_anim_depth(-5);
+        assert_eq!(vs.anim_current_depth, 0);
+    }
+
+    #[test]
+    fn advance_animation_reports_boundary_crossings_and_recomputes_cull_only_then() {
+        let g = build_graph(&fixture(), Tier::Functions);
+        let sim = simulate(4, &g.layout_edges, 42, &ForceConfig { max_ticks: 5, ..ForceConfig::default() });
+        let positions: Vec<(f32, f32)> = sim.positions.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
+        let mut vs = ViewState::new(g, positions, sim.tree, 0.0, 0.0, 1.0, false);
+        vs.anim_mode = AnimMode::Roots;
+        vs.recompute_bfs(); // max_depth 2: main -> handler -> helper
+
+        let (crossed, finished) = vs.advance_animation(HOP_DURATION_MS / 4.0);
+        assert!(!crossed, "a quarter of a hop must not cross a depth boundary");
+        assert!(!finished);
+        assert!(vs.anim_hop_progress > 0.0 && vs.anim_hop_progress < 1.0);
+
+        let (crossed, _finished) = vs.advance_animation(HOP_DURATION_MS);
+        assert!(crossed, "enough elapsed time must cross into the next depth");
+        assert_eq!(vs.anim_current_depth, 1);
+
+        loop {
+            let (_crossed, finished) = vs.advance_animation(HOP_DURATION_MS);
+            if finished {
+                break;
+            }
+        }
+        assert_eq!(vs.anim_current_depth, vs.anim_max_depth, "playback stops exactly at the end");
+        assert_eq!(vs.anim_hop_progress, 0.0);
     }
 
     // --- ≥1000-node interconnected-graph tests ------------------------------
@@ -738,7 +1068,7 @@ mod tests {
         assert_eq!(g.node_count(), n);
         assert!(g.directed_edges.len() > n, "the fixture is interconnected");
 
-        let c = cull(&g, &FilterState::default());
+        let c = cull(&g, &FilterState::default(), None);
         // "showing N of M" accounting: the default filter shows prod-reachable
         // only, and the visible map, the node list, and the flag slices must
         // all agree on N.
@@ -769,7 +1099,7 @@ mod tests {
     fn dynamic_state_interleaves_are_exact_4f32_per_instance_at_1000_nodes() {
         let (doc, n) = fixture_1000();
         let g = build_graph(&doc, Tier::Functions);
-        let c = cull(&g, &show_everything());
+        let c = cull(&g, &show_everything(), None);
         assert_eq!(c.nodes.len(), n, "show-everything uploads the full graph");
         assert!(c.edges.len() > n, "full-scale edge upload");
 
@@ -784,12 +1114,14 @@ mod tests {
             assert_eq!(slot[3], 0.0, "node padding slot stays zero");
         }
 
-        // Edges: [alpha, colorMix, 0, 0] per uploaded instance.
-        let es = edge_state(&c, None, AnimMode::Off, &[], 0);
+        // Edges: [alpha, colorMix, progress, 0] per uploaded instance — the
+        // Off path always draws full length (progress 1.0, formerly
+        // always-zero padding — see `gl/shaders.rs`'s `EDGE_VS`).
+        let es = edge_state(&c, None, AnimMode::Off, &[], 0, 0.0);
         assert_eq!(es.len(), c.edges.len() * 4, "exactly 4 f32 per uploaded edge");
         for slot in es.chunks_exact(4) {
             assert!(slot[0].is_finite() && slot[1].is_finite(), "edge state must stay finite");
-            assert_eq!(slot[2], 0.0, "edge padding slot 2 stays zero");
+            assert_eq!(slot[2], 1.0, "edge fully drawn outside an animation");
             assert_eq!(slot[3], 0.0, "edge padding slot 3 stays zero");
         }
     }
@@ -821,15 +1153,27 @@ mod tests {
             }
         }
 
-        // The wavefront composes with the cull at scale without going
-        // non-finite (culled nodes keep a depth; they just aren't drawn).
-        let c = cull(&g, &FilterState::default());
+        // The wavefront composes with the filter cull at scale — REQUIREMENT:
+        // un-reached nodes/edges are culled from the upload while animating,
+        // not merely faded, so a real wavefront at depth 1 (of the fixture's
+        // much deeper BFS) must upload strictly fewer nodes/edges than the
+        // filter-only cull, and every value must stay finite.
+        let base = cull(&g, &FilterState::default(), None);
+        let wave = Wavefront { depth: &depth, current: 1, growth: true };
+        let c = cull(&g, &FilterState::default(), Some(wave));
+        assert!(c.nodes.len() < base.nodes.len(), "the wavefront must actually cull at scale");
+        assert!(c.nodes.iter().all(|&i| depth[i] >= 0 && depth[i] <= 1), "only depth 0/1 nodes upload");
+
         let ns = node_state(&g, &c, None, AnimMode::Roots, &depth, 1);
         assert_eq!(ns.len(), c.nodes.len() * 4);
         assert!(ns.iter().all(|v| v.is_finite()), "animated node state stays finite at scale");
-        let es = edge_state(&c, None, AnimMode::Roots, &depth, 1);
+        let es = edge_state(&c, None, AnimMode::Roots, &depth, 1, 0.6);
         assert_eq!(es.len(), c.edges.len() * 4);
         assert!(es.iter().all(|v| v.is_finite()), "animated edge state stays finite at scale");
+        assert!(!c.edges.is_empty(), "sanity: the fixture's depth-1 wavefront has in-flight/settled edges");
+        for &(lo, hi, _) in &c.edges {
+            assert!(depth[lo] <= depth[hi], "cull reorders every edge lower-depth-endpoint-first");
+        }
     }
 
     /// Regression for the P0 report's second symptom ("changing options...
@@ -849,7 +1193,7 @@ mod tests {
         let sim = simulate(n, &g.layout_edges, 42, &ForceConfig { max_ticks: 20, ..ForceConfig::default() });
         let positions: Vec<(f32, f32)> = sim.positions.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
         let before = positions.clone();
-        let mut vs = ViewState::new(g, positions, sim.tree, 0.0, 0.0, 1.0);
+        let mut vs = ViewState::new(g, positions, sim.tree, 0.0, 0.0, 1.0, false);
 
         // Every filter checkbox the toolbar exposes, flipped one at a time.
         for flip in [

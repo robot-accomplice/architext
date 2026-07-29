@@ -94,6 +94,18 @@ const LAYOUT_FRAME_BUDGET_MS: f64 = 12.0;
 /// against the alternative of a canvas frozen forever.
 const STALL_RESUME_THRESHOLD_MS: f64 = 500.0;
 
+/// `prefers-reduced-motion: reduce` — read once per tier (re)seed and stashed
+/// on `ViewState`, never polled per frame. Motion-reduced users fall back to
+/// the pre-rework "instant reveal" (see `code_graph_view_model::Wavefront`'s
+/// `growth` field and `ViewState::advance_animation`'s cadence choice)
+/// instead of the progressive edge-growth animation.
+fn prefers_reduced_motion() -> bool {
+    web_sys::window()
+        .and_then(|w| w.match_media("(prefers-reduced-motion: reduce)").ok().flatten())
+        .map(|mql| mql.matches())
+        .unwrap_or(false)
+}
+
 /// Live render-pipeline progress facts for the staged progress panel —
 /// covers the two stages of tier entry that are genuinely observable from
 /// this component:
@@ -196,7 +208,6 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // GPU + view state live OUTSIDE Leptos signals (see ViewState docs).
     let gpu: Rc<RefCell<Option<Renderer>>> = Rc::new(RefCell::new(None));
     let vs: Rc<RefCell<Option<ViewState>>> = Rc::new(RefCell::new(None));
-    let interval: Rc<RefCell<Option<gloo_timers::callback::Interval>>> = Rc::new(RefCell::new(None));
     // Progressive layout (Task 5): the seeded, still-ticking driver for the
     // current tier. The RAF loop slices it; `None` once settled. Plain
     // `Cell`s for the instrumentation/camera bookkeeping — nothing reads
@@ -209,6 +220,12 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // actually ran. The `visibilitychange` handler below compares against
     // this to tell a genuinely stalled loop from a merely-slow one.
     let last_frame_at: Rc<Cell<f64>> = Rc::new(Cell::new(0.0));
+    // Animation-rework: the RAF timestamp of the last frame that actually
+    // advanced the wavefront while playing — `0.0` is the "start the dt
+    // clock fresh next frame" sentinel (same pattern as `last_frame_at`),
+    // set whenever `play()` (re)starts so the very first frame after a press
+    // never jumps by however long the animation sat paused/stopped.
+    let last_anim_frame_at: Rc<Cell<f64>> = Rc::new(Cell::new(0.0));
 
     let alive: Rc<RefCell<bool>> = Rc::new(RefCell::new(true));
     on_cleanup({
@@ -295,6 +312,15 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                     v.graph.directed_edges.len(),
                 ));
                 selected_label.set(v.selected.map(|i| (v.graph.labels[i].clone(), v.graph.degree[i])));
+                // Depth-chrome mirror: `full_upload` is now the path
+                // `set_anim_mode`/`set_depth`/a hop-boundary crossing take
+                // (the cull set changes with the wavefront — see their call
+                // sites), so it must mirror the depth label/slider itself
+                // rather than leaving that to `sync_and_upload` alone, or
+                // "depth N / M" and the scrub slider go stale on every mode
+                // change and step/scrub.
+                anim_depth_sig.set(v.anim_current_depth);
+                anim_max_sig.set(v.anim_max_depth);
                 // Inspector mirror (Task 6): runs on the cull/tier paths too,
                 // so a filter that culls the selection (or a tier switch,
                 // which rebuilds `vs` with `selected: None`) also clears the
@@ -311,13 +337,25 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     };
 
     // --- Animation mode / depth / play-pause / step ---
+    //
+    // Progressive edge-draw rework: playback no longer runs its own
+    // `gloo_timers::callback::Interval` ticking whole depth layers on/off —
+    // it rides the ALREADY-RUNNING continuous RAF loop below, which each
+    // frame calls `ViewState::advance_animation` (pure timing in
+    // `code_graph_view_model::advance_hop`) to move `anim_hop_progress`
+    // toward the next depth at the readable-trace pace. `play`/`pause` here
+    // are just the `anim_playing_sig` flag the RAF loop gates on, plus the
+    // "restart from 0 if already at the end" convenience the button had
+    // before. `set_anim_mode`/`set_depth` still do a FULL upload (not just
+    // `sync_and_upload`): the wavefront restriction now changes which
+    // nodes/edges are culled from the upload (see `ViewState::recompute_cull`
+    // and `cull`'s `Wavefront` doc), so the STATIC buffers may need rebuilding
+    // on every mode/depth change, not just the dynamic per-instance state.
     let set_anim_mode = {
         let vs = vs.clone();
-        let sync_and_upload = sync_and_upload.clone();
-        let interval = interval.clone();
+        let full_upload = full_upload.clone();
         let alive = alive.clone();
         move |mode: AnimMode| {
-            *interval.borrow_mut() = None;
             if !*alive.borrow() {
                 return;
             }
@@ -325,23 +363,23 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             anim_mode_sig.set(mode);
             if let Some(v) = vs.borrow_mut().as_mut() {
                 v.anim_mode = mode;
-                v.recompute_bfs();
+                v.recompute_bfs(); // also re-culls to match (see its doc)
             }
-            sync_and_upload();
+            full_upload();
         }
     };
     let set_depth = {
         let vs = vs.clone();
-        let sync_and_upload = sync_and_upload.clone();
+        let full_upload = full_upload.clone();
         let alive = alive.clone();
         move |d: i32| {
             if let Some(v) = vs.borrow_mut().as_mut() {
-                v.anim_current_depth = d.clamp(0, v.anim_max_depth);
+                v.set_anim_depth(d); // clamps, resets hop_progress, re-culls
             }
             if !*alive.borrow() {
                 return;
             }
-            sync_and_upload();
+            full_upload();
         }
     };
     let step = {
@@ -361,8 +399,8 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     };
     let play = {
         let vs = vs.clone();
-        let interval = interval.clone();
-        let sync_and_upload = sync_and_upload.clone();
+        let full_upload = full_upload.clone();
+        let last_anim_frame_at = last_anim_frame_at.clone();
         let alive = alive.clone();
         move || {
             if !*alive.borrow() {
@@ -370,43 +408,27 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             }
             // Pressing play after the wavefront reached the end RESTARTS it
             // from depth 0 rather than freezing on the final frame.
+            let mut restarted = false;
             if let Some(v) = vs.borrow_mut().as_mut() {
                 if v.anim_current_depth >= v.anim_max_depth {
-                    v.anim_current_depth = 0;
+                    v.set_anim_depth(0);
+                    restarted = true;
                 }
             }
+            // Next RAF frame starts the playback dt clock fresh — otherwise
+            // its `now - last_anim_frame_at` would include however long the
+            // animation sat paused/stopped, and `advance_hop` (correctly)
+            // treats that as a huge dt and fast-forwards straight to the end.
+            last_anim_frame_at.set(0.0);
             anim_playing_sig.set(true);
-            let vs2 = vs.clone();
-            let sync2 = sync_and_upload.clone();
-            let interval2 = interval.clone();
-            let alive2 = alive.clone();
-            let tick = gloo_timers::callback::Interval::new(400, move || {
-                if !*alive2.borrow() {
-                    *interval2.borrow_mut() = None;
-                    return;
-                }
-                let mut done = false;
-                if let Some(v) = vs2.borrow_mut().as_mut() {
-                    if v.anim_current_depth >= v.anim_max_depth {
-                        done = true;
-                    } else {
-                        v.anim_current_depth += 1;
-                    }
-                }
-                sync2();
-                if done {
-                    *interval2.borrow_mut() = None;
-                    anim_playing_sig.set(false);
-                }
-            });
-            *interval.borrow_mut() = Some(tick);
+            if restarted {
+                full_upload();
+            }
         }
     };
     let pause = {
-        let interval = interval.clone();
         let alive = alive.clone();
         move || {
-            *interval.borrow_mut() = None;
             if !*alive.borrow() {
                 return;
             }
@@ -423,7 +445,6 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let gpu = gpu.clone();
         let vs = vs.clone();
         let alive = alive.clone();
-        let interval = interval.clone();
         let full_upload = full_upload.clone();
         let layout = layout.clone();
         let layout_t0 = layout_t0.clone();
@@ -452,7 +473,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 }
             }
 
-            *interval.borrow_mut() = None; // stop the previous tier's animation
+            anim_playing_sig.set(false); // stop the previous tier's animation
 
             // Real, measured cost of stage 1 ("Building graph model") — see
             // `RenderProgress` docs for why this is the whole stage (no
@@ -482,7 +503,8 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // tier's size — a `bufferSubData` overflow (the spike's bug,
             // kept fixed). The initial hit-test tree covers the seeded
             // positions; the RAF loop replaces it with the settled tree.
-            let mut new_vs = ViewState::new(graph, positions, driver.hit_tree(), w / 2.0, h / 2.0, zoom);
+            let mut new_vs =
+                ViewState::new(graph, positions, driver.hit_tree(), w / 2.0, h / 2.0, zoom, prefers_reduced_motion());
             new_vs.layout_settling = settling;
             *vs.borrow_mut() = Some(new_vs);
             *layout.borrow_mut() = Some(driver);
@@ -527,12 +549,14 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let alive = alive.clone();
         let layout = layout.clone();
         let full_upload = full_upload.clone();
+        let sync_and_upload = sync_and_upload.clone();
         let set_anim_mode = set_anim_mode.clone();
         let play = play.clone();
         let layout_t0 = layout_t0.clone();
         let first_paint_logged = first_paint_logged.clone();
         let user_moved_camera = user_moved_camera.clone();
         let last_frame_at = last_frame_at.clone();
+        let last_anim_frame_at = last_anim_frame_at.clone();
         let perf = web_sys::window().and_then(|w| w.performance());
         type FrameCb = wasm_bindgen::closure::Closure<dyn FnMut(f64)>;
         let frame_cb: Rc<RefCell<Option<FrameCb>>> = Rc::new(RefCell::new(None));
@@ -670,6 +694,40 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                     }
                 }
             }
+            // --- Animation playback slice (progressive edge-draw rework) ---
+            // Rides this SAME RAF loop: while `anim_playing_sig` is set, each
+            // frame advances the wavefront's `hop_progress` by the elapsed
+            // wall-clock time (pure timing in `ViewState::advance_animation`
+            // / `code_graph_view_model::advance_hop`, paced by
+            // `HOP_DURATION_MS` — the readable-trace 1-2s/hop). A hop-boundary
+            // crossing changes which nodes/edges `cull` admits (see its
+            // `Wavefront` doc) and needs a full re-upload; a same-hop tick
+            // only moves the in-flight edges' GPU `progress` floats, so the
+            // cheaper DYNAMIC-only `sync_and_upload` suffices — no per-frame
+            // STATIC rebuild, matching the "no per-edge CPU work beyond the
+            // existing dynamic-upload path" constraint.
+            if anim_playing_sig.get_untracked() {
+                let dt = if last_anim_frame_at.get() > 0.0 { now - last_anim_frame_at.get() } else { 0.0 };
+                last_anim_frame_at.set(now);
+                let mut outcome: Option<(bool, bool)> = None;
+                if let Some(v) = vs.borrow_mut().as_mut() {
+                    if v.anim_mode != AnimMode::Off {
+                        outcome = Some(v.advance_animation(dt));
+                    }
+                }
+                if let Some((boundary_crossed, finished)) = outcome {
+                    if *alive.borrow() {
+                        if boundary_crossed {
+                            full_upload();
+                        } else {
+                            sync_and_upload();
+                        }
+                        if finished {
+                            anim_playing_sig.set(false);
+                        }
+                    }
+                }
+            }
             {
                 let mut ft = frame_times.borrow_mut();
                 ft.push(now);
@@ -804,6 +862,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     let on_click = {
         let vs = vs.clone();
         let sync_and_upload = sync_and_upload.clone();
+        let full_upload = full_upload.clone();
         move |ev: ev::MouseEvent| {
             if moved.get() {
                 return; // the mouseup that ends a drag is not a click
@@ -814,6 +873,11 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             let scale_y = canvas.height() as f64 / rect.height();
             let sx = (ev.client_x() as f64 - rect.left()) * scale_x;
             let sy = (ev.client_y() as f64 - rect.top()) * scale_y;
+            // Outbound/Inbound re-seed the BFS wavefront from the new
+            // selection, which changes what `cull` admits (see its
+            // `Wavefront` doc) — that needs a FULL re-upload, not just the
+            // dynamic selection-highlight path a plain click takes.
+            let mut cull_changed = false;
             if let Some(v) = vs.borrow_mut().as_mut() {
                 if v.layout_settling {
                     // The painted positions refresh every frame but the
@@ -830,10 +894,15 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 v.selected =
                     v.tree.query_point(gx as f64, gy as f64, hit_r as f64).filter(|&i| v.cull.visible[i]);
                 if v.anim_mode == AnimMode::Outbound || v.anim_mode == AnimMode::Inbound {
-                    v.recompute_bfs();
+                    v.recompute_bfs(); // also re-culls to match (see its doc)
+                    cull_changed = true;
                 }
             }
-            sync_and_upload();
+            if cull_changed {
+                full_upload();
+            } else {
+                sync_and_upload();
+            }
         }
     };
 
@@ -859,8 +928,9 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // --- TRUE CLEAR for the inspector's "‹ back to code graph" (Task 8) ---
     // The inspector can only clear the MIRROR signal
     // (`AppState::selected_code_graph_node`); without this effect the next
-    // `sync_and_upload` — e.g. the 400 ms auto-play tick — re-mirrors the
-    // still-selected canvas node and the clear never sticks. When the mirror
+    // `sync_and_upload` — e.g. the per-frame animation-playback tick —
+    // re-mirrors the still-selected canvas node and the clear never sticks.
+    // When the mirror
     // goes to None while the canvas still holds a selection, drop the canvas
     // selection too (this also deselects visually). No ping-pong: a canvas
     // click writes Some (early return here), and `sync_and_upload`'s equality

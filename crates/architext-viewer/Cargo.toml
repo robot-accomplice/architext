@@ -58,6 +58,9 @@ web-sys = { version = "0.3", features = [
     # against `performance.now()` and the time-to-first-paint /
     # time-to-settled instrumentation reads the same clock.
     "Performance",
+    # Code-graph animation rework: `prefers-reduced-motion` gate for the
+    # progressive edge-draw — read once per tier via `Window::match_media`.
+    "MediaQueryList",
 ] }
 
 # Same-origin async fetch of the Architext data docs (/data/**, /api/config)
