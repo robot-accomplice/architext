@@ -162,4 +162,54 @@ mod tests {
         assert!(!done, "10-tick budget cannot be done after one tick");
         assert_eq!(d.ticks_run(), 1, "a zero/negative budget must not starve progress");
     }
+
+    /// Root-cause regression for the blank-during-settle P0: the seeded
+    /// circle (`sqrt(node_count) * k`, see `Simulation::new`) is deliberately
+    /// WIDE so Barnes-Hut repulsion never starts from a degenerate 0/0
+    /// direction, but the simulation then CONTRACTS a large, well-connected
+    /// graph down to a much smaller settled footprint as attraction pulls
+    /// hubs together. Measured at 17,561 nodes (a real Magma-scale tier):
+    /// the extent shrinks from the ~7951-unit seed circle to a ~423-unit
+    /// settled footprint — a ~19x contraction. A camera fit only once, at
+    /// tick 0, therefore frames the WRONG (much too wide) extent for nearly
+    /// the entire settle: the real graph occupies a shrinking sliver near
+    /// the center of that frame, which reads as a blank canvas well before
+    /// the layout is actually done. This is why the view must re-fit the
+    /// camera on every ticked frame (`code_graph_view.rs`), not just at
+    /// seed and at the final settle.
+    #[test]
+    fn settle_contracts_far_below_the_seed_extent_at_scale() {
+        let (n, edges) = tests_support::interconnected(17_561, 3);
+        let cfg = ForceConfig::default();
+        let seed_radius = (n as f64).sqrt() * cfg.k;
+
+        let mut d = LayoutDriver::new(n, &edges, 1_469_598_103_934_665_603u64, &cfg);
+        // Tick 0: the seeded circle. Confirms the premise — the seed really
+        // does span (within RNG jitter) the whole `seed_radius` circle.
+        let seed_extent = max_abs_extent(&d.positions_f32());
+        assert!(
+            seed_extent > seed_radius as f32 * 0.9,
+            "seed extent {seed_extent} should be close to the {seed_radius:.0}-unit seed circle"
+        );
+
+        while !d.step_within(0.0, || 1.0e9) {}
+        let settled_extent = max_abs_extent(&d.positions_f32());
+
+        assert!(
+            settled_extent < seed_extent * 0.1,
+            "settled extent {settled_extent} should have contracted well below \
+             the seed extent {seed_extent} (a fixed tick-0 camera fit would \
+             frame mostly empty space around the settled graph)"
+        );
+    }
+
+    /// The largest absolute x or y coordinate across all positions — the
+    /// same quantity `fit_zoom`'s 90th-percentile bound approximates, close
+    /// enough to demonstrate the order-of-magnitude contraction above.
+    fn max_abs_extent(positions: &[(f32, f32)]) -> f32 {
+        positions
+            .iter()
+            .flat_map(|&(x, y)| [x.abs(), y.abs()])
+            .fold(0.0_f32, f32::max)
+    }
 }

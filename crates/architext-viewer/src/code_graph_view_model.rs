@@ -831,4 +831,50 @@ mod tests {
         assert_eq!(es.len(), c.edges.len() * 4);
         assert!(es.iter().all(|v| v.is_finite()), "animated edge state stays finite at scale");
     }
+
+    /// Regression for the P0 report's second symptom ("changing options...
+    /// clears the graph and never rerenders"): a filter checkbox or
+    /// animation-mode change must ONLY affect what is culled/highlighted,
+    /// never the force-simulated layout itself. `ViewState::recompute_cull`
+    /// and `recompute_bfs` are exactly what the view's filter effect and
+    /// `set_anim_mode` call on every option change (`code_graph_view.rs`);
+    /// this proves neither one perturbs `positions` — the same positions
+    /// the view's progressive layout driver is (or isn't) still ticking —
+    /// at real (1000+ interconnected node) scale, not just on the 4-node
+    /// fixture above.
+    #[test]
+    fn filter_and_anim_mode_changes_never_touch_the_settled_positions_at_1000_nodes() {
+        let (doc, n) = fixture_1000();
+        let g = build_graph(&doc, Tier::Functions);
+        let sim = simulate(n, &g.layout_edges, 42, &ForceConfig { max_ticks: 20, ..ForceConfig::default() });
+        let positions: Vec<(f32, f32)> = sim.positions.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
+        let before = positions.clone();
+        let mut vs = ViewState::new(g, positions, sim.tree, 0.0, 0.0, 1.0);
+
+        // Every filter checkbox the toolbar exposes, flipped one at a time.
+        for flip in [
+            |f: &mut FilterState| f.show_prod_reachable = !f.show_prod_reachable,
+            |f: &mut FilterState| f.show_dead = !f.show_dead,
+            |f: &mut FilterState| f.show_test_only = !f.show_test_only,
+            |f: &mut FilterState| f.show_generated = !f.show_generated,
+            |f: &mut FilterState| f.show_static = !f.show_static,
+            |f: &mut FilterState| f.show_dynamic = !f.show_dynamic,
+        ] {
+            flip(&mut vs.filter);
+            vs.recompute_cull();
+            assert_eq!(vs.positions, before, "a filter change must never move a single node");
+        }
+
+        // Every animation mode the toolbar exposes.
+        vs.selected = Some(0);
+        for mode in [AnimMode::Roots, AnimMode::Outbound, AnimMode::Inbound, AnimMode::Off] {
+            vs.anim_mode = mode;
+            vs.recompute_bfs();
+            assert_eq!(vs.positions, before, "an animation-mode change must never move a single node");
+        }
+
+        // The cull/BFS churn above must have actually done something (i.e.
+        // this test is not vacuously true because nothing changed at all).
+        assert_ne!(vs.cull.nodes.len(), 0, "sanity: the graph still has visible nodes");
+    }
 }

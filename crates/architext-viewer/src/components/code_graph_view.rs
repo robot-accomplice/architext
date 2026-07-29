@@ -81,6 +81,19 @@ use crate::state::{use_app_state, CodeGraphSelection};
 /// Small tiers blow through their whole layout in the first frame or two.
 const LAYOUT_FRAME_BUDGET_MS: f64 = 12.0;
 
+/// How long (ms, measured against the RAF timestamp clock) a frame may go
+/// missing before the `visibilitychange` handler force-resumes the loop.
+/// A healthy foreground tab paints every ~16 ms; 500 ms is >30x that, so it
+/// only fires for a genuinely stalled chain (backgrounded tab, minimized
+/// window, OS focus loss — browsers throttle or fully suspend RAF callbacks
+/// for hidden documents, confirmed directly: a bare `requestAnimationFrame`
+/// loop with zero app code fires 0 times in 5 s while `document.hidden` is
+/// true). The resumed frame can race a callback the browser was *also*
+/// about to redeliver on its own, briefly doubling the RAF chain until the
+/// component next unmounts — an accepted, harmless-in-practice tradeoff
+/// against the alternative of a canvas frozen forever.
+const STALL_RESUME_THRESHOLD_MS: f64 = 500.0;
+
 /// Outer surface: mirrors the 4-surface shape of the code-graph panel this
 /// replaces (no document / unreadable / refusal / real graph).
 #[component]
@@ -151,6 +164,10 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     let layout_t0: Rc<Cell<f64>> = Rc::new(Cell::new(0.0));
     let first_paint_logged: Rc<Cell<bool>> = Rc::new(Cell::new(false));
     let user_moved_camera: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+    // RAF resilience: the timestamp (RAF clock) of the last frame that
+    // actually ran. The `visibilitychange` handler below compares against
+    // this to tell a genuinely stalled loop from a merely-slow one.
+    let last_frame_at: Rc<Cell<f64>> = Rc::new(Cell::new(0.0));
 
     let alive: Rc<RefCell<bool>> = Rc::new(RefCell::new(true));
     on_cleanup({
@@ -457,15 +474,22 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let layout_t0 = layout_t0.clone();
         let first_paint_logged = first_paint_logged.clone();
         let user_moved_camera = user_moved_camera.clone();
+        let last_frame_at = last_frame_at.clone();
         let perf = web_sys::window().and_then(|w| w.performance());
         type FrameCb = wasm_bindgen::closure::Closure<dyn FnMut(f64)>;
         let frame_cb: Rc<RefCell<Option<FrameCb>>> = Rc::new(RefCell::new(None));
         let frame_times: Rc<RefCell<Vec<f64>>> = Rc::new(RefCell::new(Vec::with_capacity(120)));
         let frame_cb2 = frame_cb.clone();
+        // A third handle to the same leaked closure, for the `visibilitychange`
+        // listener below to re-arm the loop if it ever goes quiet (see there).
+        let frame_cb_vis = frame_cb.clone();
+        let alive_vis = alive.clone();
+        let last_frame_at_vis = last_frame_at.clone();
         *frame_cb.borrow_mut() = Some(wasm_bindgen::closure::Closure::wrap(Box::new(move |now: f64| {
             if !*alive.borrow() {
                 return;
             }
+            last_frame_at.set(now);
             // --- Progressive layout slice (Task 5) ---
             // Spend up to LAYOUT_FRAME_BUDGET_MS ticking the seeded layout,
             // then hand the frame back to input/paint. Positions are
@@ -484,12 +508,33 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                             });
                         let positions = d.positions_f32();
                         let (ticks, max) = (d.ticks_run(), d.max_ticks());
+                        // Never stomp a camera the user already moved.
+                        let refit = !user_moved_camera.get();
                         // Build the status line INSIDE the borrow but set the
                         // signal AFTER it is released — a signal write runs
                         // dependent effects synchronously, and one of those
                         // borrowing `vs` here would double-borrow the RefCell.
                         let status_line = if let Some(v) = vs.borrow_mut().as_mut() {
                             v.positions = positions;
+                            // Re-fit the camera on EVERY ticked frame, not
+                            // just tick 0 and the final settle: the sim's
+                            // footprint moves a great deal across the whole
+                            // settle (measured ~19x contraction at 17,561
+                            // nodes — see `code_graph_layout` tests), so a
+                            // camera fit only once at seed frames the WRONG
+                            // extent for nearly the entire settle, reading
+                            // as a blank canvas around a point the graph
+                            // has already shrunk away from. Continuous
+                            // refit keeps it legibly visible throughout.
+                            if refit {
+                                if let Some(canvas) = canvas_ref.get_untracked() {
+                                    v.zoom = fit_zoom(
+                                        &v.positions,
+                                        canvas.width() as f32,
+                                        canvas.height() as f32,
+                                    );
+                                }
+                            }
                             Some(format!(
                                 "{} nodes / {} edges — settling layout (tick {ticks}/{max}) — click-to-select deferred",
                                 v.graph.node_count(),
@@ -506,21 +551,9 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                         if done {
                             settled_ticks = Some(ticks);
                             let tree = d.hit_tree();
-                            // Re-fit to the settled extent — but never stomp a
-                            // camera the user already moved during the settle.
-                            let refit = !user_moved_camera.get();
                             if let Some(v) = vs.borrow_mut().as_mut() {
                                 v.tree = tree;
                                 v.layout_settling = false;
-                                if refit {
-                                    if let Some(canvas) = canvas_ref.get_untracked() {
-                                        v.zoom = fit_zoom(
-                                            &v.positions,
-                                            canvas.width() as f32,
-                                            canvas.height() as f32,
-                                        );
-                                    }
-                                }
                             }
                         }
                     }
@@ -596,6 +629,39 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             }
         }
         std::mem::forget(frame_cb); // intentional — cancelled via `alive`
+
+        // RAF resilience: browsers throttle or fully suspend
+        // `requestAnimationFrame` callbacks for a hidden/backgrounded
+        // document (confirmed directly — a bare RAF loop with no app code
+        // fires zero times in 5 s while `document.hidden` is true). There is
+        // otherwise no path back to painting if that happens mid-settle:
+        // the loop is the only thing that ever calls `draw`. On regaining
+        // visibility, force one resumed frame if the last one is stale
+        // beyond `STALL_RESUME_THRESHOLD_MS` — cheap insurance against a
+        // canvas stuck frozen forever, at the cost of a possible harmless
+        // one-off double-schedule if the browser was already about to
+        // redeliver the pending callback on its own.
+        let perf_vis = web_sys::window().and_then(|w| w.performance());
+        let vis_cb = wasm_bindgen::closure::Closure::wrap(Box::new(move |_evt: web_sys::Event| {
+            if !*alive_vis.borrow() {
+                return;
+            }
+            let Some(doc) = web_sys::window().and_then(|w| w.document()) else { return };
+            if doc.hidden() {
+                return; // only act on the hidden -> visible transition
+            }
+            let now = perf_vis.as_ref().map(|p| p.now()).unwrap_or(0.0);
+            if now - last_frame_at_vis.get() > STALL_RESUME_THRESHOLD_MS {
+                leptos::logging::log!("[code-graph-view] RAF stalled — resuming on visibilitychange");
+                if let (Some(w), Some(cb)) = (web_sys::window(), frame_cb_vis.borrow().as_ref()) {
+                    let _ = w.request_animation_frame(cb.as_ref().unchecked_ref());
+                }
+            }
+        }) as Box<dyn FnMut(web_sys::Event)>);
+        if let Some(doc) = web_sys::window().and_then(|w| w.document()) {
+            let _ = doc.add_event_listener_with_callback("visibilitychange", vis_cb.as_ref().unchecked_ref());
+        }
+        std::mem::forget(vis_cb); // leaked like `frame_cb` — `alive` guards it
     }
 
     // --- Interaction: drag = pan, wheel = zoom, click (no drag) = select ---
