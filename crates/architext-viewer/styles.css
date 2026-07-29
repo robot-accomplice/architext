@@ -2930,6 +2930,9 @@ button.blast-chip { cursor: pointer; }
 .code-graph-view__progress-stage { display: flex; flex-direction: column; gap: 6px; }
 .code-graph-view__progress-stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .code-graph-view__progress-stage-label { color: var(--ink); font-size: 0.85rem; white-space: nowrap; }
+/* Stage-1's "done" affordance (replaces its always-100%-by-construction bar —
+   see the component doc for why that bar conveyed nothing). */
+.code-graph-view__progress-stage-check { color: var(--accent); margin-right: 4px; font-weight: 700; }
 .code-graph-view__progress-stage-detail {
   color: var(--muted);
   font-size: 0.74rem;

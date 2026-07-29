@@ -1123,14 +1123,20 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                         <div class="code-graph-view__progress" role="status" aria-live="polite">
                             <div class="code-graph-view__progress-stage is-done">
                                 <div class="code-graph-view__progress-stage-head">
-                                    <span class="code-graph-view__progress-stage-label">"Building graph model"</span>
+                                    <span class="code-graph-view__progress-stage-label">
+                                        <span class="code-graph-view__progress-stage-check" aria-hidden="true">"✓"</span>
+                                        "Building graph model"
+                                    </span>
                                     <span class="code-graph-view__progress-stage-detail">
                                         {format!("{} nodes / {} edges — {:.0}ms", p.node_count, p.edge_count, p.build_ms)}
                                     </span>
                                 </div>
-                                <div class="code-graph-view__progress-bar">
-                                    <div class="code-graph-view__progress-fill" style="width: 100%"></div>
-                                </div>
+                                // No bar here on purpose: `build_graph` is one synchronous
+                                // call with no sub-progress to show (see `RenderProgress`'s
+                                // doc) — a bar that is 100% by construction the instant this
+                                // struct exists conveys nothing. The fact worth keeping (it
+                                // took ~`build_ms` and cost nothing) is the detail line above;
+                                // the checkmark is this stage's completed affordance instead.
                             </div>
                             <div class="code-graph-view__progress-stage is-active">
                                 <div class="code-graph-view__progress-stage-head">
