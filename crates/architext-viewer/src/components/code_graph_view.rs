@@ -863,6 +863,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let vs = vs.clone();
         let sync_and_upload = sync_and_upload.clone();
         let full_upload = full_upload.clone();
+        let set_anim_mode = set_anim_mode.clone();
         move |ev: ev::MouseEvent| {
             if moved.get() {
                 return; // the mouseup that ends a drag is not a click
@@ -873,12 +874,16 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             let scale_y = canvas.height() as f64 / rect.height();
             let sx = (ev.client_x() as f64 - rect.left()) * scale_x;
             let sy = (ev.client_y() as f64 - rect.top()) * scale_y;
-            // Outbound/Inbound re-seed the BFS wavefront from the new
-            // selection, which changes what `cull` admits (see its
-            // `Wavefront` doc) — that needs a FULL re-upload, not just the
-            // dynamic selection-highlight path a plain click takes.
-            let mut cull_changed = false;
-            if let Some(v) = vs.borrow_mut().as_mut() {
+
+            // Resolve the hit against `cull.filter_visible` — FILTER-culled
+            // only, never narrowed by an in-progress animation wavefront (see
+            // `Cull`'s doc). An animation-culled node is a real, on-screen-
+            // adjacent node the wavefront simply hasn't drawn yet and must
+            // stay clickable; only a node the user's own filters hide is
+            // rejected here — that is the defect-1 fix.
+            let (hit, was_animating) = {
+                let guard = vs.borrow();
+                let Some(v) = guard.as_ref() else { return };
                 if v.layout_settling {
                     // The painted positions refresh every frame but the
                     // hit-test tree still covers pre-settle positions — a
@@ -889,19 +894,51 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 let gx = ((sx as f32) - v.pan_x) / v.zoom;
                 let gy = ((sy as f32) - v.pan_y) / v.zoom;
                 let hit_r = 6.0 / v.zoom + 20.0 / v.zoom;
-                // The tree spans the FULL graph (layout stability); a CULLED
-                // node is not uploaded and must not be selectable through it.
-                v.selected =
-                    v.tree.query_point(gx as f64, gy as f64, hit_r as f64).filter(|&i| v.cull.visible[i]);
-                if v.anim_mode == AnimMode::Outbound || v.anim_mode == AnimMode::Inbound {
-                    v.recompute_bfs(); // also re-culls to match (see its doc)
-                    cull_changed = true;
+                let hit = v
+                    .tree
+                    .query_point(gx as f64, gy as f64, hit_r as f64)
+                    .filter(|&i| v.cull.filter_visible[i]);
+                (hit, v.anim_mode != AnimMode::Off)
+            };
+
+            match hit {
+                Some(i) => {
+                    // A click is the user saying "stop, I want to inspect
+                    // this" — the animation is an overview and must not
+                    // swallow the interaction. Turning it off drops the
+                    // wavefront cull entirely, so the just-selected node (and
+                    // its neighbours) render in full context instead of
+                    // staying swallowed by e.g. a 3-of-17,814 wavefront cull.
+                    // `set_anim_mode` already handles the playing flag, the
+                    // toolbar mirror, `recompute_bfs`, and the FULL re-upload
+                    // the mode change needs.
+                    if was_animating {
+                        set_anim_mode(AnimMode::Off);
+                    }
+                    if let Some(v) = vs.borrow_mut().as_mut() {
+                        v.selected = Some(i);
+                    }
+                    sync_and_upload();
                 }
-            }
-            if cull_changed {
-                full_upload();
-            } else {
-                sync_and_upload();
+                None => {
+                    // A miss deselects. Outbound/Inbound re-seed the BFS
+                    // wavefront from the (now empty) selection, which changes
+                    // what `cull` admits (see its `Wavefront` doc) — unchanged
+                    // from the pre-fix behaviour.
+                    let mut cull_changed = false;
+                    if let Some(v) = vs.borrow_mut().as_mut() {
+                        v.selected = None;
+                        if v.anim_mode == AnimMode::Outbound || v.anim_mode == AnimMode::Inbound {
+                            v.recompute_bfs();
+                            cull_changed = true;
+                        }
+                    }
+                    if cull_changed {
+                        full_upload();
+                    } else {
+                        sync_and_upload();
+                    }
+                }
             }
         }
     };

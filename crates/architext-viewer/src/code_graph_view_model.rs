@@ -212,14 +212,30 @@ pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
 
 /// The result of applying a [`FilterState`] (and, while an animation is
 /// running, a [`Wavefront`]) to a graph: WHAT GETS UPLOADED. `nodes`/`edges`
-/// hold FULL-graph indices; `visible` is the full-graph node lookup
-/// (hit-testing must not select a culled node through the full-graph
-/// quadtree, and a selection culled by a filter or wavefront change is
-/// cleared). When a `Wavefront` narrowed the set, `edges` is reordered
-/// lower-depth-endpoint-first (see [`Wavefront`]'s doc) — callers that don't
-/// pass one keep the original call-direction order untouched.
+/// hold FULL-graph indices. When a `Wavefront` narrowed the set, `edges` is
+/// reordered lower-depth-endpoint-first (see [`Wavefront`]'s doc) — callers
+/// that don't pass one keep the original call-direction order untouched.
+///
+/// Two DISTINCT full-graph node masks, deliberately kept separate rather than
+/// folded into one `visible` (the pre-fix representation, which conflated
+/// them and made every node but the current wavefront's ~handful
+/// unclickable):
+/// - `visible` — filter AND wavefront. This is what gets DRAWN: an
+///   un-reached node/edge is culled from the render, not merely faded (the
+///   "17.5k nodes stay legible" requirement). Use this for anything about
+///   what is currently on screen.
+/// - `filter_visible` — filter ONLY, never narrowed by an in-progress
+///   wavefront. A node the user asked to hide (via the reachability/edge-kind
+///   checkboxes) is correctly absent here; a node the wavefront simply
+///   hasn't reached YET is still present. Use this for anything about
+///   whether a node is a legitimate interaction target: hit-testing (a click
+///   must be able to reach an animation-culled node — it is real and
+///   on-screen-adjacent, just not yet drawn) and selection LIFETIME (a
+///   selection must survive the wavefront advancing past it; only a filter
+///   change may legitimately drop it — see `ViewState::recompute_cull`).
 pub struct Cull {
     pub visible: Vec<bool>,
+    pub filter_visible: Vec<bool>,
     pub nodes: Vec<usize>,
     pub edges: Vec<(usize, usize, bool)>,
 }
@@ -287,7 +303,7 @@ pub fn cull(graph: &GraphModel, filter: &FilterState, wave: Option<Wavefront>) -
             }
         }
     }
-    Cull { visible, nodes, edges }
+    Cull { visible, filter_visible: filter_visible.clone(), nodes, edges }
 }
 
 /// BFS layers → per-node depth field (`-1` = unreached), the shape the
@@ -480,8 +496,11 @@ pub struct ViewState {
     pub graph: GraphModel,
     /// Full-graph layout positions (stable across filter changes).
     pub positions: Vec<(f32, f32)>,
-    /// Hit-test tree over the FULL graph (culled hits are rejected via
-    /// `cull.visible`, keeping the tree — and the layout — filter-stable).
+    /// Hit-test tree over the FULL graph (filter-culled hits are rejected via
+    /// `cull.filter_visible` — never `cull.visible`, which also narrows to
+    /// the current animation wavefront and would make every node the
+    /// wavefront hasn't reached yet unclickable; see `Cull`'s doc — keeping
+    /// the tree — and the layout — filter-stable).
     pub tree: QuadTree,
     /// True while the progressive layout (Task 5) is still ticking: the
     /// painted positions refresh every frame but `tree` still covers the
@@ -551,9 +570,14 @@ impl ViewState {
 
     /// Re-apply the current filter (after a checkbox flip) AND, while an
     /// animation is running, the current wavefront depth/progress — the two
-    /// restrictions compose (a filter change while mid-animation must not
-    /// resurrect edges the wavefront hasn't reached). A selection culled by
-    /// either one is cleared — it is no longer on the canvas.
+    /// restrictions compose for RENDERING (a filter change while
+    /// mid-animation must not resurrect edges the wavefront hasn't reached).
+    ///
+    /// Selection lifetime, though, is judged against `filter_visible` alone,
+    /// never the wavefront-narrowed `visible`: the wavefront advancing past
+    /// the selected node must NOT silently drop the selection (it is still a
+    /// real, filter-visible node — merely not drawn as reached yet), only a
+    /// filter change that genuinely hides the node may clear it.
     pub fn recompute_cull(&mut self) {
         let wave = (self.anim_mode != AnimMode::Off).then_some(Wavefront {
             depth: &self.anim_depth,
@@ -562,7 +586,7 @@ impl ViewState {
         });
         self.cull = cull(&self.graph, &self.filter, wave);
         if let Some(s) = self.selected {
-            if !self.cull.visible[s] {
+            if !self.cull.filter_visible[s] {
                 self.selected = None;
             }
         }
@@ -1242,5 +1266,99 @@ mod tests {
         // The cull/BFS churn above must have actually done something (i.e.
         // this test is not vacuously true because nothing changed at all).
         assert_ne!(vs.cull.nodes.len(), 0, "sanity: the graph still has visible nodes");
+    }
+
+    // --- Defect 1 regression: hit-testing vs. selection lifetime ------------
+    //
+    // The maintainer-reported bug: entering the function tier auto-plays the
+    // roots wavefront, which culls the render down to a handful of nodes
+    // ("Showing 3 of 17814"); hit-testing rejected everything the wavefront
+    // hadn't drawn yet, so clicks landed on nothing, and any selection that
+    // did land was silently dropped as the wavefront advanced past it. The
+    // fix splits `Cull::visible` (render mask, filter AND wavefront) from
+    // `Cull::filter_visible` (hit-test / selection-lifetime mask, filter
+    // ONLY) — these four tests pin the distinction at the mandated ≥1000-node
+    // scale.
+
+    #[test]
+    fn hit_test_mask_admits_animation_culled_nodes_but_rejects_filter_culled_ones_at_1000_nodes() {
+        let (doc, n) = fixture_1000();
+        let g = build_graph(&doc, Tier::Functions);
+        let layers = g.index.bfs(Direction::Outbound, &g.roots);
+        let depth = depth_field(n, &layers);
+        let wave = Wavefront { depth: &depth, current: 0, growth: true };
+        let c = cull(&g, &FilterState::default(), Some(wave));
+
+        // An animation-culled node: prod-reachable (so the default filter
+        // shows it) but not yet reached by the depth-0 wavefront. Hit-testing
+        // (`code_graph_view.rs`'s on_click, which filters by
+        // `cull.filter_visible`) must still treat it as a legitimate target
+        // even though it is not currently drawn.
+        let anim_culled = (0..n)
+            .find(|&i| g.prod_reachable[i] && depth[i] > 0)
+            .expect("the interconnected fixture has a node beyond depth 0");
+        assert!(c.filter_visible[anim_culled], "animation-culled node must remain hit-testable");
+        assert!(!c.visible[anim_culled], "sanity: it really is culled from the render");
+        assert!(!c.nodes.contains(&anim_culled), "sanity: not in the uploaded set either");
+
+        // A filter-culled node: dead or test-only, excluded by the default
+        // (prod-reachable-only) filter regardless of the wavefront. Hit-testing
+        // must reject it exactly as before this fix.
+        let filter_culled =
+            (0..n).find(|&i| !g.prod_reachable[i]).expect("fixture has dead/test nodes");
+        assert!(!c.filter_visible[filter_culled], "filter-culled node must never be hit-testable");
+    }
+
+    #[test]
+    fn selection_survives_animation_advance_at_1000_nodes() {
+        let (doc, n) = fixture_1000();
+        let g = build_graph(&doc, Tier::Functions);
+        let sim = simulate(n, &g.layout_edges, 42, &ForceConfig { max_ticks: 20, ..ForceConfig::default() });
+        let positions: Vec<(f32, f32)> = sim.positions.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
+        let mut vs = ViewState::new(g, positions, sim.tree, 0.0, 0.0, 1.0, false);
+
+        vs.anim_mode = AnimMode::Roots;
+        vs.recompute_bfs();
+        // Pick a node several hops out — reached well after depth 0, so it
+        // starts this wavefront animation-culled (present in `filter_visible`,
+        // absent from `cull.nodes`/`visible`).
+        let target = (0..vs.graph.node_count())
+            .find(|&i| vs.graph.prod_reachable[i] && vs.anim_depth[i] > 1)
+            .expect("the interconnected fixture has a node beyond depth 1");
+        vs.selected = Some(target);
+        assert!(!vs.cull.nodes.contains(&target), "sanity: the target starts animation-culled");
+
+        // Advance the wavefront hop by hop to the end. At every boundary
+        // crossing `recompute_cull` runs — the selection must never be
+        // dropped, whether the target is still ahead of the wavefront or has
+        // since been passed.
+        loop {
+            let (_crossed, finished) = vs.advance_animation(HOP_DURATION_MS);
+            assert_eq!(vs.selected, Some(target), "animation progress must never drop the selection");
+            if finished {
+                break;
+            }
+        }
+        assert!(vs.cull.nodes.contains(&target), "by the end the wavefront has drawn the target too");
+    }
+
+    #[test]
+    fn selection_is_still_cleared_when_a_filter_hides_it_at_1000_nodes() {
+        let (doc, n) = fixture_1000();
+        let g = build_graph(&doc, Tier::Functions);
+        let sim = simulate(n, &g.layout_edges, 42, &ForceConfig { max_ticks: 20, ..ForceConfig::default() });
+        let positions: Vec<(f32, f32)> = sim.positions.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
+        let mut vs = ViewState::new(g, positions, sim.tree, 0.0, 0.0, 1.0, false);
+
+        // Show everything, select a dead node, then flip back to the default
+        // (prod-reachable-only) filter — a REAL hide, not merely a wavefront
+        // that hasn't reached it yet — which must still clear the selection.
+        vs.filter = show_everything();
+        vs.recompute_cull();
+        let dead_node = (0..n).find(|&i| !vs.graph.prod_reachable[i]).expect("fixture has dead nodes");
+        vs.selected = Some(dead_node);
+        vs.filter = FilterState::default();
+        vs.recompute_cull();
+        assert_eq!(vs.selected, None, "a filter-hidden selection must still be cleared");
     }
 }
