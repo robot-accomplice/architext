@@ -244,7 +244,9 @@ impl Renderer {
     /// `buffer_sub_data` never reallocates.
     ///
     /// - `node_state`: interleaved `[alpha, glow, color_mix, 0.0] * node_count`
-    /// - `edge_state`: interleaved `[alpha, color_mix, 0.0, 0.0] * edge_count`
+    /// - `edge_state`: interleaved `[alpha, color_mix, progress, 0.0] * edge_count`
+    ///   (`progress` drives the progressive call-order animation's growing
+    ///   line — see `gl/shaders.rs`'s `EDGE_VS`; `1.0` outside an animation)
     pub fn upload_dynamic(&self, node_state: &[f32], edge_state: &[f32]) {
         upload_sub(&self.gl, &self.node_state_buf, node_state);
         upload_sub(&self.gl, &self.edge_state_buf, edge_state);

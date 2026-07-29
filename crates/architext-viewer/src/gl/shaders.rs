@@ -1,8 +1,10 @@
 //! GLSL shader sources for the WebGL2 code-graph renderer, as Rust `const
 //! &str` (zero JavaScript — shaders are compiled in Rust via `web-sys`).
 //!
-//! Lifted verbatim from the proven spike
-//! (`docs/superpowers/spike-source/spike-c-webgl/code_graph_gl.rs`). The
+//! Originally lifted from the proven spike
+//! (`docs/superpowers/spike-source/spike-c-webgl/code_graph_gl.rs`); the edge
+//! program's `aState.z` slot (was always-zero padding) was repurposed for the
+//! progressive call-order animation (see `EDGE_VS`'s doc). The
 //! attribute/uniform contract below is what `renderer.rs` wires up:
 //!
 //! - Node program: `aCorner` (loc 0, quad corner in [-1,1]²),
@@ -10,7 +12,9 @@
 //!   per-instance alpha/glow/colorMix/unused).
 //! - Edge program: `aLocal` (loc 0, [0,1]×[-1,1] along/across local space),
 //!   `aEndpoints` (loc 1, per-instance fromX/fromY/toX/toY), `aState`
-//!   (loc 2, per-instance alpha/colorMix/unused/unused).
+//!   (loc 2, per-instance alpha/colorMix/progress/unused — `progress`
+//!   interpolates the drawn endpoint from `from` toward `to`, `1.0` meaning
+//!   the full edge).
 //! - Both share the `uResolution`/`uPan`/`uZoom` camera uniforms and the
 //!   `uColorBase`/`uColorAccent` palette uniforms; edges add `uHalfWidth`.
 //!
@@ -75,12 +79,24 @@ void main() {
 "#;
 
 /// Edge vertex shader: one quad instance per directed edge, extruded to
-/// `uHalfWidth` around the from→to segment in world space, then projected
-/// through the same camera as the nodes.
+/// `uHalfWidth` around the from→(progressive-)to segment in world space,
+/// then projected through the same camera as the nodes.
+///
+/// Progressive edge-draw (call-order animation rework): `aState.z` is the
+/// draw progress in `[0,1]` — the quad's far end is `mix(from, to,
+/// progress)` instead of always `to`, so at `progress < 1.0` the line is
+/// visibly SHORTER than the full edge, reading as still growing from `from`
+/// toward `to`. `code_graph_view_model.rs`'s `cull` (with a `Wavefront`)
+/// always orders `aEndpoints` lower-BFS-depth-endpoint-first, so `from` is
+/// the already-reached end and `to` is the one hop ahead — the line grows in
+/// the direction the wavefront is actually travelling, independent of the
+/// call direction. `progress` is `1.0` for every edge outside an active
+/// animation (unchanged full-length draw) and for any edge already fully
+/// behind the wavefront.
 pub const EDGE_VS: &str = r#"#version 300 es
 layout(location=0) in vec2 aLocal; // (0/1 along length, -1/1 across width)
 layout(location=1) in vec4 aEndpoints; // fromX, fromY, toX, toY
-layout(location=2) in vec4 aState; // alpha, colorMix, unused, unused
+layout(location=2) in vec4 aState; // alpha, colorMix, progress, unused
 uniform vec2 uResolution;
 uniform vec2 uPan;
 uniform float uZoom;
@@ -89,7 +105,7 @@ out vec2 vLocal;
 out vec4 vState;
 void main() {
     vec2 from = aEndpoints.xy;
-    vec2 to = aEndpoints.zw;
+    vec2 to = mix(aEndpoints.xy, aEndpoints.zw, aState.z);
     vec2 dir = to - from;
     float len = max(length(dir), 0.0001);
     vec2 unit = dir / len;
