@@ -51,6 +51,14 @@ pub enum Tier {
     Functions,
 }
 
+/// Fixed layout seed — reproducible layout across runs, tiers, and (Plan D
+/// Task 3) main-thread vs. worker settles. Centralised here (rather than a
+/// literal repeated at each settle call site) because the worker-warm path
+/// (`layout_worker_client.rs`) now needs the SAME value the view's own
+/// settle uses: a divergent seed would settle to a different (still valid,
+/// but not cache-shareable) layout.
+pub const LAYOUT_SEED: u64 = 1_469_598_103_934_665_603;
+
 /// Whether entering `tier` should auto-play the roots animation once its
 /// layout settles. Maintainer spec: the function tier only — modules stay
 /// static (small and legible without a wavefront). Pulled out as its own

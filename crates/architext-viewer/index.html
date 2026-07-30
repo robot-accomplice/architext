@@ -16,6 +16,18 @@
     <!-- Vendored woff2 referenced by @font-face in styles.css (zero CDN). Trunk
          copies the dir into dist/assets/fonts/ so the url()s resolve offline. -->
     <link data-trunk rel="copy-dir" href="assets/fonts" data-target-path="assets/fonts" />
+    <!-- Plan D Task 3: the code-graph layout-settle worker
+         (src/bin/layout_worker.rs) — a SECOND Rust/wasm entry point, built by
+         Trunk itself (no Node/npm/Vite involved). `data-loader-shim` makes
+         Trunk generate the tiny classic-worker bootstrap script
+         (`importScripts(...);wasm_bindgen(...)`) — that file is Trunk's own
+         generated glue, not hand-authored JavaScript, exactly like the
+         `.js` wasm-bindgen output the "main" link below already produces.
+         The loader's filename is the Cargo bin name, deliberately never
+         content-hashed by Trunk (a worker script must be reachable at a name
+         known ahead of the build) — `layout_worker_client.rs` references it
+         by that fixed path. -->
+    <link data-trunk rel="rust" data-bin="layout_worker" data-type="worker" data-loader-shim />
   </head>
   <body></body>
 </html>

@@ -24,6 +24,7 @@ pub mod flow_step_display;
 pub mod force_layout;
 pub mod gl;
 pub mod layout_cache;
+pub mod layout_worker_client;
 pub mod release_planning_model;
 pub mod release_truth;
 pub mod repo_tree_model;
@@ -59,6 +60,15 @@ pub fn App() -> impl IntoView {
                 Ok(loaded) => {
                     let state = AppState::new(loaded);
                     provide_context(state);
+                    // Plan D Task 3: warm the function-tier code-graph layout
+                    // in a background worker now, so a later Code Graph entry
+                    // is very likely a `layout_cache` hit before the user
+                    // gets there — costs background CPU, never main-thread
+                    // responsiveness. A no-op if there is no computable code
+                    // graph document.
+                    if let Some(Ok(cg)) = state.data.get_untracked().code_graph.as_ref() {
+                        crate::layout_worker_client::warm_function_tier(state, cg);
+                    }
                     // Apply + persist the color theme: seed `<html data-theme>`
                     // from the (localStorage-seeded) signal now, and re-apply
                     // whenever the header toggle flips it.

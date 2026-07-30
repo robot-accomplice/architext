@@ -67,11 +67,14 @@ use wasm_bindgen::JsCast;
 
 use crate::code_graph_graph::FilterState;
 use crate::code_graph_layout::LayoutDriver;
-use crate::code_graph_view_model::{build_graph, fit_camera, should_autoplay, AnimMode, Tier, ViewState};
+use crate::code_graph_view_model::{
+    build_graph, fit_camera, should_autoplay, AnimMode, Tier, ViewState, LAYOUT_SEED,
+};
 use crate::data::models::CodeGraph;
 use crate::force_layout::{ForceConfig, QuadTree};
 use crate::gl::renderer::Renderer;
-use crate::layout_cache::{LayoutCache, LayoutKey};
+use crate::layout_cache::LayoutKey;
+use crate::layout_worker_client::CodeGraphWarm;
 use crate::state::{use_app_state, CodeGraphSelection};
 
 /// Per-frame millisecond budget for progressive layout ticks (Task 5). At
@@ -214,13 +217,15 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // `Cell`s for the instrumentation/camera bookkeeping — nothing reads
     // them reactively (same rationale as the drag `Cell`s below).
     let layout: Rc<RefCell<Option<LayoutDriver>>> = Rc::new(RefCell::new(None));
-    // Plan D Task 2: settled layouts keyed on (sha, tree, tier), scoped to
-    // this component instance (a viewer session, not a persistent store —
-    // see `layout_cache` module docs). `cg_sha`/`cg_tree` are cloned out of
-    // the loaded envelope now because `cg` itself is moved into the
-    // tier-entry effect below, but the RAF loop (defined after it) also
-    // needs them to `put` on settle completion.
-    let layout_cache: Rc<RefCell<LayoutCache>> = Rc::new(RefCell::new(LayoutCache::default()));
+    // Plan D Task 2 cache, keyed on (sha, tree, tier) — lives on `AppState`
+    // (Task 3), not this component: the app-load background warm
+    // (`layout_worker_client::warm_function_tier`) writes into it before any
+    // Code Graph view exists, and this component is torn down and rebuilt on
+    // every mode switch (see the module docs on render-loop cancellation), so
+    // a component-local cache would start cold on every re-entry. `cg_sha`/
+    // `cg_tree` are cloned out of the loaded envelope now because `cg` itself
+    // is moved into the tier-entry effect below, but the RAF loop (defined
+    // after it) also needs them to `put` on settle completion.
     let cg_sha = cg.sha.clone();
     let cg_tree = cg.tree.clone();
     let layout_t0: Rc<Cell<f64>> = Rc::new(Cell::new(0.0));
@@ -457,7 +462,6 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let alive = alive.clone();
         let full_upload = full_upload.clone();
         let layout = layout.clone();
-        let layout_cache = layout_cache.clone();
         let cg_sha = cg_sha.clone();
         let cg_tree = cg_tree.clone();
         let layout_t0 = layout_t0.clone();
@@ -506,8 +510,10 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // instead of re-running ~400 ticks to arrive at the provably same
             // answer (the layout is a pure deterministic function of
             // (edges, seed, tick_count); see `layout_cache` module docs).
+            // Task 3: this also catches an app-load worker warm that already
+            // finished — its result lands here via `state.layout_cache`.
             let cache_key = LayoutKey::new(cg_sha.clone(), cg_tree.clone(), t);
-            let cache_hit = layout_cache.borrow().get(&cache_key).map(|p| p.to_vec());
+            let cache_hit = state.layout_cache.with_untracked(|c| c.get(&cache_key).map(|p| p.to_vec()));
 
             user_moved_camera.set(false);
             first_paint_logged.set(false);
@@ -542,8 +548,31 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 }
             } else {
                 // MISS: settle as today.
-                let seed = 1_469_598_103_934_665_603u64; // fixed — reproducible layout
-                let driver = LayoutDriver::new(n, &graph.layout_edges, seed, &ForceConfig::default());
+                //
+                // Task 3 "no racing writers": if the app-load worker warm is
+                // still computing THIS exact (sha, tree) function-tier
+                // answer, cancel it before starting a redundant main-thread
+                // settle — determinism means the two would compute the same
+                // bit-identical positions, but there must be only one
+                // eventual writer of this cache entry, not two settles
+                // racing to finish. `Running` is only ever produced for the
+                // function tier, so this is gated to it explicitly: an
+                // unrelated Modules-tier miss must NOT cancel a Functions
+                // warm still in flight.
+                if t == Tier::Functions {
+                    if let CodeGraphWarm::Running { sha, tree, cancel } =
+                        state.code_graph_warm.get_untracked()
+                    {
+                        if sha == cg_sha && tree == cg_tree {
+                            cancel.cancel();
+                            state.code_graph_warm.set(CodeGraphWarm::Finished);
+                            leptos::logging::log!(
+                                "[code-graph-view] cancelled in-flight warm — settling on the main thread instead"
+                            );
+                        }
+                    }
+                }
+                let driver = LayoutDriver::new(n, &graph.layout_edges, LAYOUT_SEED, &ForceConfig::default());
                 let max_ticks = driver.max_ticks();
                 // Tick-0 positions (the seeded circle) upload IMMEDIATELY so
                 // the first frame paints a real graph, not a spinner.
@@ -612,7 +641,6 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let vs = vs.clone();
         let alive = alive.clone();
         let layout = layout.clone();
-        let layout_cache = layout_cache.clone();
         let cg_sha = cg_sha.clone();
         let cg_tree = cg_tree.clone();
         let full_upload = full_upload.clone();
@@ -751,7 +779,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 // this (sha, tree, tier) is a cache hit instead of another
                 // ~400-tick recompute of the same, provably identical answer.
                 let key = LayoutKey::new(cg_sha.clone(), cg_tree.clone(), tier.get_untracked());
-                layout_cache.borrow_mut().put(key, positions);
+                state.layout_cache.update(|c| c.put(key, positions));
             }
             if let Some(ticks) = settled_ticks {
                 if *alive.borrow() {

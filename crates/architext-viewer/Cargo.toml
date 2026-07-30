@@ -61,6 +61,15 @@ web-sys = { version = "0.3", features = [
     # Code-graph animation rework: `prefers-reduced-motion` gate for the
     # progressive edge-draw — read once per tier via `Window::match_media`.
     "MediaQueryList",
+    # Plan D Task 3: the layout-settle Web Worker. `Worker` is the main-thread
+    # spawn/postMessage/terminate handle (`layout_worker_client.rs`);
+    # `DedicatedWorkerGlobalScope` is the worker-side scope the second wasm
+    # binary (`src/bin/layout_worker.rs`) posts its reply from. `console` lets
+    # that worker log diagnostics directly (it has no Leptos app context to
+    # route through `leptos::logging::log!`'s usual path).
+    "Worker",
+    "DedicatedWorkerGlobalScope",
+    "console",
 ] }
 
 # Same-origin async fetch of the Architext data docs (/data/**, /api/config)

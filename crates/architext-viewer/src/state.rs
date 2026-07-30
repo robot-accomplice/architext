@@ -12,6 +12,8 @@ use std::rc::Rc;
 use crate::code_graph_view_model::Tier;
 use crate::data::ArchitectureData;
 use crate::data::{models::RepoTreePayload, FetchError};
+use crate::layout_cache::LayoutCache;
+use crate::layout_worker_client::CodeGraphWarm;
 use crate::selection;
 use crate::theme::{load_theme, Mode, Theme};
 
@@ -115,6 +117,19 @@ pub struct AppState {
     /// load"). `repo_tree_loading` guards same-tick mounts down to one fetch.
     pub repo_tree: RwSignal<Option<Result<RepoTreePayload, FetchError>>>,
     pub repo_tree_loading: RwSignal<bool>,
+
+    /// Settled code-graph layouts keyed on `(sha, tree, tier)` (Plan D Task
+    /// 2), promoted from a `CodeGraphViewCanvas`-local `Rc<RefCell<_>>` to
+    /// `AppState` (Plan D Task 3): the app-load background warm writes into
+    /// this BEFORE any Code Graph view exists, and the view itself is torn
+    /// down and rebuilt on every mode switch (see `components/
+    /// code_graph_view.rs`'s render-loop-cancellation docs) — only
+    /// `AppState` outlives both. Read/written via `with_untracked`/`update`
+    /// only; nothing subscribes to it reactively.
+    pub layout_cache: RwSignal<LayoutCache>,
+    /// Status of the app-load function-tier layout warm (Plan D Task 3) —
+    /// see `layout_worker_client::CodeGraphWarm`.
+    pub code_graph_warm: RwSignal<CodeGraphWarm>,
 }
 
 impl AppState {
@@ -153,6 +168,8 @@ impl AppState {
             c4_trail: create_rw_signal(Vec::new()),
             repo_tree: create_rw_signal(None),
             repo_tree_loading: create_rw_signal(false),
+            layout_cache: create_rw_signal(LayoutCache::default()),
+            code_graph_warm: create_rw_signal(CodeGraphWarm::Idle),
         }
     }
 
