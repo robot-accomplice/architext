@@ -30,11 +30,20 @@
 //! Trunk's own `examples/webworker`). The worker posts an empty ready-ping
 //! first; this side only posts the real request once that ping arrives.
 //!
-//! CANCELLATION (Task 3 Step 3 — "no racing writers"): the view never lets a
-//! main-thread settle and this worker's settle both run for the same
-//! `(sha, tree, tier)`. `WarmCancelHandle::cancel` (`Worker::terminate`) lets
-//! the view stop an in-flight warm the instant it decides to settle that
-//! answer itself — see `components/code_graph_view.rs`'s cache-miss branch.
+//! NO RACING WRITERS (Task 3 Step 3, revised by the Defect 2 fix): the view
+//! never lets a main-thread settle and this worker's settle both run for the
+//! same `(sha, tree, tier)` — but the two answers are bit-identical
+//! (determinism), so the fix is to never START a redundant second settle at
+//! all, not to race-and-cancel one of them. `components/code_graph_view.rs`'s
+//! tier effect checks `AppState::code_graph_warm` on a cache miss: if a
+//! matching warm is `Running`, it AWAITS the warm (a dedicated effect
+//! resolves once it finishes) instead of settling locally in parallel — an
+//! earlier version of this guard used to `Worker::terminate` the in-flight
+//! warm and settle locally right away, which threw away however much of the
+//! warm's head start had already accumulated on every single Code Graph
+//! entry. There is therefore only ever one writer per `(sha, tree, tier)`
+//! cache entry by construction (nothing ever starts a second settle for a
+//! key that's already in flight), so no cancellation handle is needed here.
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -208,11 +217,11 @@ pub enum WorkerOutcome {
 
 /// Spawn the layout worker and hand it exactly one settle request.
 ///
-/// Returns the `Worker` handle on a successful synchronous spawn — the
-/// caller can `.terminate()` it later via `WarmCancelHandle` to cancel a
-/// warm that's no longer needed. Returns `None` if the worker could not even
-/// be constructed; `on_settled` has ALREADY been called with `Failed` in
-/// that case, so the caller has nothing further to do.
+/// Returns the `Worker` handle on a successful synchronous spawn (the
+/// caller only needs it to know a real settle is now in flight — see this
+/// module's "no racing writers" doc). Returns `None` if the worker could
+/// not even be constructed; `on_settled` has ALREADY been called with
+/// `Failed` in that case, so the caller has nothing further to do.
 pub fn spawn_settle(
     node_count: u32,
     edges: &[(usize, usize)],
@@ -289,21 +298,6 @@ fn fire(slot: &SettleCallback, outcome: WorkerOutcome) {
 
 // --- app-load warm + AppState glue ------------------------------------------
 
-/// A live worker's cancel handle. Wraps `web_sys::Worker` (itself cheap to
-/// clone — a JS reference) so `CodeGraphWarm::Running` can be cloned freely.
-#[derive(Debug, Clone)]
-pub struct WarmCancelHandle(Worker);
-
-impl WarmCancelHandle {
-    /// Stop the worker immediately. Used when the view is about to compute
-    /// the SAME answer itself (Task 3 Step 3): terminating first guarantees
-    /// there is only ever one eventual writer of this layout's cache entry
-    /// — never two settles racing to finish.
-    pub fn cancel(&self) {
-        self.0.terminate();
-    }
-}
-
 /// Status of the app-load background warm (Task 3 Step 3). Lives on
 /// `AppState`, not scoped to one Code Graph view instance: the warm starts
 /// at app load, before any Code Graph view exists, and the view is torn
@@ -312,14 +306,19 @@ impl WarmCancelHandle {
 /// outlives that. `Running` is only ever produced for the function tier
 /// (see `warm_function_tier`) — it does not carry a `Tier` because there is
 /// only ever one warm target.
+///
+/// No cancel handle: per this module's "no racing writers" doc, nothing
+/// ever starts a second settle for a key that's already `Running` (the view
+/// awaits it instead — see `components/code_graph_view.rs`'s tier effect),
+/// so there is never a reason to stop this worker early.
 #[derive(Debug, Clone)]
 pub enum CodeGraphWarm {
     /// No computable code graph at load, or the warm hasn't been kicked off.
     Idle,
     /// A worker is settling `(sha, tree)`'s function tier right now.
-    Running { sha: String, tree: String, cancel: WarmCancelHandle },
-    /// Settled, cancelled, or failed — nothing left to do or cancel. Any
-    /// settled positions are already in `AppState::layout_cache`.
+    Running { sha: String, tree: String },
+    /// Settled or failed — nothing left to do. Any settled positions are
+    /// already in `AppState::layout_cache`.
     Finished,
 }
 
@@ -409,12 +408,13 @@ pub fn warm_function_tier(state: AppState, cg: &CodeGraph) {
         state.code_graph_warm.set(CodeGraphWarm::Finished);
     });
 
-    if let Some(w) = worker {
-        state.code_graph_warm.set(CodeGraphWarm::Running {
-            sha: cg.sha.clone(),
-            tree: cg.tree.clone(),
-            cancel: WarmCancelHandle(w),
-        });
+    if worker.is_some() {
+        // The `Worker` handle itself isn't needed beyond this point — no
+        // cancel handle to stash it in (see `CodeGraphWarm::Running`'s
+        // doc) — it stays alive because `onmessage`/`onerror` in
+        // `spawn_settle` hold their own clone via the closures they were
+        // registered with.
+        state.code_graph_warm.set(CodeGraphWarm::Running { sha: cg.sha.clone(), tree: cg.tree.clone() });
     }
     // else: `spawn_settle` already invoked the closure above with `Failed`,
     // which already set `Finished` — nothing more to do.

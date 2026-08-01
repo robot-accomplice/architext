@@ -2994,6 +2994,17 @@ button.blast-chip { cursor: pointer; }
   background: var(--accent);
   border-radius: 3px;
 }
+/* Defect 3 fix: the settle gate (clicks silently ignored while
+   `layout_settling`) must be VISIBLE, not just present — this note says so
+   explicitly instead of relying on the easy-to-miss toolbar status line.
+   Wraps (unlike the single-line stage-detail above) since it's a full
+   sentence, not a truncatable fact. */
+.code-graph-view__progress-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: italic;
+}
 .code-graph-view__footer {
   display: flex;
   align-items: center;
