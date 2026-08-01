@@ -9,10 +9,28 @@
 use leptos::*;
 use std::rc::Rc;
 
+use crate::code_graph_view_model::Tier;
 use crate::data::ArchitectureData;
 use crate::data::{models::RepoTreePayload, FetchError};
+use crate::layout_cache::LayoutCache;
+use crate::layout_worker_client::CodeGraphWarm;
 use crate::selection;
 use crate::theme::{load_theme, Mode, Theme};
+
+/// The code-graph node selected on the WebGL canvas (Plan C Task 6), mirrored
+/// into shared state so the INSPECTOR can render its detail while the graph's
+/// own selection stays panel-local. This is deliberately NOT `selected_node`:
+/// code-graph ids are Magma's function/module ids — a different id-space that
+/// resolves against `data.code_graph`, never `data.nodes`. `tier` records
+/// which of the two collections the id resolves against (functions vs.
+/// modules). Cleared by `set_mode`/`reload_data` and re-mirrored (as `None`)
+/// whenever the view rebuilds or the selection clears, so the inspector never
+/// shows stale code-graph detail outside Code Graph mode.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CodeGraphSelection {
+    pub tier: Tier,
+    pub id: String,
+}
 
 /// The reactive application state. Cheap to clone (signals are `Copy`).
 #[derive(Clone, Copy)]
@@ -68,6 +86,13 @@ pub struct AppState {
     /// inspector's item detail in Release Truth mode (the item id). Cleared when
     /// the selected release changes.
     pub selected_release_item: RwSignal<Option<String>>,
+    /// The code-graph node selected on the WebGL canvas (see
+    /// [`CodeGraphSelection`]). Panel-local selection mirrored for the
+    /// inspector; NEVER folded into `selected_node` (different id-space).
+    /// Cleared on mode change and data reload, and re-mirrored as `None` by
+    /// the view whenever its own selection clears, so the inspector cannot
+    /// show stale code-graph detail in another mode.
+    pub selected_code_graph_node: RwSignal<Option<CodeGraphSelection>>,
 
     /// Active color theme (Dark default / Light). Seeded from localStorage in
     /// `new`; an effect in `App` applies it as `data-theme` on <html> and
@@ -92,6 +117,19 @@ pub struct AppState {
     /// load"). `repo_tree_loading` guards same-tick mounts down to one fetch.
     pub repo_tree: RwSignal<Option<Result<RepoTreePayload, FetchError>>>,
     pub repo_tree_loading: RwSignal<bool>,
+
+    /// Settled code-graph layouts keyed on `(sha, tree, tier)` (Plan D Task
+    /// 2), promoted from a `CodeGraphViewCanvas`-local `Rc<RefCell<_>>` to
+    /// `AppState` (Plan D Task 3): the app-load background warm writes into
+    /// this BEFORE any Code Graph view exists, and the view itself is torn
+    /// down and rebuilt on every mode switch (see `components/
+    /// code_graph_view.rs`'s render-loop-cancellation docs) — only
+    /// `AppState` outlives both. Read/written via `with_untracked`/`update`
+    /// only; nothing subscribes to it reactively.
+    pub layout_cache: RwSignal<LayoutCache>,
+    /// Status of the app-load function-tier layout warm (Plan D Task 3) —
+    /// see `layout_worker_client::CodeGraphWarm`.
+    pub code_graph_warm: RwSignal<CodeGraphWarm>,
 }
 
 impl AppState {
@@ -124,11 +162,14 @@ impl AppState {
             invalid_notice: create_rw_signal(None),
             selected_release: create_rw_signal(None),
             selected_release_item: create_rw_signal(None),
+            selected_code_graph_node: create_rw_signal(None),
             theme: create_rw_signal(load_theme()),
             // Initial mode is Flows, which doesn't drill — start with no trail.
             c4_trail: create_rw_signal(Vec::new()),
             repo_tree: create_rw_signal(None),
             repo_tree_loading: create_rw_signal(false),
+            layout_cache: create_rw_signal(LayoutCache::default()),
+            code_graph_warm: create_rw_signal(CodeGraphWarm::Idle),
         }
     }
 
@@ -185,6 +226,9 @@ impl AppState {
         // clear both so nothing dangles (mirrors set_view/set_flow behavior).
         self.selected_node.set(None);
         self.selected_step.set(None);
+        // Same for the code-graph mirror: a reloaded document may have dropped
+        // the selected function/module id.
+        self.selected_code_graph_node.set(None);
         // The reloaded views vector may have shifted; the old trail's indices
         // can't be trusted, so re-root at the (clamped) active view.
         self.reroot_c4_trail(view);
@@ -219,11 +263,21 @@ impl AppState {
         self.selected_step.set(Some(step_id));
     }
 
+    /// Mirror the code-graph canvas selection for the inspector (or clear it
+    /// with `None`). Kept out of `selected_node` on purpose — see
+    /// [`CodeGraphSelection`].
+    pub fn set_selected_code_graph_node(&self, selection: Option<CodeGraphSelection>) {
+        self.selected_code_graph_node.set(selection);
+    }
+
     /// Switch modes and re-seed the view/flow selection per the routing rules.
     pub fn set_mode(&self, mode: Mode) {
         let data = self.data.get_untracked();
         self.selected_node.set(None);
         self.selected_step.set(None);
+        // Leaving Code Graph mode must not leave stale code-graph detail in
+        // the inspector (the mirror is written only by the Code Graph view).
+        self.selected_code_graph_node.set(None);
         self.mode.set(mode);
         if mode.renders_routed_flow() {
             // Flows / Data-Risks: the flow drives; resolve the view to a

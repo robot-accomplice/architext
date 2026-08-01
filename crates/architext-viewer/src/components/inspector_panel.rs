@@ -8,10 +8,12 @@
 //! genuinely diagram-less data mode (Rules / Release Truth) summarizes its set.
 use leptos::*;
 
+use crate::code_graph_graph::{format_signature, reach_badges, Reach};
+use crate::code_graph_view_model::Tier;
 use crate::components::data_risks_panel::DataRisksPanel;
 use crate::components::notes_editor::NotesSection;
 use crate::data::fetch_node_git;
-use crate::data::models::{DataClass, Node, NodeGit, View};
+use crate::data::models::{CodeGraphFunction, CodeGraphModule, DataClass, Node, NodeGit, View};
 use crate::diagram::role_color_var;
 use crate::release_truth::{release_path, release_tone, ReleaseDoc};
 use crate::severity::release_tone_color_var;
@@ -77,6 +79,60 @@ fn derive_node_relations(
         .collect();
 
     NodeRelations { depends_on, used_by, data_handled, appears_in }
+}
+
+/// Everything the inspector renders for a selected code-graph FUNCTION (Plan C
+/// Task 6): symbol, Go-style signature, `file:line`, fan-in/out, doc, and the
+/// CANDIDATE reachability badges. The badges are exactly `reach_badges` output
+/// — never filtered or relabelled — and each is rendered with
+/// `Reach::tooltip()` verbatim as its hover text (it names the static-analysis
+/// blind spots; a badge that reads as a verdict invites deleting live code).
+/// Pure so it is unit-testable on native.
+#[derive(Debug, PartialEq)]
+struct CodeGraphFunctionDetail {
+    symbol: String,
+    signature: String,
+    location: String,
+    fan_in: u32,
+    fan_out: u32,
+    doc: Option<String>,
+    badges: Vec<Reach>,
+}
+
+fn code_graph_function_detail(f: &CodeGraphFunction) -> CodeGraphFunctionDetail {
+    CodeGraphFunctionDetail {
+        symbol: f.symbol.clone(),
+        signature: format_signature(&f.signature),
+        location: format!("{}:{}", f.file, f.line),
+        fan_in: f.fan_in,
+        fan_out: f.fan_out,
+        doc: f.doc.clone(),
+        badges: reach_badges(f),
+    }
+}
+
+/// The module-tier counterpart. Modules carry no per-module signature, doc, or
+/// reachability flags, so the detail is the package plus its fan and the
+/// contract's function counts — phrased as CANDIDATES, same as the badges.
+#[derive(Debug, PartialEq)]
+struct CodeGraphModuleDetail {
+    pkg: String,
+    fan_in: u32,
+    fan_out: u32,
+    functions: u32,
+    dead_candidates: u32,
+    test_only_candidates: u32,
+}
+
+fn code_graph_module_detail(m: &CodeGraphModule) -> CodeGraphModuleDetail {
+    CodeGraphModuleDetail {
+        pkg: m.pkg.clone(),
+        fan_in: m.fan_in,
+        fan_out: m.fan_out,
+        functions: m.counts.functions,
+        dead_candidates: m.counts.dead,
+        test_only_candidates: m.counts.test_only,
+    }
 }
 
 /// A labeled chip group: an `.overline` label with a count, then the values as
@@ -184,6 +240,101 @@ pub fn InspectorPanel() -> impl IntoView {
                                 target_id=note_target
                             />
                         }.into_view();
+                    }
+                }
+
+                // Code Graph: the WebGL canvas mirrors its selection into
+                // `selected_code_graph_node` (a Magma id + tier — NEVER
+                // `selected_node`, which is a different id-space). Resolve the
+                // id against the matching tier's collection and render the
+                // detail. An id that no longer resolves (e.g. an SSE reload
+                // swapped the document under the selection) falls through to
+                // the summary card below rather than dangling.
+                if mode == Mode::CodeGraph {
+                    if let Some(sel) = state.selected_code_graph_node.get() {
+                        let cg = data.code_graph.as_ref().and_then(|r| r.as_ref().ok());
+                        match (sel.tier, cg) {
+                            (Tier::Functions, Some(cg)) => {
+                                let f = cg
+                                    .functions
+                                    .as_ref()
+                                    .and_then(|fs| fs.iter().find(|f| f.id == sel.id))
+                                    .cloned();
+                                if let Some(f) = f {
+                                    let CodeGraphFunctionDetail {
+                                        symbol,
+                                        signature,
+                                        location,
+                                        fan_in,
+                                        fan_out,
+                                        doc,
+                                        badges,
+                                    } = code_graph_function_detail(&f);
+                                    let clear = move |_| state.set_selected_code_graph_node(None);
+                                    return view! {
+                                        <button class="inspector__back" on:click=clear>
+                                            "‹ back to code graph"
+                                        </button>
+                                        <div class="accent-surface inspector__card">
+                                            <div class="overline">"FUNCTION"</div>
+                                            <h2 class="inspector__title">{symbol}</h2>
+                                            <p class="inspector__meta mono">{signature}</p>
+                                            <p class="inspector__meta mono">{location}</p>
+                                            <p class="inspector__meta">
+                                                {format!("fan-in {fan_in} · fan-out {fan_out}")}
+                                            </p>
+                                            {doc.map(|d| view! { <p class="inspector__meta">{d}</p> })}
+                                            {(!badges.is_empty()).then(move || view! {
+                                                <div class="chip-row">
+                                                    {badges.into_iter().map(|b| view! {
+                                                        <span
+                                                            class="chip chip--state cg-chip"
+                                                            style=format!("color:{}", b.color_var())
+                                                            title=b.tooltip()
+                                                        >
+                                                            {b.label()}
+                                                        </span>
+                                                    }).collect_view()}
+                                                </div>
+                                            })}
+                                        </div>
+                                    }
+                                    .into_view();
+                                }
+                            }
+                            (Tier::Modules, Some(cg)) => {
+                                let m = cg
+                                    .modules
+                                    .as_ref()
+                                    .and_then(|ms| ms.iter().find(|m| m.id == sel.id))
+                                    .cloned();
+                                if let Some(m) = m {
+                                    let d = code_graph_module_detail(&m);
+                                    let clear = move |_| state.set_selected_code_graph_node(None);
+                                    return view! {
+                                        <button class="inspector__back" on:click=clear>
+                                            "‹ back to code graph"
+                                        </button>
+                                        <div class="accent-surface inspector__card">
+                                            <div class="overline">"MODULE"</div>
+                                            <h2 class="inspector__title">{d.pkg}</h2>
+                                            <span class="chip">"module"</span>
+                                            <p class="inspector__meta">
+                                                {format!("fan-in {} · fan-out {}", d.fan_in, d.fan_out)}
+                                            </p>
+                                            <p class="inspector__meta">
+                                                {format!(
+                                                    "{} functions · {} dead-code candidates · {} test-only candidates",
+                                                    d.functions, d.dead_candidates, d.test_only_candidates,
+                                                )}
+                                            </p>
+                                        </div>
+                                    }
+                                    .into_view();
+                                }
+                            }
+                            _ => {}
+                        }
                     }
                 }
 
@@ -521,5 +672,64 @@ mod tests {
             node_by_id(&nodes, "unrelated"),
         );
         assert_eq!(rel, NodeRelations::default());
+    }
+
+    // --- Code Graph detail (Task 6) ------------------------------------------
+
+    fn function(flags: serde_json::Value) -> CodeGraphFunction {
+        let mut v = serde_json::json!({
+            "id": "f1", "symbol": "srv.handle", "pkg": "srv", "file": "h.go", "line": 42,
+            "kind": "func", "exported": true, "test": false, "root": false,
+            "generated": false, "reachable": true, "prod_reachable": true,
+            "signature": {"params": [{"name": "a", "type": "int"}], "results": [{"type": "error"}]},
+            "doc": "Handle serves one request.",
+            "fan_in": 3, "fan_out": 2
+        });
+        if let (Some(base), Some(over)) = (v.as_object_mut(), flags.as_object()) {
+            for (k, val) in over {
+                base.insert(k.clone(), val.clone());
+            }
+        }
+        serde_json::from_value(v).unwrap()
+    }
+
+    #[test]
+    fn function_detail_assembles_the_display_facts() {
+        let d = code_graph_function_detail(&function(serde_json::json!({})));
+        assert_eq!(d.symbol, "srv.handle");
+        assert_eq!(d.signature, "(a int) error");
+        assert_eq!(d.location, "h.go:42");
+        assert_eq!((d.fan_in, d.fan_out), (3, 2));
+        assert_eq!(d.doc.as_deref(), Some("Handle serves one request."));
+        assert!(d.badges.is_empty(), "a plain prod-reachable function earns no badge");
+    }
+
+    #[test]
+    fn function_detail_badges_are_exactly_reach_badges_with_verbatim_tooltips() {
+        // WHY: dead/test-only are static-analysis CANDIDATES. The inspector
+        // must render `reach_badges` output unfiltered, and every badge's
+        // hover text is `Reach::tooltip()` verbatim — the inferred ones name
+        // the blind spots so the badge never reads as a verdict.
+        let dead = function(serde_json::json!({"reachable": false, "prod_reachable": false}));
+        let d = code_graph_function_detail(&dead);
+        assert_eq!(d.badges, reach_badges(&dead), "no filtering/relabeling on the way out");
+        assert_eq!(d.badges, vec![Reach::Dead]);
+        let t = Reach::Dead.tooltip();
+        assert!(t.starts_with("CANDIDATE"), "tooltip is the candidate warning: {t}");
+        assert!(t.contains("Reflection"), "tooltip names a blind spot: {t}");
+    }
+
+    #[test]
+    fn module_detail_carries_fan_and_candidate_counts() {
+        let m: CodeGraphModule = serde_json::from_value(serde_json::json!({
+            "id": "example.com/x/srv", "pkg": "srv",
+            "counts": {"functions": 9, "dead": 2, "test_only": 1},
+            "fan_in": 4, "fan_out": 5
+        }))
+        .unwrap();
+        let d = code_graph_module_detail(&m);
+        assert_eq!(d.pkg, "srv");
+        assert_eq!((d.fan_in, d.fan_out), (4, 5));
+        assert_eq!((d.functions, d.dead_candidates, d.test_only_candidates), (9, 2, 1));
     }
 }

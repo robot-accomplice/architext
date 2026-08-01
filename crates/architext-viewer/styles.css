@@ -2855,94 +2855,112 @@ button.blast-chip { cursor: pointer; }
   }
 }
 
-/* ─── Code Graph mode ──────────────────────────────────────────────────── */
-.code-graph { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+/* Reuses the existing .chip / .chip--state pill; only the tint channel differs. */
+.cg-chip { cursor: help; }
 
-.code-graph__empty {
-  margin: auto;
-  max-width: 44ch;
-  padding: calc(var(--pad) * 2);
-  text-align: center;
+/* ─── Code Graph WebGL view (Plan C) ──────────────────────────────────────
+   The WebGL2 code-graph surface (`code_graph_view.rs`). It styles its own
+   `.code-graph-view__toolbar` controls with the shared design tokens; the
+   canvas keeps its own dark backdrop, matching the renderer's clear color. */
+.code-graph-view { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.code-graph-view__surface { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.code-graph-view__empty { padding: var(--pad); color: var(--muted); }
+.code-graph-view__empty h2 { margin: 0 0 8px; font-size: 1rem; color: var(--ink); }
+.code-graph-view__empty p { margin: 0 0 12px; line-height: 1.5; }
+.code-graph-view__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  font-size: 0.82rem;
   color: var(--dim);
 }
-.code-graph__empty-title { margin: 0 0 8px; font-size: 1rem; color: var(--ink); }
-.code-graph__empty-body { margin: 0 0 12px; line-height: 1.5; }
-.code-graph__empty-cmd {
-  margin: 0 0 12px;
-  padding: 8px 10px;
-  overflow-x: auto;
-  text-align: left;
-  border-radius: 6px;
-  background: var(--panel-2);
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-}
-.code-graph__empty-note { margin: 0; font-size: 0.82rem; opacity: 0.8; }
-
-.code-graph__viewport { flex: 1; min-height: 0; overflow: hidden; cursor: grab; }
-.code-graph__viewport:active { cursor: grabbing; }
-.code-graph-svg { width: 100%; height: 100%; display: block; }
-
-.cg-edge { stroke: var(--edge, currentColor); opacity: 0.75; }
-/* Dynamic dispatch differs by MARKER + opacity, never by dash — flow
-   connectors are uniformly solid; dashing is a sequence-diagram device. */
-.cg-edge--dynamic { opacity: 0.55; }
-.cg-arrowhead { fill: var(--edge); stroke: var(--edge); }
-/* Same specificity as .cg-arrowhead (one class each) but declared after it,
-   so this fill wins the cascade and the open chevron stays unfilled instead
-   of closing into the same solid triangle as the static marker. */
-.cg-arrowhead--dynamic { fill: none; stroke: var(--edge); stroke-width: 1.5; }
-
-/* Every card is clickable — module tier drills, function tier selects — so
-   both get the pointer cursor (mirrors `.flow-node`'s blanket rule); there is
-   no separate `--drillable` cursor to keep the fine tier from looking inert. */
-.cg-node { cursor: pointer; }
-.cg-node__card {
-  fill: var(--panel-2);
-  stroke: var(--line);
-  stroke-width: 1;
-}
-.cg-node.is-active .cg-node__card {
-  stroke: var(--accent);
-  stroke-width: 2;
-  filter: drop-shadow(0 0 6px var(--accent-glow));
-}
-.cg-node__label { font-size: 13px; fill: var(--ink); }
-.cg-node__sublabel,
-.cg-node__fan { font-size: 10px; fill: var(--dim); }
-.cg-badge { stroke: none; }
-
-.code-graph__controls { display: flex; gap: 4px; justify-content: flex-end; padding: 6px; }
-
-.code-graph__crumbs { display: flex; align-items: center; gap: 6px; padding: 8px 10px; }
-.code-graph__crumb {
-  padding: 2px 6px;
-  border: 0;
+.code-graph-view__toolbar button {
+  padding: 2px 8px;
+  border: var(--hairline) solid var(--line);
   border-radius: 4px;
   background: none;
   color: var(--dim);
   font: inherit;
+  font-size: 0.78rem;
   cursor: pointer;
 }
-.code-graph__crumb.is-active { color: var(--accent); }
-/* The drilled-into module name is a plain (non-clickable) span — unlike the
-   "Modules" button, which stays clickable to reset the view. */
-span.code-graph__crumb.is-active { cursor: default; }
-.code-graph__crumb-sep { color: var(--dim); opacity: 0.6; }
-
-.cg-detail { border-top: var(--hairline) solid var(--line); padding: 10px var(--pad); max-height: 34%; overflow-y: auto; }
-.cg-detail__hint { margin: 0; color: var(--dim); font-size: 0.85rem; }
-.cg-detail__symbol { margin: 0 0 4px; font-size: 0.95rem; color: var(--ink); }
-.cg-detail__sig {
-  display: block;
-  margin-bottom: 6px;
+.code-graph-view__toolbar button.is-active { color: var(--accent); border-color: var(--accent); }
+.code-graph-view__label { font-size: 0.78rem; color: var(--dim); }
+.code-graph-view__status { font-size: 0.78rem; color: var(--muted); }
+.code-graph-view__fps { margin-left: auto; font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); }
+/* Culling notice — renders whenever the filters exclude any node or edge;
+   accent so a cull is never silent. */
+.code-graph-view__notice { font-size: 0.78rem; color: var(--accent); }
+.code-graph-view__check { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--dim); cursor: pointer; }
+.code-graph-view__toolbar--anim input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--accent); }
+/* Canvas wrap — a positioned ancestor so the staged progress panel below can
+   float centred OVER the canvas instead of docked in the toolbar chrome. */
+.code-graph-view__canvas-wrap { position: relative; flex: 1; min-height: 0; display: flex; }
+.code-graph-view__canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: grab; background: #08090b; }
+.code-graph-view__canvas:active { cursor: grabbing; }
+/* Staged, centred progress panel — the PRIMARY signal that the app is
+   working, not broken, while the graph model builds and the force layout
+   settles (the 11px status line alone was not enough: see the
+   code-graph-view module docs). Free-floating over the canvas, one row per
+   observable render stage, each with its own title + bar; a completed
+   stage's bar reads full, the active stage's bar tracks real progress.
+   Tonal layering + a hairline border (DESIGN.md's elevation language, not a
+   heavy shadow). `pointer-events: none` so it never blocks canvas
+   pan/zoom/click — same non-blocking behaviour as the row it replaces. */
+.code-graph-view__progress {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 320px;
+  max-width: 420px;
+  padding: var(--pad) calc(var(--pad) * 1.5);
+  background: var(--popover);
+  border: var(--hairline) solid var(--line);
+  border-radius: 6px;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--muted);
-  overflow-x: auto;
+  pointer-events: none;
 }
-.cg-detail__meta { margin: 0 0 2px; font-size: 0.78rem; color: var(--muted); }
-.cg-detail__doc { margin: 6px 0 0; font-size: 0.82rem; }
-.cg-detail__badges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
-/* Reuses the existing .chip / .chip--state pill; only the tint channel differs. */
-.cg-chip { cursor: help; }
+.code-graph-view__progress-stage { display: flex; flex-direction: column; gap: 6px; }
+.code-graph-view__progress-stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.code-graph-view__progress-stage-label { color: var(--ink); font-size: 0.85rem; white-space: nowrap; }
+/* Stage-1's "done" affordance (replaces its always-100%-by-construction bar —
+   see the component doc for why that bar conveyed nothing). */
+.code-graph-view__progress-stage-check { color: var(--accent); margin-right: 4px; font-weight: 700; }
+.code-graph-view__progress-stage-detail {
+  color: var(--muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.code-graph-view__progress-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.code-graph-view__progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  border-radius: 3px;
+}
+.code-graph-view__footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-top: var(--hairline) solid var(--line);
+  font-size: 0.78rem;
+  color: var(--dim);
+}
+.code-graph-view__selected { color: var(--accent); }
