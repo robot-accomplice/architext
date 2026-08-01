@@ -190,6 +190,61 @@ pub fn CodeGraphView() -> impl IntoView {
     }
 }
 
+// Everything `sync_and_upload`/`full_upload` mirror onto their Leptos
+// signals after touching `vs`, snapshotted OUT of the RefCell borrow. Module
+// scope (not nested in `CodeGraphViewCanvas` below) so the regression test
+// at the bottom of this file can reach it directly.
+struct SelectionMirror {
+    selected_label: Option<(String, u32)>,
+    anim_current_depth: i32,
+    anim_max_depth: i32,
+    counts: (usize, usize, usize, usize),
+    next: Option<CodeGraphSelection>,
+}
+
+// THE FIX for the release-blocking crash: borrow `vs` just long enough to
+// copy out everything the two upload paths mirror, then hand back OWNED
+// data — never a reference borrowed from `vs`. Both call sites used to read
+// straight out of `vs.borrow().as_ref()` and keep that borrow alive across
+// `state.set_selected_code_graph_node(next)`, which runs the "TRUE CLEAR"
+// effect (further down `CodeGraphViewCanvas`) SYNCHRONOUSLY — and that
+// effect does its own `vs.borrow_mut()`. A `borrow_mut()` reentering while a
+// `borrow()` is still live panics ("RefCell already borrowed"), and a panic
+// inside wasm traps the WHOLE instance (see the module doc's RENDER-LOOP
+// CANCELLATION section) — every signal write app-wide freezes, which is
+// exactly the user's report of "changing options at the top clears the
+// graph and never rerenders it." Returning owned data makes the bug
+// structurally impossible to reintroduce: the `Ref` this function takes is
+// dropped at the end of the statement below (the same tail-expression
+// pattern the RAF frame's "build inside the borrow, set after it's
+// released" comment relies on), which is BEFORE this function returns to
+// its caller — so there is no borrow left for the caller to still be
+// holding. Regression coverage: `refcell_discipline_tests` at the bottom of
+// this file.
+fn snapshot_selection_mirror(
+    vs: &Rc<RefCell<Option<ViewState>>>,
+    tier: Tier,
+    selection_id: &impl Fn(Tier, usize) -> Option<String>,
+) -> Option<SelectionMirror> {
+    // `.map()`, not `if let ... else`: same tail-expression temporary-drop
+    // timing either way (the `Ref` from `vs.borrow()` is dropped at the end
+    // of this statement, before the function returns — proven by
+    // `refcell_discipline_tests::snapshot_selection_mirror_releases_the_borrow_before_returning`
+    // below), and clippy's `manual_map` flags the longer form as a warning.
+    vs.borrow().as_ref().map(|v| SelectionMirror {
+        selected_label: v.selected.map(|i| (v.graph.labels[i].clone(), v.graph.degree[i])),
+        anim_current_depth: v.anim_current_depth,
+        anim_max_depth: v.anim_max_depth,
+        counts: (
+            v.cull.nodes.len(),
+            v.graph.node_count(),
+            v.cull.edges.len(),
+            v.graph.directed_edges.len(),
+        ),
+        next: v.selected.and_then(|i| selection_id(tier, i)).map(|id| CodeGraphSelection { tier, id }),
+    })
+}
+
 #[component]
 fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     let state = use_app_state();
@@ -287,8 +342,19 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // `vs`/`layout` are plain `Rc<RefCell<..>>`, not Leptos signals —
             // safe to read regardless of disposal order — and `tier_mirror`
             // exists precisely so tier is available here too.
-            let layout_settling = layout.borrow().is_some();
-            let selection_held = vs.borrow().as_ref().map(|v| v.selected.is_some()).unwrap_or(false);
+            //
+            // `try_borrow`, never `borrow`: the recorded trail shows cleanup
+            // fires WHILE a settle is in flight every single time (the
+            // teardown storm on mode entry disposes each instance ~15 ms after
+            // it starts its layout), so the RAF tick loop may well be holding
+            // `layout.borrow_mut()` right now. A panic here would trap the
+            // whole wasm instance — see the `try_borrow` note in `on_click`.
+            // Unknown beats dead: `None` renders as "unknown" in the detail.
+            let fmt = |b: Option<bool>| b.map_or("unknown".to_string(), |v| v.to_string());
+            let layout_settling = fmt(layout.try_borrow().ok().map(|l| l.is_some()));
+            let selection_held = fmt(
+                vs.try_borrow().ok().map(|v| v.as_ref().map(|v| v.selected.is_some()).unwrap_or(false)),
+            );
             diagnostics::record(
                 diag_instance,
                 "cleanup",
@@ -348,28 +414,29 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 diagnostics::record_alive_bail(diag_instance, "sync_and_upload");
                 return;
             }
-            if let Some(v) = vs.borrow().as_ref() {
-                selected_label.set(v.selected.map(|i| (v.graph.labels[i].clone(), v.graph.degree[i])));
-                anim_depth_sig.set(v.anim_current_depth);
-                anim_max_sig.set(v.anim_max_depth);
+            // `snapshot_selection_mirror` releases its `vs` borrow before
+            // returning (see its doc) — the fix for the crash where holding
+            // `vs.borrow()` across `state.set_selected_code_graph_node` below
+            // double-borrowed the RefCell and trapped the wasm instance.
+            if let Some(snap) = snapshot_selection_mirror(&vs, tier.get_untracked(), &selection_id) {
+                selected_label.set(snap.selected_label);
+                anim_depth_sig.set(snap.anim_current_depth);
+                anim_max_sig.set(snap.anim_max_depth);
                 // Inspector mirror (Task 6): None when nothing is selected, so
                 // a cleared canvas selection clears the inspector detail too.
                 // The equality guard matters: this closure also runs per
                 // layout-settle frame, and an unconditional `set` would
                 // re-render the inspector body every frame with the same value.
-                let t = tier.get_untracked();
-                let next =
-                    v.selected.and_then(|i| selection_id(t, i)).map(|id| CodeGraphSelection { tier: t, id });
-                if state.selected_code_graph_node.get_untracked() != next {
+                if state.selected_code_graph_node.get_untracked() != snap.next {
                     // Module doc item 5: the mirror actually changing is rare
                     // (gated by the equality check above), so this never
                     // becomes a per-frame flood — no throttling needed here.
                     diagnostics::record(
                         diag_instance,
                         "selection_mirror",
-                        Some(selection_mirror_detail(&next)),
+                        Some(selection_mirror_detail(&snap.next)),
                     );
-                    state.set_selected_code_graph_node(next);
+                    state.set_selected_code_graph_node(snap.next);
                 }
             }
         }
@@ -400,14 +467,14 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 diagnostics::record_alive_bail(diag_instance, "full_upload");
                 return;
             }
-            if let Some(v) = vs.borrow().as_ref() {
-                counts.set((
-                    v.cull.nodes.len(),
-                    v.graph.node_count(),
-                    v.cull.edges.len(),
-                    v.graph.directed_edges.len(),
-                ));
-                selected_label.set(v.selected.map(|i| (v.graph.labels[i].clone(), v.graph.degree[i])));
+            // Same fix as `sync_and_upload` above: `snapshot_selection_mirror`
+            // releases the `vs` borrow before returning, so the signal writes
+            // below — most of all `state.set_selected_code_graph_node`, whose
+            // reentrant `vs.borrow_mut()` (the "TRUE CLEAR" effect) is what
+            // trapped the wasm instance — can never race a still-held borrow.
+            if let Some(snap) = snapshot_selection_mirror(&vs, tier.get_untracked(), &selection_id) {
+                counts.set(snap.counts);
+                selected_label.set(snap.selected_label);
                 // Depth-chrome mirror: `full_upload` is now the path
                 // `set_anim_mode`/`set_depth`/a hop-boundary crossing take
                 // (the cull set changes with the wavefront — see their call
@@ -415,25 +482,22 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 // rather than leaving that to `sync_and_upload` alone, or
                 // "depth N / M" and the scrub slider go stale on every mode
                 // change and step/scrub.
-                anim_depth_sig.set(v.anim_current_depth);
-                anim_max_sig.set(v.anim_max_depth);
+                anim_depth_sig.set(snap.anim_current_depth);
+                anim_max_sig.set(snap.anim_max_depth);
                 // Inspector mirror (Task 6): runs on the cull/tier paths too,
                 // so a filter that culls the selection (or a tier switch,
                 // which rebuilds `vs` with `selected: None`) also clears the
                 // inspector detail. Same equality guard as `sync_and_upload`:
                 // this runs per layout-settle frame.
-                let t = tier.get_untracked();
-                let next =
-                    v.selected.and_then(|i| selection_id(t, i)).map(|id| CodeGraphSelection { tier: t, id });
-                if state.selected_code_graph_node.get_untracked() != next {
+                if state.selected_code_graph_node.get_untracked() != snap.next {
                     // Same equality guard as `sync_and_upload` bounds this to
                     // real changes, not one entry per settle frame.
                     diagnostics::record(
                         diag_instance,
                         "selection_mirror",
-                        Some(selection_mirror_detail(&next)),
+                        Some(selection_mirror_detail(&snap.next)),
                     );
-                    state.set_selected_code_graph_node(next);
+                    state.set_selected_code_graph_node(snap.next);
                 }
             }
         }
@@ -1191,7 +1255,19 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                     // when the layout settles (status line says so). This is
                     // the call site the maintainer traced the 60-click burst
                     // to — record how far into the settle it landed.
-                    let ticks = layout.borrow().as_ref().map(|d| (d.ticks_run(), d.max_ticks()));
+                    // `try_borrow`, never `borrow`: this runs DURING a settle,
+                    // which is exactly when the RAF tick loop holds
+                    // `layout.borrow_mut()`. A plain `borrow()` here panicked
+                    // ("RefCell already mutably borrowed"), and a panic in wasm
+                    // traps the WHOLE instance — every signal write in the app
+                    // freezes while the DOM stays on screen looking alive, which
+                    // is precisely the un-diagnosable failure this module exists
+                    // to prevent. Instrumentation must never be able to take the
+                    // app down: if the driver is busy, record without the ticks.
+                    let ticks = layout
+                        .try_borrow()
+                        .ok()
+                        .and_then(|l| l.as_ref().map(|d| (d.ticks_run(), d.max_ticks())));
                     diagnostics::record(
                         diag_instance,
                         "click_ignored",
@@ -1549,5 +1625,144 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 })}
             </div>
         </div>
+    }
+}
+
+#[cfg(test)]
+mod refcell_discipline_tests {
+    //! Regression coverage for the release-blocking crash captured live via
+    //! CDP against the real 17,814-function artifact:
+    //! `panicked at .../code_graph_view.rs:853:63: RefCell already borrowed`
+    //! → `RuntimeError: unreachable`, trapping the WHOLE wasm instance.
+    //!
+    //! Root cause: `sync_and_upload`/`full_upload` used to read
+    //! `vs.borrow().as_ref()` and keep that borrow alive across
+    //! `state.set_selected_code_graph_node(next)` — a Leptos signal write
+    //! that runs the "TRUE CLEAR" effect (in `CodeGraphViewCanvas` above)
+    //! SYNCHRONOUSLY, and that effect does its own `vs.borrow_mut()`. This
+    //! is pure Rust `RefCell` borrow-discipline logic, not GPU or DOM state,
+    //! so it is fully reproducible natively — no wasm32 target needed.
+    //!
+    //! The fixture is a real `GraphModel`/`ViewState` built over the shared
+    //! `tests_support::interconnected` generator at 1000+ nodes (the
+    //! maintainer's standing convention for call-graph tests — see
+    //! `code_graph_view_model::tests`'s "WHY ≥1000" note), so
+    //! `snapshot_selection_mirror`'s `v.graph.labels[i]` /
+    //! `v.graph.degree[i]` indexing runs against a realistic graph rather
+    //! than a toy stub too small to exercise real indices.
+    use super::*;
+    use crate::code_graph_graph::tests_support;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    /// A 1000-interconnected-function `ViewState` with node 0 selected.
+    fn selected_view_state() -> Rc<RefCell<Option<ViewState>>> {
+        let (n, edges) = tests_support::interconnected(1000, 3);
+        let functions: Vec<serde_json::Value> = (0..n)
+            .map(|i| {
+                serde_json::json!({
+                    "id": format!("f{i}"), "symbol": format!("pkg.fn{i}"), "pkg": "pkg",
+                    "file": "f.go", "line": i + 1, "kind": "func", "exported": false,
+                    "test": false, "root": i == 0, "generated": false,
+                    "reachable": true, "prod_reachable": true,
+                    "signature": {"params": [], "results": []},
+                    "fan_in": 0, "fan_out": 0
+                })
+            })
+            .collect();
+        let calls: Vec<serde_json::Value> = edges
+            .iter()
+            .map(|&(a, b)| {
+                serde_json::json!({
+                    "from": format!("f{a}"), "to": format!("f{b}"),
+                    "site_file": "f.go", "site_line": 1, "kind": "static"
+                })
+            })
+            .collect();
+        let doc: CodeGraph = serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1", "generator": "magma",
+            "language": "go", "module": "example.com/x", "sha": "a",
+            "tree": "clean", "fidelity": "rta", "computable": true,
+            "functions": functions, "calls": calls
+        }))
+        .expect("1000-node fixture parses");
+
+        let graph = build_graph(&doc, Tier::Functions);
+        let positions = vec![(0.0f32, 0.0f32); n];
+        let tree = QuadTree::from_positions_f32(&positions);
+        let mut vs = ViewState::new(graph, positions, tree, 0.0, 0.0, 1.0, false);
+        vs.selected = Some(0);
+        Rc::new(RefCell::new(Some(vs)))
+    }
+
+    /// Pins the EXACT pre-fix shape: a `vs.borrow()` still held while a
+    /// reentrant `vs.borrow_mut()` runs — standing in for the "TRUE CLEAR"
+    /// effect a live `state.set_selected_code_graph_node` write triggers.
+    /// This is what `sync_and_upload`/`full_upload` did before the fix, and
+    /// reproduces the exact panic message ("RefCell already borrowed")
+    /// captured via CDP in production. If this test ever stops panicking,
+    /// the fixture below has stopped reproducing the crash it guards.
+    #[test]
+    fn holding_the_vs_borrow_across_a_reentrant_borrow_mut_panics() {
+        let vs = selected_view_state();
+        let vs_reentrant = vs.clone();
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            let guard = vs.borrow(); // the bug: still held below
+            let _ = guard.as_ref().map(|v| v.selected);
+            let _ = vs_reentrant.borrow_mut(); // the "TRUE CLEAR" effect's touch
+        }));
+        assert!(
+            result.is_err(),
+            "holding a `vs.borrow()` across a reentrant `vs.borrow_mut()` must panic \
+             (RefCell's documented double-borrow behaviour)"
+        );
+    }
+
+    /// THE FIX: `snapshot_selection_mirror` — the function `sync_and_upload`/
+    /// `full_upload` now call instead of reading `vs` directly — returns
+    /// owned data, so its `vs` borrow is released before the caller can
+    /// reach a signal write. The SAME reentrant touch that panics above no
+    /// longer panics once it happens after the snapshot call returns.
+    ///
+    /// Before this fix existed, `snapshot_selection_mirror` did not exist —
+    /// this test could not even compile, let alone pass. After the fix, it
+    /// both compiles and passes, exercising the exact function
+    /// `sync_and_upload`/`full_upload` depend on for correctness.
+    #[test]
+    fn snapshot_selection_mirror_releases_the_borrow_before_returning() {
+        let vs = selected_view_state();
+        let vs_reentrant = vs.clone();
+        let selection_id = |_t: Tier, i: usize| Some(format!("f{i}"));
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            let snap = snapshot_selection_mirror(&vs, Tier::Functions, &selection_id)
+                .expect("a ViewState was set");
+            // Stands in for `state.set_selected_code_graph_node` running the
+            // "TRUE CLEAR" effect synchronously — must NOT panic now that
+            // `snapshot_selection_mirror` has already returned and released
+            // its `vs` borrow.
+            let _ = vs_reentrant.borrow_mut();
+            snap
+        }));
+
+        let snap = match result {
+            Ok(snap) => snap,
+            Err(_) => panic!(
+                "snapshot_selection_mirror must release its `vs` borrow before returning \
+                 (a reentrant `vs.borrow_mut()` right after the call panicked)"
+            ),
+        };
+
+        // Not just "didn't panic" — the snapshot must carry the REAL
+        // selected node's facts through, at real (1000-node) scale.
+        assert_eq!(
+            snap.next,
+            Some(CodeGraphSelection { tier: Tier::Functions, id: "f0".to_string() }),
+            "the mirror must carry the real selected node's id through, not just avoid panicking"
+        );
+        assert_eq!(
+            snap.selected_label.as_ref().map(|(label, _)| label.as_str()),
+            Some("pkg.fn0"),
+            "the mirror must carry the real selected node's label through"
+        );
     }
 }
