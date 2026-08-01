@@ -61,6 +61,30 @@
       "doc": "Add returns the sum of a and b.",
       "fan_in": 1,
       "fan_out": 0
+    },
+    {
+      "id": "m-static-init",
+      "symbol": "MAX_SIZE#init",
+      "pkg": "m",
+      "file": "main.go",
+      "line": 99,
+      "kind": "init",
+      "exported": true,
+      "test": false,
+      "root": false,
+      "generated": false,
+      "reachable": false,
+      "prod_reachable": false,
+      "signature": {
+        "params": [],
+        "results": [
+          {
+            "type": "usize"
+          }
+        ]
+      },
+      "fan_in": 0,
+      "fan_out": 0
     }
   ],
   "calls": [
@@ -78,10 +102,11 @@
       "pkg": "m",
       "function_ids": [
         "m-add",
-        "m-main"
+        "m-main",
+        "m-static-init"
       ],
       "counts": {
-        "functions": 2,
+        "functions": 3,
         "dead": 0,
         "test_only": 0
       },

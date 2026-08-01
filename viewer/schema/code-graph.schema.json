@@ -90,7 +90,7 @@
         "pkg": { "type": "string" },
         "file": { "type": "string" },
         "line": { "type": "integer" },
-        "kind": { "type": "string", "enum": ["func", "method"] },
+        "kind": { "type": "string", "enum": ["func", "method", "init"] },
         "exported": { "type": "boolean" },
         "test": { "type": "boolean" },
         "root": { "type": "boolean" },

@@ -228,6 +228,29 @@ mod tests {
     /// before the property was declared. Caught before magma shipped it; had it
     /// landed first, every artifact they produced would have failed validation
     /// on day one — the same shape as the `tree`-carrying-the-SHA defect.
+    /// `kind: "init"` is a THIRD function kind, alongside `func` and `method`,
+    /// carrying Rust const/static initialisers.
+    ///
+    /// DO NOT "UNIFY" THIS WITH GO's `init#N` — they share a name and are not
+    /// the same thing, and collapsing them is the natural instinct:
+    ///   - Go's `init#N` IS a real function. The compiler generates it, it has
+    ///     a body, the runtime calls it. Magma emits `kind: "func"` for it, and
+    ///     that is the true answer.
+    ///   - Rust's `#init` is NOT a function. It is a magma-synthesized node
+    ///     wrapping a const/static initialiser EXPRESSION; there is no `fn`
+    ///     anywhere in the source. Hence a distinct kind.
+    ///
+    /// Why the distinction is load-bearing rather than pedantic: on a real
+    /// workspace 22 of these land in our `dead` badge, and they are `static`s —
+    /// `ENV_MUTEX#init`, `MACHINE_ID_MUTEX#init`. Rendering them as dead
+    /// *functions* would tell a reader to go delete a function that does not
+    /// exist. That is an actionable wrong answer, not a cosmetic one.
+    ///
+    /// CAVEAT for anyone rendering these (disclosed by magma): magma models
+    /// CALLS, not USES. A `static` is used, never called, so no edge ever points
+    /// at its initialiser — it fails `reachable` and lands in `dead` even when
+    /// `test: true`. Their reachability is therefore weaker evidence than a
+    /// function's, and the UI must not present them with equal confidence.
     #[test]
     fn code_graph_accepts_magmas_forthcoming_fields() {
         let outcome = validate_data_dir(&fixture("valid-code-graph-forthcoming"), &schema_dir());
