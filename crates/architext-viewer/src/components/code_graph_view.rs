@@ -66,6 +66,9 @@ use leptos::*;
 use wasm_bindgen::JsCast;
 
 use crate::code_graph_graph::FilterState;
+use crate::code_graph_provenance::{
+    discloses_executed_target_code, dynamic_edge_explanation, fidelity_method_description,
+};
 use crate::code_graph_layout::LayoutDriver;
 use crate::code_graph_view_model::{
     build_graph, fit_camera, should_autoplay, AnimMode, Tier, ViewState, LAYOUT_SEED,
@@ -228,6 +231,19 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // after it) also needs them to `put` on settle completion.
     let cg_sha = cg.sha.clone();
     let cg_tree = cg.tree.clone();
+    // Provenance surface (Item 1): the facts the "how this map was made"
+    // affordance and the fidelity-modulated dynamic-edge explanation need,
+    // cloned out for the same reason as `cg_sha`/`cg_tree` above — `cg`
+    // itself is moved into the tier-entry effect below.
+    let cg_generator = cg.generator.clone();
+    let cg_executed_target_code = cg.executed_target_code;
+    // Computed once from `cg.fidelity` (fixed for this component instance's
+    // life) so nothing downstream needs to hold onto `cg.fidelity` itself —
+    // both are `&'static str`, so they're `Copy` and freely reusable across
+    // the reactive closures below.
+    let dynamic_edge_title = dynamic_edge_explanation(&cg.fidelity);
+    let cg_method_description = fidelity_method_description(&cg.fidelity);
+    let provenance_open = create_rw_signal(false);
     let layout_t0: Rc<Cell<f64>> = Rc::new(Cell::new(0.0));
     let first_paint_logged: Rc<Cell<bool>> = Rc::new(Cell::new(false));
     let user_moved_camera: Rc<Cell<bool>> = Rc::new(Cell::new(false));
@@ -1119,6 +1135,47 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 <button class:is-active=move || tier.get() == Tier::Functions on:click=move |_| tier.set(Tier::Functions)>
                     "Functions"
                 </button>
+                // "How this map was made" (Item 1): the facts that are NOT
+                // per-edge — generator + version, the analysis method in
+                // plain words (never the raw fidelity token), and — only
+                // when the FIELD says so — that producing this map executed
+                // the analysed repo's own code. Lives in the mode chrome
+                // (not the inspector) because it describes the whole
+                // document, not a selected node/edge; a click-to-toggle
+                // popover keeps it discoverable without being a wall of text
+                // in the toolbar itself.
+                <div class="code-graph-view__provenance">
+                    <button
+                        class="code-graph-view__provenance-btn"
+                        class:is-active=move || provenance_open.get()
+                        title="How this map was made"
+                        aria-expanded=move || provenance_open.get().to_string()
+                        on:click=move |_| provenance_open.update(|o| *o = !*o)
+                    >
+                        <span aria-hidden="true">"ⓘ "</span>"How this map was made"
+                    </button>
+                    {move || provenance_open.get().then(|| {
+                        let show_exec = discloses_executed_target_code(cg_executed_target_code);
+                        view! {
+                            <div
+                                class="code-graph-view__provenance-popover"
+                                role="dialog"
+                                aria-label="How this map was made"
+                            >
+                                <p class="code-graph-view__provenance-line">
+                                    {format!("Generator: {cg_generator}")}
+                                </p>
+                                <p class="code-graph-view__provenance-line">{cg_method_description}</p>
+                                {show_exec.then(|| view! {
+                                    <p class="code-graph-view__provenance-warn">
+                                        "Producing this map executed the analysed repository's \
+                                         code (build scripts, proc macros run during analysis)."
+                                    </p>
+                                })}
+                            </div>
+                        }
+                    })}
+                </div>
                 <span class="code-graph-view__status">{move || status.get()}</span>
                 {move || {
                     let (n, total_n, e, total_e) = counts.get();
@@ -1153,12 +1210,25 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                     "Generated"
                 </label>
                 <span class="code-graph-view__label">"Edge kind:"</span>
-                <label class="code-graph-view__check">
+                <label
+                    class="code-graph-view__check"
+                    title="Static calls are resolved exactly by either analysis method."
+                >
                     <input type="checkbox" prop:checked=move || filter.get().show_static
                         on:input=move |e| filter.update(|f| f.show_static = event_target_checked(&e))/>
                     "Static"
                 </label>
-                <label class="code-graph-view__check">
+                // Fidelity MODULATES this explanation rather than appearing as its
+                // own label (Item 1): the same "dynamic" edge kind carries
+                // different warranty depending on how the graph was produced —
+                // an RTA over-approximation vs. a semantically-resolved target.
+                // This toggle is the one place dynamic-vs-static is already
+                // communicated to the user, so it is where the explanation lives;
+                // there is no per-edge inspect affordance to attach it to instead.
+                <label
+                    class="code-graph-view__check"
+                    title=dynamic_edge_title
+                >
                     <input type="checkbox" prop:checked=move || filter.get().show_dynamic
                         on:input=move |e| filter.update(|f| f.show_dynamic = event_target_checked(&e))/>
                     "Dynamic"
