@@ -243,10 +243,19 @@ impl Renderer {
     /// (node/edge count is fixed between `upload_static` calls), so
     /// `buffer_sub_data` never reallocates.
     ///
-    /// - `node_state`: interleaved `[alpha, glow, color_mix, 0.0] * node_count`
-    /// - `edge_state`: interleaved `[alpha, color_mix, progress, 0.0] * edge_count`
+    /// - `node_state`: interleaved `[alpha, glow, color_mix, hop_age] * node_count`
+    /// - `edge_state`: interleaved `[alpha, color_mix, progress, hop_age] * edge_count`
     ///   (`progress` drives the progressive call-order animation's growing
     ///   line — see `gl/shaders.rs`'s `EDGE_VS`; `1.0` outside an animation)
+    ///
+    /// `hop_age` (both, formerly always-zero padding) is hop-durations since
+    /// the BFS wavefront revealed that node/edge — `0.0` outside an active,
+    /// motion-enabled animation. The vertex shaders decay brightness from it
+    /// every frame on the GPU (`gl/shaders.rs`'s `NODE_VS`/`EDGE_VS`); this
+    /// function still re-uploads the WHOLE buffer every animation frame (for
+    /// `progress`'s sake, unchanged from before), but does not do any
+    /// PER-FRAME brightness-curve arithmetic on the CPU — see the module doc
+    /// on why that split matters at 17,814 nodes / 50,215 edges.
     pub fn upload_dynamic(&self, node_state: &[f32], edge_state: &[f32]) {
         upload_sub(&self.gl, &self.node_state_buf, node_state);
         upload_sub(&self.gl, &self.edge_state_buf, edge_state);

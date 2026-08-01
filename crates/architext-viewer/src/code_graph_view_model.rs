@@ -24,8 +24,104 @@ use crate::code_graph_graph::{Direction, FilterState, GraphIndex};
 use crate::data::models::CodeGraph;
 use crate::force_layout::QuadTree;
 
-const TRAIL_ALPHA: f32 = 0.35;
+// `pub` (not just crate-private): after the decay rework below, this value's
+// only remaining Rust-side reference is as the node decay floor argument
+// passed to `decay_brightness` in tests (the render path itself only
+// uploads raw age — see `hop_age`'s doc — the floor lives as a GLSL literal
+// in `gl/shaders.rs`'s `NODE_VS`), so it needs to stay visible outside this
+// module's non-test code to avoid a dead-code false positive.
+pub const TRAIL_ALPHA: f32 = 0.35;
 const SELECT_FADE_ALPHA: f32 = 0.05;
+
+/// How many hop-durations a revealed node's brightness takes to decay from
+/// peak down to its resting floor (`TRAIL_ALPHA`/`NODE_MIX_FLOOR`) — the
+/// maintainer's ask, verbatim: "keep the new elements bright and gradually
+/// fade out the older elements so that users can better see what's
+/// happening" (the wavefront was previously an ever-accumulating STATIC
+/// mass once a node passed its one hop of "just arrived" brightness — see
+/// `node_state`'s pre-decay two-bucket alpha). 3 hops reads as "a few hops"
+/// against `HOP_DURATION_MS` (1.5s/hop, so a 4.5s trail): long enough that a
+/// reader mid-animation can still tell "revealed a hop or two ago" from
+/// "long settled", short enough that most of the accumulated graph reads as
+/// settled background rather than perpetually "recent". `hop_age` derives
+/// the per-element age this decays against; `decay_brightness` is the curve
+/// itself (the Rust-side, unit-tested twin of `gl/shaders.rs`'s `NODE_VS`,
+/// which does the actual per-frame evaluation on the GPU — see its doc for
+/// why the real work lives there and not here). Edges use a shorter span —
+/// see `EDGE_DECAY_HOPS`.
+pub const NODE_DECAY_HOPS: f32 = 3.0;
+
+/// Edge counterpart of `NODE_DECAY_HOPS`, deliberately shorter (1.5 hops,
+/// half a node's span). An edge's `progress` (see `edge_state`) already
+/// encodes travel direction by growing from the reached endpoint toward the
+/// next hop; keeping only the most recent hop or two lit is what keeps THAT
+/// leading edge visually distinct from edges revealed three, four, five
+/// hops back — a slower decay would smear many hops of direction cues into
+/// one undifferentiated tangle. Nodes have no direction to blur, so their
+/// afterglow is free to linger longer (`NODE_DECAY_HOPS`).
+pub const EDGE_DECAY_HOPS: f32 = 1.5;
+
+/// Resting colorMix a fully-decayed node settles to — exactly the flat
+/// value `node_state` used to assign outright before decay existed, now
+/// named because `gl/shaders.rs`'s `NODE_VS` also needs it (as a GLSL
+/// literal — a shader source string cannot import a Rust `const`, so keep
+/// the two in sync by hand if this ever changes).
+pub const NODE_MIX_FLOOR: f32 = 0.6;
+
+/// Resting alpha/colorMix a fully-decayed edge settles to — exactly the
+/// flat values `edge_state` used to assign outright before decay existed.
+/// See `NODE_MIX_FLOOR`'s doc: `gl/shaders.rs`'s `EDGE_VS` mirrors these by
+/// hand.
+pub const EDGE_ALPHA_FLOOR: f32 = 0.22;
+pub const EDGE_MIX_FLOOR: f32 = 0.5;
+
+/// Continuous hop-position of the wavefront's leading edge (`current_depth`
+/// plus the fractional progress into the NEXT hop — the same quantity
+/// `advance_hop` already derives every frame) minus an element's own BFS
+/// depth (nodes), or its higher-depth endpoint (edges — see `edge_state`):
+/// "how many hop-durations ago did the wavefront pass this element",
+/// entirely reconstructed from state `ViewState` already tracks
+/// (`anim_current_depth`/`anim_hop_progress`/`anim_depth`) rather than a
+/// second, independently-ticking per-element timestamp — one animation
+/// clock, not two. Negative (not yet fully reached, or — edges only — still
+/// mid-growth) is deliberately left negative rather than clamped here:
+/// `decay_brightness` treats any `age <= 0` as "freshly activated, full
+/// brightness", so the in-flight growth band gets the same brightest
+/// treatment as the instant-of-arrival without a separate branch.
+fn hop_age(element_depth: i32, current_depth: i32, hop_progress: f32) -> f32 {
+    (current_depth as f32 + hop_progress) - element_depth as f32
+}
+
+/// Linear peak-to-floor brightness fraction for an element `age` hop-
+/// durations past activation (see `hop_age`). `age <= 0` is the freshest
+/// state (full brightness — never a premature dim before an element has
+/// actually arrived, and the same treatment an in-flight edge's negative
+/// age gets); the fraction then ramps linearly down to `floor` over
+/// `decay_span_hops` and holds flat. Linear, not eased/exponential: this is
+/// a "wavefront moving through an accumulating mass" legibility cue, not a
+/// decorative glow, and a linear ramp keeps the trail's visible LENGTH
+/// constant in hop-space regardless of playback speed — an eased curve's
+/// slow tail would make "how many hops back is still visible" depend on the
+/// eye's contrast sensitivity rather than a fixed, predictable count.
+///
+/// This function is the CANONICAL reference for the identical decay math
+/// `gl/shaders.rs`'s `NODE_VS`/`EDGE_VS` implement in GLSL (`mix(peak,
+/// floor, t)` where `t = clamp(age / decay_span_hops, 0, 1)`). The real
+/// per-frame evaluation runs there, on the GPU, once per vertex, every
+/// frame — see `gl/renderer.rs`'s doc on why: recomputing a brightness
+/// curve on the CPU across 17,814 nodes / 50,215 edges every animation
+/// frame is exactly the cost this renderer's instanced-draw design exists
+/// to avoid. This Rust twin exists purely so the curve's PROPERTIES
+/// (monotonic, floor-respecting, brightest-first) are unit-testable without
+/// a browser, since a GLSL source string cannot be. Keep the two in sync by
+/// eye if `decay_span_hops`/`floor` ever change on either side.
+pub fn decay_brightness(age_hops: f32, decay_span_hops: f32, floor: f32) -> f32 {
+    if age_hops <= 0.0 {
+        return 1.0;
+    }
+    let t = (age_hops / decay_span_hops).min(1.0);
+    1.0 - t * (1.0 - floor)
+}
 
 /// Readable-trace pacing (maintainer directive, verbatim: "let's start with
 /// readable trace... 'draw' them at that pace from one node to the next").
@@ -380,7 +476,7 @@ pub fn static_interleaves(
     (node_pos_radius, edge_endpoints)
 }
 
-/// Per-uploaded-node `[alpha, glow, colorMix, 0]` — folds the animation
+/// Per-uploaded-node `[alpha, glow, colorMix, hopAge]` — folds the animation
 /// wavefront and the selection highlight into one pass so they compose
 /// instead of fighting. (No filter fold: culled nodes are not uploaded at
 /// all — that is the whole point of the cull.)
@@ -390,6 +486,20 @@ pub fn static_interleaves(
 /// `0 <= anim_depth[g] <= anim_current` by construction (an unreached node
 /// is never in `c.nodes` at all — see `cull`'s doc — so there is no "fade
 /// the rest of the haze" branch here to fight with the real cull upstream).
+///
+/// Slot 3 (formerly always-zero padding) is `hopAge` — the comet-trail
+/// brightness decay input `gl/shaders.rs`'s `NODE_VS` consumes (see
+/// `hop_age`'s doc). While an animation is running AND motion is enabled,
+/// alpha/colorMix are uploaded at their PEAK (1.0/1.0) for every reached
+/// node — the two-bucket "just arrived vs. flat trail" split this replaced
+/// is now the shader's job, driven continuously by `hopAge`, not a discrete
+/// CPU-computed level. `reduced_motion` (and the Off/selection paths) upload
+/// `0.0`, which is `decay_brightness`'s identity input (`age <= 0` → no
+/// dimming) — those paths are therefore bit-for-bit unchanged. `glow` stays
+/// a discrete "just arrived this hop" flash, untouched by decay — it is a
+/// brief selection-style cue, not part of the trail the maintainer asked to
+/// see fade.
+#[allow(clippy::too_many_arguments)] // same precedent as sync_plan.rs / diagram/sequence.rs
 pub fn node_state(
     graph: &GraphModel,
     c: &Cull,
@@ -397,18 +507,20 @@ pub fn node_state(
     anim_mode: AnimMode,
     anim_depth: &[i32],
     anim_current: i32,
+    hop_progress: f32,
+    reduced_motion: bool,
 ) -> Vec<f32> {
     let mut out = Vec::with_capacity(c.nodes.len() * 4);
     for &g in &c.nodes {
-        let (mut alpha, mut glow, mut mix) = (0.85_f32, 0.0_f32, 0.0_f32);
+        let (mut alpha, mut glow, mut mix, mut age) = (0.85_f32, 0.0_f32, 0.0_f32, 0.0_f32);
         if anim_mode != AnimMode::Off {
+            alpha = 1.0;
+            mix = 1.0;
             if anim_depth[g] == anim_current {
-                alpha = 1.0;
                 glow = 0.9;
-                mix = 1.0;
-            } else {
-                alpha = TRAIL_ALPHA;
-                mix = 0.6;
+            }
+            if !reduced_motion {
+                age = hop_age(anim_depth[g], anim_current, hop_progress);
             }
         } else if let Some(s) = selected {
             if g == s {
@@ -422,14 +534,14 @@ pub fn node_state(
                 alpha = SELECT_FADE_ALPHA;
             }
         }
-        out.extend_from_slice(&[alpha, glow, mix, 0.0]);
+        out.extend_from_slice(&[alpha, glow, mix, age]);
     }
     out
 }
 
-/// Per-uploaded-edge `[alpha, colorMix, progress, 0]`. The base alpha drops
-/// at scale (>4000 visible edges) so a dense tier stays readable — same
-/// threshold as the spike. `progress` (slot 2, previously always-zero
+/// Per-uploaded-edge `[alpha, colorMix, progress, hopAge]`. The base alpha
+/// drops at scale (>4000 visible edges) so a dense tier stays readable —
+/// same threshold as the spike. `progress` (slot 2, previously always-zero
 /// padding — see `gl/shaders.rs`'s `EDGE_VS`) is the GPU interpolation
 /// factor the vertex shader draws the line to, `mix(loDepthEnd, hiDepthEnd,
 /// progress)`: `1.0` for every edge outside an active animation (fully
@@ -440,6 +552,17 @@ pub fn node_state(
 /// to the next" requirement. `c.edges` is assumed lower-depth-endpoint-first
 /// (guaranteed by `cull` whenever a `Wavefront` was passed), so `a` is always
 /// the line's grow-FROM end while animating.
+///
+/// Slot 3 (`hopAge`) is the comet-trail brightness decay input
+/// `gl/shaders.rs`'s `EDGE_VS` consumes — see `node_state`'s doc for the
+/// same PEAK-upload-plus-GPU-decay rationale, mirrored here: alpha/colorMix
+/// upload at their peak (0.9/1.0) for every reached-or-in-flight edge while
+/// motion is enabled, replacing the old three-way discrete alpha split with
+/// one continuous shader-side curve keyed on `hop_age(hi_depth, ...)` (the
+/// edge's DEEPER endpoint — the one that determines when it stops growing).
+/// An in-flight edge's age is negative (see `hop_age`'s doc), so it gets the
+/// same brightest treatment as the instant it fully arrives — no special
+/// case needed alongside the `progress` handling above.
 pub fn edge_state(
     c: &Cull,
     selected: Option<usize>,
@@ -447,26 +570,24 @@ pub fn edge_state(
     anim_depth: &[i32],
     anim_current: i32,
     hop_progress: f32,
+    reduced_motion: bool,
 ) -> Vec<f32> {
     let base = if c.edges.len() > 4000 { 0.05 } else { 0.28 };
     let mut out = Vec::with_capacity(c.edges.len() * 4);
     for &(a, b, _) in &c.edges {
-        let (mut alpha, mut mix, mut progress) = (base, 0.0_f32, 1.0_f32);
+        let (mut alpha, mut mix, mut progress, mut age) = (base, 0.0_f32, 1.0_f32, 0.0_f32);
         if anim_mode != AnimMode::Off {
             let hi_depth = anim_depth[a].max(anim_depth[b]);
+            alpha = 0.9;
+            mix = 1.0;
             if hi_depth == anim_current + 1 {
                 // In-flight: the one hop this wavefront is currently drawing
                 // toward. `progress` stays the live hop fraction; every other
                 // branch leaves it at the 1.0 default (fully drawn).
-                alpha = 0.9;
-                mix = 1.0;
                 progress = hop_progress;
-            } else if hi_depth == anim_current {
-                alpha = 0.9;
-                mix = 1.0;
-            } else {
-                alpha = 0.22;
-                mix = 0.5;
+            }
+            if !reduced_motion {
+                age = hop_age(hi_depth, anim_current, hop_progress);
             }
         } else if let Some(s) = selected {
             if a == s || b == s {
@@ -476,7 +597,7 @@ pub fn edge_state(
                 alpha = SELECT_FADE_ALPHA * 0.5;
             }
         }
-        out.extend_from_slice(&[alpha, mix, progress, 0.0]);
+        out.extend_from_slice(&[alpha, mix, progress, age]);
     }
     out
 }
@@ -870,6 +991,8 @@ impl ViewState {
             self.anim_mode,
             &self.anim_depth,
             self.anim_current_depth,
+            self.anim_hop_progress,
+            self.reduced_motion,
         )
     }
 
@@ -881,6 +1004,7 @@ impl ViewState {
             &self.anim_depth,
             self.anim_current_depth,
             self.anim_hop_progress,
+            self.reduced_motion,
         )
     }
 }
@@ -984,7 +1108,7 @@ mod tests {
         // 4 f32 per uploaded node: [alpha, glow, colorMix, 0].
         let g = build_graph(&fixture(), Tier::Functions);
         let c = cull(&g, &FilterState::default(), None);
-        let s = node_state(&g, &c, None, AnimMode::Off, &[], 0);
+        let s = node_state(&g, &c, None, AnimMode::Off, &[], 0, 0.0, false);
         assert_eq!(s.len(), c.nodes.len() * 4);
         assert_eq!(&s[0..4], &[0.85, 0.0, 0.0, 0.0], "base state, no selection/anim");
     }
@@ -994,7 +1118,7 @@ mod tests {
         let g = build_graph(&fixture(), Tier::Functions);
         let c = cull(&g, &FilterState::default(), None);
         // Select handler (graph idx 1); its uploaded neighbour is main (0).
-        let s = node_state(&g, &c, Some(1), AnimMode::Off, &[], 0);
+        let s = node_state(&g, &c, Some(1), AnimMode::Off, &[], 0, 0.0, false);
         let slot_main = &s[0..4];
         let slot_handler = &s[4..8];
         assert_eq!(slot_handler, &[1.0, 0.8, 1.0, 0.0], "selected: full alpha + glow");
@@ -1043,14 +1167,14 @@ mod tests {
         // Only edge (0,1) is uploaded (see the cull test above) and it is
         // in-flight at current_depth 0 — progress must equal hop_progress,
         // not the Off-path default of 1.0.
-        let s = edge_state(&c, None, AnimMode::Roots, &depth, 0, 0.37);
+        let s = edge_state(&c, None, AnimMode::Roots, &depth, 0, 0.37, false);
         assert_eq!(s.len(), 4);
         assert_eq!(s[2], 0.37, "in-flight edge progress mirrors hop_progress exactly");
 
         // Once main→handler is fully behind the wavefront (current_depth 1),
         // its progress is pinned at 1.0 regardless of hop_progress.
         let c1 = cull(&g, &FilterState::default(), Some(Wavefront { depth: &depth, current: 1, growth: true }));
-        let s1 = edge_state(&c1, None, AnimMode::Roots, &depth, 1, 0.9);
+        let s1 = edge_state(&c1, None, AnimMode::Roots, &depth, 1, 0.9, false);
         assert_eq!(s1[2], 1.0, "a fully-reached edge is always fully drawn");
     }
 
@@ -1058,10 +1182,10 @@ mod tests {
     fn edge_state_interleave_and_selection_accent() {
         let g = build_graph(&fixture(), Tier::Functions);
         let c = cull(&g, &FilterState::default(), None);
-        let s = edge_state(&c, None, AnimMode::Off, &[], 0, 0.0);
+        let s = edge_state(&c, None, AnimMode::Off, &[], 0, 0.0, false);
         assert_eq!(s.len(), c.edges.len() * 4, "4 f32 per uploaded edge");
         assert_eq!(&s[0..4], &[0.28, 0.0, 1.0, 0.0], "small-graph base alpha, fully drawn (Off)");
-        let s = edge_state(&c, Some(1), AnimMode::Off, &[], 0, 0.0);
+        let s = edge_state(&c, Some(1), AnimMode::Off, &[], 0, 0.0, false);
         assert_eq!(&s[0..4], &[0.9, 1.0, 1.0, 0.0], "edge touching the selection accents, fully drawn");
     }
 
@@ -1650,26 +1774,26 @@ mod tests {
         assert_eq!(c.nodes.len(), n, "show-everything uploads the full graph");
         assert!(c.edges.len() > n, "full-scale edge upload");
 
-        // Nodes: [alpha, glow, colorMix, 0] per uploaded instance.
-        let ns = node_state(&g, &c, None, AnimMode::Off, &[], 0);
+        // Nodes: [alpha, glow, colorMix, hopAge] per uploaded instance.
+        let ns = node_state(&g, &c, None, AnimMode::Off, &[], 0, 0.0, false);
         assert_eq!(ns.len(), c.nodes.len() * 4, "exactly 4 f32 per uploaded node");
         for slot in ns.chunks_exact(4) {
             assert!(
                 slot[0].is_finite() && slot[1].is_finite() && slot[2].is_finite(),
                 "node state must stay finite at scale"
             );
-            assert_eq!(slot[3], 0.0, "node padding slot stays zero");
+            assert_eq!(slot[3], 0.0, "node hopAge slot stays zero outside an animation");
         }
 
-        // Edges: [alpha, colorMix, progress, 0] per uploaded instance — the
-        // Off path always draws full length (progress 1.0, formerly
+        // Edges: [alpha, colorMix, progress, hopAge] per uploaded instance —
+        // the Off path always draws full length (progress 1.0, formerly
         // always-zero padding — see `gl/shaders.rs`'s `EDGE_VS`).
-        let es = edge_state(&c, None, AnimMode::Off, &[], 0, 0.0);
+        let es = edge_state(&c, None, AnimMode::Off, &[], 0, 0.0, false);
         assert_eq!(es.len(), c.edges.len() * 4, "exactly 4 f32 per uploaded edge");
         for slot in es.chunks_exact(4) {
             assert!(slot[0].is_finite() && slot[1].is_finite(), "edge state must stay finite");
             assert_eq!(slot[2], 1.0, "edge fully drawn outside an animation");
-            assert_eq!(slot[3], 0.0, "edge padding slot 3 stays zero");
+            assert_eq!(slot[3], 0.0, "edge hopAge slot stays zero outside an animation");
         }
     }
 
@@ -1711,16 +1835,146 @@ mod tests {
         assert!(c.nodes.len() < base.nodes.len(), "the wavefront must actually cull at scale");
         assert!(c.nodes.iter().all(|&i| depth[i] >= 0 && depth[i] <= 1), "only depth 0/1 nodes upload");
 
-        let ns = node_state(&g, &c, None, AnimMode::Roots, &depth, 1);
+        let ns = node_state(&g, &c, None, AnimMode::Roots, &depth, 1, 0.6, false);
         assert_eq!(ns.len(), c.nodes.len() * 4);
         assert!(ns.iter().all(|v| v.is_finite()), "animated node state stays finite at scale");
-        let es = edge_state(&c, None, AnimMode::Roots, &depth, 1, 0.6);
+        let es = edge_state(&c, None, AnimMode::Roots, &depth, 1, 0.6, false);
         assert_eq!(es.len(), c.edges.len() * 4);
         assert!(es.iter().all(|v| v.is_finite()), "animated edge state stays finite at scale");
         assert!(!c.edges.is_empty(), "sanity: the fixture's depth-1 wavefront has in-flight/settled edges");
         for &(lo, hi, _) in &c.edges {
             assert!(depth[lo] <= depth[hi], "cull reorders every edge lower-depth-endpoint-first");
         }
+    }
+
+    // --- Comet-trail brightness decay (1.8.0 release item) -----------------
+    //
+    // "as we're drawing the initial hairball during load up, can we keep the
+    // new elements bright and gradually fade out the older elements so that
+    // users can better see what's happening?" — the actual brightness curve
+    // runs on the GPU every frame (`gl/shaders.rs`'s `NODE_VS`/`EDGE_VS`, not
+    // unit-testable without a browser), so these tests pin the PROPERTIES of
+    // its Rust-side twin (`decay_brightness`) and the age input it consumes
+    // (`hop_age`, exercised indirectly through `node_state`/`edge_state`).
+
+    #[test]
+    fn decay_brightness_is_brightest_at_or_before_activation_and_never_negative() {
+        // age <= 0 covers both "not yet activated" and (edges only) "still
+        // mid-growth" — hop_age's doc explains why both collapse to the same
+        // freshest treatment rather than a separate branch.
+        for age in [-10.0_f32, -1.0, -0.001, 0.0] {
+            assert_eq!(
+                decay_brightness(age, NODE_DECAY_HOPS, TRAIL_ALPHA),
+                1.0,
+                "age {age} <= 0 must be full brightness"
+            );
+        }
+    }
+
+    #[test]
+    fn decay_brightness_is_monotonically_decreasing_and_floors_at_the_span() {
+        let floor = TRAIL_ALPHA;
+        let span = NODE_DECAY_HOPS;
+        let samples: Vec<f32> = (0..=40).map(|i| i as f32 * span / 40.0).collect();
+        let values: Vec<f32> = samples.iter().map(|&age| decay_brightness(age, span, floor)).collect();
+        for w in values.windows(2) {
+            assert!(
+                w[1] <= w[0] + f32::EPSILON,
+                "brightness must never increase as age grows: {} then {}",
+                w[0],
+                w[1]
+            );
+        }
+        assert!((values[0] - 1.0).abs() < 1e-6, "age 0 is peak brightness");
+        assert!((*values.last().unwrap() - floor).abs() < 1e-6, "age == span lands exactly on the floor");
+
+        // Beyond the span the curve holds flat — never dips below the floor,
+        // which is the whole point (already-revealed elements must stay
+        // VISIBLE, not fade to nothing).
+        for age in [span, span * 2.0, span * 100.0, f32::MAX] {
+            let b = decay_brightness(age, span, floor);
+            assert!(b >= floor - 1e-6, "brightness {b} at age {age} fell below the floor {floor}");
+            assert!((b - floor).abs() < 1e-6, "brightness past the span must hold exactly at the floor");
+        }
+    }
+
+    #[test]
+    fn decay_brightness_floor_is_clearly_above_the_culled_absent_state() {
+        // "Must stay clearly above the culled/absent state" — a culled
+        // element is never uploaded at all (effectively alpha 0). Both
+        // floors reused here (TRAIL_ALPHA for nodes, EDGE_ALPHA_FLOOR for
+        // edges) predate this decay work — they are the exact resting
+        // values the pre-decay code already shipped and proved legible.
+        assert!(TRAIL_ALPHA > 0.2, "node floor must be comfortably above zero");
+        assert!(EDGE_ALPHA_FLOOR > 0.15, "edge floor must be comfortably above zero");
+    }
+
+    #[test]
+    fn hop_age_is_zero_at_activation_negative_mid_growth_and_grows_with_the_wavefront() {
+        // A node at depth 2, wavefront currently at depth 2 with no hop
+        // progress yet: it just became fully reached this instant.
+        assert_eq!(hop_age(2, 2, 0.0), 0.0, "just-activated element has age 0");
+        // Half a hop later (still depth 2 current): age has grown by 0.5.
+        assert_eq!(hop_age(2, 2, 0.5), 0.5);
+        // An in-flight edge's higher-depth endpoint is one hop AHEAD of
+        // current — hop_progress in [0,1) keeps this negative until the
+        // boundary crossing, matching "still growing = brightest".
+        assert!(hop_age(3, 2, 0.9) < 0.0, "still-growing element must read as not-yet-activated");
+        // Three whole hops after activation (current has advanced 3 hops
+        // past this element's own depth): age == 3.0 exactly.
+        assert_eq!(hop_age(0, 3, 0.0), 3.0);
+    }
+
+    #[test]
+    fn node_and_edge_hop_age_reflects_recency_at_1000_nodes_and_reduced_motion_bypasses_decay() {
+        let (doc, n) = fixture_1000();
+        let g = build_graph(&doc, Tier::Functions);
+        let layers = g.index.bfs(Direction::Outbound, &g.roots);
+        let depth = depth_field(n, &layers);
+        // A wavefront several hops in, mid-hop, so both "just arrived" and
+        // "long settled" nodes are present in the same upload.
+        let current = 3;
+        let hop_progress = 0.4;
+        let wave = Wavefront { depth: &depth, current, growth: true };
+        let c = cull(&g, &FilterState::default(), Some(wave));
+        assert!(c.nodes.len() > 10, "sanity: the wavefront has reached a meaningful slice of 1000 nodes");
+
+        // Motion enabled: every uploaded node's age is non-negative (a node
+        // is only uploaded once FULLY reached — see `cull`'s doc — so it can
+        // never be "mid growth" the way an in-flight edge can) and strictly
+        // larger for nodes revealed longer ago, i.e. lower BFS depth.
+        let ns = node_state(&g, &c, None, AnimMode::Roots, &depth, current, hop_progress, false);
+        for (slot, &gi) in ns.chunks_exact(4).zip(&c.nodes) {
+            let age = slot[3];
+            assert!(age >= 0.0, "a fully-reached node must never have a negative age, got {age}");
+            let expected = hop_age(depth[gi], current, hop_progress);
+            assert!((age - expected).abs() < 1e-5, "uploaded age must match hop_age exactly");
+        }
+        // The freshest cohort (depth == current) is younger than an older
+        // one (depth == current - 1), proving the ordering "freshly
+        // activated is brightest, older is dimmer" holds at scale.
+        let freshest_idx = c.nodes.iter().position(|&i| depth[i] == current);
+        let older_idx = c.nodes.iter().position(|&i| depth[i] == current - 1);
+        if let (Some(fi), Some(oi)) = (freshest_idx, older_idx) {
+            let age_fresh = ns[fi * 4 + 3];
+            let age_older = ns[oi * 4 + 3];
+            assert!(age_fresh < age_older, "a node revealed this hop must be younger than one revealed last hop");
+        }
+
+        // prefers-reduced-motion: reduce — every age collapses to the
+        // decay-identity value (0.0), regardless of real recency. This is
+        // the "no new motion for those users" contract: `decay_brightness`
+        // treats 0.0 the same as "just activated", so nothing decays.
+        let ns_reduced = node_state(&g, &c, None, AnimMode::Roots, &depth, current, hop_progress, true);
+        assert!(
+            ns_reduced.chunks_exact(4).all(|slot| slot[3] == 0.0),
+            "reduced motion must bypass decay entirely — every node age must be exactly 0.0"
+        );
+        let es_reduced = edge_state(&c, None, AnimMode::Roots, &depth, current, hop_progress, true);
+        assert!(
+            es_reduced.chunks_exact(4).all(|slot| slot[3] == 0.0),
+            "reduced motion must bypass decay entirely — every edge age must be exactly 0.0"
+        );
     }
 
     /// Regression for the P0 report's second symptom ("changing options...
