@@ -112,10 +112,41 @@ impl GraphModel {
     }
 }
 
+/// Smallest rendered node radius, in model-space px — a degree-0 node.
+const RADIUS_MIN: f32 = 3.0;
+/// Largest rendered node radius. Above this, hubs start swallowing the canvas.
+const RADIUS_MAX: f32 = 22.0;
+/// Model-space px added per doubling of degree. Chosen so the real magma
+/// corpus's busiest node (degree 888) lands just at `RADIUS_MAX` rather than
+/// far past it, which is what keeps the top of the range readable instead of
+/// saturated — see the measurements in `radius_separates_the_common_range`.
+const RADIUS_PX_PER_DOUBLING: f32 = 2.0;
+
 /// Node radius keys off total degree (fan-in + fan-out), clamped so hubs
-/// dominate without swallowing the canvas. Same formula as the spike.
+/// dominate without swallowing the canvas.
+///
+/// LOG, not sqrt. The original `3.0 + sqrt(degree) * 1.7` is the textbook
+/// "area proportional to value" mapping, and it is the wrong tool for THIS
+/// distribution: real call graphs are heavy-tailed, and measuring the magma
+/// corpus (17,814 Go functions) showed median degree 3 against a max of 888.
+/// Under sqrt that put 77% of nodes inside a 3-6px band — three quarters of
+/// the graph rendered at visually indistinguishable sizes — while clamping
+/// flattened the 46 busiest nodes to an identical 22px, so the hubs a reader
+/// most wants to pick out were exactly the ones the formula could not
+/// separate. Saturating at both ends is the worst of both.
+///
+/// A log map spends the visual range where the nodes actually are: it widens
+/// the crowded low-degree band and stops the top saturating (46 nodes at the
+/// ceiling drops to 2). Degree 3 -> 7.0px, 10 -> 9.9, 38 -> 13.6, 100 -> 16.3,
+/// 888 -> 22.0.
+///
+/// Deliberately NOT rank/percentile-based, which would use ~95% of the span:
+/// that makes radius mean "busier than N% of THIS document", so the same
+/// function changes size between repositories and a median node reads as a
+/// hub. Absolute, comparable meaning is worth the narrower spread.
 fn radius_for(degree: u32) -> f32 {
-    (3.0 + (degree as f32).sqrt() * 1.7).clamp(3.0, 22.0)
+    let r = RADIUS_MIN + (1.0 + degree as f32).log2() * RADIUS_PX_PER_DOUBLING;
+    r.clamp(RADIUS_MIN, RADIUS_MAX)
 }
 
 /// Build one tier's [`GraphModel`] from the Magma document.
@@ -1830,5 +1861,87 @@ mod tests {
         vs.filter = FilterState::default();
         vs.recompute_cull();
         assert_eq!(vs.selected, None, "a filter-hidden selection must still be cleared");
+    }
+
+    /// A heavy-tailed degree distribution shaped like a real call graph:
+    /// most functions call almost nothing, a handful are hubs. Proportions
+    /// and the 888 maximum are taken from the magma corpus this viewer is
+    /// built to render (17,814 Go functions, median degree 3).
+    fn heavy_tailed_degrees(n: usize) -> Vec<u32> {
+        (0..n)
+            .map(|i| match i * 100 / n {
+                0..=4 => 0,             // 5% isolated
+                5..=76 => 1 + (i % 9) as u32, // 72% in the crowded 1-9 band
+                77..=94 => 10 + (i % 28) as u32,
+                95..=98 => 38 + (i % 62) as u32,
+                _ => 100 + (i % 789) as u32, // the hub tail, up to 888
+            })
+            .collect()
+    }
+
+    #[test]
+    fn radius_separates_the_common_range_instead_of_saturating_both_ends() {
+        // WHY: node size is the reader's only at-a-glance cue for "how
+        // connected is this?". A mapping can be perfectly monotonic and still
+        // fail that job by spending its visual range where no nodes live. The
+        // previous sqrt mapping did exactly that on real data — three
+        // quarters of nodes within a 3px band, and the busiest 46 all pinned
+        // at the ceiling — so this test pins the two SEPARATION properties
+        // that motivated the change, not the formula itself. A future remap
+        // is free to change the curve as long as it still separates.
+        const N: usize = 1200; // >1000 interconnected-scale sample (maintainer rule)
+        let degrees = heavy_tailed_degrees(N);
+        let radii: Vec<f32> = degrees.iter().map(|&d| radius_for(d)).collect();
+
+        // 1. The ceiling must stay scarce: hubs are the nodes a reader most
+        //    needs to tell apart, so they must not collapse into one size.
+        let at_ceiling = radii.iter().filter(|r| **r >= RADIUS_MAX - 0.01).count();
+        assert!(
+            at_ceiling * 100 / N < 2,
+            "hubs saturating the ceiling stop being distinguishable: {at_ceiling}/{N}"
+        );
+
+        // 2. The crowded low-degree band must actually spread. Under sqrt,
+        //    degree 1 and degree 9 differed by ~3.4px; the whole point of the
+        //    log remap is to widen precisely this range.
+        let spread = radius_for(9) - radius_for(1);
+        assert!(spread > 4.0, "low-degree band too compressed to read: {spread:.1}px");
+
+        // 3. Still monotonic and still bounded — a size that shrank with
+        //    degree, or escaped the clamp, would be worse than compressed.
+        assert_eq!(radius_for(0), RADIUS_MIN);
+        assert_eq!(radius_for(u32::MAX), RADIUS_MAX);
+        for w in degrees.windows(2) {
+            if w[1] > w[0] {
+                assert!(radius_for(w[1]) >= radius_for(w[0]), "radius must not shrink with degree");
+            }
+        }
+    }
+
+    #[test]
+    fn radius_meaning_is_absolute_not_relative_to_the_document() {
+        // WHY: the rejected alternative (rank/percentile) would have used far
+        // more of the visual span, but it makes radius mean "busier than N%
+        // of THIS document" — the same function would change size between
+        // repositories, and a median node would render as a hub. Pin that a
+        // given degree maps to a given radius regardless of what else is in
+        // the graph, so nobody "improves" the spread by reintroducing that.
+        // Pinned absolute values. A document-relative mapping cannot satisfy
+        // these from `degree` alone, so this fails loudly if anyone swaps the
+        // curve for a rank/percentile one — which is the actual risk, since
+        // percentile scores far better on raw visual spread and is the
+        // tempting "fix" for a reader who only sees the spread number.
+        for (degree, expected) in [(0u32, 3.0f32), (1, 5.0), (3, 7.0), (10, 9.9), (100, 16.3)] {
+            let got = radius_for(degree);
+            assert!(
+                (got - expected).abs() < 0.05,
+                "degree {degree} must map to {expected}px regardless of the surrounding \
+                 document, got {got:.2}"
+            );
+        }
+        // The busiest node in the real corpus should reach the ceiling and
+        // not sail far past it — that is what `RADIUS_PX_PER_DOUBLING` buys.
+        assert_eq!(radius_for(888), RADIUS_MAX);
+        assert!(radius_for(444) < RADIUS_MAX, "the ceiling should be reached at the tail, not before it");
     }
 }
