@@ -517,7 +517,12 @@ pub fn centroid(positions: &[(f32, f32)]) -> (f32, f32) {
 }
 
 /// The density-weighted centre — the median of x and of y independently,
-/// over the FULL (untrimmed) position set — `fit_camera`'s PAN target.
+/// over the FULL (untrimmed) position set. Historically `fit_camera`'s PAN
+/// target; kept (and still `pub`) as the UNWEIGHTED reference statistic —
+/// `fit_camera` now pans by `weighted_centre` instead (see its doc: this
+/// function counts every node equally regardless of how much of it is
+/// actually drawn, which undercounts a hub's rendered ink). Tests compare
+/// the two directly to prove they diverge once node size varies.
 ///
 /// Chosen over a mean/centroid: on a hub-and-ring topology (a dense hub
 /// plus a large one-sided ring of low-degree, mostly-disconnected modules
@@ -544,6 +549,81 @@ pub fn density_centre(positions: &[(f32, f32)]) -> (f32, f32) {
     (mx, my)
 }
 
+/// A single axis's weighted median: sort `values`, then walk that order
+/// accumulating `weights` until the point where each element's own
+/// half-weight midpoint (cumulative weight before it, plus half its own
+/// weight) is closest to the half-of-total-weight mark. Ties keep the
+/// LATER element — matching `f32::round`'s round-half-up-away-from-zero —
+/// so this reduces EXACTLY to the plain rank median (`density_centre`'s
+/// helper) when every weight is equal; a test asserts that invariant
+/// directly rather than trusting the algebra. "Tie" is judged within a
+/// small epsilon of `total`, not bit-exact equality: an even element count
+/// with truly equal weights lands EXACTLY on the half-weight mark from two
+/// adjacent ranks, and float summation drift across hundreds of additions
+/// (unavoidable — weights are accumulated, not recomputed from scratch
+/// each step) can otherwise tip that exact tie to the wrong side. `values`
+/// and `weights` must be index-aligned, the same contract `GraphModel`'s
+/// parallel vecs use.
+fn weighted_median(values: &[f32], weights: &[f32]) -> f32 {
+    let n = values.len();
+    if n == 0 {
+        return 0.0;
+    }
+    let mut order: Vec<usize> = (0..n).collect();
+    order.sort_by(|&a, &b| values[a].partial_cmp(&values[b]).unwrap());
+    let total: f32 = weights.iter().sum();
+    if total <= 0.0 {
+        // No positive weight to accumulate toward — shouldn't happen with
+        // real radii (clamped >= 3.0), but fall back to the plain rank
+        // median rather than divide by zero.
+        let mid = ((n as f32 - 1.0) * 0.5).round().max(0.0) as usize;
+        return values[order[mid]];
+    }
+    let target = total / 2.0;
+    let tie_epsilon = total * 1e-4;
+    let mut cumulative = 0.0_f32;
+    let mut best_rank = 0;
+    let mut best_dist = f32::INFINITY;
+    for (rank, &i) in order.iter().enumerate() {
+        let midpoint = cumulative + weights[i] / 2.0;
+        let dist = (midpoint - target).abs();
+        if dist <= best_dist + tie_epsilon {
+            best_dist = dist.min(best_dist);
+            best_rank = rank;
+        }
+        cumulative += weights[i];
+    }
+    values[order[best_rank]]
+}
+
+/// The rendered-mass-weighted centre — `weighted_median` applied to x and y
+/// independently, weighted by each node's `GraphModel::radius` (the same
+/// degree-derived quantity `radius_for` computes — this deliberately does
+/// NOT invent a second notion of "how big is this node"). `fit_camera`'s
+/// actual PAN target.
+///
+/// Weighting fixes what plain `density_centre` leaves on the table: node
+/// radius scales with degree (`radius_for`, sqrt-scaled and clamped to
+/// 3..22), so a hub draws far more ink than a peripheral node — median NODE
+/// POSITION and centre of rendered INK are different points whenever sizes
+/// vary by an order of magnitude, which they do on this codebase's real
+/// corpus (dense hub + ring of near-isolates; measured directly as a ~4%
+/// pixel-centre-of-mass offset in a real browser). A degree-WEIGHTED MEAN
+/// was rejected for the same reason a plain mean was rejected for
+/// `density_centre`: it lets a few big nodes, wherever they sit, drag the
+/// centre by their exact distance from the mass — the box centre's
+/// failure mode all over again. A weighted MEDIAN keeps the median's
+/// robustness (see `density_centre`'s doc) while making per-node influence
+/// proportional to `radius`, which is itself clamped — so no single node,
+/// however high its degree, can dominate the crossing point unboundedly.
+/// Degenerates the same way `density_centre` does: empty input collapses to
+/// the origin, a single point collapses to itself.
+pub fn weighted_centre(positions: &[(f32, f32)], weights: &[f32]) -> (f32, f32) {
+    let xs: Vec<f32> = positions.iter().map(|(x, _)| *x).collect();
+    let ys: Vec<f32> = positions.iter().map(|(_, y)| *y).collect();
+    (weighted_median(&xs, weights), weighted_median(&ys, weights))
+}
+
 /// Fit-to-viewport camera (zoom AND pan) for a fresh layout. Replaces the
 /// old `fit_zoom`, which measured the 90th percentile of `|x|`/`|y|` —
 /// distance FROM THE ORIGIN — and so silently assumed the layout was
@@ -555,24 +635,31 @@ pub fn density_centre(positions: &[(f32, f32)]) -> (f32, f32) {
 /// with the same 1.1x margin the old `fit_zoom` used, clamped to the same
 /// `0.02..3.0` range — outliers up to the 90th percentile stay on screen.
 /// This statistic is UNCHANGED by the pan fix below; outliers must remain
-/// framed, they simply stop dictating the CENTRE.
+/// framed, they simply stop dictating the CENTRE. `weights` plays NO part
+/// in the zoom computation — sizing the frame and centring the mass are
+/// different jobs, and conflating them is exactly what produced the
+/// original bug.
 ///
-/// Pan places the density-weighted centre (see `density_centre`) at the
-/// viewport centre — deliberately a DIFFERENT statistic from the box the
-/// zoom above measures. On this codebase's real corpus (a dense hub plus a
-/// ring of disconnected modules) the box centre is dragged toward whichever
-/// side carries more ring nodes, so the hub — the visual mass the user is
-/// actually looking at — sits off-centre with empty space opposite it; the
-/// median resists that because it takes close to half the node count
-/// sitting one-sided to move it. Centring on the mass (pan) and framing the
-/// extent (zoom) are different jobs — do not unify them back into one
+/// Pan places the rendered-mass-weighted centre (see `weighted_centre`) at
+/// the viewport centre — deliberately a DIFFERENT statistic from the box
+/// the zoom above measures, and now also different from the plain
+/// `density_centre` this replaced as the pan target: median NODE POSITION
+/// undercounts a hub, which draws far more ink than a same-position
+/// peripheral node once radius scales with degree (measured directly as a
+/// ~4% pixel-centre-of-mass offset in a real browser, hub-and-ring corpus).
+/// `weights` should be the same per-node quantity `GraphModel::radius`
+/// already carries — see `weighted_centre`'s doc for why reusing it (not a
+/// second size notion) matters, and why a weighted MEDIAN, not a weighted
+/// mean, keeps this robust against the gravity-equilibrium ring
+/// `robust_bounds`' doc describes. Centring on the mass (pan) and framing
+/// the extent (zoom) stay different jobs — do not unify them back into one
 /// statistic; conflating them is exactly what produced the original bug.
-pub fn fit_camera(positions: &[(f32, f32)], w: f32, h: f32) -> (f32, f32, f32) {
+pub fn fit_camera(positions: &[(f32, f32)], weights: &[f32], w: f32, h: f32) -> (f32, f32, f32) {
     let (lo_x, hi_x, lo_y, hi_y) = robust_bounds(positions);
     let box_w = (hi_x - lo_x).max(1.0);
     let box_h = (hi_y - lo_y).max(1.0);
     let zoom = (w / (box_w * 1.1)).min(h / (box_h * 1.1)).clamp(0.02, 3.0);
-    let (cx, cy) = density_centre(positions);
+    let (cx, cy) = weighted_centre(positions, weights);
     let pan_x = w / 2.0 - cx * zoom;
     let pan_y = h / 2.0 - cy * zoom;
     (zoom, pan_x, pan_y)
@@ -961,15 +1048,20 @@ mod tests {
 
     #[test]
     fn fit_camera_is_bounded_and_handles_empty_input() {
+        // Uniform weights here: this test is about the zoom/pan MECHANICS
+        // (clamping, empty input), not weighting, and equal weights make
+        // `weighted_centre` coincide exactly with the old `density_centre`
+        // pan target (see `weighted_centre_matches_density_centre_...`).
         let positions = vec![(0.0, 0.0), (100.0, 50.0), (-100.0, -50.0)];
-        let (z, _, _) = fit_camera(&positions, 1600.0, 1000.0);
+        let weights = vec![1.0; positions.len()];
+        let (z, _, _) = fit_camera(&positions, &weights, 1600.0, 1000.0);
         assert!((0.02..=3.0).contains(&z), "zoom clamped, got {z}");
         // Preserved from `fit_zoom`: an empty layout collapses to a unit
         // box, which clamps zoom to the 3.0 max — still the least
         // surprising choice for "nothing to frame" (matches the old
         // behaviour exactly). Pan for an empty/degenerate box centres the
         // (zero) content at the viewport centre rather than drifting.
-        let (z_empty, pan_x, pan_y) = fit_camera(&[], 1600.0, 1000.0);
+        let (z_empty, pan_x, pan_y) = fit_camera(&[], &[], 1600.0, 1000.0);
         assert_eq!(z_empty, 3.0, "empty layout still clamps to max zoom");
         assert_eq!((pan_x, pan_y), (800.0, 500.0), "empty layout centres the viewport");
     }
@@ -983,7 +1075,8 @@ mod tests {
         // A cluster deliberately far from the origin.
         let positions: Vec<(f32, f32)> =
             (0..1000).map(|i| (1000.0 + (i % 30) as f32, 500.0 + (i / 30) as f32)).collect();
-        let (zoom, pan_x, pan_y) = fit_camera(&positions, 1600.0, 1000.0);
+        let weights = vec![1.0; positions.len()]; // uniform: not a weighting test
+        let (zoom, pan_x, pan_y) = fit_camera(&positions, &weights, 1600.0, 1000.0);
         assert!(zoom > 0.0 && zoom.is_finite());
         // The content centroid must land at the viewport centre.
         let (cx, cy) = centroid(&positions);
@@ -995,11 +1088,50 @@ mod tests {
 
     #[test]
     fn fit_camera_handles_empty_and_degenerate_input() {
-        let (z, _, _) = fit_camera(&[], 1600.0, 1000.0);
+        let (z, _, _) = fit_camera(&[], &[], 1600.0, 1000.0);
         assert!(z.is_finite() && z > 0.0);
         let single = vec![(42.0, 42.0)];
-        let (z2, _, _) = fit_camera(&single, 1600.0, 1000.0);
+        let weight = vec![radius_for(9)];
+        let (z2, _, _) = fit_camera(&single, &weight, 1600.0, 1000.0);
         assert!(z2.is_finite() && z2 > 0.0, "a single node must not divide by zero");
+    }
+
+    #[test]
+    fn weighted_centre_handles_empty_and_degenerate_input() {
+        let (wx, wy) = weighted_centre(&[], &[]);
+        assert!(wx.is_finite() && wy.is_finite(), "empty input must not divide by zero or NaN");
+        assert_eq!((wx, wy), (0.0, 0.0), "empty input collapses to the origin, same as density_centre");
+
+        let single = [(42.0, -7.0)];
+        let weight = [radius_for(9)];
+        let (wx2, wy2) = weighted_centre(&single, &weight);
+        assert_eq!((wx2, wy2), (42.0, -7.0), "a single node's weighted median is itself");
+    }
+
+    /// With all degrees equal, every node has the same radius/weight — the
+    /// weighted median must reduce EXACTLY to the plain rank median
+    /// (`density_centre`), not just approximately. This is the invariant
+    /// `weighted_median`'s doc claims algebraically; this test proves it.
+    #[test]
+    fn weighted_centre_matches_density_centre_when_weights_are_equal() {
+        let positions = hub_and_ring_positions();
+        // An arbitrary non-1.0 constant — proves it's equal-weight
+        // invariance, not a coincidence of weight == 1.0.
+        let uniform = vec![radius_for(7); positions.len()];
+        assert_eq!(
+            weighted_centre(&positions, &uniform),
+            density_centre(&positions),
+            "equal weights must reduce exactly to the unweighted median"
+        );
+
+        // Odd-length input too (even/odd rank-median tie-break differs).
+        let odd_positions: Vec<(f32, f32)> = positions[..999].to_vec();
+        let odd_weights = vec![radius_for(3); odd_positions.len()];
+        assert_eq!(
+            weighted_centre(&odd_positions, &odd_weights),
+            density_centre(&odd_positions),
+            "odd-length equal weights must also match exactly"
+        );
     }
 
     /// A handful of far-flung outliers (the gravity-equilibrium ring, per
@@ -1015,7 +1147,8 @@ mod tests {
         for k in 0..5 {
             positions.push((5000.0 + k as f32, -5000.0 - k as f32));
         }
-        let (zoom, pan_x, pan_y) = fit_camera(&positions, 1600.0, 1000.0);
+        let weights = vec![1.0; positions.len()]; // uniform: not a weighting test
+        let (zoom, pan_x, pan_y) = fit_camera(&positions, &weights, 1600.0, 1000.0);
         // The cluster spans roughly 40x24 units, which fits well past the
         // 3.0 zoom ceiling — so a trimmed box should clamp at the max. If
         // the outliers dictated the box instead, zoom would collapse to
@@ -1060,8 +1193,15 @@ mod tests {
     #[test]
     fn fit_camera_density_centring_beats_box_centring_on_hub_and_ring() {
         let positions = hub_and_ring_positions();
+        // Uniform weights: this test is about the median beating the box
+        // on NODE COUNT alone, the property that motivated `density_centre`
+        // in the first place — unrelated to the degree-weighting this
+        // change adds on top. With equal weights `weighted_centre` and
+        // `density_centre` coincide exactly (see the invariant test), so
+        // this keeps asserting the same fact it always did.
+        let weights = vec![1.0; positions.len()];
         let (w, h) = (1600.0_f32, 1000.0_f32);
-        let (zoom, pan_x, pan_y) = fit_camera(&positions, w, h);
+        let (zoom, pan_x, pan_y) = fit_camera(&positions, &weights, w, h);
 
         let (mx, my) = density_centre(&positions);
         let screen_mx = mx * zoom + pan_x;
@@ -1097,8 +1237,9 @@ mod tests {
     #[test]
     fn fit_camera_outliers_still_land_in_viewport_after_density_centring() {
         let positions = hub_and_ring_positions();
+        let weights = vec![1.0; positions.len()];
         let (w, h) = (1600.0_f32, 1000.0_f32);
-        let (zoom, pan_x, pan_y) = fit_camera(&positions, w, h);
+        let (zoom, pan_x, pan_y) = fit_camera(&positions, &weights, w, h);
 
         for &(x, y) in positions.iter().skip(850) {
             // ring nodes only
@@ -1113,6 +1254,87 @@ mod tests {
                 "ring node y={y} maps to sy={sy}, off-viewport (zoom={zoom}, pan_y={pan_y})"
             );
         }
+    }
+
+    /// Requirement 2 under actual WEIGHT variation (not just uniform
+    /// weights): the ring is now the high-degree minority (see
+    /// `weighted_centre_beats_density_centre_on_a_weighted_hub_and_ring`
+    /// below) and the pan target shifts toward it — proving that shift
+    /// doesn't push the *zoom bound* (still `robust_bounds`, untouched by
+    /// weighting) off-frame for either side. Every node, cluster and ring
+    /// alike, must still land on screen.
+    #[test]
+    fn fit_camera_weighted_outliers_still_land_in_viewport() {
+        let positions = hub_and_ring_positions();
+        let weights: Vec<f32> = (0..positions.len())
+            .map(|i| if i < 850 { radius_for(0) } else { radius_for(5000) })
+            .collect();
+        let (w, h) = (1600.0_f32, 1000.0_f32);
+        let (zoom, pan_x, pan_y) = fit_camera(&positions, &weights, w, h);
+
+        for &(x, y) in &positions {
+            let sx = x * zoom + pan_x;
+            let sy = y * zoom + pan_y;
+            assert!(
+                (0.0..=w).contains(&sx),
+                "node x={x} maps to sx={sx}, off-viewport (zoom={zoom}, pan_x={pan_x})"
+            );
+            assert!(
+                (0.0..=h).contains(&sy),
+                "node y={y} maps to sy={sy}, off-viewport (zoom={zoom}, pan_y={pan_y})"
+            );
+        }
+    }
+
+    /// Requirement 1: weighted centring beats unweighted on a hub-and-ring
+    /// fixture at >=1000 nodes, where the "ring" side is dominated in
+    /// WEIGHT (a 150-node minority of high-degree nodes) rather than in
+    /// count — the inverse of `hub_and_ring_positions`' original framing,
+    /// where the 850-node cluster was the visual mass because degree was
+    /// assumed uniform. Here the 850-node cluster is low-degree (radius
+    /// floor, 3.0) and the 150-node ring is high-degree (radius ceiling,
+    /// 22.0) — same shape the maintainer measured as centre-of-rendered-ink
+    /// drifting off the unweighted median in a real browser (a hub draws
+    /// far more ink than its node count alone suggests). The plain rank
+    /// median stays on the 850-node majority; the weighted median must
+    /// follow the mass and land inside the high-degree ring instead.
+    #[test]
+    fn weighted_centre_beats_density_centre_on_a_weighted_hub_and_ring() {
+        let positions = hub_and_ring_positions();
+        assert!(positions.len() >= 1000, "call-graph fixture must be >=1000 nodes");
+        let weights: Vec<f32> = (0..positions.len())
+            .map(|i| if i < 850 { radius_for(0) } else { radius_for(5000) })
+            .collect();
+
+        let (wx, _wy) = weighted_centre(&positions, &weights);
+        let (mx, _my) = density_centre(&positions);
+
+        // The high-degree ring spans x in [60, 89]; the low-degree cluster
+        // spans x in [-17, 16] — the two never overlap, so "which side" is
+        // unambiguous.
+        assert!(
+            wx >= 60.0,
+            "weighted centre x={wx} should land inside the high-degree ring (x>=60), the visual mass"
+        );
+        assert!(
+            mx < 60.0,
+            "sanity check: unweighted median x={mx} should stay in the low-degree \
+             majority-by-count cluster (x<60) — otherwise this fixture doesn't \
+             actually exercise the count-vs-weight divergence"
+        );
+
+        // Materially closer, not just nominally on the other side: measure
+        // both against the ring's true centre (x=74.5) and demand a large
+        // margin, not a hair's-width win.
+        let ring_centre_x = 74.5;
+        let weighted_dist = (wx - ring_centre_x).abs();
+        let unweighted_dist = (mx - ring_centre_x).abs();
+        assert!(
+            weighted_dist + 30.0 < unweighted_dist,
+            "weighted centre x={wx} (dist {weighted_dist} from ring centre) should be \
+             materially closer to the high-degree ring than the unweighted median \
+             x={mx} (dist {unweighted_dist})"
+        );
     }
 
     #[test]

@@ -523,7 +523,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 // HIT: skip the settle entirely — no driver, no progress
                 // panel, no re-seed, no animation restart. Straight to
                 // interactive, camera fit over the cached positions.
-                let (zoom, pan_x, pan_y) = fit_camera(&positions, w, h);
+                let (zoom, pan_x, pan_y) = fit_camera(&positions, &graph.radius, w, h);
                 let tree = QuadTree::from_positions_f32(&positions);
                 let mut new_vs =
                     ViewState::new(graph, positions, tree, pan_x, pan_y, zoom, prefers_reduced_motion());
@@ -577,7 +577,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 // Tick-0 positions (the seeded circle) upload IMMEDIATELY so
                 // the first frame paints a real graph, not a spinner.
                 let positions = driver.positions_f32();
-                let (zoom, pan_x, pan_y) = fit_camera(&positions, w, h);
+                let (zoom, pan_x, pan_y) = fit_camera(&positions, &graph.radius, w, h);
                 let settling = !driver.is_done();
 
                 // `vs` MUST be replaced BEFORE any of the signal writes below:
@@ -715,6 +715,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                                 if let Some(canvas) = canvas_ref.get_untracked() {
                                     let (zoom, pan_x, pan_y) = fit_camera(
                                         &v.positions,
+                                        &v.graph.radius,
                                         canvas.width() as f32,
                                         canvas.height() as f32,
                                     );
