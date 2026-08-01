@@ -45,6 +45,7 @@ use web_sys::{MessageEvent, Worker};
 
 use crate::code_graph_view_model::{build_graph, Tier, LAYOUT_SEED};
 use crate::data::models::CodeGraph;
+use crate::diagnostics;
 use crate::force_layout::ForceConfig;
 use crate::layout_cache::LayoutKey;
 use crate::state::AppState;
@@ -369,11 +370,32 @@ pub fn warm_function_tier(state: AppState, cg: &CodeGraph) {
     let key = LayoutKey::new(cg.sha.clone(), cg.tree.clone(), Tier::Functions);
     let cfg = ForceConfig::default();
 
+    // Diagnostics module doc item 4 ("whether the layout came from
+    // cache/worker/local"): this is the ONLY producer of the "worker" source
+    // value — `code_graph_view.rs` only ever settles locally or reuses a
+    // cache entry this warm may have written. `NO_INSTANCE` (0) because this
+    // runs at app load, before any `CodeGraphViewCanvas` exists to own an
+    // instance id.
+    let warm_t0 = js_sys::Date::now();
+    diagnostics::record(
+        diagnostics::NO_INSTANCE,
+        "layout_settle_start",
+        Some(format!("source=worker tier=Functions nodes={node_count}")),
+    );
+
     let worker = spawn_settle(node_count as u32, &graph.layout_edges, LAYOUT_SEED, &cfg, move |outcome| {
         match outcome {
             WorkerOutcome::Settled { positions, ticks_run } => {
                 leptos::logging::log!(
                     "[layout-worker-client] warm settled: nodes={node_count} ticks={ticks_run}"
+                );
+                diagnostics::record(
+                    diagnostics::NO_INSTANCE,
+                    "layout_settle_end",
+                    Some(format!(
+                        "source=worker tier=Functions ticks={ticks_run} elapsed_ms={:.0}",
+                        js_sys::Date::now() - warm_t0
+                    )),
                 );
                 state.layout_cache.update(|c| c.put(key, positions));
             }

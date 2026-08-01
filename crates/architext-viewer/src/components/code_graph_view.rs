@@ -74,6 +74,7 @@ use crate::code_graph_view_model::{
     build_graph, fit_camera, should_autoplay, AnimMode, Tier, ViewState, LAYOUT_SEED,
 };
 use crate::data::models::CodeGraph;
+use crate::diagnostics;
 use crate::force_layout::{ForceConfig, QuadTree};
 use crate::gl::renderer::Renderer;
 use crate::layout_cache::LayoutKey;
@@ -192,6 +193,14 @@ pub fn CodeGraphView() -> impl IntoView {
 #[component]
 fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     let state = use_app_state();
+    // Rule 14 RCA instrumentation (see `diagnostics` module doc): a
+    // process-wide id for THIS component instance. `canvas_panel.rs`'s outer
+    // mode-render closure can tear this component down and rebuild it more
+    // than once per `set_mode()` — every event below carries this id so a
+    // diagnostics dump can tell "this instance was torn down and a fresh one
+    // replaced it" apart from "this instance died and nothing replaced it".
+    let diag_instance = diagnostics::next_instance_id();
+    diagnostics::record(diag_instance, "mount", Some(format!("sha={} tree={}", cg.sha, cg.tree)));
     let canvas_ref = create_node_ref::<Canvas>();
     let tier = create_rw_signal(Tier::Functions);
     let status = create_rw_signal(String::new());
@@ -257,11 +266,38 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // set whenever `play()` (re)starts so the very first frame after a press
     // never jumps by however long the animation sat paused/stopped.
     let last_anim_frame_at: Rc<Cell<f64>> = Rc::new(Cell::new(0.0));
+    // Non-reactive mirror of `tier`'s current value, kept for `on_cleanup`
+    // below: cleanup runs AS this component's reactive scope is disposed, so
+    // reading a Leptos signal there — even via `get_untracked` — is exactly
+    // the disposed-owner hazard the module doc warns about. This plain
+    // `Cell` (same pattern as `user_moved_camera` etc. above) gives cleanup
+    // instrumentation the tier without touching the `tier` signal itself.
+    let tier_mirror: Rc<Cell<Tier>> = Rc::new(Cell::new(Tier::Functions));
 
     let alive: Rc<RefCell<bool>> = Rc::new(RefCell::new(true));
     on_cleanup({
         let alive = alive.clone();
-        move || *alive.borrow_mut() = false
+        let vs = vs.clone();
+        let layout = layout.clone();
+        let tier_mirror = tier_mirror.clone();
+        move || {
+            *alive.borrow_mut() = false;
+            // Cleanup is the pivotal instrumentation event (module doc item
+            // 2): record it with whatever context is cheaply available.
+            // `vs`/`layout` are plain `Rc<RefCell<..>>`, not Leptos signals —
+            // safe to read regardless of disposal order — and `tier_mirror`
+            // exists precisely so tier is available here too.
+            let layout_settling = layout.borrow().is_some();
+            let selection_held = vs.borrow().as_ref().map(|v| v.selected.is_some()).unwrap_or(false);
+            diagnostics::record(
+                diag_instance,
+                "cleanup",
+                Some(format!(
+                    "tier={:?} layout_settling={layout_settling} selection_held={selection_held}",
+                    tier_mirror.get()
+                )),
+            );
+        }
     });
 
     // Map a full-graph index back to its Magma id for the inspector mirror
@@ -279,6 +315,18 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         }
     };
 
+    // Format the selection-mirror instrumentation detail (module doc item
+    // 5): set-to-Some / cleared. Shared by `sync_and_upload` and
+    // `full_upload` below — both write the SAME mirror through the SAME
+    // equality-guarded pattern, so one formatter keeps the wording from
+    // drifting between the two copies.
+    fn selection_mirror_detail(next: &Option<CodeGraphSelection>) -> String {
+        match next {
+            Some(sel) => format!("set id={}", sel.id),
+            None => "cleared".to_string(),
+        }
+    }
+
     // DYNAMIC upload only (selection/animation/scrub path) + mirror the
     // display facts into signals. Called imperatively after every mutation
     // site instead of on a tracked dependency — the RefCell is the truth,
@@ -293,6 +341,11 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 g.upload_dynamic(&v.node_state(), &v.edge_state());
             }
             if !*alive.borrow() {
+                // Module doc item 3 — the "SKIPPED-because-not-alive" case
+                // for the selection mirror: without this, a torn-down
+                // instance's mirror write silently no-ops and the inspector
+                // just... stops updating, with nothing recorded anywhere.
+                diagnostics::record_alive_bail(diag_instance, "sync_and_upload");
                 return;
             }
             if let Some(v) = vs.borrow().as_ref() {
@@ -308,6 +361,14 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 let next =
                     v.selected.and_then(|i| selection_id(t, i)).map(|id| CodeGraphSelection { tier: t, id });
                 if state.selected_code_graph_node.get_untracked() != next {
+                    // Module doc item 5: the mirror actually changing is rare
+                    // (gated by the equality check above), so this never
+                    // becomes a per-frame flood — no throttling needed here.
+                    diagnostics::record(
+                        diag_instance,
+                        "selection_mirror",
+                        Some(selection_mirror_detail(&next)),
+                    );
                     state.set_selected_code_graph_node(next);
                 }
             }
@@ -333,6 +394,10 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 }
             }
             if !*alive.borrow() {
+                // Hot path: this runs every layout-settle RAF tick, so
+                // `record_alive_bail` throttles to the first bail per
+                // instance (see its doc) rather than flooding the buffer.
+                diagnostics::record_alive_bail(diag_instance, "full_upload");
                 return;
             }
             if let Some(v) = vs.borrow().as_ref() {
@@ -361,6 +426,13 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 let next =
                     v.selected.and_then(|i| selection_id(t, i)).map(|id| CodeGraphSelection { tier: t, id });
                 if state.selected_code_graph_node.get_untracked() != next {
+                    // Same equality guard as `sync_and_upload` bounds this to
+                    // real changes, not one entry per settle frame.
+                    diagnostics::record(
+                        diag_instance,
+                        "selection_mirror",
+                        Some(selection_mirror_detail(&next)),
+                    );
                     state.set_selected_code_graph_node(next);
                 }
             }
@@ -388,6 +460,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let alive = alive.clone();
         move |mode: AnimMode| {
             if !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "set_anim_mode");
                 return;
             }
             anim_playing_sig.set(false);
@@ -408,6 +481,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 v.set_anim_depth(d); // clamps, resets hop_progress, re-culls
             }
             if !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "set_depth");
                 return;
             }
             full_upload();
@@ -422,7 +496,19 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // call would double-borrow the RefCell and panic.
             let next = {
                 let guard = vs.borrow();
-                let Some(v) = guard.as_ref() else { return };
+                let Some(v) = guard.as_ref() else {
+                    // Same defensive/theoretically-unreachable shape as
+                    // `on_click`'s `no_view_state` bail — reusing
+                    // `click_ignored` (not a new event name) keeps the
+                    // vocabulary small; `call_site` disambiguates it from
+                    // the canvas click path.
+                    diagnostics::record(
+                        diag_instance,
+                        "click_ignored",
+                        Some("reason=no_view_state call_site=step".to_string()),
+                    );
+                    return;
+                };
                 (v.anim_current_depth + delta).clamp(0, v.anim_max_depth)
             };
             set_depth(next);
@@ -435,6 +521,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let alive = alive.clone();
         move || {
             if !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "play");
                 return;
             }
             // Pressing play after the wavefront reached the end RESTARTS it
@@ -461,6 +548,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let alive = alive.clone();
         move || {
             if !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "pause");
                 return;
             }
             anim_playing_sig.set(false);
@@ -485,10 +573,13 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let user_moved_camera = user_moved_camera.clone();
         let set_anim_mode = set_anim_mode.clone();
         let play = play.clone();
+        let tier_mirror = tier_mirror.clone();
         create_render_effect(move |_| {
             let t = tier.get();
+            tier_mirror.set(t); // keep the cleanup-time mirror current
             let Some(canvas) = canvas_ref.get() else { return };
             if !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "tier_effect");
                 return;
             }
 
@@ -549,6 +640,15 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 leptos::logging::log!(
                     "[code-graph-view] layout cache HIT: nodes={n} edges={edge_count} tier={t:?}"
                 );
+                // Module doc item 4: a cache hit has no settle PROCESS (zero
+                // ticks, no elapsed time to speak of) — record just the "end"
+                // fact rather than fabricating a "start" for work that never
+                // ran, same rationale as the instant-done branch below.
+                diagnostics::record(
+                    diag_instance,
+                    "layout_settle_end",
+                    Some(format!("source=cache tier={t:?} nodes={n} edges={edge_count}")),
+                );
                 full_upload();
                 status.set(format!("{n} nodes / {edge_count} edges"));
                 render_progress.set(None);
@@ -595,6 +695,10 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 let positions = driver.positions_f32();
                 let (zoom, pan_x, pan_y) = fit_camera(&positions, &graph.radius, w, h);
                 let settling = !driver.is_done();
+                // Captured before `driver` moves into `layout` below — only
+                // used by the "already done at seed" branch's instant
+                // `layout_settle_end` (module doc item 4).
+                let ticks_at_seed = driver.ticks_run();
 
                 // `vs` MUST be replaced BEFORE any of the signal writes below:
                 // each `.set()` synchronously re-runs the filter effect (which
@@ -623,6 +727,11 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 full_upload();
 
                 if settling {
+                    diagnostics::record(
+                        diag_instance,
+                        "layout_settle_start",
+                        Some(format!("source=local tier={t:?} nodes={n} edges={edge_count} max_ticks={max_ticks}")),
+                    );
                     status.set(format!(
                         "{n} nodes / {edge_count} edges — layout settling… (click-to-select deferred until settled)"
                     ));
@@ -635,6 +744,14 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                         edge_count,
                     }));
                 } else {
+                    // Tiny tiers can be done at tick 0 (no ticks needed) —
+                    // same "no fabricated start for a process that never
+                    // ran" rationale as the cache-hit branch above.
+                    diagnostics::record(
+                        diag_instance,
+                        "layout_settle_end",
+                        Some(format!("source=local tier={t:?} ticks={ticks_at_seed} elapsed_ms=0")),
+                    );
                     status.set(format!("{n} nodes / {edge_count} edges"));
                     render_progress.set(None);
                 }
@@ -680,6 +797,13 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let last_frame_at_vis = last_frame_at.clone();
         *frame_cb.borrow_mut() = Some(wasm_bindgen::closure::Closure::wrap(Box::new(move |now: f64| {
             if !*alive.borrow() {
+                // Hottest path in the component (up to 60/s) — throttled to
+                // the first bail per instance, see `record_alive_bail`'s doc.
+                // This is the exact call site the original, undiagnosable
+                // failure needed: an `alive == false` instance whose RAF
+                // loop kept getting scheduled would show up here as ONE
+                // entry instead of silence.
+                diagnostics::record_alive_bail(diag_instance, "raf_frame");
                 return;
             }
             last_frame_at.set(now);
@@ -811,6 +935,14 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                     leptos::logging::log!(
                         "[code-graph-view] layout settled: ticks={ticks} time-to-settled={elapsed:.0}ms"
                     );
+                    diagnostics::record(
+                        diag_instance,
+                        "layout_settle_end",
+                        Some(format!(
+                            "source=local tier={:?} ticks={ticks} elapsed_ms={elapsed:.0}",
+                            tier.get_untracked()
+                        )),
+                    );
                     // AUTO-PLAY ON OPEN (deferred from the tier effect until
                     // the positions stop moving): the function tier starts
                     // the roots animation automatically; the chrome offers
@@ -910,15 +1042,32 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let perf_vis = web_sys::window().and_then(|w| w.performance());
         let vis_cb = wasm_bindgen::closure::Closure::wrap(Box::new(move |_evt: web_sys::Event| {
             if !*alive_vis.borrow() {
+                // Fires at most a handful of times per session (a user
+                // switching tabs) — no per-frame throttling concern here,
+                // but `record_alive_bail` is still the right call: uniform
+                // mechanism, and a torn-down instance's listener staying
+                // registered at all is itself worth knowing about once.
+                diagnostics::record_alive_bail(diag_instance, "visibilitychange");
                 return;
             }
             let Some(doc) = web_sys::window().and_then(|w| w.document()) else { return };
-            if doc.hidden() {
+            let hidden = doc.hidden();
+            // Module doc item 6: both directions of the transition, not just
+            // the resume path below — this is the only place either is
+            // observable.
+            diagnostics::record(diag_instance, "visibilitychange", Some(format!("hidden={hidden}")));
+            if hidden {
                 return; // only act on the hidden -> visible transition
             }
             let now = perf_vis.as_ref().map(|p| p.now()).unwrap_or(0.0);
             if now - last_frame_at_vis.get() > STALL_RESUME_THRESHOLD_MS {
+                let stalled_ms = now - last_frame_at_vis.get();
                 leptos::logging::log!("[code-graph-view] RAF stalled — resuming on visibilitychange");
+                diagnostics::record(
+                    diag_instance,
+                    "raf_stall_resume",
+                    Some(format!("stalled_ms={stalled_ms:.0}")),
+                );
                 if let (Some(w), Some(cb)) = (web_sys::window(), frame_cb_vis.borrow().as_ref()) {
                     let _ = w.request_animation_frame(cb.as_ref().unchecked_ref());
                 }
@@ -990,14 +1139,30 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
 
     let on_click = {
         let vs = vs.clone();
+        let layout = layout.clone();
         let sync_and_upload = sync_and_upload.clone();
         let full_upload = full_upload.clone();
         let set_anim_mode = set_anim_mode.clone();
         move |ev: ev::MouseEvent| {
             if moved.get() {
+                // Module doc / Rule 14 follow-up: this and the other
+                // `click_ignored` sites below are exactly the silent
+                // discards that made a real settling-window click burst
+                // (60 clicks, zero trace) indistinguishable from a dead
+                // view. User-driven, not per-frame, so — unlike
+                // `record_alive_bail` — every occurrence is recorded, not
+                // just the first: a run of these IS the diagnosis.
+                diagnostics::record(diag_instance, "click_ignored", Some("reason=drag".to_string()));
                 return; // the mouseup that ends a drag is not a click
             }
-            let Some(canvas) = canvas_ref.get_untracked() else { return };
+            let Some(canvas) = canvas_ref.get_untracked() else {
+                // Defensive: the canvas element owns this handler, so this
+                // is not expected to be reachable in practice — recorded
+                // anyway since it's another silent early return in this
+                // function and costs nothing to cover.
+                diagnostics::record(diag_instance, "click_ignored", Some("reason=no_canvas".to_string()));
+                return;
+            };
             let rect = canvas.get_bounding_client_rect();
             let scale_x = canvas.width() as f64 / rect.width();
             let scale_y = canvas.height() as f64 / rect.height();
@@ -1012,12 +1177,26 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // rejected here — that is the defect-1 fix.
             let (hit, was_animating) = {
                 let guard = vs.borrow();
-                let Some(v) = guard.as_ref() else { return };
+                let Some(v) = guard.as_ref() else {
+                    // `vs` is only `None` in the brief window before the
+                    // tier effect's synchronous first run — defensive, like
+                    // `no_canvas` above.
+                    diagnostics::record(diag_instance, "click_ignored", Some("reason=no_view_state".to_string()));
+                    return;
+                };
                 if v.layout_settling {
                     // The painted positions refresh every frame but the
                     // hit-test tree still covers pre-settle positions — a
                     // hit now would select the WRONG node. Selection opens
-                    // when the layout settles (status line says so).
+                    // when the layout settles (status line says so). This is
+                    // the call site the maintainer traced the 60-click burst
+                    // to — record how far into the settle it landed.
+                    let ticks = layout.borrow().as_ref().map(|d| (d.ticks_run(), d.max_ticks()));
+                    diagnostics::record(
+                        diag_instance,
+                        "click_ignored",
+                        Some(diagnostics::click_ignored_layout_settling_detail(ticks)),
+                    );
                     return;
                 }
                 let gx = ((sx as f32) - v.pan_x) / v.zoom;
@@ -1029,6 +1208,17 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                     .filter(|&i| v.cull.filter_visible[i]);
                 (hit, v.anim_mode != AnimMode::Off)
             };
+
+            // A processed click either hits a node or misses (deselects) —
+            // record which BEFORE running the side effects below, so a miss
+            // that happens to leave the mirror unchanged (already
+            // deselected) is still distinguishable in the trail from a click
+            // that never reached processing at all (the `click_ignored`
+            // sites above).
+            match &hit {
+                Some(i) => diagnostics::record(diag_instance, "click_hit", Some(format!("node_index={i}"))),
+                None => diagnostics::record(diag_instance, "click_miss", None),
+            }
 
             match hit {
                 Some(i) => {
@@ -1081,6 +1271,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         create_render_effect(move |_| {
             let f = filter.get();
             if !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "filter_effect");
                 return;
             }
             if let Some(v) = vs.borrow_mut().as_mut() {
@@ -1106,7 +1297,18 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let sync_and_upload = sync_and_upload.clone();
         let alive = alive.clone();
         create_render_effect(move |_| {
-            if state.selected_code_graph_node.get().is_some() || !*alive.borrow() {
+            // `state.selected_code_graph_node.get()` MUST run unconditionally
+            // (same position as before) to keep this effect subscribed to
+            // the mirror signal — only the diagnostic below is new. The
+            // `alive` check happens exactly when it did previously (only
+            // once the mirror is confirmed unset, matching the original `||`
+            // short-circuit), so this identifies specifically the case where
+            // `alive` — not the mirror already being clear — caused the bail.
+            let mirror_set = state.selected_code_graph_node.get().is_some();
+            if !mirror_set && !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "true_clear_effect");
+            }
+            if mirror_set || !*alive.borrow() {
                 return;
             }
             let had_selection = vs
