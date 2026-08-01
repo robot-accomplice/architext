@@ -9,6 +9,7 @@
 use leptos::*;
 
 use crate::code_graph_graph::{format_signature, reach_badges, Reach};
+use crate::code_graph_paths::format_location;
 use crate::code_graph_provenance::dynamic_edge_explanation;
 use crate::code_graph_view_model::Tier;
 use crate::components::data_risks_panel::DataRisksPanel;
@@ -95,6 +96,9 @@ fn derive_node_relations(
 struct CodeGraphFunctionDetail {
     symbol: String,
     signature: String,
+    /// `file:line`, honestly rendered — see [`format_location`]: a
+    /// non-repo-relative `file` (Magma's open Go build-cache-stub defect) is
+    /// shortened and marked, never shown as if it were a normal source path.
     location: String,
     fan_in: u32,
     fan_out: u32,
@@ -162,7 +166,7 @@ fn code_graph_function_detail(
     CodeGraphFunctionDetail {
         symbol: f.symbol.clone(),
         signature: format_signature(&f.signature),
-        location: format!("{}:{}", f.file, f.line),
+        location: format_location(&f.file, f.line),
         fan_in: f.fan_in,
         fan_out: f.fan_out,
         doc: f.doc.clone(),
@@ -838,6 +842,20 @@ mod tests {
         let dead_func = function(serde_json::json!({"reachable": false, "prod_reachable": false}));
         let d2 = code_graph_function_detail(&dead_func, &[], "rta");
         assert_eq!(Reach::Dead.tooltip_for_kind(&d2.kind), Reach::Dead.tooltip());
+    }
+
+    #[test]
+    fn function_detail_location_marks_a_non_repo_relative_file_honestly() {
+        // WHY: magma's open Go build-cache-stub defect emits an ABSOLUTE
+        // path in `file` for some functions. The location must not render
+        // the raw home-directory path as if it were a normal repo path.
+        let f = function(serde_json::json!({
+            "file": "/Users/jmachen/Library/Caches/go-build/81/8162abc-d"
+        }));
+        let d = code_graph_function_detail(&f, &[], "rta");
+        assert!(d.location.contains(":42"));
+        assert!(d.location.to_lowercase().contains("not a repository file"));
+        assert!(!d.location.starts_with("/Users/jmachen"));
     }
 
     #[test]
