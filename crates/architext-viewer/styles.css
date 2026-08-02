@@ -2894,6 +2894,47 @@ button.blast-chip { cursor: pointer; }
    accent so a cull is never silent. */
 .code-graph-view__notice { font-size: 0.78rem; color: var(--accent); }
 .code-graph-view__check { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--dim); cursor: pointer; }
+/* "How this map was made" (Item 1) — a positioned ancestor for the popover,
+   a toolbar button matching the tier/anim buttons, and a small `--popover`
+   card anchored below it. Never a wall of text: three short facts at most
+   (generator, plain-language method, and the executed-code disclosure only
+   when the document says so). */
+.code-graph-view__provenance { position: relative; display: inline-flex; }
+.code-graph-view__provenance-btn {
+  padding: 2px 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: 4px;
+  background: none;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.code-graph-view__provenance-btn.is-active { color: var(--accent); border-color: var(--accent); }
+.code-graph-view__provenance-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 260px;
+  max-width: 360px;
+  padding: var(--pad);
+  background: var(--popover);
+  border: var(--hairline) solid var(--line);
+  border-radius: 6px;
+}
+.code-graph-view__provenance-line { margin: 0; font-size: 0.8rem; color: var(--ink); line-height: 1.4; }
+/* The execution disclosure is a TRUST BOUNDARY, not a fidelity nuance
+   (DESIGN mandate) — its own tone, distinct from the plain-fact lines above. */
+.code-graph-view__provenance-warn {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--accent);
+  line-height: 1.4;
+}
 .code-graph-view__toolbar--anim input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--accent); }
 /* Canvas wrap — a positioned ancestor so the staged progress panel below can
    float centred OVER the canvas instead of docked in the toolbar chrome. */
@@ -2952,6 +2993,17 @@ button.blast-chip { cursor: pointer; }
   inset: 0 auto 0 0;
   background: var(--accent);
   border-radius: 3px;
+}
+/* Defect 3 fix: the settle gate (clicks silently ignored while
+   `layout_settling`) must be VISIBLE, not just present — this note says so
+   explicitly instead of relying on the easy-to-miss toolbar status line.
+   Wraps (unlike the single-line stage-detail above) since it's a full
+   sentence, not a truncatable fact. */
+.code-graph-view__progress-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: italic;
 }
 .code-graph-view__footer {
   display: flex;

@@ -66,11 +66,15 @@ use leptos::*;
 use wasm_bindgen::JsCast;
 
 use crate::code_graph_graph::FilterState;
+use crate::code_graph_provenance::{
+    discloses_executed_target_code, dynamic_edge_explanation, fidelity_method_description,
+};
 use crate::code_graph_layout::LayoutDriver;
 use crate::code_graph_view_model::{
-    build_graph, fit_camera, should_autoplay, AnimMode, Tier, ViewState, LAYOUT_SEED,
+    build_graph, fit_camera, should_autoplay, AnimMode, GraphModel, Tier, ViewState, LAYOUT_SEED,
 };
 use crate::data::models::CodeGraph;
+use crate::diagnostics;
 use crate::force_layout::{ForceConfig, QuadTree};
 use crate::gl::renderer::Renderer;
 use crate::layout_cache::LayoutKey;
@@ -98,6 +102,17 @@ const LAYOUT_FRAME_BUDGET_MS: f64 = 12.0;
 /// against the alternative of a canvas frozen forever.
 const STALL_RESUME_THRESHOLD_MS: f64 = 500.0;
 
+/// Minimum time (ms, measured from `layout_t0`) a settle/await must have run
+/// before the `RenderProgress` panel is allowed to render (Defect 3: the
+/// settle gate — clicks silently ignored while `layout_settling` — must be
+/// VISIBLE, but a settle that finishes inside this window is fast enough
+/// that showing and immediately hiding the panel would just be a flash of
+/// UI noise, not useful information). Below this, `render_progress` is still
+/// tracked (so a later-crossing frame reveals it promptly) but the view
+/// withholds the panel. 200ms is comfortably above single-frame jitter
+/// (~16ms) and below the point a user perceives a delay as unexplained.
+const PROGRESS_PANEL_REVEAL_MS: f64 = 200.0;
+
 /// `prefers-reduced-motion: reduce` — read once per tier (re)seed and stashed
 /// on `ViewState`, never polled per frame. Motion-reduced users fall back to
 /// the pre-rework "instant reveal" (see `code_graph_view_model::Wavefront`'s
@@ -108,6 +123,63 @@ fn prefers_reduced_motion() -> bool {
         .and_then(|w| w.match_media("(prefers-reduced-motion: reduce)").ok().flatten())
         .map(|mql| mql.matches())
         .unwrap_or(false)
+}
+
+/// Defect 2 fix: whether a cache-miss tier entry should AWAIT an in-flight
+/// app-load warm instead of racing it with a duplicate local settle. Pure
+/// decision logic pulled out of the tier effect so it's natively testable —
+/// the effect itself (`CodeGraphViewCanvas`'s tier-entry `create_render_effect`)
+/// is WASM-only (canvas, WebGL, `web_sys::Performance`), but the decision of
+/// WHICH branch it takes does not need any of that.
+///
+/// `Running` is only ever produced for the function tier (see
+/// `layout_worker_client::warm_function_tier`), so this stays gated to it
+/// explicitly — an unrelated Modules-tier miss must never wait on a
+/// Functions warm, even if one happens to be running.
+fn should_await_warm(tier: Tier, warm: &CodeGraphWarm, cg_sha: &str, cg_tree: &str) -> bool {
+    tier == Tier::Functions
+        && match warm {
+            CodeGraphWarm::Running { sha, tree } => sha == cg_sha && tree == cg_tree,
+            CodeGraphWarm::Idle | CodeGraphWarm::Finished => false,
+        }
+}
+
+#[cfg(test)]
+mod should_await_warm_tests {
+    use super::*;
+
+    #[test]
+    fn awaits_a_running_warm_for_the_same_key_on_the_function_tier() {
+        let warm = CodeGraphWarm::Running { sha: "abc123".to_string(), tree: "deadbeef".to_string() };
+        assert!(should_await_warm(Tier::Functions, &warm, "abc123", "deadbeef"));
+    }
+
+    #[test]
+    fn never_awaits_on_the_module_tier_even_with_a_matching_running_warm() {
+        // `warm_function_tier` only ever warms the function tier — a
+        // Modules-tier miss must settle (or hit cache) on its own, never
+        // wait on a warm that isn't for it.
+        let warm = CodeGraphWarm::Running { sha: "abc123".to_string(), tree: "deadbeef".to_string() };
+        assert!(!should_await_warm(Tier::Modules, &warm, "abc123", "deadbeef"));
+    }
+
+    #[test]
+    fn never_awaits_a_running_warm_for_a_different_sha_or_tree() {
+        // A stale warm from a PREVIOUS document (before a reload changed
+        // sha/tree) must not stall entry into the NEW document's graph.
+        let warm = CodeGraphWarm::Running { sha: "old-sha".to_string(), tree: "old-tree".to_string() };
+        assert!(!should_await_warm(Tier::Functions, &warm, "new-sha", "old-tree"));
+        assert!(!should_await_warm(Tier::Functions, &warm, "old-sha", "new-tree"));
+    }
+
+    #[test]
+    fn never_awaits_when_the_warm_is_idle_or_already_finished() {
+        // `Idle` (no warm ever started) and `Finished` (settled, cancelled,
+        // or failed) both mean there is nothing in flight to await — the
+        // effect must fall through to its own cache/local-settle logic.
+        assert!(!should_await_warm(Tier::Functions, &CodeGraphWarm::Idle, "sha", "tree"));
+        assert!(!should_await_warm(Tier::Functions, &CodeGraphWarm::Finished, "sha", "tree"));
+    }
 }
 
 /// Live render-pipeline progress facts for the staged progress panel —
@@ -144,6 +216,14 @@ struct RenderProgress {
     elapsed_ms: f64,
     node_count: usize,
     edge_count: usize,
+    /// True while AWAITING an in-flight app-load warm instead of ticking
+    /// locally (Defect 2 fix, `layout_worker_client::CodeGraphWarm`): the
+    /// worker settle is a one-shot request/reply with no incremental
+    /// progress messages, so `ticks`/`max_ticks` stay frozen at `0`/the
+    /// driver's tick budget for the whole wait — the panel swaps the tick
+    /// counter and bar for a plain elapsed-time line instead of a "tick
+    /// 0/N" that never advances, which would read as stalled.
+    awaiting_worker: bool,
 }
 
 /// Outer surface: mirrors the 4-surface shape of the code-graph panel this
@@ -186,9 +266,72 @@ pub fn CodeGraphView() -> impl IntoView {
     }
 }
 
+// Everything `sync_and_upload`/`full_upload` mirror onto their Leptos
+// signals after touching `vs`, snapshotted OUT of the RefCell borrow. Module
+// scope (not nested in `CodeGraphViewCanvas` below) so the regression test
+// at the bottom of this file can reach it directly.
+struct SelectionMirror {
+    selected_label: Option<(String, u32)>,
+    anim_current_depth: i32,
+    anim_max_depth: i32,
+    counts: (usize, usize, usize, usize),
+    next: Option<CodeGraphSelection>,
+}
+
+// THE FIX for the release-blocking crash: borrow `vs` just long enough to
+// copy out everything the two upload paths mirror, then hand back OWNED
+// data — never a reference borrowed from `vs`. Both call sites used to read
+// straight out of `vs.borrow().as_ref()` and keep that borrow alive across
+// `state.set_selected_code_graph_node(next)`, which runs the "TRUE CLEAR"
+// effect (further down `CodeGraphViewCanvas`) SYNCHRONOUSLY — and that
+// effect does its own `vs.borrow_mut()`. A `borrow_mut()` reentering while a
+// `borrow()` is still live panics ("RefCell already borrowed"), and a panic
+// inside wasm traps the WHOLE instance (see the module doc's RENDER-LOOP
+// CANCELLATION section) — every signal write app-wide freezes, which is
+// exactly the user's report of "changing options at the top clears the
+// graph and never rerenders it." Returning owned data makes the bug
+// structurally impossible to reintroduce: the `Ref` this function takes is
+// dropped at the end of the statement below (the same tail-expression
+// pattern the RAF frame's "build inside the borrow, set after it's
+// released" comment relies on), which is BEFORE this function returns to
+// its caller — so there is no borrow left for the caller to still be
+// holding. Regression coverage: `refcell_discipline_tests` at the bottom of
+// this file.
+fn snapshot_selection_mirror(
+    vs: &Rc<RefCell<Option<ViewState>>>,
+    tier: Tier,
+    selection_id: &impl Fn(Tier, usize) -> Option<String>,
+) -> Option<SelectionMirror> {
+    // `.map()`, not `if let ... else`: same tail-expression temporary-drop
+    // timing either way (the `Ref` from `vs.borrow()` is dropped at the end
+    // of this statement, before the function returns — proven by
+    // `refcell_discipline_tests::snapshot_selection_mirror_releases_the_borrow_before_returning`
+    // below), and clippy's `manual_map` flags the longer form as a warning.
+    vs.borrow().as_ref().map(|v| SelectionMirror {
+        selected_label: v.selected.map(|i| (v.graph.labels[i].clone(), v.graph.degree[i])),
+        anim_current_depth: v.anim_current_depth,
+        anim_max_depth: v.anim_max_depth,
+        counts: (
+            v.cull.nodes.len(),
+            v.graph.node_count(),
+            v.cull.edges.len(),
+            v.graph.directed_edges.len(),
+        ),
+        next: v.selected.and_then(|i| selection_id(tier, i)).map(|id| CodeGraphSelection { tier, id }),
+    })
+}
+
 #[component]
 fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     let state = use_app_state();
+    // Rule 14 RCA instrumentation (see `diagnostics` module doc): a
+    // process-wide id for THIS component instance. `canvas_panel.rs`'s outer
+    // mode-render closure can tear this component down and rebuild it more
+    // than once per `set_mode()` — every event below carries this id so a
+    // diagnostics dump can tell "this instance was torn down and a fresh one
+    // replaced it" apart from "this instance died and nothing replaced it".
+    let diag_instance = diagnostics::next_instance_id();
+    diagnostics::record(diag_instance, "mount", Some(format!("sha={} tree={}", cg.sha, cg.tree)));
     let canvas_ref = create_node_ref::<Canvas>();
     let tier = create_rw_signal(Tier::Functions);
     let status = create_rw_signal(String::new());
@@ -217,6 +360,15 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // `Cell`s for the instrumentation/camera bookkeeping — nothing reads
     // them reactively (same rationale as the drag `Cell`s below).
     let layout: Rc<RefCell<Option<LayoutDriver>>> = Rc::new(RefCell::new(None));
+    // Defect 2 fix: `Some(t)` while the tier effect has chosen to AWAIT an
+    // in-flight app-load warm for tier `t` instead of racing it with a
+    // duplicate local settle (see the tier effect's MISS branch below).
+    // `None` the rest of the time. Read by the dedicated warm-watch effect
+    // (defined after the tier effect) so a `state.code_graph_warm`
+    // transition it is NOT waiting on — e.g. the user switched tiers, or a
+    // second view instance's warm — is a cheap no-op instead of touching
+    // `vs`/`layout` for the wrong tier.
+    let awaiting_warm: Rc<Cell<Option<Tier>>> = Rc::new(Cell::new(None));
     // Plan D Task 2 cache, keyed on (sha, tree, tier) — lives on `AppState`
     // (Task 3), not this component: the app-load background warm
     // (`layout_worker_client::warm_function_tier`) writes into it before any
@@ -228,6 +380,26 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // after it) also needs them to `put` on settle completion.
     let cg_sha = cg.sha.clone();
     let cg_tree = cg.tree.clone();
+    // A second full clone of `cg` for the warm-watch effect (Defect 2 fix):
+    // that effect resolves ASYNCHRONOUSLY, well after the tier effect has
+    // already moved the original `cg` into its own closure (see below), so
+    // it needs its own owned copy to rebuild the `GraphModel` when the
+    // warm resolves — the same one-clone-per-long-lived-closure pattern
+    // `selection_id` already uses a few lines up.
+    let cg_for_warm_watch = cg.clone();
+    // Provenance surface (Item 1): the facts the "how this map was made"
+    // affordance and the fidelity-modulated dynamic-edge explanation need,
+    // cloned out for the same reason as `cg_sha`/`cg_tree` above — `cg`
+    // itself is moved into the tier-entry effect below.
+    let cg_generator = cg.generator.clone();
+    let cg_executed_target_code = cg.executed_target_code;
+    // Computed once from `cg.fidelity` (fixed for this component instance's
+    // life) so nothing downstream needs to hold onto `cg.fidelity` itself —
+    // both are `&'static str`, so they're `Copy` and freely reusable across
+    // the reactive closures below.
+    let dynamic_edge_title = dynamic_edge_explanation(&cg.fidelity);
+    let cg_method_description = fidelity_method_description(&cg.fidelity);
+    let provenance_open = create_rw_signal(false);
     let layout_t0: Rc<Cell<f64>> = Rc::new(Cell::new(0.0));
     let first_paint_logged: Rc<Cell<bool>> = Rc::new(Cell::new(false));
     let user_moved_camera: Rc<Cell<bool>> = Rc::new(Cell::new(false));
@@ -241,11 +413,49 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // set whenever `play()` (re)starts so the very first frame after a press
     // never jumps by however long the animation sat paused/stopped.
     let last_anim_frame_at: Rc<Cell<f64>> = Rc::new(Cell::new(0.0));
+    // Non-reactive mirror of `tier`'s current value, kept for `on_cleanup`
+    // below: cleanup runs AS this component's reactive scope is disposed, so
+    // reading a Leptos signal there — even via `get_untracked` — is exactly
+    // the disposed-owner hazard the module doc warns about. This plain
+    // `Cell` (same pattern as `user_moved_camera` etc. above) gives cleanup
+    // instrumentation the tier without touching the `tier` signal itself.
+    let tier_mirror: Rc<Cell<Tier>> = Rc::new(Cell::new(Tier::Functions));
 
     let alive: Rc<RefCell<bool>> = Rc::new(RefCell::new(true));
     on_cleanup({
         let alive = alive.clone();
-        move || *alive.borrow_mut() = false
+        let vs = vs.clone();
+        let layout = layout.clone();
+        let tier_mirror = tier_mirror.clone();
+        move || {
+            *alive.borrow_mut() = false;
+            // Cleanup is the pivotal instrumentation event (module doc item
+            // 2): record it with whatever context is cheaply available.
+            // `vs`/`layout` are plain `Rc<RefCell<..>>`, not Leptos signals —
+            // safe to read regardless of disposal order — and `tier_mirror`
+            // exists precisely so tier is available here too.
+            //
+            // `try_borrow`, never `borrow`: the recorded trail shows cleanup
+            // fires WHILE a settle is in flight every single time (the
+            // teardown storm on mode entry disposes each instance ~15 ms after
+            // it starts its layout), so the RAF tick loop may well be holding
+            // `layout.borrow_mut()` right now. A panic here would trap the
+            // whole wasm instance — see the `try_borrow` note in `on_click`.
+            // Unknown beats dead: `None` renders as "unknown" in the detail.
+            let fmt = |b: Option<bool>| b.map_or("unknown".to_string(), |v| v.to_string());
+            let layout_settling = fmt(layout.try_borrow().ok().map(|l| l.is_some()));
+            let selection_held = fmt(
+                vs.try_borrow().ok().map(|v| v.as_ref().map(|v| v.selected.is_some()).unwrap_or(false)),
+            );
+            diagnostics::record(
+                diag_instance,
+                "cleanup",
+                Some(format!(
+                    "tier={:?} layout_settling={layout_settling} selection_held={selection_held}",
+                    tier_mirror.get()
+                )),
+            );
+        }
     });
 
     // Map a full-graph index back to its Magma id for the inspector mirror
@@ -263,6 +473,18 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         }
     };
 
+    // Format the selection-mirror instrumentation detail (module doc item
+    // 5): set-to-Some / cleared. Shared by `sync_and_upload` and
+    // `full_upload` below — both write the SAME mirror through the SAME
+    // equality-guarded pattern, so one formatter keeps the wording from
+    // drifting between the two copies.
+    fn selection_mirror_detail(next: &Option<CodeGraphSelection>) -> String {
+        match next {
+            Some(sel) => format!("set id={}", sel.id),
+            None => "cleared".to_string(),
+        }
+    }
+
     // DYNAMIC upload only (selection/animation/scrub path) + mirror the
     // display facts into signals. Called imperatively after every mutation
     // site instead of on a tracked dependency — the RefCell is the truth,
@@ -277,22 +499,36 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 g.upload_dynamic(&v.node_state(), &v.edge_state());
             }
             if !*alive.borrow() {
+                // Module doc item 3 — the "SKIPPED-because-not-alive" case
+                // for the selection mirror: without this, a torn-down
+                // instance's mirror write silently no-ops and the inspector
+                // just... stops updating, with nothing recorded anywhere.
+                diagnostics::record_alive_bail(diag_instance, "sync_and_upload");
                 return;
             }
-            if let Some(v) = vs.borrow().as_ref() {
-                selected_label.set(v.selected.map(|i| (v.graph.labels[i].clone(), v.graph.degree[i])));
-                anim_depth_sig.set(v.anim_current_depth);
-                anim_max_sig.set(v.anim_max_depth);
+            // `snapshot_selection_mirror` releases its `vs` borrow before
+            // returning (see its doc) — the fix for the crash where holding
+            // `vs.borrow()` across `state.set_selected_code_graph_node` below
+            // double-borrowed the RefCell and trapped the wasm instance.
+            if let Some(snap) = snapshot_selection_mirror(&vs, tier.get_untracked(), &selection_id) {
+                selected_label.set(snap.selected_label);
+                anim_depth_sig.set(snap.anim_current_depth);
+                anim_max_sig.set(snap.anim_max_depth);
                 // Inspector mirror (Task 6): None when nothing is selected, so
                 // a cleared canvas selection clears the inspector detail too.
                 // The equality guard matters: this closure also runs per
                 // layout-settle frame, and an unconditional `set` would
                 // re-render the inspector body every frame with the same value.
-                let t = tier.get_untracked();
-                let next =
-                    v.selected.and_then(|i| selection_id(t, i)).map(|id| CodeGraphSelection { tier: t, id });
-                if state.selected_code_graph_node.get_untracked() != next {
-                    state.set_selected_code_graph_node(next);
+                if state.selected_code_graph_node.get_untracked() != snap.next {
+                    // Module doc item 5: the mirror actually changing is rare
+                    // (gated by the equality check above), so this never
+                    // becomes a per-frame flood — no throttling needed here.
+                    diagnostics::record(
+                        diag_instance,
+                        "selection_mirror",
+                        Some(selection_mirror_detail(&snap.next)),
+                    );
+                    state.set_selected_code_graph_node(snap.next);
                 }
             }
         }
@@ -317,16 +553,20 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 }
             }
             if !*alive.borrow() {
+                // Hot path: this runs every layout-settle RAF tick, so
+                // `record_alive_bail` throttles to the first bail per
+                // instance (see its doc) rather than flooding the buffer.
+                diagnostics::record_alive_bail(diag_instance, "full_upload");
                 return;
             }
-            if let Some(v) = vs.borrow().as_ref() {
-                counts.set((
-                    v.cull.nodes.len(),
-                    v.graph.node_count(),
-                    v.cull.edges.len(),
-                    v.graph.directed_edges.len(),
-                ));
-                selected_label.set(v.selected.map(|i| (v.graph.labels[i].clone(), v.graph.degree[i])));
+            // Same fix as `sync_and_upload` above: `snapshot_selection_mirror`
+            // releases the `vs` borrow before returning, so the signal writes
+            // below — most of all `state.set_selected_code_graph_node`, whose
+            // reentrant `vs.borrow_mut()` (the "TRUE CLEAR" effect) is what
+            // trapped the wasm instance — can never race a still-held borrow.
+            if let Some(snap) = snapshot_selection_mirror(&vs, tier.get_untracked(), &selection_id) {
+                counts.set(snap.counts);
+                selected_label.set(snap.selected_label);
                 // Depth-chrome mirror: `full_upload` is now the path
                 // `set_anim_mode`/`set_depth`/a hop-boundary crossing take
                 // (the cull set changes with the wavefront — see their call
@@ -334,18 +574,22 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 // rather than leaving that to `sync_and_upload` alone, or
                 // "depth N / M" and the scrub slider go stale on every mode
                 // change and step/scrub.
-                anim_depth_sig.set(v.anim_current_depth);
-                anim_max_sig.set(v.anim_max_depth);
+                anim_depth_sig.set(snap.anim_current_depth);
+                anim_max_sig.set(snap.anim_max_depth);
                 // Inspector mirror (Task 6): runs on the cull/tier paths too,
                 // so a filter that culls the selection (or a tier switch,
                 // which rebuilds `vs` with `selected: None`) also clears the
                 // inspector detail. Same equality guard as `sync_and_upload`:
                 // this runs per layout-settle frame.
-                let t = tier.get_untracked();
-                let next =
-                    v.selected.and_then(|i| selection_id(t, i)).map(|id| CodeGraphSelection { tier: t, id });
-                if state.selected_code_graph_node.get_untracked() != next {
-                    state.set_selected_code_graph_node(next);
+                if state.selected_code_graph_node.get_untracked() != snap.next {
+                    // Same equality guard as `sync_and_upload` bounds this to
+                    // real changes, not one entry per settle frame.
+                    diagnostics::record(
+                        diag_instance,
+                        "selection_mirror",
+                        Some(selection_mirror_detail(&snap.next)),
+                    );
+                    state.set_selected_code_graph_node(snap.next);
                 }
             }
         }
@@ -372,6 +616,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let alive = alive.clone();
         move |mode: AnimMode| {
             if !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "set_anim_mode");
                 return;
             }
             anim_playing_sig.set(false);
@@ -392,6 +637,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 v.set_anim_depth(d); // clamps, resets hop_progress, re-culls
             }
             if !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "set_depth");
                 return;
             }
             full_upload();
@@ -406,7 +652,19 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // call would double-borrow the RefCell and panic.
             let next = {
                 let guard = vs.borrow();
-                let Some(v) = guard.as_ref() else { return };
+                let Some(v) = guard.as_ref() else {
+                    // Same defensive/theoretically-unreachable shape as
+                    // `on_click`'s `no_view_state` bail — reusing
+                    // `click_ignored` (not a new event name) keeps the
+                    // vocabulary small; `call_site` disambiguates it from
+                    // the canvas click path.
+                    diagnostics::record(
+                        diag_instance,
+                        "click_ignored",
+                        Some("reason=no_view_state call_site=step".to_string()),
+                    );
+                    return;
+                };
                 (v.anim_current_depth + delta).clamp(0, v.anim_max_depth)
             };
             set_depth(next);
@@ -419,6 +677,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let alive = alive.clone();
         move || {
             if !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "play");
                 return;
             }
             // Pressing play after the wavefront reached the end RESTARTS it
@@ -445,9 +704,156 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let alive = alive.clone();
         move || {
             if !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "pause");
                 return;
             }
             anim_playing_sig.set(false);
+        }
+    };
+
+    // Defect 2 fix: adopt an already-settled positions vector — from a cache
+    // hit OR a resolved app-load warm — and finish tier entry with NO
+    // further ticking. Shared by the tier effect's cache-HIT branch below
+    // and the warm-watch effect's hit branch (further below) so a worker's
+    // answer and a cache's answer finish tier entry identically; only the
+    // `source` value passed in (and thus the diagnostics line) tells them
+    // apart.
+    let finish_settled = {
+        let vs = vs.clone();
+        let layout = layout.clone();
+        let full_upload = full_upload.clone();
+        let set_anim_mode = set_anim_mode.clone();
+        let play = play.clone();
+        move |t: Tier, graph: GraphModel, positions: Vec<(f32, f32)>, w: f32, h: f32, source: &'static str| {
+            let n = graph.node_count();
+            let edge_count = graph.directed_edges.len();
+            let (zoom, pan_x, pan_y) = fit_camera(&positions, &graph.radius, w, h);
+            let tree = QuadTree::from_positions_f32(&positions);
+            let mut new_vs =
+                ViewState::new(graph, positions, tree, pan_x, pan_y, zoom, prefers_reduced_motion());
+            new_vs.layout_settling = false;
+            *vs.borrow_mut() = Some(new_vs);
+            *layout.borrow_mut() = None; // nothing to tick — already settled
+            leptos::logging::log!(
+                "[code-graph-view] layout settled via {source}: nodes={n} edges={edge_count} tier={t:?}"
+            );
+            // Module doc item 4: an adopted settle has no PROCESS to log a
+            // start for (zero local ticks) — record just the "end" fact,
+            // same rationale whether it came from the cache or a worker.
+            diagnostics::record(
+                diag_instance,
+                "layout_settle_end",
+                Some(format!("source={source} tier={t:?} nodes={n} edges={edge_count}")),
+            );
+            full_upload();
+            status.set(format!("{n} nodes / {edge_count} edges"));
+            render_progress.set(None);
+            filter.set(FilterState::default());
+            // Honours auto-play on the function tier even though there is
+            // no local settle event to hang it off.
+            if should_autoplay(t) {
+                set_anim_mode(AnimMode::Roots);
+                play();
+            } else {
+                set_anim_mode(AnimMode::Off);
+            }
+        }
+    };
+
+    // Defect 2 fix: begin a genuine LOCAL settle right now — seed the
+    // driver, upload its tick-0 circle, and store it in `layout` for the
+    // RAF loop below to tick. Shared by the tier effect's plain cache-MISS
+    // branch (no warm to await) and the warm-watch effect's fallback (the
+    // awaited worker failed) — both are "start ticking from scratch",
+    // differing only in WHEN they run and whether `layout_t0` was just set
+    // (immediate call site, elapsed ~= 0) or set a while ago (deferred
+    // fallback, elapsed reflects the real wait already spent awaiting).
+    let start_local_settle = {
+        let vs = vs.clone();
+        let layout = layout.clone();
+        let full_upload = full_upload.clone();
+        let set_anim_mode = set_anim_mode.clone();
+        let layout_t0 = layout_t0.clone();
+        move |t: Tier, graph: GraphModel, w: f32, h: f32, build_ms: f64| {
+            let n = graph.node_count();
+            let edge_count = graph.directed_edges.len();
+            let driver = LayoutDriver::new(n, &graph.layout_edges, LAYOUT_SEED, &ForceConfig::default());
+            let max_ticks = driver.max_ticks();
+            // Tick-0 positions (the seeded circle) upload IMMEDIATELY so the
+            // first frame paints a real graph, not a spinner.
+            let positions = driver.positions_f32();
+            let (zoom, pan_x, pan_y) = fit_camera(&positions, &graph.radius, w, h);
+            let settling = !driver.is_done();
+            // Captured before `driver` moves into `layout` below — only used
+            // by the "already done at seed" branch's instant
+            // `layout_settle_end` (module doc item 4).
+            let ticks_at_seed = driver.ticks_run();
+
+            // `vs` MUST be replaced BEFORE any of the signal writes below:
+            // each `.set()` synchronously re-runs the filter effect (which
+            // re-uploads, sized from `vs`). Writing the signals first let
+            // that reentrant upload fire while `vs` still held the PREVIOUS
+            // tier's counts against buffers just reallocated to the NEW
+            // tier's size — a `bufferSubData` overflow (the spike's bug,
+            // kept fixed). The initial hit-test tree covers the seeded
+            // positions; the RAF loop replaces it with the settled tree.
+            let mut new_vs = ViewState::new(
+                graph,
+                positions,
+                driver.hit_tree(),
+                pan_x,
+                pan_y,
+                zoom,
+                prefers_reduced_motion(),
+            );
+            new_vs.layout_settling = settling;
+            *vs.borrow_mut() = Some(new_vs);
+            *layout.borrow_mut() = Some(driver);
+            leptos::logging::log!(
+                "[code-graph-view] layout seeded: nodes={n} edges={edge_count} settling={settling}"
+            );
+            full_upload();
+
+            let elapsed_ms = web_sys::window()
+                .and_then(|w| w.performance())
+                .map(|p| p.now() - layout_t0.get())
+                .unwrap_or(0.0);
+
+            if settling {
+                diagnostics::record(
+                    diag_instance,
+                    "layout_settle_start",
+                    Some(format!("source=local tier={t:?} nodes={n} edges={edge_count} max_ticks={max_ticks}")),
+                );
+                status.set(format!(
+                    "{n} nodes / {edge_count} edges — layout settling… (click-to-select deferred until settled)"
+                ));
+                render_progress.set(Some(RenderProgress {
+                    build_ms,
+                    ticks: 0,
+                    max_ticks,
+                    elapsed_ms,
+                    node_count: n,
+                    edge_count,
+                    awaiting_worker: false,
+                }));
+            } else {
+                // Tiny tiers can be done at tick 0 (no ticks needed) — same
+                // "no fabricated start for a process that never ran"
+                // rationale as `finish_settled`.
+                diagnostics::record(
+                    diag_instance,
+                    "layout_settle_end",
+                    Some(format!("source=local tier={t:?} ticks={ticks_at_seed} elapsed_ms={elapsed_ms:.0}")),
+                );
+                status.set(format!("{n} nodes / {edge_count} edges"));
+                render_progress.set(None);
+            }
+            filter.set(FilterState::default());
+            // AUTO-PLAY ON OPEN is deferred to the settle (RAF loop below):
+            // starting the wavefront while positions churn would sweep the
+            // animation across a graph that is still moving.
+            set_anim_mode(AnimMode::Off);
         }
     };
 
@@ -468,11 +874,16 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let first_paint_logged = first_paint_logged.clone();
         let user_moved_camera = user_moved_camera.clone();
         let set_anim_mode = set_anim_mode.clone();
-        let play = play.clone();
+        let tier_mirror = tier_mirror.clone();
+        let awaiting_warm = awaiting_warm.clone();
+        let finish_settled = finish_settled.clone();
+        let start_local_settle = start_local_settle.clone();
         create_render_effect(move |_| {
             let t = tier.get();
+            tier_mirror.set(t); // keep the cleanup-time mirror current
             let Some(canvas) = canvas_ref.get() else { return };
             if !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "tier_effect");
                 return;
             }
 
@@ -523,92 +934,63 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 // HIT: skip the settle entirely — no driver, no progress
                 // panel, no re-seed, no animation restart. Straight to
                 // interactive, camera fit over the cached positions.
-                let (zoom, pan_x, pan_y) = fit_camera(&positions, &graph.radius, w, h);
-                let tree = QuadTree::from_positions_f32(&positions);
-                let mut new_vs =
-                    ViewState::new(graph, positions, tree, pan_x, pan_y, zoom, prefers_reduced_motion());
-                new_vs.layout_settling = false;
-                *vs.borrow_mut() = Some(new_vs);
-                *layout.borrow_mut() = None; // nothing to tick — already settled
-                leptos::logging::log!(
-                    "[code-graph-view] layout cache HIT: nodes={n} edges={edge_count} tier={t:?}"
-                );
-                full_upload();
-                status.set(format!("{n} nodes / {edge_count} edges"));
-                render_progress.set(None);
-                filter.set(FilterState::default());
-                // A cache hit still honours auto-play on the function tier —
-                // there is no settle event to hang it off, so trigger it here
-                // directly instead of deferring to the RAF loop.
-                if should_autoplay(t) {
-                    set_anim_mode(AnimMode::Roots);
-                    play();
-                } else {
-                    set_anim_mode(AnimMode::Off);
-                }
+                finish_settled(t, graph, positions, w, h, "cache");
             } else {
-                // MISS: settle as today.
+                // MISS.
                 //
-                // Task 3 "no racing writers": if the app-load worker warm is
-                // still computing THIS exact (sha, tree) function-tier
-                // answer, cancel it before starting a redundant main-thread
-                // settle — determinism means the two would compute the same
-                // bit-identical positions, but there must be only one
-                // eventual writer of this cache entry, not two settles
-                // racing to finish. `Running` is only ever produced for the
-                // function tier, so this is gated to it explicitly: an
-                // unrelated Modules-tier miss must NOT cancel a Functions
-                // warm still in flight.
-                if t == Tier::Functions {
-                    if let CodeGraphWarm::Running { sha, tree, cancel } =
-                        state.code_graph_warm.get_untracked()
-                    {
-                        if sha == cg_sha && tree == cg_tree {
-                            cancel.cancel();
-                            state.code_graph_warm.set(CodeGraphWarm::Finished);
-                            leptos::logging::log!(
-                                "[code-graph-view] cancelled in-flight warm — settling on the main thread instead"
-                            );
-                        }
-                    }
-                }
-                let driver = LayoutDriver::new(n, &graph.layout_edges, LAYOUT_SEED, &ForceConfig::default());
-                let max_ticks = driver.max_ticks();
-                // Tick-0 positions (the seeded circle) upload IMMEDIATELY so
-                // the first frame paints a real graph, not a spinner.
-                let positions = driver.positions_f32();
-                let (zoom, pan_x, pan_y) = fit_camera(&positions, &graph.radius, w, h);
-                let settling = !driver.is_done();
-
-                // `vs` MUST be replaced BEFORE any of the signal writes below:
-                // each `.set()` synchronously re-runs the filter effect (which
-                // re-uploads, sized from `vs`). Writing the signals first let
-                // that reentrant upload fire while `vs` still held the
-                // PREVIOUS tier's counts against buffers just reallocated to
-                // the NEW tier's size — a `bufferSubData` overflow (the
-                // spike's bug, kept fixed). The initial hit-test tree covers
-                // the seeded positions; the RAF loop replaces it with the
-                // settled tree.
-                let mut new_vs = ViewState::new(
-                    graph,
-                    positions,
-                    driver.hit_tree(),
-                    pan_x,
-                    pan_y,
-                    zoom,
-                    prefers_reduced_motion(),
-                );
-                new_vs.layout_settling = settling;
-                *vs.borrow_mut() = Some(new_vs);
-                *layout.borrow_mut() = Some(driver);
-                leptos::logging::log!(
-                    "[code-graph-view] layout seeded: nodes={n} edges={edge_count} settling={settling}"
-                );
-                full_upload();
-
-                if settling {
+                // Defect 2 fix: if the app-load worker warm is STILL
+                // computing THIS exact (sha, tree) function-tier answer,
+                // AWAIT it instead of racing it with a duplicate local
+                // settle. This guard USED TO cancel the warm and settle
+                // locally instead — which sounds equivalent (determinism
+                // means the two computations are bit-identical) but was
+                // measured throwing away up to a second-plus of
+                // already-in-flight worker compute on EVERY Code Graph
+                // entry: the warm hadn't finished by the time a real user
+                // reaches the mode (17,814 nodes takes >1s to even warm up
+                // to), so cancelling it just made the local fallback re-pay
+                // the FULL ~15.7s settle on the main thread it was there to
+                // avoid. `Running` is only ever produced for the function
+                // tier, so this stays gated to it explicitly — an unrelated
+                // Modules-tier miss must not wait on a Functions warm.
+                let awaiting = should_await_warm(t, &state.code_graph_warm.get_untracked(), &cg_sha, &cg_tree);
+                if awaiting {
+                    // Seed + upload the tick-0 circle for FIRST PAINT ONLY —
+                    // do NOT store the driver in `layout`, so the RAF loop
+                    // never ticks it: a local settle running IN PARALLEL
+                    // with the worker would still be correct (same
+                    // deterministic answer either way) but would burn
+                    // main-thread CPU for nothing, exactly the waste this
+                    // fix removes. `awaiting_warm` tells the warm-watch
+                    // effect (below the tier effect) to finish this tier
+                    // entry once the worker resolves.
+                    let driver =
+                        LayoutDriver::new(n, &graph.layout_edges, LAYOUT_SEED, &ForceConfig::default());
+                    let max_ticks = driver.max_ticks();
+                    let positions = driver.positions_f32();
+                    let (zoom, pan_x, pan_y) = fit_camera(&positions, &graph.radius, w, h);
+                    let mut new_vs = ViewState::new(
+                        graph,
+                        positions,
+                        driver.hit_tree(),
+                        pan_x,
+                        pan_y,
+                        zoom,
+                        prefers_reduced_motion(),
+                    );
+                    new_vs.layout_settling = true; // gate clicks until the warm resolves
+                    *vs.borrow_mut() = Some(new_vs);
+                    *layout.borrow_mut() = None; // nothing to tick locally — awaiting the worker
+                    full_upload();
+                    diagnostics::record(
+                        diag_instance,
+                        "layout_settle_start",
+                        Some(format!(
+                            "source=await_worker tier={t:?} nodes={n} edges={edge_count} max_ticks={max_ticks}"
+                        )),
+                    );
                     status.set(format!(
-                        "{n} nodes / {edge_count} edges — layout settling… (click-to-select deferred until settled)"
+                        "{n} nodes / {edge_count} edges — awaiting warmed layout… (click-to-select deferred until settled)"
                     ));
                     render_progress.set(Some(RenderProgress {
                         build_ms,
@@ -617,16 +999,67 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                         elapsed_ms: 0.0,
                         node_count: n,
                         edge_count,
+                        awaiting_worker: true,
                     }));
+                    filter.set(FilterState::default());
+                    set_anim_mode(AnimMode::Off);
+                    awaiting_warm.set(Some(t));
                 } else {
-                    status.set(format!("{n} nodes / {edge_count} edges"));
-                    render_progress.set(None);
+                    start_local_settle(t, graph, w, h, build_ms);
                 }
-                filter.set(FilterState::default());
-                // AUTO-PLAY ON OPEN is deferred to the settle (RAF loop
-                // below): starting the wavefront while positions churn would
-                // sweep the animation across a graph that is still moving.
-                set_anim_mode(AnimMode::Off);
+            }
+        });
+    }
+
+    // Defect 2 fix: resolves an in-flight warm the tier effect above chose
+    // to AWAIT rather than race. Deliberately a SEPARATE effect, not folded
+    // into the tier effect: this one must react ONLY to
+    // `state.code_graph_warm` changing. Folding it into the tier effect
+    // (which also tracks `tier`) would make ANY warm transition re-run tier
+    // entry for whatever tier happens to be selected at that moment — even
+    // an unrelated Modules-tier view the user has since switched to —
+    // discarding its live selection/camera/filter for no reason. Keeping
+    // the two effects separate means each only fires for the thing it
+    // actually cares about.
+    {
+        let awaiting_warm = awaiting_warm.clone();
+        let alive = alive.clone();
+        let cg_sha = cg_sha.clone();
+        let cg_tree = cg_tree.clone();
+        let cg_for_warm_watch = cg_for_warm_watch.clone();
+        let finish_settled = finish_settled.clone();
+        let start_local_settle = start_local_settle.clone();
+        create_render_effect(move |_| {
+            // TRACKED read — the whole point of this effect: it wakes up
+            // exactly when this signal changes, nothing else.
+            let warm = state.code_graph_warm.get();
+            let Some(awaiting_tier) = awaiting_warm.get() else { return };
+            if matches!(warm, CodeGraphWarm::Running { .. }) {
+                return; // still in flight — keep waiting
+            }
+            if !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "warm_watch");
+                return;
+            }
+            awaiting_warm.set(None); // resolve exactly once
+            let Some(canvas) = canvas_ref.get_untracked() else { return };
+            let (w, h) = (canvas.width() as f32, canvas.height() as f32);
+            let cache_key = LayoutKey::new(cg_sha.clone(), cg_tree.clone(), awaiting_tier);
+            let cache_hit = state.layout_cache.with_untracked(|c| c.get(&cache_key).map(|p| p.to_vec()));
+            let perf = web_sys::window().and_then(|w| w.performance());
+            let t_build0 = perf.as_ref().map(|p| p.now()).unwrap_or(0.0);
+            let graph = build_graph(&cg_for_warm_watch, awaiting_tier);
+            let build_ms = perf.as_ref().map(|p| p.now()).unwrap_or(0.0) - t_build0;
+            match cache_hit {
+                // The worker settled it — adopt its answer exactly like a
+                // cache hit (it wrote the SAME cache entry `finish_settled`
+                // would otherwise have written from a local settle).
+                Some(positions) => finish_settled(awaiting_tier, graph, positions, w, h, "worker"),
+                // The worker failed (or never actually ran for this key —
+                // shouldn't happen given the `awaiting` gate above, but
+                // fail safe) — settle locally now, same as a plain cache
+                // miss, just started later than tier entry.
+                None => start_local_settle(awaiting_tier, graph, w, h, build_ms),
             }
         });
     }
@@ -664,6 +1097,13 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let last_frame_at_vis = last_frame_at.clone();
         *frame_cb.borrow_mut() = Some(wasm_bindgen::closure::Closure::wrap(Box::new(move |now: f64| {
             if !*alive.borrow() {
+                // Hottest path in the component (up to 60/s) — throttled to
+                // the first bail per instance, see `record_alive_bail`'s doc.
+                // This is the exact call site the original, undiagnosable
+                // failure needed: an `alive == false` instance whose RAF
+                // loop kept getting scheduled would show up here as ONE
+                // entry instead of silence.
+                diagnostics::record_alive_bail(diag_instance, "raf_frame");
                 return;
             }
             last_frame_at.set(now);
@@ -753,6 +1193,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                                         - layout_t0.get(),
                                     node_count,
                                     edge_count,
+                                    awaiting_worker: false, // real local ticks — never the await state
                                 }));
                             }
                         }
@@ -774,6 +1215,22 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 // Static buffers carry positions, so every slice re-uploads
                 // them (the cull sets are unchanged — same nodes, new spots).
                 full_upload();
+            } else if let Some(mut p) = render_progress.get_untracked() {
+                // Defect 3 fix: keep the progress panel's elapsed clock
+                // live even when NOTHING is ticking locally — the Defect 2
+                // await-the-warm path leaves `layout` `None` for the whole
+                // wait (see the tier effect's MISS branch), so the block
+                // above never runs and `elapsed_ms` would otherwise stay
+                // frozen at the value it was seeded with. Without this, the
+                // view's `PROGRESS_PANEL_REVEAL_MS` gate could never open
+                // for a long await, hiding the very state (settling,
+                // clicks deferred) it exists to surface. `ticks`/`max_ticks`
+                // are left untouched — the panel already treats those as
+                // meaningless while `awaiting_worker` is true.
+                if *alive.borrow() {
+                    p.elapsed_ms = perf.as_ref().map(|pf| pf.now()).unwrap_or(0.0) - layout_t0.get();
+                    render_progress.set(Some(p));
+                }
             }
             if let Some(positions) = positions_for_cache {
                 // Plan D Task 2: remember this settle so the NEXT entry into
@@ -794,6 +1251,14 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                     let elapsed = perf.as_ref().map(|p| p.now() - layout_t0.get()).unwrap_or(0.0);
                     leptos::logging::log!(
                         "[code-graph-view] layout settled: ticks={ticks} time-to-settled={elapsed:.0}ms"
+                    );
+                    diagnostics::record(
+                        diag_instance,
+                        "layout_settle_end",
+                        Some(format!(
+                            "source=local tier={:?} ticks={ticks} elapsed_ms={elapsed:.0}",
+                            tier.get_untracked()
+                        )),
                     );
                     // AUTO-PLAY ON OPEN (deferred from the tier effect until
                     // the positions stop moving): the function tier starts
@@ -894,15 +1359,32 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let perf_vis = web_sys::window().and_then(|w| w.performance());
         let vis_cb = wasm_bindgen::closure::Closure::wrap(Box::new(move |_evt: web_sys::Event| {
             if !*alive_vis.borrow() {
+                // Fires at most a handful of times per session (a user
+                // switching tabs) — no per-frame throttling concern here,
+                // but `record_alive_bail` is still the right call: uniform
+                // mechanism, and a torn-down instance's listener staying
+                // registered at all is itself worth knowing about once.
+                diagnostics::record_alive_bail(diag_instance, "visibilitychange");
                 return;
             }
             let Some(doc) = web_sys::window().and_then(|w| w.document()) else { return };
-            if doc.hidden() {
+            let hidden = doc.hidden();
+            // Module doc item 6: both directions of the transition, not just
+            // the resume path below — this is the only place either is
+            // observable.
+            diagnostics::record(diag_instance, "visibilitychange", Some(format!("hidden={hidden}")));
+            if hidden {
                 return; // only act on the hidden -> visible transition
             }
             let now = perf_vis.as_ref().map(|p| p.now()).unwrap_or(0.0);
             if now - last_frame_at_vis.get() > STALL_RESUME_THRESHOLD_MS {
+                let stalled_ms = now - last_frame_at_vis.get();
                 leptos::logging::log!("[code-graph-view] RAF stalled — resuming on visibilitychange");
+                diagnostics::record(
+                    diag_instance,
+                    "raf_stall_resume",
+                    Some(format!("stalled_ms={stalled_ms:.0}")),
+                );
                 if let (Some(w), Some(cb)) = (web_sys::window(), frame_cb_vis.borrow().as_ref()) {
                     let _ = w.request_animation_frame(cb.as_ref().unchecked_ref());
                 }
@@ -974,14 +1456,30 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
 
     let on_click = {
         let vs = vs.clone();
+        let layout = layout.clone();
         let sync_and_upload = sync_and_upload.clone();
         let full_upload = full_upload.clone();
         let set_anim_mode = set_anim_mode.clone();
         move |ev: ev::MouseEvent| {
             if moved.get() {
+                // Module doc / Rule 14 follow-up: this and the other
+                // `click_ignored` sites below are exactly the silent
+                // discards that made a real settling-window click burst
+                // (60 clicks, zero trace) indistinguishable from a dead
+                // view. User-driven, not per-frame, so — unlike
+                // `record_alive_bail` — every occurrence is recorded, not
+                // just the first: a run of these IS the diagnosis.
+                diagnostics::record(diag_instance, "click_ignored", Some("reason=drag".to_string()));
                 return; // the mouseup that ends a drag is not a click
             }
-            let Some(canvas) = canvas_ref.get_untracked() else { return };
+            let Some(canvas) = canvas_ref.get_untracked() else {
+                // Defensive: the canvas element owns this handler, so this
+                // is not expected to be reachable in practice — recorded
+                // anyway since it's another silent early return in this
+                // function and costs nothing to cover.
+                diagnostics::record(diag_instance, "click_ignored", Some("reason=no_canvas".to_string()));
+                return;
+            };
             let rect = canvas.get_bounding_client_rect();
             let scale_x = canvas.width() as f64 / rect.width();
             let scale_y = canvas.height() as f64 / rect.height();
@@ -996,12 +1494,38 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // rejected here — that is the defect-1 fix.
             let (hit, was_animating) = {
                 let guard = vs.borrow();
-                let Some(v) = guard.as_ref() else { return };
+                let Some(v) = guard.as_ref() else {
+                    // `vs` is only `None` in the brief window before the
+                    // tier effect's synchronous first run — defensive, like
+                    // `no_canvas` above.
+                    diagnostics::record(diag_instance, "click_ignored", Some("reason=no_view_state".to_string()));
+                    return;
+                };
                 if v.layout_settling {
                     // The painted positions refresh every frame but the
                     // hit-test tree still covers pre-settle positions — a
                     // hit now would select the WRONG node. Selection opens
-                    // when the layout settles (status line says so).
+                    // when the layout settles (status line says so). This is
+                    // the call site the maintainer traced the 60-click burst
+                    // to — record how far into the settle it landed.
+                    // `try_borrow`, never `borrow`: this runs DURING a settle,
+                    // which is exactly when the RAF tick loop holds
+                    // `layout.borrow_mut()`. A plain `borrow()` here panicked
+                    // ("RefCell already mutably borrowed"), and a panic in wasm
+                    // traps the WHOLE instance — every signal write in the app
+                    // freezes while the DOM stays on screen looking alive, which
+                    // is precisely the un-diagnosable failure this module exists
+                    // to prevent. Instrumentation must never be able to take the
+                    // app down: if the driver is busy, record without the ticks.
+                    let ticks = layout
+                        .try_borrow()
+                        .ok()
+                        .and_then(|l| l.as_ref().map(|d| (d.ticks_run(), d.max_ticks())));
+                    diagnostics::record(
+                        diag_instance,
+                        "click_ignored",
+                        Some(diagnostics::click_ignored_layout_settling_detail(ticks)),
+                    );
                     return;
                 }
                 let gx = ((sx as f32) - v.pan_x) / v.zoom;
@@ -1013,6 +1537,17 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                     .filter(|&i| v.cull.filter_visible[i]);
                 (hit, v.anim_mode != AnimMode::Off)
             };
+
+            // A processed click either hits a node or misses (deselects) —
+            // record which BEFORE running the side effects below, so a miss
+            // that happens to leave the mirror unchanged (already
+            // deselected) is still distinguishable in the trail from a click
+            // that never reached processing at all (the `click_ignored`
+            // sites above).
+            match &hit {
+                Some(i) => diagnostics::record(diag_instance, "click_hit", Some(format!("node_index={i}"))),
+                None => diagnostics::record(diag_instance, "click_miss", None),
+            }
 
             match hit {
                 Some(i) => {
@@ -1065,6 +1600,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         create_render_effect(move |_| {
             let f = filter.get();
             if !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "filter_effect");
                 return;
             }
             if let Some(v) = vs.borrow_mut().as_mut() {
@@ -1090,7 +1626,18 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let sync_and_upload = sync_and_upload.clone();
         let alive = alive.clone();
         create_render_effect(move |_| {
-            if state.selected_code_graph_node.get().is_some() || !*alive.borrow() {
+            // `state.selected_code_graph_node.get()` MUST run unconditionally
+            // (same position as before) to keep this effect subscribed to
+            // the mirror signal — only the diagnostic below is new. The
+            // `alive` check happens exactly when it did previously (only
+            // once the mirror is confirmed unset, matching the original `||`
+            // short-circuit), so this identifies specifically the case where
+            // `alive` — not the mirror already being clear — caused the bail.
+            let mirror_set = state.selected_code_graph_node.get().is_some();
+            if !mirror_set && !*alive.borrow() {
+                diagnostics::record_alive_bail(diag_instance, "true_clear_effect");
+            }
+            if mirror_set || !*alive.borrow() {
                 return;
             }
             let had_selection = vs
@@ -1119,6 +1666,47 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 <button class:is-active=move || tier.get() == Tier::Functions on:click=move |_| tier.set(Tier::Functions)>
                     "Functions"
                 </button>
+                // "How this map was made" (Item 1): the facts that are NOT
+                // per-edge — generator + version, the analysis method in
+                // plain words (never the raw fidelity token), and — only
+                // when the FIELD says so — that producing this map executed
+                // the analysed repo's own code. Lives in the mode chrome
+                // (not the inspector) because it describes the whole
+                // document, not a selected node/edge; a click-to-toggle
+                // popover keeps it discoverable without being a wall of text
+                // in the toolbar itself.
+                <div class="code-graph-view__provenance">
+                    <button
+                        class="code-graph-view__provenance-btn"
+                        class:is-active=move || provenance_open.get()
+                        title="How this map was made"
+                        aria-expanded=move || provenance_open.get().to_string()
+                        on:click=move |_| provenance_open.update(|o| *o = !*o)
+                    >
+                        <span aria-hidden="true">"ⓘ "</span>"How this map was made"
+                    </button>
+                    {move || provenance_open.get().then(|| {
+                        let show_exec = discloses_executed_target_code(cg_executed_target_code);
+                        view! {
+                            <div
+                                class="code-graph-view__provenance-popover"
+                                role="dialog"
+                                aria-label="How this map was made"
+                            >
+                                <p class="code-graph-view__provenance-line">
+                                    {format!("Generator: {cg_generator}")}
+                                </p>
+                                <p class="code-graph-view__provenance-line">{cg_method_description}</p>
+                                {show_exec.then(|| view! {
+                                    <p class="code-graph-view__provenance-warn">
+                                        "Producing this map executed the analysed repository's \
+                                         code (build scripts, proc macros run during analysis)."
+                                    </p>
+                                })}
+                            </div>
+                        }
+                    })}
+                </div>
                 <span class="code-graph-view__status">{move || status.get()}</span>
                 {move || {
                     let (n, total_n, e, total_e) = counts.get();
@@ -1153,12 +1741,25 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                     "Generated"
                 </label>
                 <span class="code-graph-view__label">"Edge kind:"</span>
-                <label class="code-graph-view__check">
+                <label
+                    class="code-graph-view__check"
+                    title="Static calls are resolved exactly by either analysis method."
+                >
                     <input type="checkbox" prop:checked=move || filter.get().show_static
                         on:input=move |e| filter.update(|f| f.show_static = event_target_checked(&e))/>
                     "Static"
                 </label>
-                <label class="code-graph-view__check">
+                // Fidelity MODULATES this explanation rather than appearing as its
+                // own label (Item 1): the same "dynamic" edge kind carries
+                // different warranty depending on how the graph was produced —
+                // an RTA over-approximation vs. a semantically-resolved target.
+                // This toggle is the one place dynamic-vs-static is already
+                // communicated to the user, so it is where the explanation lives;
+                // there is no per-edge inspect affordance to attach it to instead.
+                <label
+                    class="code-graph-view__check"
+                    title=dynamic_edge_title
+                >
                     <input type="checkbox" prop:checked=move || filter.get().show_dynamic
                         on:input=move |e| filter.update(|f| f.show_dynamic = event_target_checked(&e))/>
                     "Dynamic"
@@ -1219,7 +1820,14 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                     on:wheel=on_wheel
                     on:click=on_click
                 ></canvas>
-                {move || render_progress.get().map(|p| {
+                {move || render_progress.get()
+                    // Defect 3 fix: withhold the panel until the settle/await
+                    // has genuinely run a while (see `PROGRESS_PANEL_REVEAL_MS`'s
+                    // doc) — `render_progress` still tracks from tick/await 0 so
+                    // a later-crossing frame reveals it promptly, but a settle
+                    // that finishes inside the window never shows it at all.
+                    .filter(|p| p.elapsed_ms >= PROGRESS_PANEL_REVEAL_MS)
+                    .map(|p| {
                     let pct = if p.max_ticks > 0 {
                         (p.ticks as f64 / p.max_ticks as f64 * 100.0).clamp(0.0, 100.0)
                     } else {
@@ -1255,15 +1863,39 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                                 <div class="code-graph-view__progress-stage-head">
                                     <span class="code-graph-view__progress-stage-label">"Laying out graph"</span>
                                     <span class="code-graph-view__progress-stage-detail">
-                                        {format!(
-                                            "tick {}/{} — {elapsed_s:.1}s elapsed, ~{eta_s:.1}s remaining",
-                                            p.ticks, p.max_ticks
-                                        )}
+                                        {if p.awaiting_worker {
+                                            // Defect 2's await path: the worker is a
+                                            // one-shot request/reply with no incremental
+                                            // progress messages, so a "tick 0/N" here
+                                            // would just sit frozen and read as stalled
+                                            // — show the one honest fact instead (time
+                                            // spent waiting).
+                                            format!("settling in the background — {elapsed_s:.1}s elapsed")
+                                        } else {
+                                            format!(
+                                                "tick {}/{} — {elapsed_s:.1}s elapsed, ~{eta_s:.1}s remaining",
+                                                p.ticks, p.max_ticks
+                                            )
+                                        }}
                                     </span>
                                 </div>
-                                <div class="code-graph-view__progress-bar">
-                                    <div class="code-graph-view__progress-fill" style=format!("width: {pct:.1}%")></div>
-                                </div>
+                                // No bar while awaiting the worker — a bar
+                                // implies a known fraction complete, which
+                                // isn't available here (see the detail line).
+                                {(!p.awaiting_worker).then(|| view! {
+                                    <div class="code-graph-view__progress-bar">
+                                        <div class="code-graph-view__progress-fill" style=format!("width: {pct:.1}%")></div>
+                                    </div>
+                                })}
+                                // Defect 3: the settle gate itself — `on_click`'s
+                                // `layout_settling` guard silently discards every
+                                // click while this panel is up (the hit-test tree
+                                // still covers pre-settle positions). Say so
+                                // explicitly rather than leaving it to the small
+                                // parenthetical in the toolbar status line.
+                                <p class="code-graph-view__progress-note">
+                                    "Selection is unavailable until the layout settles."
+                                </p>
                             </div>
                         </div>
                     }
@@ -1277,5 +1909,144 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 })}
             </div>
         </div>
+    }
+}
+
+#[cfg(test)]
+mod refcell_discipline_tests {
+    //! Regression coverage for the release-blocking crash captured live via
+    //! CDP against the real 17,814-function artifact:
+    //! `panicked at .../code_graph_view.rs:853:63: RefCell already borrowed`
+    //! → `RuntimeError: unreachable`, trapping the WHOLE wasm instance.
+    //!
+    //! Root cause: `sync_and_upload`/`full_upload` used to read
+    //! `vs.borrow().as_ref()` and keep that borrow alive across
+    //! `state.set_selected_code_graph_node(next)` — a Leptos signal write
+    //! that runs the "TRUE CLEAR" effect (in `CodeGraphViewCanvas` above)
+    //! SYNCHRONOUSLY, and that effect does its own `vs.borrow_mut()`. This
+    //! is pure Rust `RefCell` borrow-discipline logic, not GPU or DOM state,
+    //! so it is fully reproducible natively — no wasm32 target needed.
+    //!
+    //! The fixture is a real `GraphModel`/`ViewState` built over the shared
+    //! `tests_support::interconnected` generator at 1000+ nodes (the
+    //! maintainer's standing convention for call-graph tests — see
+    //! `code_graph_view_model::tests`'s "WHY ≥1000" note), so
+    //! `snapshot_selection_mirror`'s `v.graph.labels[i]` /
+    //! `v.graph.degree[i]` indexing runs against a realistic graph rather
+    //! than a toy stub too small to exercise real indices.
+    use super::*;
+    use crate::code_graph_graph::tests_support;
+    use std::panic::{catch_unwind, AssertUnwindSafe};
+
+    /// A 1000-interconnected-function `ViewState` with node 0 selected.
+    fn selected_view_state() -> Rc<RefCell<Option<ViewState>>> {
+        let (n, edges) = tests_support::interconnected(1000, 3);
+        let functions: Vec<serde_json::Value> = (0..n)
+            .map(|i| {
+                serde_json::json!({
+                    "id": format!("f{i}"), "symbol": format!("pkg.fn{i}"), "pkg": "pkg",
+                    "file": "f.go", "line": i + 1, "kind": "func", "exported": false,
+                    "test": false, "root": i == 0, "generated": false,
+                    "reachable": true, "prod_reachable": true,
+                    "signature": {"params": [], "results": []},
+                    "fan_in": 0, "fan_out": 0
+                })
+            })
+            .collect();
+        let calls: Vec<serde_json::Value> = edges
+            .iter()
+            .map(|&(a, b)| {
+                serde_json::json!({
+                    "from": format!("f{a}"), "to": format!("f{b}"),
+                    "site_file": "f.go", "site_line": 1, "kind": "static"
+                })
+            })
+            .collect();
+        let doc: CodeGraph = serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1", "generator": "magma",
+            "language": "go", "module": "example.com/x", "sha": "a",
+            "tree": "clean", "fidelity": "rta", "computable": true,
+            "functions": functions, "calls": calls
+        }))
+        .expect("1000-node fixture parses");
+
+        let graph = build_graph(&doc, Tier::Functions);
+        let positions = vec![(0.0f32, 0.0f32); n];
+        let tree = QuadTree::from_positions_f32(&positions);
+        let mut vs = ViewState::new(graph, positions, tree, 0.0, 0.0, 1.0, false);
+        vs.selected = Some(0);
+        Rc::new(RefCell::new(Some(vs)))
+    }
+
+    /// Pins the EXACT pre-fix shape: a `vs.borrow()` still held while a
+    /// reentrant `vs.borrow_mut()` runs — standing in for the "TRUE CLEAR"
+    /// effect a live `state.set_selected_code_graph_node` write triggers.
+    /// This is what `sync_and_upload`/`full_upload` did before the fix, and
+    /// reproduces the exact panic message ("RefCell already borrowed")
+    /// captured via CDP in production. If this test ever stops panicking,
+    /// the fixture below has stopped reproducing the crash it guards.
+    #[test]
+    fn holding_the_vs_borrow_across_a_reentrant_borrow_mut_panics() {
+        let vs = selected_view_state();
+        let vs_reentrant = vs.clone();
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            let guard = vs.borrow(); // the bug: still held below
+            let _ = guard.as_ref().map(|v| v.selected);
+            let _ = vs_reentrant.borrow_mut(); // the "TRUE CLEAR" effect's touch
+        }));
+        assert!(
+            result.is_err(),
+            "holding a `vs.borrow()` across a reentrant `vs.borrow_mut()` must panic \
+             (RefCell's documented double-borrow behaviour)"
+        );
+    }
+
+    /// THE FIX: `snapshot_selection_mirror` — the function `sync_and_upload`/
+    /// `full_upload` now call instead of reading `vs` directly — returns
+    /// owned data, so its `vs` borrow is released before the caller can
+    /// reach a signal write. The SAME reentrant touch that panics above no
+    /// longer panics once it happens after the snapshot call returns.
+    ///
+    /// Before this fix existed, `snapshot_selection_mirror` did not exist —
+    /// this test could not even compile, let alone pass. After the fix, it
+    /// both compiles and passes, exercising the exact function
+    /// `sync_and_upload`/`full_upload` depend on for correctness.
+    #[test]
+    fn snapshot_selection_mirror_releases_the_borrow_before_returning() {
+        let vs = selected_view_state();
+        let vs_reentrant = vs.clone();
+        let selection_id = |_t: Tier, i: usize| Some(format!("f{i}"));
+
+        let result = catch_unwind(AssertUnwindSafe(|| {
+            let snap = snapshot_selection_mirror(&vs, Tier::Functions, &selection_id)
+                .expect("a ViewState was set");
+            // Stands in for `state.set_selected_code_graph_node` running the
+            // "TRUE CLEAR" effect synchronously — must NOT panic now that
+            // `snapshot_selection_mirror` has already returned and released
+            // its `vs` borrow.
+            let _ = vs_reentrant.borrow_mut();
+            snap
+        }));
+
+        let snap = match result {
+            Ok(snap) => snap,
+            Err(_) => panic!(
+                "snapshot_selection_mirror must release its `vs` borrow before returning \
+                 (a reentrant `vs.borrow_mut()` right after the call panicked)"
+            ),
+        };
+
+        // Not just "didn't panic" — the snapshot must carry the REAL
+        // selected node's facts through, at real (1000-node) scale.
+        assert_eq!(
+            snap.next,
+            Some(CodeGraphSelection { tier: Tier::Functions, id: "f0".to_string() }),
+            "the mirror must carry the real selected node's id through, not just avoid panicking"
+        );
+        assert_eq!(
+            snap.selected_label.as_ref().map(|(label, _)| label.as_str()),
+            Some("pkg.fn0"),
+            "the mirror must carry the real selected node's label through"
+        );
     }
 }

@@ -419,6 +419,15 @@ pub struct CodeGraph {
     pub tree: String,
     pub fidelity: String,
     pub computable: bool,
+    /// Whether producing this document EXECUTED the analysed repository's
+    /// code (e.g. Rust's `build.rs` / proc macros) rather than only reading
+    /// it. Optional: magma has not shipped it yet, and older artifacts won't
+    /// carry it. A trust-boundary fact, not a fidelity nuance — drive any
+    /// "this analysis ran your code" disclosure off THIS field, never off
+    /// `language == "rust"` (magma's own rationale: that equivalence breaks
+    /// once their deferred sandboxed mode lands).
+    #[serde(default)]
+    pub executed_target_code: Option<bool>,
     #[serde(default)]
     pub not_computable_reason: Option<String>,
     #[serde(default)]
@@ -965,6 +974,32 @@ mod config_payload_tests {
         assert!(doc.calls.is_none());
         assert!(doc.modules.is_none());
         assert!(doc.module_calls.is_none());
+    }
+
+    #[test]
+    fn code_graph_parses_executed_target_code_when_present_and_absent() {
+        // WHY: `executed_target_code` reaching the viewer's serde model was the
+        // gap this test guards — serde silently ignores unknown fields, so a
+        // document could parse "successfully" while the field never reached the
+        // UI. Present (magma's Rust artifacts) and absent (Go artifacts, and
+        // every artifact predating the field) must both parse.
+        let with_field: CodeGraph = serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1", "generator": "magma/0.3.0",
+            "language": "rust", "module": "m", "sha": "a", "tree": "clean",
+            "fidelity": "semantic", "computable": true, "executed_target_code": true,
+            "functions": [], "calls": [], "modules": [], "module_calls": []
+        }))
+        .expect("document with executed_target_code must parse");
+        assert_eq!(with_field.executed_target_code, Some(true));
+
+        let without_field: CodeGraph = serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1", "generator": "magma/0.1.0",
+            "language": "go", "module": "m", "sha": "a", "tree": "clean",
+            "fidelity": "rta", "computable": true,
+            "functions": [], "calls": [], "modules": [], "module_calls": []
+        }))
+        .expect("document without executed_target_code must still parse");
+        assert_eq!(without_field.executed_target_code, None);
     }
 
     #[test]

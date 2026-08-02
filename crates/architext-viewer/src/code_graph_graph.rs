@@ -224,6 +224,12 @@ impl Reach {
     }
 }
 
+// `Reach::tooltip_for_kind` (the `kind: "init"` weaker-evidence wording) and
+// the fidelity provenance helpers live in `code_graph_provenance.rs`; the
+// `file`-not-repo-relative helpers live in `code_graph_paths.rs`. Kept out
+// of this file to avoid growing the core graph/badges module past its size
+// budget.
+
 /// The candidate classifications for one function, per the contract's own
 /// predicates (`dead` and `test_only` are Magma's definitions — do not drift).
 pub fn reach_badges(f: &CodeGraphFunction) -> Vec<Reach> {
@@ -442,4 +448,8 @@ mod tests {
             assert!(r.color_var().starts_with("var(--reach-"), "{:?} needs its own scale", r);
         }
     }
+
+    // `Reach::tooltip_for_kind` and the fidelity provenance helpers are
+    // tested in `code_graph_provenance.rs`; the `file`-not-repo-relative
+    // helpers are tested in `code_graph_paths.rs`.
 }

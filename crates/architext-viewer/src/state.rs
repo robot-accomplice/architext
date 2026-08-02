@@ -271,42 +271,60 @@ impl AppState {
     }
 
     /// Switch modes and re-seed the view/flow selection per the routing rules.
+    ///
+    /// The whole body runs inside `leptos::batch`: without it, each `.set()`
+    /// below (mode, then flow_idx, then view_idx, ...) notifies its
+    /// subscribers IMMEDIATELY and unconditionally (Leptos signals don't
+    /// dedupe on value equality — only memos do), so `canvas_panel.rs`'s
+    /// `selection_key` memo — which reads mode/view_idx/flow_idx together —
+    /// recomputes and re-notifies once per intermediate write, not once for
+    /// the whole mode switch. Each of those notifications re-runs the
+    /// `diagram_inputs` compute effect, which re-runs the canvas's outer
+    /// mode-render `DynChild` closure, which tears down and rebuilds
+    /// whichever component is showing (Code Graph mode measured FIVE mounts
+    /// for one click, each kicking off its own full-graph layout settle —
+    /// see `components/code_graph_view.rs`'s module doc on render-loop
+    /// cancellation, which works around the symptom; this fixes the cause).
+    /// `batch` defers every dependent effect until this closure returns, so
+    /// they see only the FINAL mode/view/flow and run (at most) once.
     pub fn set_mode(&self, mode: Mode) {
-        let data = self.data.get_untracked();
-        self.selected_node.set(None);
-        self.selected_step.set(None);
-        // Leaving Code Graph mode must not leave stale code-graph detail in
-        // the inspector (the mirror is written only by the Code Graph view).
-        self.selected_code_graph_node.set(None);
-        self.mode.set(mode);
-        if mode.renders_routed_flow() {
-            // Flows / Data-Risks: the flow drives; resolve the view to a
-            // compatible flow-projection.
-            let flow = if data.flows.is_empty() { None } else { Some(0) };
-            self.flow_idx.set(flow);
-            let view = match flow {
-                Some(f) => selection::default_view_for_flow(&data.views, &data.flows, mode, None, f),
-                None => selection::default_view_for_mode(&data.views, mode),
-            };
-            self.view_idx.set(view);
-        } else if mode.projects_flows() {
-            // Sequence: the view is fixed by the mode (the `sequence` view); keep the
-            // CURRENT flow if it's compatible (so switching into Sequence mode doesn't
-            // silently jump back to the first flow), else fall back to the first.
-            let current_flow = self.flow_idx.get_untracked();
-            let view = selection::default_view_for_mode(&data.views, mode);
-            self.view_idx.set(view);
-            let flow = view.and_then(|v| {
-                selection::default_flow_for_view(&data.views, &data.flows, v, current_flow)
-            });
-            self.flow_idx.set(flow);
-        } else {
-            self.flow_idx.set(None);
-            self.view_idx.set(selection::default_view_for_mode(&data.views, mode));
-        }
-        // Re-root the breadcrumb trail at the new mode's view: a single crumb
-        // when entering C4 (the Context root), empty for every non-C4 mode.
-        self.reroot_c4_trail(self.view_idx.get_untracked());
+        batch(|| {
+            let data = self.data.get_untracked();
+            self.selected_node.set(None);
+            self.selected_step.set(None);
+            // Leaving Code Graph mode must not leave stale code-graph detail in
+            // the inspector (the mirror is written only by the Code Graph view).
+            self.selected_code_graph_node.set(None);
+            self.mode.set(mode);
+            if mode.renders_routed_flow() {
+                // Flows / Data-Risks: the flow drives; resolve the view to a
+                // compatible flow-projection.
+                let flow = if data.flows.is_empty() { None } else { Some(0) };
+                self.flow_idx.set(flow);
+                let view = match flow {
+                    Some(f) => selection::default_view_for_flow(&data.views, &data.flows, mode, None, f),
+                    None => selection::default_view_for_mode(&data.views, mode),
+                };
+                self.view_idx.set(view);
+            } else if mode.projects_flows() {
+                // Sequence: the view is fixed by the mode (the `sequence` view); keep the
+                // CURRENT flow if it's compatible (so switching into Sequence mode doesn't
+                // silently jump back to the first flow), else fall back to the first.
+                let current_flow = self.flow_idx.get_untracked();
+                let view = selection::default_view_for_mode(&data.views, mode);
+                self.view_idx.set(view);
+                let flow = view.and_then(|v| {
+                    selection::default_flow_for_view(&data.views, &data.flows, v, current_flow)
+                });
+                self.flow_idx.set(flow);
+            } else {
+                self.flow_idx.set(None);
+                self.view_idx.set(selection::default_view_for_mode(&data.views, mode));
+            }
+            // Re-root the breadcrumb trail at the new mode's view: a single crumb
+            // when entering C4 (the Context root), empty for every non-C4 mode.
+            self.reroot_c4_trail(self.view_idx.get_untracked());
+        });
     }
 
     /// Select a flow (flows mode); re-resolve the view to a compatible one.
@@ -378,4 +396,138 @@ impl AppState {
 /// error — the shell always provides it before rendering panels).
 pub fn use_app_state() -> AppState {
     use_context::<AppState>().expect("AppState must be provided by the shell")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::data::models::{Flow, View};
+    use std::cell::Cell;
+
+    fn sample_view(id: &str, view_type: &str) -> View {
+        View {
+            id: id.to_string(),
+            name: id.to_string(),
+            view_type: view_type.to_string(),
+            summary: None,
+            scope_node_id: None,
+            lanes: Vec::new(),
+        }
+    }
+
+    fn sample_flow(id: &str) -> Flow {
+        Flow {
+            id: id.to_string(),
+            name: id.to_string(),
+            status: None,
+            summary: None,
+            trigger: None,
+            steps: Vec::new(),
+            sequence_frames: Vec::new(),
+        }
+    }
+
+    /// Two views (one flows-shaped, one C4-shaped) and one flow — enough for
+    /// `set_mode` to move `mode`, `flow_idx`, AND `view_idx` to genuinely
+    /// different values on a Flows -> C4 switch, so the regression test below
+    /// actually exercises three distinct signal writes, not one.
+    fn sample_data() -> ArchitectureData {
+        ArchitectureData {
+            views: vec![sample_view("flows-root", "flows"), sample_view("c4-root", "c4-context")],
+            flows: vec![sample_flow("flow-1")],
+            ..Default::default()
+        }
+    }
+
+    /// `AppState::new`'s body, minus `load_theme()` (reads `localStorage` via
+    /// a `js-sys` imported static, which panics off a real wasm target — see
+    /// its doc). Native tests exercise the reactive graph, not the DOM/JS
+    /// boundary, so this seeds `theme` with a plain default instead.
+    fn test_state(data: ArchitectureData) -> AppState {
+        let mode = Mode::Flows;
+        let data = Rc::new(data);
+        let flow_idx = if mode.projects_flows() && !data.flows.is_empty() { Some(0) } else { None };
+        let view_idx = match flow_idx {
+            Some(f) => selection::default_view_for_flow(&data.views, &data.flows, mode, None, f),
+            None => selection::default_view_for_mode(&data.views, mode),
+        };
+        AppState {
+            data: create_rw_signal(data),
+            mode: create_rw_signal(mode),
+            view_idx: create_rw_signal(view_idx),
+            flow_idx: create_rw_signal(flow_idx),
+            selected_node: create_rw_signal(None),
+            selected_step: create_rw_signal(None),
+            steps_collapsed: create_rw_signal(false),
+            cli_version: create_rw_signal(None),
+            mutation_token: create_rw_signal(None),
+            nav_collapsed: create_rw_signal(false),
+            inspector_collapsed: create_rw_signal(false),
+            live_connected: create_rw_signal(false),
+            invalid_notice: create_rw_signal(None),
+            selected_release: create_rw_signal(None),
+            selected_release_item: create_rw_signal(None),
+            selected_code_graph_node: create_rw_signal(None),
+            theme: create_rw_signal(Theme::Dark),
+            c4_trail: create_rw_signal(Vec::new()),
+            repo_tree: create_rw_signal(None),
+            repo_tree_loading: create_rw_signal(false),
+            layout_cache: create_rw_signal(LayoutCache::default()),
+            code_graph_warm: create_rw_signal(CodeGraphWarm::Idle),
+        }
+    }
+
+    // Regression for the code-graph mount-storm defect: the recorded
+    // diagnostic trail showed entering Code Graph mode mounting (and
+    // full-graph-layout-settling) the view FIVE times for one click. Root
+    // cause: `set_mode` used to write `mode`, then `flow_idx`, then
+    // `view_idx` as three separate UNBATCHED `.set()` calls — and Leptos
+    // signals notify subscribers on every `.set()` regardless of whether the
+    // value actually changed. `canvas_panel.rs`'s outer mode-render closure
+    // reads mode/view_idx/flow_idx together, so it re-ran (and
+    // remounted/tore-down whichever panel was showing) once per intermediate
+    // write instead of once for the whole mode switch.
+    //
+    // This test reproduces the MECHANISM without a browser or the canvas
+    // component: a plain reactive effect that reads all three signals
+    // together must fire exactly ONCE per `set_mode` call. Before `set_mode`
+    // wrapped its body in `leptos::batch`, this test fails (the effect fires
+    // three times: once each for mode, flow_idx, and view_idx).
+    #[test]
+    fn set_mode_notifies_a_combined_selection_watcher_exactly_once() {
+        let runtime = create_runtime();
+        let state = test_state(sample_data());
+        let fires: Rc<Cell<usize>> = Rc::new(Cell::new(0));
+        {
+            let fires = fires.clone();
+            create_render_effect(move |_| {
+                // Mirrors `canvas_panel.rs`'s `selection_key` memo, whose
+                // recompute gates the outer mode-render `DynChild` closure.
+                let _ = (state.mode.get(), state.view_idx.get(), state.flow_idx.get());
+                fires.set(fires.get() + 1);
+            });
+        }
+        assert_eq!(fires.get(), 1, "the effect's own first (synchronous) run counts once");
+
+        // Sanity check the fixture actually exercises all three signals —
+        // otherwise this test would pass even without batching, proving
+        // nothing. `AppState::new(Mode::Flows)` seeds flow_idx = Some(0);
+        // `set_mode(C4)` must change mode, flow_idx (-> None), AND view_idx
+        // (flows-root -> c4-root).
+        assert_eq!(state.mode.get_untracked(), Mode::Flows);
+        assert_eq!(state.flow_idx.get_untracked(), Some(0));
+        let view_before = state.view_idx.get_untracked();
+
+        state.set_mode(Mode::C4);
+
+        assert_ne!(state.flow_idx.get_untracked(), Some(0), "flow_idx must actually change");
+        assert_ne!(state.view_idx.get_untracked(), view_before, "view_idx must actually change");
+        assert_eq!(
+            fires.get(),
+            2,
+            "one set_mode call must notify a combined watcher exactly once, not once per signal it writes"
+        );
+
+        runtime.dispose();
+    }
 }

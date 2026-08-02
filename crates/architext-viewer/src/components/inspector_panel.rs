@@ -9,11 +9,15 @@
 use leptos::*;
 
 use crate::code_graph_graph::{format_signature, reach_badges, Reach};
+use crate::code_graph_paths::format_location;
+use crate::code_graph_provenance::dynamic_edge_explanation;
 use crate::code_graph_view_model::Tier;
 use crate::components::data_risks_panel::DataRisksPanel;
 use crate::components::notes_editor::NotesSection;
 use crate::data::fetch_node_git;
-use crate::data::models::{CodeGraphFunction, CodeGraphModule, DataClass, Node, NodeGit, View};
+use crate::data::models::{
+    CodeGraphCall, CodeGraphFunction, CodeGraphModule, DataClass, Node, NodeGit, View,
+};
 use crate::diagram::role_color_var;
 use crate::release_truth::{release_path, release_tone, ReleaseDoc};
 use crate::severity::release_tone_color_var;
@@ -92,22 +96,83 @@ fn derive_node_relations(
 struct CodeGraphFunctionDetail {
     symbol: String,
     signature: String,
+    /// `file:line`, honestly rendered — see [`format_location`]: a
+    /// non-repo-relative `file` (Magma's open Go build-cache-stub defect) is
+    /// shortened and marked, never shown as if it were a normal source path.
     location: String,
     fan_in: u32,
     fan_out: u32,
     doc: Option<String>,
     badges: Vec<Reach>,
+    /// The function's magma `kind` (`func` | `method` | `init`) — carried
+    /// through so the view can render each badge's tooltip via
+    /// `Reach::tooltip_for_kind`, giving `kind: "init"` nodes the
+    /// weaker-evidence wording instead of the generic reflection/cgo text.
+    kind: String,
+    /// This function's DYNAMIC outbound-call summary — `None` when it has
+    /// zero dynamic outbound calls (the overwhelming majority of nodes;
+    /// silence is correct there). See [`dynamic_call_info`].
+    dynamic_calls: Option<DynamicCallInfo>,
 }
 
-fn code_graph_function_detail(f: &CodeGraphFunction) -> CodeGraphFunctionDetail {
+/// A selected function's dynamic-outbound-call summary — the per-edge
+/// surface named by the settled design ("a node's dynamic-call
+/// information"), rendered as real panel text rather than a hover-only
+/// tooltip. `explanation` is `dynamic_edge_explanation` verbatim, so this
+/// line and the toolbar's edge-kind hint (if kept) can never drift — one
+/// source of truth for what a fidelity's dynamic edges mean.
+#[derive(Debug, PartialEq)]
+struct DynamicCallInfo {
+    dynamic_count: usize,
+    total_outbound: usize,
+    explanation: &'static str,
+}
+
+/// Count `f`'s outbound calls (`from == f.id`) and, of those, how many are
+/// `kind == "dynamic"`. `calls` is ~100k+ entries on a real artifact, so this
+/// is a linear scan — acceptable because it runs once per selection (a rare,
+/// user-driven event), not once per render; callers must compute it inside
+/// the same derivation that already builds the rest of the function detail,
+/// never inside a closure that re-runs on every reactive tick. Returns `None`
+/// when the dynamic count is zero — a "0 dynamic calls" row is noise on the
+/// overwhelming majority of nodes.
+fn dynamic_call_info(
+    f: &CodeGraphFunction,
+    calls: &[CodeGraphCall],
+    fidelity: &str,
+) -> Option<DynamicCallInfo> {
+    let mut dynamic_count = 0usize;
+    let mut total_outbound = 0usize;
+    for c in calls {
+        if c.from == f.id {
+            total_outbound += 1;
+            if c.kind == "dynamic" {
+                dynamic_count += 1;
+            }
+        }
+    }
+    (dynamic_count > 0).then(|| DynamicCallInfo {
+        dynamic_count,
+        total_outbound,
+        explanation: dynamic_edge_explanation(fidelity),
+    })
+}
+
+fn code_graph_function_detail(
+    f: &CodeGraphFunction,
+    calls: &[CodeGraphCall],
+    fidelity: &str,
+) -> CodeGraphFunctionDetail {
     CodeGraphFunctionDetail {
         symbol: f.symbol.clone(),
         signature: format_signature(&f.signature),
-        location: format!("{}:{}", f.file, f.line),
+        location: format_location(&f.file, f.line),
         fan_in: f.fan_in,
         fan_out: f.fan_out,
         doc: f.doc.clone(),
         badges: reach_badges(f),
+        kind: f.kind.clone(),
+        dynamic_calls: dynamic_call_info(f, calls, fidelity),
     }
 }
 
@@ -261,6 +326,13 @@ pub fn InspectorPanel() -> impl IntoView {
                                     .and_then(|fs| fs.iter().find(|f| f.id == sel.id))
                                     .cloned();
                                 if let Some(f) = f {
+                                    // Computed here, once per selection (this
+                                    // whole body closure only re-runs when its
+                                    // reactive dependencies — including
+                                    // `selected_code_graph_node` — change),
+                                    // never per-frame: `cg.calls` is 100k+
+                                    // entries on a real artifact.
+                                    let calls = cg.calls.as_deref().unwrap_or(&[]);
                                     let CodeGraphFunctionDetail {
                                         symbol,
                                         signature,
@@ -269,7 +341,9 @@ pub fn InspectorPanel() -> impl IntoView {
                                         fan_out,
                                         doc,
                                         badges,
-                                    } = code_graph_function_detail(&f);
+                                        kind,
+                                        dynamic_calls,
+                                    } = code_graph_function_detail(&f, calls, &cg.fidelity);
                                     let clear = move |_| state.set_selected_code_graph_node(None);
                                     return view! {
                                         <button class="inspector__back" on:click=clear>
@@ -283,19 +357,38 @@ pub fn InspectorPanel() -> impl IntoView {
                                             <p class="inspector__meta">
                                                 {format!("fan-in {fan_in} · fan-out {fan_out}")}
                                             </p>
+                                            // The per-edge dynamic-call surface named by the
+                                            // settled design ("a node's dynamic-call
+                                            // information"): visible panel text, not a
+                                            // tooltip, and silent when there are zero dynamic
+                                            // outbound calls (the common case).
+                                            {dynamic_calls.map(|dc| view! {
+                                                <p class="inspector__meta">
+                                                    {format!(
+                                                        "{} of {} outbound calls are dynamic — {}",
+                                                        dc.dynamic_count, dc.total_outbound, dc.explanation,
+                                                    )}
+                                                </p>
+                                            })}
                                             {doc.map(|d| view! { <p class="inspector__meta">{d}</p> })}
-                                            {(!badges.is_empty()).then(move || view! {
-                                                <div class="chip-row">
-                                                    {badges.into_iter().map(|b| view! {
-                                                        <span
-                                                            class="chip chip--state cg-chip"
-                                                            style=format!("color:{}", b.color_var())
-                                                            title=b.tooltip()
-                                                        >
-                                                            {b.label()}
-                                                        </span>
-                                                    }).collect_view()}
-                                                </div>
+                                            {(!badges.is_empty()).then(move || {
+                                                let kind = kind.clone();
+                                                view! {
+                                                    <div class="chip-row">
+                                                        {badges.into_iter().map(|b| {
+                                                            let tooltip = b.tooltip_for_kind(&kind);
+                                                            view! {
+                                                                <span
+                                                                    class="chip chip--state cg-chip"
+                                                                    style=format!("color:{}", b.color_var())
+                                                                    title=tooltip
+                                                                >
+                                                                    {b.label()}
+                                                                </span>
+                                                            }
+                                                        }).collect_view()}
+                                                    </div>
+                                                }
                                             })}
                                         </div>
                                     }
@@ -693,15 +786,25 @@ mod tests {
         serde_json::from_value(v).unwrap()
     }
 
+    /// A `CodeGraphCall` fixture — only the fields `dynamic_call_info` reads
+    /// vary per call; `site_file`/`site_line` are filler.
+    fn call(from: &str, to: &str, kind: &str) -> CodeGraphCall {
+        serde_json::from_value(serde_json::json!({
+            "from": from, "to": to, "site_file": "f.go", "site_line": 1, "kind": kind
+        }))
+        .unwrap()
+    }
+
     #[test]
     fn function_detail_assembles_the_display_facts() {
-        let d = code_graph_function_detail(&function(serde_json::json!({})));
+        let d = code_graph_function_detail(&function(serde_json::json!({})), &[], "rta");
         assert_eq!(d.symbol, "srv.handle");
         assert_eq!(d.signature, "(a int) error");
         assert_eq!(d.location, "h.go:42");
         assert_eq!((d.fan_in, d.fan_out), (3, 2));
         assert_eq!(d.doc.as_deref(), Some("Handle serves one request."));
         assert!(d.badges.is_empty(), "a plain prod-reachable function earns no badge");
+        assert!(d.dynamic_calls.is_none(), "no calls at all means no dynamic-call line");
     }
 
     #[test]
@@ -711,12 +814,87 @@ mod tests {
         // hover text is `Reach::tooltip()` verbatim — the inferred ones name
         // the blind spots so the badge never reads as a verdict.
         let dead = function(serde_json::json!({"reachable": false, "prod_reachable": false}));
-        let d = code_graph_function_detail(&dead);
+        let d = code_graph_function_detail(&dead, &[], "rta");
         assert_eq!(d.badges, reach_badges(&dead), "no filtering/relabeling on the way out");
         assert_eq!(d.badges, vec![Reach::Dead]);
         let t = Reach::Dead.tooltip();
         assert!(t.starts_with("CANDIDATE"), "tooltip is the candidate warning: {t}");
         assert!(t.contains("Reflection"), "tooltip names a blind spot: {t}");
+    }
+
+    #[test]
+    fn function_detail_carries_kind_so_init_nodes_get_weaker_evidence_tooltips() {
+        // WHY: a `kind: "init"` node (Rust const/static initialiser) is never
+        // called, so its Dead badge is structurally weaker evidence than a
+        // function's — the detail must carry `kind` through so the view can
+        // ask for the kind-aware tooltip instead of the generic one.
+        let dead_init = function(serde_json::json!({
+            "kind": "init", "reachable": false, "prod_reachable": false, "root": false
+        }));
+        let d = code_graph_function_detail(&dead_init, &[], "rta");
+        assert_eq!(d.kind, "init");
+        assert_eq!(d.badges, vec![Reach::Dead]);
+        let tooltip = Reach::Dead.tooltip_for_kind(&d.kind);
+        assert_ne!(tooltip, Reach::Dead.tooltip(), "init must not get the generic wording");
+        assert!(tooltip.to_lowercase().contains("initialiser"));
+
+        // An ordinary function keeps the generic tooltip.
+        let dead_func = function(serde_json::json!({"reachable": false, "prod_reachable": false}));
+        let d2 = code_graph_function_detail(&dead_func, &[], "rta");
+        assert_eq!(Reach::Dead.tooltip_for_kind(&d2.kind), Reach::Dead.tooltip());
+    }
+
+    #[test]
+    fn function_detail_location_marks_a_non_repo_relative_file_honestly() {
+        // WHY: magma's open Go build-cache-stub defect emits an ABSOLUTE
+        // path in `file` for some functions. The location must not render
+        // the raw home-directory path as if it were a normal repo path.
+        let f = function(serde_json::json!({
+            "file": "/Users/jmachen/Library/Caches/go-build/81/8162abc-d"
+        }));
+        let d = code_graph_function_detail(&f, &[], "rta");
+        assert!(d.location.contains(":42"));
+        assert!(d.location.to_lowercase().contains("not a repository file"));
+        assert!(!d.location.starts_with("/Users/jmachen"));
+    }
+
+    #[test]
+    fn function_detail_reports_dynamic_call_count_from_mixed_outbound_calls() {
+        // WHY: this is the per-edge surface the settled design names ("a
+        // node's dynamic-call information") — real panel text, computed from
+        // the selected function's OWN outbound calls only. Inbound calls
+        // (someone else calling `f1`) and other functions' outbound calls
+        // must not be counted.
+        let f = function(serde_json::json!({}));
+        let calls = vec![
+            call("f1", "g1", "static"),
+            call("f1", "g2", "dynamic"),
+            call("f1", "g3", "dynamic"),
+            call("other", "g4", "dynamic"), // not f1's outbound — excluded
+            call("g5", "f1", "dynamic"),    // inbound to f1 — excluded
+        ];
+        let d = code_graph_function_detail(&f, &calls, "rta");
+        let dc = d.dynamic_calls.expect("mixed outbound calls include dynamic ones");
+        assert_eq!(dc.dynamic_count, 2);
+        assert_eq!(dc.total_outbound, 3);
+        assert_eq!(dc.explanation, dynamic_edge_explanation("rta"), "single source of truth");
+
+        // Semantic fidelity carries the different explanation, same counts.
+        let d_semantic = code_graph_function_detail(&f, &calls, "semantic");
+        let dc_semantic = d_semantic.dynamic_calls.unwrap();
+        assert_eq!(dc_semantic.dynamic_count, 2);
+        assert_eq!(dc_semantic.explanation, dynamic_edge_explanation("semantic"));
+        assert_ne!(dc_semantic.explanation, dc.explanation);
+    }
+
+    #[test]
+    fn function_detail_omits_dynamic_calls_when_all_outbound_calls_are_static() {
+        // WHY: "silence is correct" for the common case — a "0 dynamic
+        // calls" row would be noise on the overwhelming majority of nodes.
+        let f = function(serde_json::json!({}));
+        let calls = vec![call("f1", "g1", "static"), call("f1", "g2", "static")];
+        let d = code_graph_function_detail(&f, &calls, "rta");
+        assert!(d.dynamic_calls.is_none());
     }
 
     #[test]
