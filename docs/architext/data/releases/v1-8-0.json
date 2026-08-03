@@ -1,0 +1,327 @@
+{
+  "id": "v1-8-0",
+  "version": "1.8.0",
+  "name": "Architext 1.8.0 Magma Code Graph",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Adds Code Graph mode: Architext now consumes a Magma-produced Go/Rust call graph (contract magma-code-graph/1) as an optional docs/architext/data/code-graph.json, and renders it with a WebGL2 GPU viewer that holds 59-60 fps at 17,814 nodes / 50,215 edges where the existing grid/SVG engine could not. The mode carries its own provenance surface: fidelity is never shown as a raw token but modulates what a dynamic call edge MEANS, and a 'How this map was made' affordance names the generator, the analysis method in plain words, and -- when the producer says so -- that generating the map executed the analysed repository's own code. Data schema 1.6.0; the code-graph file is optional, so repositories without one are unaffected.",
+  "targetDate": "2026-08-03",
+  "lastUpdated": "2026-08-03T14:55:30.000Z",
+  "updateSource": "Code complete on develop as of PR #282 (merged 2026-08-02, CI green at 3c7d241). Not yet shipped: no merge to main and no v1.8.0 tag. Viewer behaviour verified in a real Chrome over CDP against a 17,814-function Magma artifact, not only in unit tests.",
+  "scope": {
+    "required": [
+      {
+        "id": "code-graph-contract",
+        "title": "Consume Magma's code-graph artifact under a versioned contract",
+        "kind": "feature",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "magma-contract",
+        "source": "ad-hoc",
+        "summary": "code-graph.schema.json plus contract-version gating, refusal acceptance (computable:false with a reason), and internal referential integrity (calls->functions, module.function_ids->functions, module_calls->modules). Registered as an OPTIONAL file, so a repository without a code graph is unaffected. Five contract defects were caught before shipping by validating real artifacts rather than reading the spec: tree carrying the sha, executed_target_code against additionalProperties:false, a fidelity minLength that rejected a legitimate empty refusal, null signature params/results, and kind:'init' for Rust const/static initialisers.",
+        "evidence": [
+          "pr-277",
+          "magma-real-artifacts"
+        ],
+        "dependsOn": []
+      },
+      {
+        "id": "code-graph-gpu-viewer",
+        "title": "WebGL2 code-graph renderer with call-order animation",
+        "kind": "feature",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "code-graph-viewer",
+        "source": "ad-hoc",
+        "summary": "Instanced WebGL2 rendering via web-sys with GLSL as Rust consts -- no JavaScript, no new toolchain. A seeded Barnes-Hut force layout settles in a Web Worker (a second Rust/wasm entry point built by Trunk) and is cached on (sha, tree, tier). Call order is revealed as a BFS wavefront that DRAWS each edge source-to-target rather than lighting hops all at once. Reachability filters cull by default, so the 17k-node tier never opens as a hairball.",
+        "evidence": [
+          "pr-281",
+          "browser-measurements"
+        ],
+        "dependsOn": [
+          "code-graph-contract"
+        ]
+      },
+      {
+        "id": "code-graph-provenance",
+        "title": "Surface how the map was produced, without leaking raw tokens",
+        "kind": "feature",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "code-graph-viewer",
+        "source": "ad-hoc",
+        "summary": "fidelity gets no standalone display; it MODULATES the explanation of an edge kind already drawn, so the same picture carries its correct warranty (under rta a dynamic edge may not occur at runtime; under semantic it was resolved by type inference). A separate 'How this map was made' affordance carries generator, method in plain words, and the executed_target_code trust boundary -- driven off the field, never off a language rule. Nodes of kind 'init' get weaker-evidence wording because Magma models calls, not uses, so an initialiser can never satisfy reachability through a caller.",
+        "evidence": [
+          "pr-282",
+          "browser-measurements"
+        ],
+        "dependsOn": [
+          "code-graph-gpu-viewer"
+        ]
+      },
+      {
+        "id": "code-graph-file-honesty",
+        "title": "Render a non-repo-relative file path honestly",
+        "kind": "bug-fix",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "code-graph-viewer",
+        "source": "ad-hoc",
+        "summary": "Magma's Go backend emits absolute build-cache paths for some stub functions (201 of 17,814 in a real artifact; 9 visible in the default view because the filter composes with OR). The inspector now treats file as NOT guaranteed repo-relative: an absolute path is shortened and explicitly marked as not a repository file rather than rendered as source the reader could open. The node is never hidden -- it is real data. The upstream emission is Magma's to fix and is logged with them.",
+        "evidence": [
+          "pr-282"
+        ],
+        "dependsOn": []
+      },
+      {
+        "id": "code-graph-instrumentation",
+        "title": "Persisted lifecycle instrumentation for the code-graph surface",
+        "kind": "feature",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "code-graph-viewer",
+        "source": "ad-hoc",
+        "summary": "The surface shipped with eleven alive-guarded early returns that all returned SILENTLY, so a failure was indistinguishable from a dead app. Adds a bounded localStorage ring buffer (console + persisted, retrievable after the fact via architext_diagnostics()) recording mount/cleanup with instance identity, every alive bail, click hit/miss/ignored-with-reason, layout lifecycle with source and elapsed time, and visibility transitions. This is what turned 'clicking does nothing' into a RefCell double-borrow with a line number. Diagnostics use try_borrow throughout: a panic in wasm traps the whole instance, so instrumentation must never be able to take the app down.",
+        "evidence": [
+          "pr-282",
+          "diagnostic-trail"
+        ],
+        "dependsOn": []
+      },
+      {
+        "id": "code-graph-selection-trap",
+        "title": "Deselecting or switching tier no longer traps the wasm instance",
+        "kind": "bug-fix",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "critical",
+        "workstreamId": "code-graph-viewer",
+        "source": "ad-hoc",
+        "summary": "sync_and_upload wrote the selection signal while HOLDING vs.borrow(). A Leptos signal write runs dependent effects synchronously, and the clear-path effect then took vs.borrow_mut() -- 'RefCell already borrowed' -> RuntimeError: unreachable -> the entire wasm instance traps, freezing every signal write app-wide while the DOM stays on screen looking alive. It fired on routine paths: clicking empty space to deselect, and switching tier. Fixed by snapshotting inside the borrow and writing signals after it is released, with a native regression test pinning the pre-fix shape against a 1000-node ViewState.",
+        "evidence": [
+          "pr-282",
+          "browser-measurements"
+        ],
+        "dependsOn": [
+          "code-graph-instrumentation"
+        ]
+      },
+      {
+        "id": "code-graph-mount-storm",
+        "title": "Code Graph mode entry mounts once, not five times",
+        "kind": "bug-fix",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "code-graph-viewer",
+        "source": "ad-hoc",
+        "summary": "The recorded trail showed five mount/cleanup cycles per mode entry, each starting its own 400-tick layout over 17,814 nodes and leaking a RAF closure. Root cause: set_mode wrote mode, flow_idx and view_idx as three unbatched signal writes, and canvas_panel's combined watcher fired once per write, remounting the panel each time. Wrapped in leptos::batch; verified at one mount in the trail.",
+        "evidence": [
+          "diagnostic-trail"
+        ],
+        "dependsOn": [
+          "code-graph-instrumentation"
+        ]
+      },
+      {
+        "id": "code-graph-worker-await",
+        "title": "Await the layout warm instead of racing it, and show the settle gate",
+        "kind": "bug-fix",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "code-graph-viewer",
+        "source": "ad-hoc",
+        "summary": "The app-load worker warm existed to remove the settle cost, but the tier effect terminated the in-flight warm on a cache miss and settled locally instead -- 15,697 ms on the main thread, every time. The component now awaits a warm for the same LayoutKey (still painting the tick-0 seed immediately, so first paint is unchanged) and adopts its result. Separately, clicks during a settle were discarded silently because the hit-test tree still holds pre-settle positions; the guard is correct but was invisible, so the progress panel now states that selection is unavailable while the layout settles, gated behind a 200 ms threshold so fast settles never flash it.",
+        "evidence": [
+          "diagnostic-trail"
+        ],
+        "dependsOn": [
+          "code-graph-instrumentation"
+        ]
+      },
+      {
+        "id": "code-graph-node-scale",
+        "title": "Size nodes on a log scale so connectivity is readable",
+        "kind": "bug-fix",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "code-graph-viewer",
+        "source": "ad-hoc",
+        "summary": "Radius already keyed off degree, but sqrt is the wrong curve for a heavy-tailed call graph. Measured on the real corpus (median degree 3, max 888), it put 77% of nodes inside a 3-6px band and clamped the 46 busiest to an identical 22px -- saturating at BOTH ends. A log map widens the crowded low-degree band and drops ceiling saturation from 46 nodes to 2. Rank/percentile scores better on raw spread and was deliberately rejected: it makes radius mean 'busier than N% of THIS document', so the same function changes size between repositories.",
+        "evidence": [
+          "node-scale-measurement"
+        ],
+        "dependsOn": [
+          "code-graph-gpu-viewer"
+        ]
+      },
+      {
+        "id": "code-graph-call-order-decay",
+        "title": "Decay call-order animation brightness on the GPU",
+        "kind": "feature",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "workstreamId": "code-graph-viewer",
+        "source": "ad-hoc",
+        "summary": "The reveal accumulated as a uniformly-lit mass, so the wavefront was hard to follow. Each element now lights bright as its hop fires and decays toward a legible resting floor -- a comet trail -- with the falloff computed per-vertex in the shader from a per-instance hop age, never on the CPU. Already-revealed elements stay visible, since the accumulated graph is the point. Measured 59 fps during reveal plus decay, identical to the pre-decay baseline. prefers-reduced-motion bypasses decay entirely.",
+        "evidence": [
+          "browser-measurements"
+        ],
+        "dependsOn": [
+          "code-graph-gpu-viewer"
+        ]
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [
+      {
+        "id": "richer-ui-design-track",
+        "title": "Richer-UI design track across the nine SVG modes",
+        "kind": "architecture",
+        "status": "deferred",
+        "owner": "maintainer",
+        "priority": "medium",
+        "source": "roadmap",
+        "summary": "Carry the visual quality of the GPU code-graph surface across the existing SVG modes (Flows, Sequence, C4, Deployment, Data/Risks, Repo Tree, Blast Radius, Release Truth, Rules). Approved in principle by the maintainer during 1.8.0.",
+        "deferredReason": "SEQUENCING, not descoping. 1.8.0's viewer work was scoped to the code-graph surface because a 17k-node call graph is a genuinely different rendering problem from the routed diagrams -- WebGL was adopted for that surface alone, deliberately. Applying a design language across nine modes needs the design settled first and a fidelity audit across every mode (rule design-language-fidelity-audit); folding that into 1.8.0 would hold a shipped, verified code-graph feature behind unstarted design work. Maintainer's call on 2026-08-01 was to fold it into the next release.",
+        "evidence": [],
+        "dependsOn": []
+      },
+      {
+        "id": "magma-limitations-field",
+        "title": "Consume Magma's limitations[] and disclosure fields",
+        "kind": "feature",
+        "status": "deferred",
+        "owner": "maintainer",
+        "priority": "high",
+        "source": "ad-hoc",
+        "summary": "Magma is designing a limitations[] field (scope / attribution / effect / id) plus a sibling disclosure object of per-run counts, retrofitted across Go and Rust. Architext has reviewed the proposed shape and recommended an array, unconstrained scope/effect strings, and a sibling for the counts. It matters beyond disclosure: Magma's Rust backend over-roots derive-heavy crates (measured 87% of nodes rooted, zero dead functions of 156), which collapses our Dead and Test-only badge sets to empty and would read as a clean bill of health rather than an absence of evidence.",
+        "deferredReason": "UPSTREAM DEPENDENCY. The field is unfinalised -- Magma explicitly has not built against it and asked for review before freezing the spec. Adding a new property is a two-sided change because our root schema sets additionalProperties:false, so guessing the shape early risks shipping a contract we then have to break. Lands in the release after 1.8.0, once Magma finalises.",
+        "evidence": [],
+        "dependsOn": []
+      },
+      {
+        "id": "magma-absolute-path-emission",
+        "title": "Magma emits absolute build-cache paths for some Go stubs",
+        "kind": "bug-fix",
+        "status": "deferred",
+        "owner": "maintainer",
+        "priority": "low",
+        "source": "ad-hoc",
+        "summary": "201 of 17,814 functions in a real Go artifact carry an absolute Go build-cache path instead of a repo-relative one.",
+        "deferredReason": "NOT OURS TO FIX -- the defect is in Magma's Go backend emission and is logged with that project. Architext's consumer-side mitigation (code-graph-file-honesty) shipped in this release, so the reader is never misled in the meantime; closing the underlying issue requires an upstream change.",
+        "evidence": [],
+        "dependsOn": [
+          "code-graph-file-honesty"
+        ]
+      }
+    ],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "magma-contract",
+      "name": "Magma contract and validation",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "summary": "The data-side half: schema, contract-version gating, refusal acceptance, referential integrity, and doctor/sync auto-registration of the optional code-graph file.",
+      "progress": 100,
+      "itemIds": [
+        "code-graph-contract"
+      ],
+      "evidence": [
+        "pr-277",
+        "magma-real-artifacts"
+      ]
+    },
+    {
+      "id": "code-graph-viewer",
+      "name": "Code Graph viewer",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "The rendering half: GPU renderer, call-order animation, provenance surface, and the stability work that the persisted instrumentation exposed -- a wasm-trapping double borrow, a five-fold mount storm, and a worker warm that was being terminated by the code meant to use it.",
+      "progress": 100,
+      "itemIds": [
+        "code-graph-gpu-viewer",
+        "code-graph-provenance",
+        "code-graph-file-honesty",
+        "code-graph-instrumentation",
+        "code-graph-selection-trap",
+        "code-graph-mount-storm",
+        "code-graph-worker-await",
+        "code-graph-node-scale",
+        "code-graph-call-order-decay"
+      ],
+      "evidence": [
+        "pr-281",
+        "pr-282",
+        "browser-measurements",
+        "diagnostic-trail"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "pr-277",
+      "label": "PR #277 merged to develop: code-graph schema, validation, doctor auto-registration, data 1.6.0 / CLI 1.8.0",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "pr-281",
+      "label": "PR #281 merged to develop (28 commits): GPU code-graph renderer with call-order animation",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "pr-282",
+      "label": "PR #282 merged to develop 2026-08-02, CI green at 3c7d241: provenance, file honesty, instrumentation, and viewer stability",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "magma-real-artifacts",
+      "label": "Four real Magma artifacts validate against the shipped schema (Go and Rust backends); badge predicates reconcile exactly with Magma's own views on both",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "browser-measurements",
+      "label": "Real Chrome over CDP at 17,814 nodes / 50,215 edges: 59-60 fps static, animating, panning and zooming (median 16.9ms, p95 17.2ms); one mount per mode entry; select/deselect/tier-switch/reselect with zero wasm traps",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "diagnostic-trail",
+      "label": "Persisted diagnostic trail read back from the browser, showing mount count, layout source and elapsed time, and click_ignored reasons -- the evidence each stability fix was verified against",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "node-scale-measurement",
+      "label": "Radius distribution measured over the real 17,814-function corpus: sqrt put 77% of nodes in a 3-6px band with 46 at the ceiling; log drops ceiling saturation to 2",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "test-suites",
+      "label": "Workspace green: architext-viewer 239, architext-core 179, architext-routing 370, architext-cli 38; wasm32 build and clippy clean; architext validate passes",
+      "kind": "test",
+      "status": "complete"
+    }
+  ]
+}
