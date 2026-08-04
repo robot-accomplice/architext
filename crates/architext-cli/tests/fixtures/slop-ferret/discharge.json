@@ -1,0 +1,17 @@
+{
+  "sha": "PLACEHOLDER_SHA",
+  "read_paths": ["main.go", "lib.go"],
+  "coverage_waived": [],
+  "families_not_run": [],
+  "candidates_filed": [],
+  "candidates_cleared": [],
+  "candidates_refuted": [],
+  "tier": "1",
+  "checked_clean": [
+    { "class": "H · latent defect", "method": "read every h_required path" }
+  ],
+  "near_misses": [],
+  "findings_verified": 1,
+  "findings_suspected": 0,
+  "report_path": "/tmp/report.html"
+}

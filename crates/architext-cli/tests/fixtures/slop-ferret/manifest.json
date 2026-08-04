@@ -1,0 +1,20 @@
+{
+  "schemaVersion": "1.0.0",
+  "project": {
+    "id": "example",
+    "name": "Example",
+    "summary": "Fixture project."
+  },
+  "generatedAt": "2026-08-04T00:00:00Z",
+  "defaultViewId": "context",
+  "files": {
+    "nodes": "nodes.json",
+    "flows": "flows.json",
+    "views": "views.json",
+    "dataClassification": "data-classification.json",
+    "decisions": "decisions.json",
+    "risks": "risks.json",
+    "glossary": "glossary.json"
+  },
+  "notes": []
+}
