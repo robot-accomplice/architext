@@ -28,6 +28,7 @@ use crate::components::legend::Legend;
 use crate::components::release_truth_panel::ReleaseTruthPanel;
 use crate::components::repo_tree::RepoTree;
 use crate::components::rules_panel::RulesPanel;
+use crate::components::slop_ferret_panel::SlopFerretPanel;
 use crate::components::spinner::CanvasSpinner;
 use crate::components::steps_panel::StepsPanel;
 use crate::data::fetch_farm_plan_polling;
@@ -653,6 +654,7 @@ pub fn CanvasPanel() -> impl IntoView {
                             Mode::Rules => view! { <RulesPanel/> }.into_view(),
                             Mode::BlastRadius => view! { <BlastRadiusPanel/> }.into_view(),
                             Mode::ReleaseTruth => view! { <ReleaseTruthPanel/> }.into_view(),
+                            Mode::SlopFerret => view! { <SlopFerretPanel/> }.into_view(),
                             // While a (re)compute is in flight the spinner overlay
                             // conveys progress — don't flash the diagram-less "no
                             // projection" hint for C4/Deployment, which DO have a

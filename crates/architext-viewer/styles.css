@@ -1773,7 +1773,8 @@ button.c4-breadcrumb__crumb:hover {
 .repo-tree,
 .rules-panel,
 .blast-panel,
-.release-panel {
+.release-panel,
+.slop-ferret-panel {
   position: absolute;
   inset: 0;
   overflow: auto;
@@ -3016,3 +3017,143 @@ button.blast-chip { cursor: pointer; }
   color: var(--dim);
 }
 .code-graph-view__selected { color: var(--accent); }
+
+/* ── Slop Ferret ─────────────────────────────────────────────────────────────
+   Sweep coverage banner + sorted findings list. */
+.slop-ferret-panel__content {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.slop-ferret-panel__header {
+  margin-bottom: var(--pad);
+}
+
+.slop-ferret-panel__header h2 {
+  margin: var(--pad-tight) 0 0;
+  font-size: var(--headline-size);
+  color: var(--ink);
+}
+
+.slop-ferret-panel__banner {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--pad);
+  margin: var(--pad) 0;
+  padding: var(--pad);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  background: var(--panel);
+}
+
+.slop-ferret-panel__metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--grid);
+}
+
+.slop-ferret-panel__value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.slop-ferret-panel__label {
+  font-size: var(--overline-size);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--dim);
+}
+
+.slop-ferret-panel__badge {
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.slop-ferret-panel__badge--complete { color: var(--accent); }
+.slop-ferret-panel__badge--incomplete { color: var(--sev-high); }
+
+.slop-ferret-panel__findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+}
+
+.slop-ferret-panel__finding {
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  padding: var(--pad);
+  background: var(--panel);
+}
+
+.slop-ferret-panel__finding-header {
+  display: flex;
+  gap: var(--pad-tight);
+  margin-bottom: var(--pad-tight);
+}
+
+.slop-ferret-panel__severity,
+.slop-ferret-panel__status,
+.slop-ferret-panel__class {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  padding: 2px 6px;
+  border-radius: var(--card-radius);
+}
+
+.slop-ferret-panel__severity--blocking { background: var(--sev-critical); color: var(--ink); }
+.slop-ferret-panel__severity--fix-or-file { background: var(--sev-medium); color: var(--ink); }
+.slop-ferret-panel__severity--note { background: var(--sev-low); color: var(--ink); }
+
+.slop-ferret-panel__status--verified { border: var(--hairline) solid var(--accent); color: var(--accent); }
+.slop-ferret-panel__status--suspected { border: var(--hairline) dashed var(--sev-high); color: var(--sev-high); }
+
+.slop-ferret-panel__class {
+  background: var(--panel-2);
+  color: var(--muted);
+}
+
+.slop-ferret-panel__finding-title {
+  margin: 0 0 var(--grid);
+  font-size: 1.1rem;
+  color: var(--ink);
+}
+
+.slop-ferret-panel__meta {
+  font-size: var(--body-size);
+  color: var(--dim);
+  margin-bottom: var(--pad-tight);
+}
+
+.slop-ferret-panel__claim {
+  font-style: italic;
+  margin: 0 0 var(--pad);
+  color: var(--muted);
+}
+
+.slop-ferret-panel__section {
+  margin-top: var(--pad-tight);
+}
+
+.slop-ferret-panel__section p {
+  margin: var(--grid) 0 0;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.slop-ferret-panel__empty {
+  padding: var(--pad);
+  text-align: center;
+  color: var(--dim);
+}
+
+.slop-ferret-panel__empty p {
+  max-width: 600px;
+  margin: var(--pad) auto 0;
+  line-height: 1.5;
+}
