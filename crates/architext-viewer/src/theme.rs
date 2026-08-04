@@ -7,7 +7,7 @@
 //! components) follows the workspace's "no magic literals" convention and gives
 //! later slices one place to attach per-mode data wiring.
 
-/// The ten viewer modes, in nav order (DESIGN.md "one product, not nine").
+/// The eleven viewer modes, in nav order (DESIGN.md "one product, not nine").
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mode {
     Flows,
@@ -20,11 +20,12 @@ pub enum Mode {
     BlastRadius,
     ReleaseTruth,
     Rules,
+    SlopFerret,
 }
 
 impl Mode {
     /// Nav order, rendered as the left-nav mode list.
-    pub const ALL: [Mode; 10] = [
+    pub const ALL: [Mode; 11] = [
         Mode::Flows,
         Mode::Sequence,
         Mode::C4,
@@ -35,6 +36,7 @@ impl Mode {
         Mode::BlastRadius,
         Mode::ReleaseTruth,
         Mode::Rules,
+        Mode::SlopFerret,
     ];
 
     /// Human label shown in the nav.
@@ -50,6 +52,7 @@ impl Mode {
             Mode::BlastRadius => "Blast Radius",
             Mode::ReleaseTruth => "Release Truth",
             Mode::Rules => "Rules",
+            Mode::SlopFerret => "Slop Ferret",
         }
     }
 
@@ -67,6 +70,7 @@ impl Mode {
             Mode::BlastRadius => "blast-radius",
             Mode::ReleaseTruth => "release-truth",
             Mode::Rules => "rules",
+            Mode::SlopFerret => "slop-ferret",
         }
     }
 
@@ -88,6 +92,7 @@ impl Mode {
             Mode::CodeGraph => Some("Explore the Magma-derived call graph: modules, then functions."),
             Mode::BlastRadius => Some("Trace what a change to a node reaches across the model."),
             Mode::Rules => Some("Review the project's rules, ranked by criticality."),
+            Mode::SlopFerret => Some("Review slop-ferret sweep coverage and findings."),
             _ => None,
         }
     }
@@ -113,7 +118,7 @@ impl Mode {
     /// Rules and Release Truth have no clickable architecture node. Drives the
     /// inspector's "select a node" hint for node-bearing modes without a flow.
     pub fn has_clickable_nodes(self) -> bool {
-        !matches!(self, Mode::Rules | Mode::ReleaseTruth | Mode::CodeGraph)
+        !matches!(self, Mode::Rules | Mode::ReleaseTruth | Mode::CodeGraph | Mode::SlopFerret)
     }
 
     pub fn projects_flows(self) -> bool {

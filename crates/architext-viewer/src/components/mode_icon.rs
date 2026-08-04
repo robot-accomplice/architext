@@ -35,6 +35,8 @@ pub fn mode_icon_path(mode: Mode) -> &'static str {
         Mode::ReleaseTruth => "M4 4h9l7 8-7 8H4z M8 8a1.2 1.2 0 1 0 0 .01",
         // New: checklist — list rows with leading checks (project rules).
         Mode::Rules => "M4 6l1.5 1.5L8 4 M4 13l1.5 1.5L8 11 M11 6h9 M11 13h9 M11 19h6",
+        // New: stylized ferret / snout with a target line (sweep inspection).
+        Mode::SlopFerret => "M4 12h3 M4 16h3 M7 12c3 0 2 4 5 4 M7 16c3 0 2-4 5-4 M12 14h7 M16 11l3 3-3 3",
     }
 }
 
