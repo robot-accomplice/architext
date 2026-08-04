@@ -5,6 +5,7 @@ pub mod explain;
 pub mod prompt;
 pub mod serve;
 pub mod skill;
+pub mod slop_ferret;
 pub mod status;
 pub mod sync;
 pub mod update;

@@ -43,12 +43,15 @@ pub struct ParsedArgs {
     pub node_modules: bool,
     pub branch: String,
     pub branch_name: String,
+    pub plan: String,
+    pub discharge: String,
+    pub findings: String,
 }
 
 const KNOWN_COMMANDS: &[&str] = &[
     "install", "upgrade", "sync", "init", "doctor", "status", "serve",
     "validate", "build", "prompt", "skill", "clean", "explain", "help", "version",
-    "update",
+    "update", "slop-ferret",
 ];
 
 fn assert_serve_command(command: &str, arg: &str) -> Result<(), String> {
@@ -178,6 +181,9 @@ pub fn parse_args(argv: &[String]) -> Result<ParsedArgs, String> {
         node_modules: false,
         branch: String::new(),
         branch_name: String::new(),
+        plan: String::new(),
+        discharge: String::new(),
+        findings: String::new(),
     };
 
     let mut index = 0usize;
@@ -281,6 +287,18 @@ pub fn parse_args(argv: &[String]) -> Result<ParsedArgs, String> {
             "--branch-name" => {
                 index += 1;
                 opts.branch_name = rest.get(index).cloned().unwrap_or_default();
+            }
+            "--plan" => {
+                index += 1;
+                opts.plan = rest.get(index).cloned().unwrap_or_default();
+            }
+            "--discharge" => {
+                index += 1;
+                opts.discharge = rest.get(index).cloned().unwrap_or_default();
+            }
+            "--findings" => {
+                index += 1;
+                opts.findings = rest.get(index).cloned().unwrap_or_default();
             }
             "--help" | "-h" => opts.command = "help".to_string(),
             "--version" | "-v" => opts.command = "version".to_string(),
@@ -401,6 +419,16 @@ mod tests {
     fn host_loopback_validation() {
         let err = parse_args(&args("serve --host 0.0.0.0")).unwrap_err();
         assert!(err.contains("loopback"), "got: {err}");
+    }
+
+    #[test]
+    fn slop_ferret_flags_parsed() {
+        let opts = parse_args(&args("slop-ferret . --plan plan.json --discharge discharge.json --findings findings.json")).unwrap();
+        assert_eq!(opts.command, "slop-ferret");
+        assert_eq!(opts.target, ".");
+        assert_eq!(opts.plan, "plan.json");
+        assert_eq!(opts.discharge, "discharge.json");
+        assert_eq!(opts.findings, "findings.json");
     }
 
     #[test]
