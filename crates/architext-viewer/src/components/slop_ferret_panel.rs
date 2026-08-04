@@ -144,7 +144,6 @@ fn finding_card(f: SlopFerretFinding) -> View {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::data::models::SlopFerretFinding;
 
     fn sample_finding(title: &str, severity: &str, status: &str) -> SlopFerretFinding {
