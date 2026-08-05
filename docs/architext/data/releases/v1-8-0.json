@@ -188,9 +188,10 @@
         "priority": "high",
         "workstreamId": "slop-ferret",
         "source": "ad-hoc",
-        "summary": "Adds viewer/schema/slop-ferret.schema.json and registers docs/architext/data/slop-ferret.json as an OPTIONAL manifest logical key 'slopFerret'. The snapshot combines the slop-ferret Record (coverage fractions, provenance, accounting) with the authored findings list so the viewer has one fetch and one schema. Field names mirror the slop-ferret wire format (snake_case) because the producer is a Go tool. Validation enforces required fields, refuses unknown fields, and renders a non-fatal refusal panel in the viewer when the file is malformed, identical to the Code Graph refusal pattern.",
+        "summary": "Adds viewer/schema/slop-ferret.schema.json and registers docs/architext/data/slop-ferret.json as an OPTIONAL manifest logical key 'slopFerret'. The snapshot combines the slop-ferret Record (coverage fractions, provenance, accounting) with the authored findings list so the viewer has one fetch and one schema. Field names mirror the slop-ferret wire format (snake_case) because the producer is a Go tool. Validation enforces required fields, refuses unknown fields, and renders a non-fatal refusal panel in the viewer when the file is malformed, identical to the Code Graph refusal pattern. Post-review hardening (PR #287): the schema's `severity` and `status` were closed enums against a separately-versioned external tool, which is the kind:\"init\" shape — an unknown value rejects the WHOLE sweep instead of degrading. The tell was already present, since findings carry a `refutation` field while `status` admitted only VERIFIED|SUSPECTED. Both are now unconstrained strings, with the panel degrading explicitly (unknown severity sorts last and gets an `--unknown` CSS modifier rather than an unstyled class built from producer text); verified live against an injected severity \"catastrophic\" / status \"REFUTED\", which the previous schema rejected outright. A validation module was also added for the two things the JSON-schema layer cannot express: schema-VERSION gating (the schema accepts any integer >= 1, so a future schema 2 reusing these field names would otherwise be silently misread as schema 1) and count reconciliation (findings_verified/findings_suspected come from the discharge file while findings comes from a separate file, with no producer-side check between them). That module was declared in mod.rs by #285 but never committed, leaving develop unable to compile from a clean checkout until #287.",
         "evidence": [
           "pr-284",
+          "slop-ferret-degradation-check",
           "slop-ferret-fixtures"
         ],
         "dependsOn": []
@@ -418,6 +419,12 @@
       "id": "test-suites",
       "label": "Workspace green: architext-viewer 239, architext-core 179, architext-routing 370, architext-cli 38; wasm32 build and clippy clean; architext validate passes",
       "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "slop-ferret-degradation-check",
+      "label": "Unknown-value degradation verified live: a sweep carrying severity \"catastrophic\" and status \"REFUTED\" validates, renders, sorts last, and receives an --unknown CSS modifier; the pre-#287 schema rejected the same document with \"'REFUTED' is not one of ['VERIFIED','SUSPECTED']\"",
+      "kind": "manual-check",
       "status": "complete"
     }
   ]
