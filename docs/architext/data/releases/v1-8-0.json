@@ -1,13 +1,13 @@
 {
   "id": "v1-8-0",
   "version": "1.8.0",
-  "name": "Architext 1.8.0 Magma Code Graph",
+  "name": "Architext 1.8.0 Magma Code Graph + Slop Ferret viewer",
   "status": "implementing",
   "posture": "release-candidate",
-  "summary": "Adds Code Graph mode: Architext now consumes a Magma-produced Go/Rust call graph (contract magma-code-graph/1) as an optional docs/architext/data/code-graph.json, and renders it with a WebGL2 GPU viewer that holds 59-60 fps at 17,814 nodes / 50,215 edges where the existing grid/SVG engine could not. The mode carries its own provenance surface: fidelity is never shown as a raw token but modulates what a dynamic call edge MEANS, and a 'How this map was made' affordance names the generator, the analysis method in plain words, and -- when the producer says so -- that generating the map executed the analysed repository's own code. Data schema 1.6.0; the code-graph file is optional, so repositories without one are unaffected.",
+  "summary": "Adds two optional enrichment viewers. Code Graph mode consumes a Magma-produced Go/Rust call graph (contract magma-code-graph/1) as docs/architext/data/code-graph.json and renders it with a WebGL2 GPU viewer that holds 59-60 fps at 17,814 nodes / 50,215 edges where the existing grid/SVG engine could not. Slop Ferret mode consumes a slop-ferret sweep snapshot as docs/architext/data/slop-ferret.json and renders coverage, findings, and work-queue state as a first-class read-only viewer mode, with a CLI command that bundles slop-ferret plan/discharge/findings artifacts into the snapshot. Both files are optional, so repositories without them are unaffected. Data schema 1.6.0.",
   "targetDate": "2026-08-03",
-  "lastUpdated": "2026-08-03T14:55:30.000Z",
-  "updateSource": "Code complete on develop as of PR #282 (merged 2026-08-02, CI green at 3c7d241). Not yet shipped: no merge to main and no v1.8.0 tag. Viewer behaviour verified in a real Chrome over CDP against a 17,814-function Magma artifact, not only in unit tests.",
+  "lastUpdated": "2026-08-05T10:15:00.000Z",
+  "updateSource": "Code complete on develop as of PR #282 (merged 2026-08-02, CI green at 3c7d241) and PR #284 (merged 2026-08-05, Slop Ferret viewer integration). Not yet shipped: no merge to main and no v1.8.0 tag. Viewer behaviour verified in a real Chrome over CDP against a 17,814-function Magma artifact and with slop-ferret fixtures, not only in unit tests.",
   "scope": {
     "required": [
       {
@@ -178,6 +178,58 @@
         "dependsOn": [
           "code-graph-gpu-viewer"
         ]
+      },
+      {
+        "id": "slop-ferret-contract",
+        "title": "Consume Slop Ferret sweep output under a versioned contract",
+        "kind": "feature",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "slop-ferret",
+        "source": "ad-hoc",
+        "summary": "Adds viewer/schema/slop-ferret.schema.json and registers docs/architext/data/slop-ferret.json as an OPTIONAL manifest logical key 'slopFerret'. The snapshot combines the slop-ferret Record (coverage fractions, provenance, accounting) with the authored findings list so the viewer has one fetch and one schema. Field names mirror the slop-ferret wire format (snake_case) because the producer is a Go tool. Validation enforces required fields, refuses unknown fields, and renders a non-fatal refusal panel in the viewer when the file is malformed, identical to the Code Graph refusal pattern.",
+        "evidence": [
+          "pr-284",
+          "slop-ferret-fixtures"
+        ],
+        "dependsOn": []
+      },
+      {
+        "id": "slop-ferret-cli",
+        "title": "CLI command to bundle Slop Ferret artifacts into an Architext snapshot",
+        "kind": "feature",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "slop-ferret",
+        "source": "ad-hoc",
+        "summary": "Adds 'architext slop-ferret [path] --plan <plan> --discharge <discharge> --findings <findings>'. The command runs 'ferret enumerate <plan> <discharge> <repo>' as a subprocess, merges the Record fields with the findings array, writes docs/architext/data/slop-ferret.json, and adds or updates the slopFerret entry in manifest.json. Exit codes follow ferret: 3 (items open) still writes the snapshot so the viewer can show incomplete accounting; 4 (refused) does not write. This keeps mutation-token scope unchanged and avoids running an external binary from the axum server.",
+        "evidence": [
+          "pr-284",
+          "slop-ferret-fixtures"
+        ],
+        "dependsOn": [
+          "slop-ferret-contract"
+        ]
+      },
+      {
+        "id": "slop-ferret-viewer",
+        "title": "Slop Ferret viewer mode and panel",
+        "kind": "feature",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "workstreamId": "slop-ferret",
+        "source": "ad-hoc",
+        "summary": "Adds Mode::SlopFerret to the viewer with a dedicated ferret-hunt icon and a read-only panel showing the coverage banner (attested repo/plan, denominator, waived, worklist/unmatched sizes), the findings table sorted severity-first, and the work-queue summary (accounting, families not run, checked-clean, near-misses). Judgement -- which findings are verified -- stays in the skill and the agent that ran the sweep; Architext only visualizes the artefact. Malformed data renders an error surface instead of a blank panel.",
+        "evidence": [
+          "pr-284",
+          "slop-ferret-fixtures"
+        ],
+        "dependsOn": [
+          "slop-ferret-contract"
+        ]
       }
     ],
     "planned": [],
@@ -222,6 +274,21 @@
         "evidence": [],
         "dependsOn": [
           "code-graph-file-honesty"
+        ]
+      },
+      {
+        "id": "slop-ferret-filtering-detail",
+        "title": "Slop Ferret viewer filtering, master/detail, and cross-links",
+        "kind": "feature",
+        "status": "deferred",
+        "owner": "maintainer",
+        "priority": "medium",
+        "source": "ad-hoc",
+        "summary": "Add severity/status/family filters, master/detail layout for individual findings, near-misses and checked-clean sections, and cross-links from finding file paths to Repo Tree file preview.",
+        "deferredReason": "SEQUENCING, not descoping. The initial slice (Approach A) establishes the data contract and mode first; the file format does not change when the UI gets richer. Filtering and detail work is approved for a follow-up slice after 1.8.0.",
+        "evidence": [],
+        "dependsOn": [
+          "slop-ferret-viewer"
         ]
       }
     ],
@@ -269,6 +336,24 @@
         "browser-measurements",
         "diagnostic-trail"
       ]
+    },
+    {
+      "id": "slop-ferret",
+      "name": "Slop Ferret viewer integration",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "summary": "End-to-end integration: versioned data contract and validation, CLI snapshot command that invokes ferret enumerate, and a read-only viewer mode rendering coverage, findings, and work-queue state. The companion slop-ferret documentation update was merged separately in robot-accomplice/slop-ferret#30.",
+      "progress": 100,
+      "itemIds": [
+        "slop-ferret-contract",
+        "slop-ferret-cli",
+        "slop-ferret-viewer"
+      ],
+      "evidence": [
+        "pr-284",
+        "slop-ferret-fixtures"
+      ]
     }
   ],
   "blockers": [],
@@ -294,9 +379,21 @@
       "status": "complete"
     },
     {
+      "id": "pr-284",
+      "label": "PR #284 merged to develop 2026-08-05: Slop Ferret data contract, CLI snapshot command, and viewer mode/panel",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
       "id": "magma-real-artifacts",
       "label": "Four real Magma artifacts validate against the shipped schema (Go and Rust backends); badge predicates reconcile exactly with Magma's own views on both",
       "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "slop-ferret-fixtures",
+      "label": "Committed slop-ferret fixtures exercise schema validation, CLI snapshot golden-file comparison, and viewer panel rendering; architext validate passes on the fixture project",
+      "kind": "test",
       "status": "complete"
     },
     {
