@@ -117,6 +117,14 @@
   --sens-medium: #ffd21f;
   --sens-low:    #849495;
 
+  /* ── Candidate reachability scale (code-graph badges) — its own ordinal ramp,
+     NOT a --c4-* role hue and NOT --accent (rule 1), exactly as --sev-* /
+     --sens-* were split out. */
+  --reach-root: #4c9f70;
+  --reach-generated: #7a8699;
+  --reach-test-only: #c9963f;
+  --reach-dead: #c2564b;
+
   /* ── State / accent treatment (DESIGN.md rule 1) ──────────────────────────
      STATE (active / selected / primary action) is a dedicated signal — a
      border / ring / inner-glow on --accent — NOT a --c4-* role hue. --accent is
@@ -216,6 +224,11 @@
   --sens-high:    #d3253f;
   --sens-medium:  #a87800;
   --sens-low:     #6b7a80;
+
+  --reach-root: #1f7a4c;
+  --reach-generated: #5a6870;
+  --reach-test-only: #8a6423;
+  --reach-dead: #a83f36;
 
   --accent-base: #0a9e72;
   --accent: var(--accent-base);
@@ -1760,7 +1773,8 @@ button.c4-breadcrumb__crumb:hover {
 .repo-tree,
 .rules-panel,
 .blast-panel,
-.release-panel {
+.release-panel,
+.slop-ferret-panel {
   position: absolute;
   inset: 0;
   overflow: auto;
@@ -2840,4 +2854,343 @@ button.blast-chip { cursor: pointer; }
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
+}
+
+/* Reuses the existing .chip / .chip--state pill; only the tint channel differs. */
+.cg-chip { cursor: help; }
+
+/* ─── Code Graph WebGL view (Plan C) ──────────────────────────────────────
+   The WebGL2 code-graph surface (`code_graph_view.rs`). It styles its own
+   `.code-graph-view__toolbar` controls with the shared design tokens; the
+   canvas keeps its own dark backdrop, matching the renderer's clear color. */
+.code-graph-view { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+.code-graph-view__surface { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.code-graph-view__empty { padding: var(--pad); color: var(--muted); }
+.code-graph-view__empty h2 { margin: 0 0 8px; font-size: 1rem; color: var(--ink); }
+.code-graph-view__empty p { margin: 0 0 12px; line-height: 1.5; }
+.code-graph-view__toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 6px 10px;
+  font-size: 0.82rem;
+  color: var(--dim);
+}
+.code-graph-view__toolbar button {
+  padding: 2px 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: 4px;
+  background: none;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.code-graph-view__toolbar button.is-active { color: var(--accent); border-color: var(--accent); }
+.code-graph-view__label { font-size: 0.78rem; color: var(--dim); }
+.code-graph-view__status { font-size: 0.78rem; color: var(--muted); }
+.code-graph-view__fps { margin-left: auto; font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); }
+/* Culling notice — renders whenever the filters exclude any node or edge;
+   accent so a cull is never silent. */
+.code-graph-view__notice { font-size: 0.78rem; color: var(--accent); }
+.code-graph-view__check { display: inline-flex; align-items: center; gap: 4px; font-size: 0.78rem; color: var(--dim); cursor: pointer; }
+/* "How this map was made" (Item 1) — a positioned ancestor for the popover,
+   a toolbar button matching the tier/anim buttons, and a small `--popover`
+   card anchored below it. Never a wall of text: three short facts at most
+   (generator, plain-language method, and the executed-code disclosure only
+   when the document says so). */
+.code-graph-view__provenance { position: relative; display: inline-flex; }
+.code-graph-view__provenance-btn {
+  padding: 2px 8px;
+  border: var(--hairline) solid var(--line);
+  border-radius: 4px;
+  background: none;
+  color: var(--dim);
+  font: inherit;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+.code-graph-view__provenance-btn.is-active { color: var(--accent); border-color: var(--accent); }
+.code-graph-view__provenance-popover {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 260px;
+  max-width: 360px;
+  padding: var(--pad);
+  background: var(--popover);
+  border: var(--hairline) solid var(--line);
+  border-radius: 6px;
+}
+.code-graph-view__provenance-line { margin: 0; font-size: 0.8rem; color: var(--ink); line-height: 1.4; }
+/* The execution disclosure is a TRUST BOUNDARY, not a fidelity nuance
+   (DESIGN mandate) — its own tone, distinct from the plain-fact lines above. */
+.code-graph-view__provenance-warn {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--accent);
+  line-height: 1.4;
+}
+.code-graph-view__toolbar--anim input[type="range"] { flex: 1; min-width: 120px; accent-color: var(--accent); }
+/* Canvas wrap — a positioned ancestor so the staged progress panel below can
+   float centred OVER the canvas instead of docked in the toolbar chrome. */
+.code-graph-view__canvas-wrap { position: relative; flex: 1; min-height: 0; display: flex; }
+.code-graph-view__canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: grab; background: #08090b; }
+.code-graph-view__canvas:active { cursor: grabbing; }
+/* Staged, centred progress panel — the PRIMARY signal that the app is
+   working, not broken, while the graph model builds and the force layout
+   settles (the 11px status line alone was not enough: see the
+   code-graph-view module docs). Free-floating over the canvas, one row per
+   observable render stage, each with its own title + bar; a completed
+   stage's bar reads full, the active stage's bar tracks real progress.
+   Tonal layering + a hairline border (DESIGN.md's elevation language, not a
+   heavy shadow). `pointer-events: none` so it never blocks canvas
+   pan/zoom/click — same non-blocking behaviour as the row it replaces. */
+.code-graph-view__progress {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 320px;
+  max-width: 420px;
+  padding: var(--pad) calc(var(--pad) * 1.5);
+  background: var(--popover);
+  border: var(--hairline) solid var(--line);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  pointer-events: none;
+}
+.code-graph-view__progress-stage { display: flex; flex-direction: column; gap: 6px; }
+.code-graph-view__progress-stage-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+.code-graph-view__progress-stage-label { color: var(--ink); font-size: 0.85rem; white-space: nowrap; }
+/* Stage-1's "done" affordance (replaces its always-100%-by-construction bar —
+   see the component doc for why that bar conveyed nothing). */
+.code-graph-view__progress-stage-check { color: var(--accent); margin-right: 4px; font-weight: 700; }
+.code-graph-view__progress-stage-detail {
+  color: var(--muted);
+  font-size: 0.74rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.code-graph-view__progress-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--line);
+  overflow: hidden;
+}
+.code-graph-view__progress-fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--accent);
+  border-radius: 3px;
+}
+/* Defect 3 fix: the settle gate (clicks silently ignored while
+   `layout_settling`) must be VISIBLE, not just present — this note says so
+   explicitly instead of relying on the easy-to-miss toolbar status line.
+   Wraps (unlike the single-line stage-detail above) since it's a full
+   sentence, not a truncatable fact. */
+.code-graph-view__progress-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-style: italic;
+}
+.code-graph-view__footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 28px;
+  padding: 4px 10px;
+  border-top: var(--hairline) solid var(--line);
+  font-size: 0.78rem;
+  color: var(--dim);
+}
+.code-graph-view__selected { color: var(--accent); }
+
+/* ── Slop Ferret ─────────────────────────────────────────────────────────────
+   Sweep coverage banner + sorted findings list. */
+.slop-ferret-panel__content {
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.slop-ferret-panel__header {
+  margin-bottom: var(--pad);
+}
+
+.slop-ferret-panel__header h2 {
+  margin: var(--pad-tight) 0 0;
+  font-size: var(--headline-size);
+  color: var(--ink);
+}
+
+.slop-ferret-panel__banner {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--pad);
+  margin: var(--pad) 0;
+  padding: var(--pad);
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  background: var(--panel);
+}
+
+.slop-ferret-panel__metric {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--grid);
+}
+
+.slop-ferret-panel__value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.slop-ferret-panel__label {
+  font-size: var(--overline-size);
+  font-family: var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  color: var(--dim);
+}
+
+.slop-ferret-panel__badge {
+  font-size: 1.2rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.slop-ferret-panel__badge--complete { color: var(--accent); }
+.slop-ferret-panel__badge--incomplete { color: var(--sev-high); }
+
+.slop-ferret-panel__findings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--pad-tight);
+}
+
+.slop-ferret-panel__finding {
+  border: var(--hairline) solid var(--line);
+  border-radius: var(--card-radius);
+  padding: var(--pad);
+  background: var(--panel);
+}
+
+.slop-ferret-panel__finding-header {
+  display: flex;
+  gap: var(--pad-tight);
+  margin-bottom: var(--pad-tight);
+}
+
+.slop-ferret-panel__severity,
+.slop-ferret-panel__status,
+.slop-ferret-panel__class {
+  font-family: var(--font-mono);
+  font-size: var(--overline-size);
+  text-transform: uppercase;
+  letter-spacing: var(--overline-tracking);
+  padding: 2px 6px;
+  border-radius: var(--card-radius);
+}
+
+.slop-ferret-panel__severity--blocking { background: var(--sev-critical); color: var(--ink); }
+.slop-ferret-panel__severity--fix-or-file { background: var(--sev-medium); color: var(--ink); }
+.slop-ferret-panel__severity--note { background: var(--sev-low); color: var(--ink); }
+
+.slop-ferret-panel__status--verified { border: var(--hairline) solid var(--accent); color: var(--accent); }
+.slop-ferret-panel__status--suspected { border: var(--hairline) dashed var(--sev-high); color: var(--sev-high); }
+
+.slop-ferret-panel__class {
+  background: var(--panel-2);
+  color: var(--muted);
+}
+
+.slop-ferret-panel__finding-title {
+  margin: 0 0 var(--grid);
+  font-size: 1.1rem;
+  color: var(--ink);
+}
+
+.slop-ferret-panel__meta {
+  font-size: var(--body-size);
+  color: var(--dim);
+  margin-bottom: var(--pad-tight);
+}
+
+.slop-ferret-panel__claim {
+  font-style: italic;
+  margin: 0 0 var(--pad);
+  color: var(--muted);
+}
+
+.slop-ferret-panel__section {
+  margin-top: var(--pad-tight);
+}
+
+.slop-ferret-panel__section p {
+  margin: var(--grid) 0 0;
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.slop-ferret-panel__empty {
+  padding: var(--pad);
+  text-align: center;
+  color: var(--dim);
+}
+
+.slop-ferret-panel__empty p {
+  max-width: 600px;
+  margin: var(--pad) auto 0;
+  line-height: 1.5;
+}
+
+/* Slop Ferret: sweep provenance, coverage disclosure, and unknown-value
+   fallbacks. `--unknown` exists because `severity`/`status` are intentionally
+   not schema-constrained (an unrecognised value must degrade, never reject the
+   sweep), so a chip must still render legibly for a value this build has never
+   seen. */
+.slop-ferret-panel__provenance {
+  margin: 0.25rem 0 0;
+  color: var(--dim);
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+}
+.slop-ferret-panel__coverage {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--line);
+  border-radius: var(--radius, 6px);
+  background: var(--panel-2);
+}
+.slop-ferret-panel__coverage-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+.slop-ferret-panel__coverage-value {
+  color: var(--ink);
+  font-size: 0.85rem;
+  overflow-wrap: anywhere;
+}
+.slop-ferret-panel__severity--unknown,
+.slop-ferret-panel__status--unknown {
+  border: 1px solid var(--line);
+  color: var(--dim);
 }

@@ -397,6 +397,210 @@ pub struct RoadmapItem {
     pub target_release_id: Option<String>,
 }
 
+// ─── code-graph.json ───────────────────────────────────────────────────────
+
+/// `code-graph.json` — the Magma-produced call graph (contract
+/// `magma-code-graph/1`). Optional third-party enrichment: Architext validates
+/// and renders it but never writes it.
+///
+/// TWO deliberate departures from every other model in this file:
+///   1. NO `rename_all = "camelCase"` — the producer is a Go tool and the wire
+///      format is snake_case, which already matches these Rust field names.
+///   2. The four collections are `Option<Vec<_>>`, not `Vec<_>`: a REFUSAL
+///      document (`computable: false`) sets them to JSON `null`, and
+///      `#[serde(default)]` only covers a MISSING key, never an explicit null.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodeGraph {
+    pub contract_version: String,
+    pub generator: String,
+    pub language: String,
+    pub module: String,
+    pub sha: String,
+    pub tree: String,
+    pub fidelity: String,
+    pub computable: bool,
+    /// Whether producing this document EXECUTED the analysed repository's
+    /// code (e.g. Rust's `build.rs` / proc macros) rather than only reading
+    /// it. Optional: magma has not shipped it yet, and older artifacts won't
+    /// carry it. A trust-boundary fact, not a fidelity nuance — drive any
+    /// "this analysis ran your code" disclosure off THIS field, never off
+    /// `language == "rust"` (magma's own rationale: that equivalence breaks
+    /// once their deferred sandboxed mode lands).
+    #[serde(default)]
+    pub executed_target_code: Option<bool>,
+    #[serde(default)]
+    pub not_computable_reason: Option<String>,
+    #[serde(default)]
+    pub functions: Option<Vec<CodeGraphFunction>>,
+    #[serde(default)]
+    pub calls: Option<Vec<CodeGraphCall>>,
+    #[serde(default)]
+    pub modules: Option<Vec<CodeGraphModule>>,
+    #[serde(default)]
+    pub module_calls: Option<Vec<CodeGraphModuleCall>>,
+}
+
+/// One parameter. `name` is omitted for unnamed params; `type` is always present.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodeGraphSignatureParam {
+    #[serde(default)]
+    pub name: Option<String>,
+    #[serde(rename = "type")]
+    pub param_type: String,
+}
+
+/// One result. Results are never named.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodeGraphSignatureResult {
+    #[serde(rename = "type")]
+    pub result_type: String,
+}
+
+/// Always present on a function; both arrays always present, possibly empty.
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodeGraphSignature {
+    #[serde(default)]
+    pub params: Vec<CodeGraphSignatureParam>,
+    #[serde(default)]
+    pub results: Vec<CodeGraphSignatureResult>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodeGraphFunction {
+    pub id: String,
+    pub symbol: String,
+    pub pkg: String,
+    pub file: String,
+    pub line: u32,
+    pub kind: String,
+    pub exported: bool,
+    pub test: bool,
+    pub root: bool,
+    pub generated: bool,
+    pub reachable: bool,
+    pub prod_reachable: bool,
+    pub signature: CodeGraphSignature,
+    /// First sentence of the doc comment; omitted when empty.
+    #[serde(default)]
+    pub doc: Option<String>,
+    pub fan_in: u32,
+    pub fan_out: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodeGraphCall {
+    pub from: String,
+    pub to: String,
+    pub site_file: String,
+    pub site_line: u32,
+    /// `static` | `dynamic` (dynamic = RTA over-approximation).
+    pub kind: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodeGraphModuleCounts {
+    pub functions: u32,
+    pub dead: u32,
+    pub test_only: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodeGraphModule {
+    pub id: String,
+    pub pkg: String,
+    #[serde(default)]
+    pub function_ids: Vec<String>,
+    pub counts: CodeGraphModuleCounts,
+    /// Distinct INTER-module edge degree (module-graph degree) — not a sum of
+    /// underlying call counts. Intra-module edges are excluded.
+    pub fan_in: u32,
+    pub fan_out: u32,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct CodeGraphModuleCall {
+    pub from: String,
+    pub to: String,
+    /// Underlying fine call edges collapsed into this module→module edge.
+    pub count: u32,
+    /// True when any underlying edge is a dynamic dispatch.
+    pub has_dynamic: bool,
+}
+
+// ─── slop-ferret.json ───────────────────────────────────────────────────────
+
+/// A slop-ferret sweep snapshot consumed by Architext. Optional third-party
+/// enrichment, like `CodeGraph`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct SlopFerret {
+    pub schema: i64,
+    #[serde(default)]
+    pub origin: String,
+    #[serde(default, rename = "root_commit")]
+    pub root_commit: String,
+    #[serde(default, rename = "identity_method")]
+    pub identity_method: String,
+    pub sha: String,
+    pub date: String,
+    #[serde(rename = "attested_repo")]
+    pub attested_repo: String,
+    #[serde(rename = "attested_plan")]
+    pub attested_plan: String,
+    pub denominator: i64,
+    #[serde(default)]
+    pub waived: i64,
+    #[serde(default, rename = "worklist_size")]
+    pub worklist_size: i64,
+    #[serde(default, rename = "unmatched_size")]
+    pub unmatched_size: i64,
+    pub accounting: String,
+    #[serde(default, rename = "vocab_provenance")]
+    pub vocab_provenance: Option<std::collections::BTreeMap<String, String>>,
+    #[serde(default)]
+    pub tier: String,
+    #[serde(default, rename = "families_not_run")]
+    pub families_not_run: Vec<String>,
+    #[serde(default, rename = "checked_clean")]
+    pub checked_clean: Vec<SlopFerretCheckedClean>,
+    #[serde(default, rename = "near_misses")]
+    pub near_misses: Vec<String>,
+    #[serde(default, rename = "findings_verified")]
+    pub findings_verified: Option<i64>,
+    #[serde(default, rename = "findings_suspected")]
+    pub findings_suspected: Option<i64>,
+    #[serde(default, rename = "report_path")]
+    pub report_path: String,
+    #[serde(default)]
+    pub findings: Vec<SlopFerretFinding>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SlopFerretCheckedClean {
+    pub class: String,
+    pub method: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SlopFerretFinding {
+    pub title: String,
+    pub file: String,
+    pub class: String,
+    pub severity: String,
+    pub status: String,
+    #[serde(default)]
+    pub claim: String,
+    #[serde(default)]
+    pub refutation: String,
+    #[serde(default)]
+    pub bar: String,
+    #[serde(default)]
+    pub evidence: String,
+    #[serde(default)]
+    pub remediation: String,
+    #[serde(default)]
+    pub occurrences: Option<i64>,
+}
+
 // ─── releases/index.json + detail files ──────────────────────────────────────
 
 #[derive(Debug, Clone, Deserialize)]
@@ -765,5 +969,132 @@ mod config_payload_tests {
         assert_eq!(sections.len(), 1);
         assert_eq!(sections[0].id, "extra");
         assert_eq!(sections[0].label, "extra");
+    }
+
+    #[test]
+    fn code_graph_parses_a_computable_document() {
+        // WHY: the wire format is snake_case (Go producer), unlike every other
+        // Architext document — a stray rename_all would silently drop fields.
+        let doc: CodeGraph = serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1",
+            "generator": "magma/0.2.0",
+            "language": "go",
+            "module": "example.com/m",
+            "sha": "abc1234",
+            "tree": "clean",
+            "fidelity": "rta",
+            "computable": true,
+            "functions": [{
+                "id": "m-add", "symbol": "Add", "pkg": "m", "file": "main.go", "line": 3,
+                "kind": "func", "exported": true, "test": false, "root": false,
+                "generated": false, "reachable": true, "prod_reachable": true,
+                "signature": {
+                    "params": [{"name": "a", "type": "int"}, {"type": "int"}],
+                    "results": [{"type": "int"}]
+                },
+                "doc": "Add returns the sum.", "fan_in": 1, "fan_out": 0
+            }],
+            "calls": [{"from": "m-main", "to": "m-add", "site_file": "main.go", "site_line": 7, "kind": "static"}],
+            "modules": [{
+                "id": "m", "pkg": "m", "function_ids": ["m-add"],
+                "counts": {"functions": 1, "dead": 0, "test_only": 0},
+                "fan_in": 0, "fan_out": 0
+            }],
+            "module_calls": [{"from": "m", "to": "m2", "count": 3, "has_dynamic": true}]
+        })).expect("computable document must parse");
+
+        assert!(doc.computable);
+        let fns = doc.functions.expect("functions present");
+        assert_eq!(fns[0].fan_in, 1);
+        assert_eq!(fns[0].prod_reachable, true);
+        assert_eq!(fns[0].signature.params.len(), 2);
+        assert_eq!(fns[0].signature.params[0].name.as_deref(), Some("a"));
+        // An unnamed param has no `name` key at all.
+        assert_eq!(fns[0].signature.params[1].name, None);
+        assert_eq!(fns[0].signature.params[1].param_type, "int");
+        assert_eq!(fns[0].signature.results[0].result_type, "int");
+        assert_eq!(doc.calls.unwrap()[0].site_line, 7);
+        assert_eq!(doc.modules.unwrap()[0].counts.functions, 1);
+        let mc = doc.module_calls.unwrap();
+        assert_eq!(mc[0].count, 3);
+        assert!(mc[0].has_dynamic);
+    }
+
+    #[test]
+    fn code_graph_parses_a_refusal_with_null_arrays() {
+        // WHY: a refusal sets the four collections to explicit JSON `null`.
+        // #[serde(default)] only covers a MISSING key — a plain Vec<_> field
+        // would fail here, so these MUST be Option<Vec<_>>. This test is the
+        // guard against someone "simplifying" them back to Vec.
+        let doc: CodeGraph = serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1",
+            "generator": "magma/0.2.0",
+            "language": "python",
+            "module": "",
+            "sha": "",
+            "tree": "clean",
+            "fidelity": "rta",
+            "computable": false,
+            "not_computable_reason": "unsupported language: python",
+            "functions": null,
+            "calls": null,
+            "modules": null,
+            "module_calls": null
+        })).expect("refusal document must parse as VALID");
+
+        assert!(!doc.computable);
+        assert_eq!(doc.not_computable_reason.as_deref(), Some("unsupported language: python"));
+        assert!(doc.functions.is_none());
+        assert!(doc.calls.is_none());
+        assert!(doc.modules.is_none());
+        assert!(doc.module_calls.is_none());
+    }
+
+    #[test]
+    fn code_graph_parses_executed_target_code_when_present_and_absent() {
+        // WHY: `executed_target_code` reaching the viewer's serde model was the
+        // gap this test guards — serde silently ignores unknown fields, so a
+        // document could parse "successfully" while the field never reached the
+        // UI. Present (magma's Rust artifacts) and absent (Go artifacts, and
+        // every artifact predating the field) must both parse.
+        let with_field: CodeGraph = serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1", "generator": "magma/0.3.0",
+            "language": "rust", "module": "m", "sha": "a", "tree": "clean",
+            "fidelity": "semantic", "computable": true, "executed_target_code": true,
+            "functions": [], "calls": [], "modules": [], "module_calls": []
+        }))
+        .expect("document with executed_target_code must parse");
+        assert_eq!(with_field.executed_target_code, Some(true));
+
+        let without_field: CodeGraph = serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1", "generator": "magma/0.1.0",
+            "language": "go", "module": "m", "sha": "a", "tree": "clean",
+            "fidelity": "rta", "computable": true,
+            "functions": [], "calls": [], "modules": [], "module_calls": []
+        }))
+        .expect("document without executed_target_code must still parse");
+        assert_eq!(without_field.executed_target_code, None);
+    }
+
+    #[test]
+    fn code_graph_omits_optional_doc_and_param_name() {
+        // A function with no doc comment omits `doc` entirely; unnamed params
+        // omit `name`. Neither may fail the parse.
+        let doc: CodeGraph = serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1",
+            "generator": "magma/0.2.0", "language": "go", "module": "m",
+            "sha": "a", "tree": "clean", "fidelity": "rta", "computable": true,
+            "functions": [{
+                "id": "m-main", "symbol": "main", "pkg": "m", "file": "main.go", "line": 7,
+                "kind": "func", "exported": false, "test": false, "root": true,
+                "generated": false, "reachable": true, "prod_reachable": true,
+                "signature": {"params": [], "results": []},
+                "fan_in": 0, "fan_out": 1
+            }],
+            "calls": [], "modules": [], "module_calls": []
+        })).expect("document without optional fields must parse");
+        let fns = doc.functions.unwrap();
+        assert!(fns[0].doc.is_none());
+        assert!(fns[0].signature.params.is_empty());
     }
 }

@@ -101,6 +101,7 @@ dependencies = [
  "architext-serve",
  "axum",
  "nix",
+ "serde",
  "serde_json",
  "sha2",
  "tempfile",

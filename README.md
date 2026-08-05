@@ -1,3 +1,8 @@
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/architext-dark.svg">
+  <img alt="Architext" width="64" height="64" src="docs/assets/architext-light.svg">
+</picture>
+
 # Architext
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-2ff801)](LICENSE)

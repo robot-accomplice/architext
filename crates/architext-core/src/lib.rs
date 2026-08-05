@@ -25,6 +25,8 @@ pub fn validate_data_dir(data_dir: &Path, schema_dir: &Path) -> ValidationOutcom
     let mut errors = Vec::new();
     validation::schema::validate_schema(data_dir, schema_dir, &mut errors);
     validation::references::validate_references(data_dir, &mut errors);
+    validation::code_graph::validate_code_graph(data_dir, &mut errors);
+    validation::slop_ferret::validate_slop_ferret(data_dir, &mut errors);
 
     // Load manifest to check for optional releases/roadmap sections.
     let manifest = read_manifest(data_dir);
@@ -79,6 +81,13 @@ mod tests {
             .join("tests")
             .join("conformance")
             .join(name)
+    }
+
+    fn repo_data_dir() -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .parent().unwrap()
+            .parent().unwrap()
+            .join("docs").join("architext").join("data")
     }
 
     /// RED → GREEN: invalid-schema-missing-field must be rejected.
@@ -166,5 +175,157 @@ mod tests {
             .join("data");
         let outcome = validate_data_dir(&data_dir, &schema_dir());
         assert!(outcome.ok, "expected acceptance; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn valid_code_graph_passes() {
+        let outcome = validate_data_dir(&fixture("valid-code-graph"), &schema_dir());
+        assert!(outcome.ok, "expected pass; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn code_graph_digit_leading_id_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-bad-id"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn code_graph_dangling_call_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-dangling-call"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "code-graph call.to references unknown function id \"m-nonexistent\""),
+            "expected dangling-call error; got: {:?}", outcome.errors
+        );
+    }
+
+    /// A refusal must validate, and the fixture is a VERBATIM real refusal
+    /// emitted by magma (pointed at a Rust repo) — not a hand-authored guess.
+    ///
+    /// WHY that matters: the hand-authored fixture this replaced carried
+    /// `"fidelity": "rta"`, which is nonsense for a document where nothing was
+    /// analysed. Real output emits `""`, and the schema's `minLength: 1` on
+    /// `fidelity` rejected it — a defect no invented fixture could surface.
+    /// `fidelity`/`module` are legitimately empty in a refusal, so the envelope
+    /// must not require content in them. Do not re-add a minimum length.
+    #[test]
+    fn code_graph_refusal_is_valid() {
+        let outcome = validate_data_dir(&fixture("valid-code-graph-refusal"), &schema_dir());
+        assert!(outcome.ok, "refusal must be valid; errors: {:?}", outcome.errors);
+    }
+
+    /// Forward-compatibility with magma's announced additions: Rust artifacts
+    /// will carry `fidelity: "semantic"` and a new `executed_target_code`
+    /// boolean (Go analysis reads; Rust analysis executes build scripts and
+    /// proc macros, so it is a trust-boundary fact, not a fidelity nuance).
+    ///
+    /// WHY THIS TEST EXISTS: magma reported both as "additive, validates
+    /// unchanged". That is true of `fidelity: "semantic"` — a new VALUE on an
+    /// existing property — but was NOT true of `executed_target_code`, a new
+    /// PROPERTY, because this schema sets `additionalProperties: false`. It was
+    /// reproduced failing with
+    ///   `codeGraph: Additional properties are not allowed ('executed_target_code' was unexpected)`
+    /// before the property was declared. Caught before magma shipped it; had it
+    /// landed first, every artifact they produced would have failed validation
+    /// on day one — the same shape as the `tree`-carrying-the-SHA defect.
+    /// `kind: "init"` is a THIRD function kind, alongside `func` and `method`,
+    /// carrying Rust const/static initialisers.
+    ///
+    /// DO NOT "UNIFY" THIS WITH GO's `init#N` — they share a name and are not
+    /// the same thing, and collapsing them is the natural instinct:
+    ///   - Go's `init#N` IS a real function. The compiler generates it, it has
+    ///     a body, the runtime calls it. Magma emits `kind: "func"` for it, and
+    ///     that is the true answer.
+    ///   - Rust's `#init` is NOT a function. It is a magma-synthesized node
+    ///     wrapping a const/static initialiser EXPRESSION; there is no `fn`
+    ///     anywhere in the source. Hence a distinct kind.
+    ///
+    /// Why the distinction is load-bearing rather than pedantic: on a real
+    /// workspace 22 of these land in our `dead` badge, and they are `static`s —
+    /// `ENV_MUTEX#init`, `MACHINE_ID_MUTEX#init`. Rendering them as dead
+    /// *functions* would tell a reader to go delete a function that does not
+    /// exist. That is an actionable wrong answer, not a cosmetic one.
+    ///
+    /// CAVEAT for anyone rendering these (disclosed by magma): magma models
+    /// CALLS, not USES. A `static` is used, never called, so no edge ever points
+    /// at its initialiser — it fails `reachable` and lands in `dead` even when
+    /// `test: true`. Their reachability is therefore weaker evidence than a
+    /// function's, and the UI must not present them with equal confidence.
+    #[test]
+    fn code_graph_accepts_magmas_forthcoming_fields() {
+        let outcome = validate_data_dir(&fixture("valid-code-graph-forthcoming"), &schema_dir());
+        assert!(
+            outcome.ok,
+            "fidelity=semantic + executed_target_code must validate; errors: {:?}",
+            outcome.errors,
+        );
+    }
+
+    /// Guards the specific field that broke on real output: an empty
+    /// `fidelity` must be accepted, independently of the rest of the fixture.
+    #[test]
+    fn code_graph_accepts_empty_fidelity_in_a_refusal() {
+        let doc = std::fs::read_to_string(
+            fixture("valid-code-graph-refusal").join("code-graph.json"),
+        )
+        .expect("refusal fixture readable");
+        let parsed: serde_json::Value = serde_json::from_str(&doc).expect("fixture is JSON");
+        assert_eq!(
+            parsed["fidelity"], "",
+            "the refusal fixture must keep an EMPTY fidelity — that is the real \
+             producer shape this test exists to guard",
+        );
+        let outcome = validate_data_dir(&fixture("valid-code-graph-refusal"), &schema_dir());
+        assert!(outcome.ok, "empty fidelity must validate; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn code_graph_unknown_major_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-bad-major"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e| e.contains("contract_version") && e.contains("unsupported")),
+            "expected version error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn code_graph_duplicate_function_id_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-duplicate-function-id"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e| e == "code-graph functions contains duplicate id \"m-add\""),
+            "expected duplicate-function-id error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn code_graph_dangling_module_function_id_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-dangling-module-function-id"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "code-graph module m.function_ids references unknown function id \"m-ghost\""),
+            "expected dangling module.function_ids error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn code_graph_dangling_module_call_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-code-graph-dangling-module-call"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "code-graph module_call.to references unknown module id \"m-ghost\""),
+            "expected dangling module_call error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn code_graph_absent_passes() {
+        // The self-hosted data dir has no code-graph.json; validate must pass.
+        let outcome = validate_data_dir(&repo_data_dir(), &schema_dir());
+        assert!(outcome.ok, "absent code-graph must pass; errors: {:?}", outcome.errors);
     }
 }

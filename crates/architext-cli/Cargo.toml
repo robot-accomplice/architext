@@ -12,6 +12,7 @@ path = "src/main.rs"
 architext-core = { path = "../architext-core" }
 architext-serve = { path = "../architext-serve" }
 axum = { version = "0.7", features = ["http1", "http2", "tokio"] }
+serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1" }
 sha2 = { version = "0.10" }
 # Minimal blocking HTTP client for `architext update` (download release binary +

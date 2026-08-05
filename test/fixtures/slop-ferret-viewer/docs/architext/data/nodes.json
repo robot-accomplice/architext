@@ -1,0 +1,23 @@
+{
+  "nodes": [
+    {
+      "id": "system",
+      "type": "software-system",
+      "name": "Example System",
+      "summary": "The system under sweep.",
+      "responsibilities": ["Host the example application."],
+      "owner": "Example Team",
+      "sourcePaths": ["main.go"],
+      "runtime": "go",
+      "interfaces": ["HTTP"],
+      "dependencies": [],
+      "dataHandled": [],
+      "security": [],
+      "observability": [],
+      "relatedFlows": ["main"],
+      "relatedDecisions": [],
+      "knownRisks": [],
+      "verification": []
+    }
+  ]
+}

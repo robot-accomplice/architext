@@ -455,6 +455,120 @@
       "knownGaps": [
         "A CI workflow is still needed to enforce packaging checks automatically."
       ]
+    },
+    {
+      "id": "code-graph-ingestion",
+      "name": "Code graph ingestion",
+      "status": "implemented",
+      "summary": "Magma, an external Go analyser, writes an optional code-graph.json into a target repository's data directory; Architext validates the contract without ever generating or editing the file, and the viewer renders it as its own mode.",
+      "trigger": "A maintainer or agent runs Magma against a Go repository that has adopted Architext; Magma writes code-graph.json into docs/architext/data/.",
+      "actors": [
+        "magma"
+      ],
+      "steps": [
+        {
+          "id": "write-code-graph",
+          "from": "magma",
+          "to": "target-data-files",
+          "kind": "start",
+          "action": "writeCodeGraphDocument",
+          "summary": "Magma statically analyses the target Go repository and writes code-graph.json (contract magma-code-graph/1) into docs/architext/data/; Architext never generates or edits this file itself.",
+          "data": [
+            "code-graph-model"
+          ]
+        },
+        {
+          "id": "register-code-graph",
+          "from": "architext-cli",
+          "to": "target-data-files",
+          "kind": "persistence",
+          "action": "registerCodeGraphFile",
+          "summary": "architext doctor/sync auto-registers manifest.files.codeGraph when code-graph.json is present on disk but unlisted, without creating or rewriting the code-graph file itself.",
+          "data": [
+            "repository-metadata",
+            "code-graph-model"
+          ]
+        },
+        {
+          "id": "validate-code-graph",
+          "from": "schema-validator",
+          "to": "target-data-files",
+          "kind": "decision",
+          "action": "validateCodeGraphContract",
+          "summary": "architext validate reads the registered code-graph.json and checks contract-version gating (magma-code-graph/1), refusal acceptance (computable:false with null arrays is valid), and internal referential integrity across functions, calls, modules, and module_calls.",
+          "data": [
+            "code-graph-model",
+            "validation-output"
+          ]
+        },
+        {
+          "id": "code-graph-valid",
+          "from": "schema-validator",
+          "to": "architext-cli",
+          "kind": "process",
+          "outcome": "valid",
+          "action": "reportCodeGraphValid",
+          "summary": "A contract-matching, internally consistent code-graph.json is reported valid alongside the rest of the model.",
+          "data": [
+            "validation-output"
+          ]
+        },
+        {
+          "id": "code-graph-invalid",
+          "from": "schema-validator",
+          "to": "architext-cli",
+          "kind": "stop",
+          "outcome": "invalid",
+          "action": "stopWithCodeGraphErrors",
+          "summary": "An unsupported contract major, or a dangling call/module_call/function id, fails architext validate and blocks claiming the documentation is current.",
+          "data": [
+            "validation-output"
+          ]
+        },
+        {
+          "id": "fetch-code-graph",
+          "from": "viewer-runtime",
+          "to": "target-data-files",
+          "kind": "process",
+          "action": "fetchCodeGraphNonFatally",
+          "summary": "Independently of architext validate, the viewer's data layer fetches /data/<codeGraph> and deserializes it into CodeGraph; a fetch or parse failure is captured as Err and surfaced by the Code Graph panel instead of blanking the rest of the viewer.",
+          "data": [
+            "code-graph-model"
+          ]
+        },
+        {
+          "id": "render-code-graph",
+          "from": "viewer-runtime",
+          "to": "viewer-runtime",
+          "kind": "self",
+          "action": "renderCodeGraphMode",
+          "summary": "Mode::CodeGraph renders the graph as a WebGL2 canvas — progressive Barnes-Hut layout, filters that cull excluded nodes/edges from the GPU upload (prod-reachable only by default), and a roots/callers/callees call-order animation — with candidate reachability badges (root, generated, test-only, dead); selection stays panel-local and is never written into the shared node-selection state the inspector uses.",
+          "data": [
+            "code-graph-model"
+          ]
+        }
+      ],
+      "guarantees": [
+        "Architext never generates, edits, or owns code-graph.json — Magma is its sole writer.",
+        "A repository with no code-graph.json validates and renders exactly as before; absence is a pass, not an error."
+      ],
+      "failureBehavior": [
+        "An unsupported contract major or a dangling id fails architext validate loudly and blocks claiming the documentation is current.",
+        "A viewer fetch or parse failure is captured per-document and rendered as an explicit error surface in the Code Graph panel, never a blank canvas."
+      ],
+      "observability": [
+        "validate error list",
+        "doctor codeGraph status section",
+        "Code Graph panel empty/refusal/error surfaces"
+      ],
+      "verification": [
+        "cargo test -p architext-core -- code_graph",
+        "cargo test -p architext-viewer",
+        "cargo run -p architext-cli -- validate ."
+      ],
+      "knownGaps": [
+        "Magma's own analysis correctness is unverified here — Architext checks only the contract shape and referential integrity of its output, not the underlying Go analysis."
+      ]
     }
   ]
 }

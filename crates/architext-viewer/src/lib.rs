@@ -10,13 +10,27 @@
 //! - `state`     — `AppState` (signals) provided via Leptos context
 //! - `selection` — thin adapter over `architext_routing` view-selection
 //! - `diagram`   — in-process plan compute + SVG render (flows mode)
+//! - `gl`        — WebGL2 instanced renderer for the code graph (Plan C)
 //! - `components`— one component per file
 //! - `theme`     — enumerated design facts (the nine modes)
+//! - `diagnostics` — RCA event trail for the code-graph view's teardown/
+//!   rebuild lifecycle (Rule 14); retrieval boundary is
+//!   [`architext_diagnostics`] below.
 pub mod blast_radius;
+pub mod code_graph_graph;
+pub mod code_graph_layout;
+pub mod code_graph_paths;
+pub mod code_graph_provenance;
+pub mod code_graph_view_model;
 pub mod components;
 pub mod data;
+pub mod diagnostics;
 pub mod diagram;
 pub mod flow_step_display;
+pub mod force_layout;
+pub mod gl;
+pub mod layout_cache;
+pub mod layout_worker_client;
 pub mod release_planning_model;
 pub mod release_truth;
 pub mod repo_tree_model;
@@ -27,6 +41,7 @@ pub mod state;
 pub mod theme;
 
 use leptos::*;
+use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::components::shell::Shell;
 use crate::components::spinner::Spinner;
@@ -52,6 +67,15 @@ pub fn App() -> impl IntoView {
                 Ok(loaded) => {
                     let state = AppState::new(loaded);
                     provide_context(state);
+                    // Plan D Task 3: warm the function-tier code-graph layout
+                    // in a background worker now, so a later Code Graph entry
+                    // is very likely a `layout_cache` hit before the user
+                    // gets there — costs background CPU, never main-thread
+                    // responsiveness. A no-op if there is no computable code
+                    // graph document.
+                    if let Some(Ok(cg)) = state.data.get_untracked().code_graph.as_ref() {
+                        crate::layout_worker_client::warm_function_tier(state, cg);
+                    }
                     // Apply + persist the color theme: seed `<html data-theme>`
                     // from the (localStorage-seeded) signal now, and re-apply
                     // whenever the header toggle flips it.
@@ -96,6 +120,17 @@ fn LoadingScreen() -> impl IntoView {
             <p class="boot-screen__msg">"Fetching architecture data…"</p>
         </div>
     }
+}
+
+/// RCA retrieval boundary (`diagnostics` module doc has the full rationale):
+/// dumps the code-graph view's bounded lifecycle event trail as a
+/// pretty-printed JSON array. Trunk's generated glue assigns every
+/// `#[wasm_bindgen]` export in this crate onto `window.wasmBindings`, so the
+/// browser-console incantation is `window.wasmBindings.architext_diagnostics()`
+/// — no debugger, no JS of our own.
+#[wasm_bindgen]
+pub fn architext_diagnostics() -> String {
+    crate::diagnostics::dump()
 }
 
 /// Error surface shown when the dataset cannot be loaded (never a blank screen).

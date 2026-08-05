@@ -43,6 +43,33 @@ web-sys = { version = "0.3", features = [
     "Window",
     "Document",
     "Storage",
+    # Code-graph WebGL2 renderer (src/gl): raw WebGL2 via web-sys, zero JS.
+    # `HtmlCanvasElement` is already implied transitively by leptos::html::Canvas
+    # elsewhere, declared here explicitly since the renderer calls
+    # `get_context`/`width`/`height` on it directly.
+    "HtmlCanvasElement",
+    "WebGl2RenderingContext",
+    "WebGlProgram",
+    "WebGlShader",
+    "WebGlBuffer",
+    "WebGlVertexArrayObject",
+    "WebGlUniformLocation",
+    # Task 5 progressive layout: the RAF layout slice budgets its ticks
+    # against `performance.now()` and the time-to-first-paint /
+    # time-to-settled instrumentation reads the same clock.
+    "Performance",
+    # Code-graph animation rework: `prefers-reduced-motion` gate for the
+    # progressive edge-draw — read once per tier via `Window::match_media`.
+    "MediaQueryList",
+    # Plan D Task 3: the layout-settle Web Worker. `Worker` is the main-thread
+    # spawn/postMessage/terminate handle (`layout_worker_client.rs`);
+    # `DedicatedWorkerGlobalScope` is the worker-side scope the second wasm
+    # binary (`src/bin/layout_worker.rs`) posts its reply from. `console` lets
+    # that worker log diagnostics directly (it has no Leptos app context to
+    # route through `leptos::logging::log!`'s usual path).
+    "Worker",
+    "DedicatedWorkerGlobalScope",
+    "console",
 ] }
 
 # Same-origin async fetch of the Architext data docs (/data/**, /api/config)

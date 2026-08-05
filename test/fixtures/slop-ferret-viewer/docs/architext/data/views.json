@@ -1,0 +1,17 @@
+{
+  "views": [
+    {
+      "id": "context",
+      "name": "Context",
+      "type": "system-map",
+      "summary": "Context view.",
+      "lanes": [
+        {
+          "id": "main",
+          "name": "Main",
+          "nodeIds": ["system"]
+        }
+      ]
+    }
+  ]
+}

@@ -407,6 +407,16 @@
       "priority": "high",
       "dateAdded": "2026-07-16T16:30:00.000Z",
       "summary": "Field-review question from the Roboticus Holistic Swarm (2026-07-16), empirically CONFIRMED on 1.7.8: when two different detail files share a release id, release_truth_repair_plan dedup indexes the winner (index-named first, then sorted scan order) and silently skips the loser — the file survives on disk but is invisible to the index AND to validation (which enumerates detail files via the index). This is the one shape strictly worse than refusing the index rewrite: silent, and the same-run validate cannot see it. The dedup itself is correct (writing duplicate ids would be corruption); the gap is surfacing. Fix direction: a validation check for detail-shaped files on disk that are not referenced by the index (catches id-collision losers AND any other unindexed residue post-doctor), and/or a duplicate-id conflict entry in the planned doctor non-repairable-findings channel. Must not become an advertised repair string (nothing deterministic fixes it; it would re-advertise forever and break second-run stability)."
+    },
+    {
+      "id": "richer-ui-design-track",
+      "title": "Carry the code-graph visual quality across the SVG viewer modes",
+      "kind": "architecture",
+      "section": "Design System",
+      "status": "planned",
+      "priority": "medium",
+      "dateAdded": "2026-08-03T14:56:21.000Z",
+      "summary": "1.8.0 introduced a GPU-rendered Code Graph mode whose visual quality now sits noticeably ahead of the nine SVG modes (Flows, Sequence, C4, Deployment, Data/Risks, Repo Tree, Blast Radius, Release Truth, Rules). Maintainer approved carrying that quality across on 2026-08-01 and directed it into the release AFTER 1.8.0, so it is deliberately not 1.8.0 scope. Distinct from the completed design-language-consolidation item, which single-sourced COLOR TOKENS and accent rails; this is about the rendered design language itself. Scope is UX-led per the maintainer's standing direction: the full user experience drives the design decisions, not per-mode cosmetics. Two constraints carry over from 1.8.0 and should be treated as given. First, WebGL stays scoped to the code graph -- it was adopted because a 17k-node call graph is a different rendering problem, not as a general replacement for the routed SVG diagrams. Second, every design change ships with a live-UI fidelity and coherency audit across ALL modes (rule design-language-fidelity-audit); a passing test suite is not evidence a diagram reads well. No targetReleaseId yet: the release after 1.8.0 is not planned, and Release Planning is the approval boundary for assigning scope to it."
     }
   ]
 }

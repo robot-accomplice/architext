@@ -2,6 +2,7 @@
 pub mod blast_radius_panel;
 pub mod c4_breadcrumb;
 pub mod canvas_panel;
+pub mod code_graph_view;
 pub mod config_field;
 pub mod config_panel;
 pub mod data_risks_panel;
@@ -21,6 +22,7 @@ pub mod repo_tree;
 pub mod rules_editor;
 pub mod rules_panel;
 pub mod selector_bar;
+pub mod slop_ferret_panel;
 pub mod shell;
 pub mod spinner;
 pub mod steps_panel;

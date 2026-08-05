@@ -1,0 +1,15 @@
+{
+  "contract_version": "magma-code-graph/1",
+  "generator": "magma/0.1.0",
+  "language": "rust",
+  "module": "",
+  "sha": "b7a9eae",
+  "tree": "clean",
+  "fidelity": "",
+  "computable": false,
+  "not_computable_reason": "language \"rust\" detected but its parser is not built yet (magma 0.1.0 supports Go)",
+  "functions": null,
+  "calls": null,
+  "modules": null,
+  "module_calls": null
+}

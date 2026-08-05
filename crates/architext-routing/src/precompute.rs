@@ -636,8 +636,20 @@ mod tests {
         }
     }
 
+    /// Regression guard on the flow×view enumeration, counted against the
+    /// repository's OWN architecture data (`corpus_data_dir()`).
+    ///
+    /// NOTE FOR FUTURE MAINTAINERS: this count tracks live project data, so it
+    /// legitimately changes whenever a flow is added/removed or a flow's view
+    /// membership changes — it is not a fixed property of the enumerator. The
+    /// original 16 matched the JS oracle when the repo documented 7 flows.
+    /// Adding the `code-graph-ingestion` flow (the Magma code-graph
+    /// integration), which projects into 3 flow-type views, took it to 19.
+    /// If this fails after an architecture-data change, confirm the delta is
+    /// explained by the flows/views you changed, then update the expectation —
+    /// do not "fix" the enumerator.
     #[test]
-    fn enumerate_produces_16_entries() {
+    fn enumerate_produces_expected_entry_count() {
         let data_dir = corpus_data_dir();
         if !data_dir.exists() {
             // Skip in environments where the corpus isn't available
@@ -646,7 +658,11 @@ mod tests {
         let config = resolve_diagram_config_defaults();
         let entries = enumerate_flow_plan_requests(&data_dir, &config)
             .expect("enumerate_flow_plan_requests");
-        assert_eq!(entries.len(), 16, "Expected 16 entries (matching JS oracle)");
+        assert_eq!(
+            entries.len(),
+            19,
+            "flow×view enumeration changed; confirm it matches the repo's current flows/views",
+        );
     }
 
     // Validates the NATIVE farm's hashing (sha256 → 64-char hex). The

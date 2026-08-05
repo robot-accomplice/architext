@@ -27,12 +27,16 @@ pub fn mode_icon_path(mode: Mode) -> &'static str {
         Mode::DataRisks => "M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z",
         // Reused `folder`: repository tree root.
         Mode::RepoTree => "M4 18h16V8h-9l-2-2H4z",
+        // New: a small call graph — one caller node fanning out to two callees.
+        Mode::CodeGraph => "M5 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4 M19 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4 M19 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4 M7 9l10-3 M7 11l10 6",
         // New: concentric rings + center (target / blast radius).
         Mode::BlastRadius => "M12 4a8 8 0 1 0 0 16 8 8 0 0 0 0-16 M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8 M12 11.5a.5.5 0 1 0 0 1 .5.5 0 0 0 0-1",
         // New: milestone tag/flag with eyelet (release marker).
         Mode::ReleaseTruth => "M4 4h9l7 8-7 8H4z M8 8a1.2 1.2 0 1 0 0 .01",
         // New: checklist — list rows with leading checks (project rules).
         Mode::Rules => "M4 6l1.5 1.5L8 4 M4 13l1.5 1.5L8 11 M11 6h9 M11 13h9 M11 19h6",
+        // New: stylized ferret / snout with a target line (sweep inspection).
+        Mode::SlopFerret => "M4 12h3 M4 16h3 M7 12c3 0 2 4 5 4 M7 16c3 0 2-4 5-4 M12 14h7 M16 11l3 3-3 3",
     }
 }
 

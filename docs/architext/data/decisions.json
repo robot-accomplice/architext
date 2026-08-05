@@ -69,6 +69,16 @@
       "consequences": ["Codex plugin metadata, native release artifacts, and skill guidance share one source tree", "Releases ship .codex-plugin and skills from the repository root", "Marketplace entries remain a distribution concern instead of driving repository layout"],
       "relatedNodes": ["package-artifacts"],
       "relatedFlows": ["release-packaging"]
+    },
+    {
+      "id": "external-code-graph-contract",
+      "status": "accepted",
+      "title": "Consume Magma's code graph as an optional, versioned, read-only contract",
+      "context": "Deeper call-graph intelligence (reachability, fan-in/out, module structure) needs static analysis of a target repository's own language, which is out of scope for Architext's own Rust codebase and would tie every consuming repo to a specific analyser implementation.",
+      "decision": "Accept code-graph.json as an optional document produced entirely outside Architext by Magma, a separate Go CLI. Architext validates contract_version gating, refusal acceptance (computable:false), and internal referential integrity, and the viewer renders it as its own Code Graph mode, but Architext never generates, edits, or requires the file.",
+      "consequences": ["Repositories without Magma validate and render exactly as before (an absent codeGraph registration is a pass, not an error)", "A contract-major bump on Magma's side fails validate loudly instead of silently misrendering", "Architext stays agnostic of the target repository's implementation language for this feature"],
+      "relatedNodes": ["magma", "schema-validator", "viewer-runtime", "target-data-files"],
+      "relatedFlows": ["code-graph-ingestion"]
     }
   ]
 }

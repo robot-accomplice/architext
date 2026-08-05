@@ -35,6 +35,15 @@ pub struct ArchitectureData {
     pub roadmap: Vec<RoadmapItem>,
     pub release_index: Option<ReleaseIndex>,
     pub release_details: Vec<ReleaseDetail>,
+    /// The optional Magma code graph. `None` = not registered in the manifest;
+    /// `Some(Err(_))` = registered but unreadable/malformed, surfaced by the
+    /// Code Graph panel rather than blanking the whole viewer (mirrors
+    /// `AppState::repo_tree`'s `Option<Result<_, FetchError>>` treatment).
+    pub code_graph: Option<Result<CodeGraph, FetchError>>,
+    /// The optional Slop Ferret sweep snapshot. `None` = not registered in the
+    /// manifest; `Some(Err(_))` = registered but malformed, surfaced by the Slop
+    /// Ferret panel.
+    pub slop_ferret: Option<Result<SlopFerret, FetchError>>,
     pub config: Option<ConfigPayload>,
 }
 
@@ -215,6 +224,20 @@ pub async fn load_architecture_data() -> Result<ArchitectureData, FetchError> {
     }
     if let Some(url) = data_url(&manifest, "roadmap") {
         data.roadmap = get_json::<RoadmapFile>(&url).await?.items;
+    }
+
+    // Code graph is an OPTIONAL third-party enrichment (produced by Magma, not
+    // Architext). Unlike the Architext-owned documents this does NOT use `?`: a
+    // malformed code graph must not blank the entire viewer, so the error is
+    // captured and rendered by the Code Graph panel. Same rationale as `config`
+    // below, which is likewise non-fatal.
+    if let Some(url) = data_url(&manifest, "codeGraph") {
+        data.code_graph = Some(get_json::<CodeGraph>(&url).await);
+    }
+
+    // Slop Ferret sweep snapshot is likewise an optional third-party enrichment.
+    if let Some(url) = data_url(&manifest, "slopFerret") {
+        data.slop_ferret = Some(get_json::<SlopFerret>(&url).await);
     }
 
     if let Some(index_path) = manifest.files.get("releases").cloned() {

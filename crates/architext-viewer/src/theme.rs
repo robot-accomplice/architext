@@ -7,7 +7,7 @@
 //! components) follows the workspace's "no magic literals" convention and gives
 //! later slices one place to attach per-mode data wiring.
 
-/// The nine viewer modes, in nav order (DESIGN.md "one product, not nine").
+/// The eleven viewer modes, in nav order (DESIGN.md "one product, not nine").
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mode {
     Flows,
@@ -16,23 +16,27 @@ pub enum Mode {
     Deployment,
     DataRisks,
     RepoTree,
+    CodeGraph,
     BlastRadius,
     ReleaseTruth,
     Rules,
+    SlopFerret,
 }
 
 impl Mode {
     /// Nav order, rendered as the left-nav mode list.
-    pub const ALL: [Mode; 9] = [
+    pub const ALL: [Mode; 11] = [
         Mode::Flows,
         Mode::Sequence,
         Mode::C4,
         Mode::Deployment,
         Mode::DataRisks,
         Mode::RepoTree,
+        Mode::CodeGraph,
         Mode::BlastRadius,
         Mode::ReleaseTruth,
         Mode::Rules,
+        Mode::SlopFerret,
     ];
 
     /// Human label shown in the nav.
@@ -44,9 +48,11 @@ impl Mode {
             Mode::Deployment => "Deployment",
             Mode::DataRisks => "Data / Risks",
             Mode::RepoTree => "Repo Tree",
+            Mode::CodeGraph => "Code Graph",
             Mode::BlastRadius => "Blast Radius",
             Mode::ReleaseTruth => "Release Truth",
             Mode::Rules => "Rules",
+            Mode::SlopFerret => "Slop Ferret",
         }
     }
 
@@ -60,9 +66,11 @@ impl Mode {
             Mode::Deployment => "deployment",
             Mode::DataRisks => "data-risks",
             Mode::RepoTree => "repo-tree",
+            Mode::CodeGraph => "code-graph",
             Mode::BlastRadius => "blast-radius",
             Mode::ReleaseTruth => "release-truth",
             Mode::Rules => "rules",
+            Mode::SlopFerret => "slop-ferret",
         }
     }
 
@@ -81,8 +89,10 @@ impl Mode {
     pub fn rail_summary(self) -> Option<&'static str> {
         match self {
             Mode::RepoTree => Some("Browse the repository file tree with ownership tags."),
+            Mode::CodeGraph => Some("Explore the Magma-derived call graph: modules, then functions."),
             Mode::BlastRadius => Some("Trace what a change to a node reaches across the model."),
             Mode::Rules => Some("Review the project's rules, ranked by criticality."),
+            Mode::SlopFerret => Some("Review slop-ferret sweep coverage and findings."),
             _ => None,
         }
     }
@@ -108,7 +118,7 @@ impl Mode {
     /// Rules and Release Truth have no clickable architecture node. Drives the
     /// inspector's "select a node" hint for node-bearing modes without a flow.
     pub fn has_clickable_nodes(self) -> bool {
-        !matches!(self, Mode::Rules | Mode::ReleaseTruth)
+        !matches!(self, Mode::Rules | Mode::ReleaseTruth | Mode::CodeGraph | Mode::SlopFerret)
     }
 
     pub fn projects_flows(self) -> bool {
@@ -207,7 +217,7 @@ mod tests {
         // The three diagram-less LIST modes describe what they show (no negative
         // "has no diagram projection" messaging); every diagram/selector-driven
         // mode returns None so the rail keeps its own affordance.
-        for mode in [Mode::RepoTree, Mode::BlastRadius, Mode::Rules] {
+        for mode in [Mode::RepoTree, Mode::BlastRadius, Mode::Rules, Mode::CodeGraph] {
             let summary = mode.rail_summary().expect("list mode should have a summary");
             assert!(!summary.is_empty());
             assert!(
@@ -226,5 +236,24 @@ mod tests {
         ] {
             assert!(mode.rail_summary().is_none(), "{} should have no rail summary", mode.label());
         }
+    }
+
+    #[test]
+    fn every_mode_has_a_label_an_id_and_an_icon() {
+        // WHY: mode registration spans four files and two of the matches have
+        // catch-alls. This walks Mode::ALL (unlike the hand-listed test above)
+        // so a newly added variant is covered automatically.
+        use std::collections::HashSet;
+        let mut ids = HashSet::new();
+        for mode in Mode::ALL {
+            assert!(!mode.label().is_empty(), "{:?} has no label", mode);
+            assert!(!mode.id().is_empty(), "{:?} has no id", mode);
+            assert!(
+                !crate::components::mode_icon::mode_icon_path(mode).is_empty(),
+                "{:?} has no icon path", mode,
+            );
+            assert!(ids.insert(mode.id()), "duplicate mode id {:?}", mode.id());
+        }
+        assert_eq!(ids.len(), Mode::ALL.len());
     }
 }

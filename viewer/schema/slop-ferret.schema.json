@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://architext.local/schema/slop-ferret.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema", "sha", "date", "attested_repo", "attested_plan",
+    "denominator", "accounting", "findings"
+  ],
+  "properties": {
+    "schema": { "type": "integer", "minimum": 1 },
+    "origin": { "type": "string" },
+    "root_commit": { "type": "string" },
+    "identity_method": { "type": "string" },
+    "sha": { "type": "string", "minLength": 1 },
+    "date": { "type": "string", "minLength": 1 },
+    "attested_repo": { "type": "string", "minLength": 1 },
+    "attested_plan": { "type": "string", "minLength": 1 },
+    "denominator": { "type": "integer", "minimum": 0 },
+    "waived": { "type": "integer", "minimum": 0 },
+    "worklist_size": { "type": "integer", "minimum": 0 },
+    "unmatched_size": { "type": "integer", "minimum": 0 },
+    "accounting": { "type": "string", "enum": ["complete", "incomplete"] },
+    "vocab_provenance": {
+      "type": "object",
+      "additionalProperties": { "type": "string" }
+    },
+    "tier": { "type": "string" },
+    "families_not_run": {
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "checked_clean": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["class", "method"],
+        "properties": {
+          "class": { "type": "string", "minLength": 1 },
+          "method": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "near_misses": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "findings_verified": { "type": "integer", "minimum": 0 },
+    "findings_suspected": { "type": "integer", "minimum": 0 },
+    "report_path": { "type": "string" },
+    "findings": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/finding" }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["title", "file", "class", "severity", "status"],
+      "properties": {
+        "title": { "type": "string", "minLength": 1 },
+        "file": { "type": "string", "minLength": 1 },
+        "class": { "type": "string", "minLength": 1 },
+        "severity": { "type": "string", "minLength": 1 },
+        "status": { "type": "string", "minLength": 1 },
+        "claim": { "type": "string" },
+        "refutation": { "type": "string" },
+        "bar": { "type": "string" },
+        "evidence": { "type": "string" },
+        "remediation": { "type": "string" },
+        "occurrences": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}
