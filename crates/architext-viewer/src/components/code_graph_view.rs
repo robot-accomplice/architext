@@ -924,7 +924,32 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // Task 3: this also catches an app-load worker warm that already
             // finished — its result lands here via `state.layout_cache`.
             let cache_key = LayoutKey::new(cg_sha.clone(), cg_tree.clone(), t);
-            let cache_hit = state.layout_cache.with_untracked(|c| c.get(&cache_key).map(|p| p.to_vec()));
+            // The length check is NOT redundant with the key. A dirty-tree map
+            // stamps `sha` from the commit and `tree` as the literal "dirty",
+            // and NEITHER encodes the working tree's CONTENT — so two runs at
+            // one commit over different uncommitted code produce an identical
+            // key and alias in this cache (pinned by
+            // `layout_cache::collision_tests`). Magma is proposing
+            // `<sha>+<diffhash>` to fix that at the source, but a consumer must
+            // not depend on a producer's key being collision-free: cached
+            // positions are indexed BY NODE INDEX in `static_interleaves`
+            // (`positions[i]`), so a short entry panics, and a panic in wasm
+            // traps the whole instance. Treat a size mismatch as a miss and
+            // settle fresh — slower, always correct.
+            let cache_hit = state
+                .layout_cache
+                .with_untracked(|c| c.get(&cache_key).map(|p| p.to_vec()))
+                .filter(|p| {
+                    let ok = p.len() == n;
+                    if !ok {
+                        diagnostics::record(
+                            diag_instance,
+                            "layout_cache_mismatch",
+                            Some(format!("cached={} nodes={n} tier={t:?}", p.len())),
+                        );
+                    }
+                    ok
+                });
 
             user_moved_camera.set(false);
             first_paint_logged.set(false);

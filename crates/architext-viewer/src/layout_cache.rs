@@ -150,3 +150,56 @@ mod tests {
         assert!(cache.get(&oldest).is_none(), "oldest entry must be evicted once over bound");
     }
 }
+
+#[cfg(test)]
+mod collision_tests {
+    use super::*;
+    use crate::code_graph_view_model::Tier;
+
+    /// A dirty-tree map stamps `sha` from the COMMIT and `tree` as the literal
+    /// string "dirty" — neither says anything about the working tree's
+    /// CONTENT. So two runs at the same commit over DIFFERENT uncommitted code
+    /// produce an identical key, and the second silently receives the first's
+    /// settled positions.
+    ///
+    /// Reported by the magma session 2026-08-05 while proposing to change
+    /// `sha` to `<sha>+<diffhash>` on dirty trees. Confirmed here rather than
+    /// taken on trust: this pins the collision so the guard added alongside it
+    /// cannot be removed without a failing test.
+    #[test]
+    fn two_dirty_runs_at_one_commit_over_different_code_collide() {
+        let mut cache = LayoutCache::default();
+        let first: Vec<(f32, f32)> = (0..1200).map(|i| (i as f32, 0.0)).collect();
+        cache.put(LayoutKey::new("3673cee", "dirty", Tier::Functions), first.clone());
+
+        // Same commit, same tree flag, DIFFERENT working-tree content — the
+        // graph now has more nodes because uncommitted code added functions.
+        let key_for_different_code = LayoutKey::new("3673cee", "dirty", Tier::Functions);
+        let hit = cache.get(&key_for_different_code);
+
+        assert!(
+            hit.is_some(),
+            "collision confirmed: a different working tree hits the previous entry"
+        );
+        assert_eq!(
+            hit.unwrap().len(),
+            1200,
+            "and it receives positions sized for the OTHER graph"
+        );
+    }
+
+    /// The proposed `<sha>+<diffhash>` fixes it at the source: different dirty
+    /// content yields a different key, so the entries no longer alias.
+    #[test]
+    fn a_content_qualified_sha_separates_them() {
+        let mut cache = LayoutCache::default();
+        cache.put(LayoutKey::new("3673cee+aaaa", "dirty", Tier::Functions), vec![(0.0, 0.0); 1200]);
+        assert!(
+            cache.get(&LayoutKey::new("3673cee+bbbb", "dirty", Tier::Functions)).is_none(),
+            "distinct dirty content must not alias"
+        );
+        // Clean trees are unaffected by the proposal and must keep hitting.
+        cache.put(LayoutKey::new("3673cee", "clean", Tier::Functions), vec![(1.0, 1.0); 1200]);
+        assert!(cache.get(&LayoutKey::new("3673cee", "clean", Tier::Functions)).is_some());
+    }
+}
