@@ -40,6 +40,10 @@ pub struct ArchitectureData {
     /// Code Graph panel rather than blanking the whole viewer (mirrors
     /// `AppState::repo_tree`'s `Option<Result<_, FetchError>>` treatment).
     pub code_graph: Option<Result<CodeGraph, FetchError>>,
+    /// The optional Slop Ferret sweep snapshot. `None` = not registered in the
+    /// manifest; `Some(Err(_))` = registered but malformed, surfaced by the Slop
+    /// Ferret panel.
+    pub slop_ferret: Option<Result<SlopFerret, FetchError>>,
     pub config: Option<ConfigPayload>,
 }
 
@@ -229,6 +233,11 @@ pub async fn load_architecture_data() -> Result<ArchitectureData, FetchError> {
     // below, which is likewise non-fatal.
     if let Some(url) = data_url(&manifest, "codeGraph") {
         data.code_graph = Some(get_json::<CodeGraph>(&url).await);
+    }
+
+    // Slop Ferret sweep snapshot is likewise an optional third-party enrichment.
+    if let Some(url) = data_url(&manifest, "slopFerret") {
+        data.slop_ferret = Some(get_json::<SlopFerret>(&url).await);
     }
 
     if let Some(index_path) = manifest.files.get("releases").cloned() {

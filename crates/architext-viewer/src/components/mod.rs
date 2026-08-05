@@ -22,6 +22,7 @@ pub mod repo_tree;
 pub mod rules_editor;
 pub mod rules_panel;
 pub mod selector_bar;
+pub mod slop_ferret_panel;
 pub mod shell;
 pub mod spinner;
 pub mod steps_panel;

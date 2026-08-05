@@ -1,0 +1,34 @@
+{
+  "contract": "slop-gate/2",
+  "sha": "PLACEHOLDER_SHA",
+  "fidelity": "rta",
+  "reachability_computable": true,
+  "map_provenance": {
+    "generator": "magma/0.2.0",
+    "contract_version": "codemap-rows/1"
+  },
+  "vocab_provenance": {
+    "lexicon": "~/.claude/skills/slop-ferret/references/ai-slop-lexicon.md",
+    "lexicon_version": "2026-08-04.1",
+    "signals_total": "3",
+    "signals_from_lexicon": "3",
+    "signals_from_repo": "0"
+  },
+  "unseeded_families": [],
+  "unseeded_detail": {},
+  "candidates": [],
+  "production_total": 2,
+  "production_files": ["main.go", "lib.go"],
+  "production_unclassified": [],
+  "h_worklist": [
+    { "path": "main.go", "reason": "network/untrusted-io" }
+  ],
+  "h_required": [
+    { "path": "main.go", "reason": "network/untrusted-io" }
+  ],
+  "h_deferred": [],
+  "h_unmatched": ["lib.go"],
+  "h_unmatched_changes": [],
+  "change_baseline": "",
+  "instructions": "read every h_required path"
+}

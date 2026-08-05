@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0.0",
+  "project": {
+    "id": "slop-ferret-viewer",
+    "name": "Slop Ferret Viewer Fixture",
+    "summary": "Validation fixture for the slop-ferret viewer integration."
+  },
+  "generatedAt": "2026-08-04T00:00:00Z",
+  "defaultViewId": "context",
+  "files": {
+    "nodes": "nodes.json",
+    "flows": "flows.json",
+    "views": "views.json",
+    "dataClassification": "data-classification.json",
+    "decisions": "decisions.json",
+    "risks": "risks.json",
+    "glossary": "glossary.json",
+    "slopFerret": "slop-ferret.json"
+  },
+  "notes": []
+}

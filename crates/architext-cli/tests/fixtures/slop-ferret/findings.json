@@ -1,0 +1,20 @@
+{
+  "repo": "github.com/robot-accomplice/example",
+  "skill_version": "v0.1.0",
+  "families_run": ["H"],
+  "findings": [
+    {
+      "title": "Example finding",
+      "file": "main.go",
+      "class": "H · latent defect",
+      "severity": "blocking",
+      "status": "VERIFIED",
+      "claim": "Example claim.",
+      "refutation": "None found.",
+      "bar": "reproduce RED",
+      "evidence": "Line 12 calls os/exec.Command with a user string.",
+      "remediation": "Validate input.",
+      "occurrences": 1
+    }
+  ]
+}

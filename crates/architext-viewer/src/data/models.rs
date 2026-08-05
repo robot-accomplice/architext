@@ -527,6 +527,80 @@ pub struct CodeGraphModuleCall {
     pub has_dynamic: bool,
 }
 
+// ─── slop-ferret.json ───────────────────────────────────────────────────────
+
+/// A slop-ferret sweep snapshot consumed by Architext. Optional third-party
+/// enrichment, like `CodeGraph`.
+#[derive(Debug, Clone, Deserialize)]
+pub struct SlopFerret {
+    pub schema: i64,
+    #[serde(default)]
+    pub origin: String,
+    #[serde(default, rename = "root_commit")]
+    pub root_commit: String,
+    #[serde(default, rename = "identity_method")]
+    pub identity_method: String,
+    pub sha: String,
+    pub date: String,
+    #[serde(rename = "attested_repo")]
+    pub attested_repo: String,
+    #[serde(rename = "attested_plan")]
+    pub attested_plan: String,
+    pub denominator: i64,
+    #[serde(default)]
+    pub waived: i64,
+    #[serde(default, rename = "worklist_size")]
+    pub worklist_size: i64,
+    #[serde(default, rename = "unmatched_size")]
+    pub unmatched_size: i64,
+    pub accounting: String,
+    #[serde(default, rename = "vocab_provenance")]
+    pub vocab_provenance: Option<std::collections::BTreeMap<String, String>>,
+    #[serde(default)]
+    pub tier: String,
+    #[serde(default, rename = "families_not_run")]
+    pub families_not_run: Vec<String>,
+    #[serde(default, rename = "checked_clean")]
+    pub checked_clean: Vec<SlopFerretCheckedClean>,
+    #[serde(default, rename = "near_misses")]
+    pub near_misses: Vec<String>,
+    #[serde(default, rename = "findings_verified")]
+    pub findings_verified: Option<i64>,
+    #[serde(default, rename = "findings_suspected")]
+    pub findings_suspected: Option<i64>,
+    #[serde(default, rename = "report_path")]
+    pub report_path: String,
+    #[serde(default)]
+    pub findings: Vec<SlopFerretFinding>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SlopFerretCheckedClean {
+    pub class: String,
+    pub method: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct SlopFerretFinding {
+    pub title: String,
+    pub file: String,
+    pub class: String,
+    pub severity: String,
+    pub status: String,
+    #[serde(default)]
+    pub claim: String,
+    #[serde(default)]
+    pub refutation: String,
+    #[serde(default)]
+    pub bar: String,
+    #[serde(default)]
+    pub evidence: String,
+    #[serde(default)]
+    pub remediation: String,
+    #[serde(default)]
+    pub occurrences: Option<i64>,
+}
+
 // ─── releases/index.json + detail files ──────────────────────────────────────
 
 #[derive(Debug, Clone, Deserialize)]

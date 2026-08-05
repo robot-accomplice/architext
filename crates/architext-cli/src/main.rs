@@ -131,6 +131,12 @@ fn main() {
     match opts.command.as_str() {
         "validate" => commands::validate::run(&target),
         "status" => commands::status::run(&target, opts.json, version),
+        "slop-ferret" => commands::slop_ferret::run(
+            &target,
+            &opts.plan,
+            &opts.discharge,
+            &opts.findings,
+        ),
         "prompt" => commands::prompt::run(&target, &opts.mode),
         "build" => commands::build::run(&target, &opts.out),
         "clean" => commands::clean::run(&target, opts.node_modules, opts.dry_run),

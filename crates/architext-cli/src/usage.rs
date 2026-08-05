@@ -22,6 +22,8 @@ Commands:
   prompt                     Print an LLM maintenance prompt.
   skill                      Print the Architext SKILL.md content for LLM skill creation.
   clean                      Remove generated local artifacts.
+  slop-ferret [path] --plan <file> --discharge <file> --findings <file>
+                             Bundle a slop-ferret sweep into docs/architext/data/slop-ferret.json.
   explain [topic]            Explain schemas and data contracts.
   version                    Print the Architext package version.
 
@@ -58,6 +60,9 @@ Options:
   --skip-validate            Do not run validation after sync/migration.
   --branch current|new|none  Branch handling for mutating sync.
   --branch-name <name>       Branch name to use with --branch new.
+  --plan <file>              slop-ferret plan.json (required for slop-ferret).
+  --discharge <file>         slop-ferret discharge.json (required for slop-ferret).
+  --findings <file>          slop-ferret findings.json (required for slop-ferret).
   --version, -v              Print the Architext package version.
 
 Examples:
