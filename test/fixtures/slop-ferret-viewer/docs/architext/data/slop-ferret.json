@@ -1,0 +1,46 @@
+{
+  "schema": 1,
+  "origin": "github.com/robot-accomplice/example",
+  "root_commit": "abc1234def5678",
+  "identity_method": "root-commit",
+  "sha": "abc1234def5678",
+  "date": "2026-08-04",
+  "attested_repo": "2/2",
+  "attested_plan": "1/1",
+  "denominator": 2,
+  "waived": 0,
+  "worklist_size": 1,
+  "unmatched_size": 1,
+  "accounting": "complete",
+  "vocab_provenance": {
+    "lexicon": "~/.claude/skills/slop-ferret/references/ai-slop-lexicon.md",
+    "lexicon_version": "2026-08-04.1",
+    "signals_total": "3",
+    "signals_from_lexicon": "3",
+    "signals_from_repo": "0"
+  },
+  "tier": "1",
+  "families_not_run": [],
+  "checked_clean": [
+    { "class": "H · latent defect", "method": "read every h_required path" }
+  ],
+  "near_misses": [],
+  "findings_verified": 1,
+  "findings_suspected": 0,
+  "report_path": "/tmp/report.html",
+  "findings": [
+    {
+      "title": "Example finding",
+      "file": "main.go",
+      "class": "H · latent defect",
+      "severity": "blocking",
+      "status": "VERIFIED",
+      "claim": "Example claim.",
+      "refutation": "None found.",
+      "bar": "reproduce RED",
+      "evidence": "Line 12 calls os/exec.Command with a user string.",
+      "remediation": "Validate input.",
+      "occurrences": 1
+    }
+  ]
+}
