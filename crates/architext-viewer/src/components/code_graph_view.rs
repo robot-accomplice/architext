@@ -66,6 +66,7 @@ use leptos::*;
 use wasm_bindgen::JsCast;
 
 use crate::code_graph_graph::FilterState;
+use crate::components::enrichment_empty_state::{Enrichment, EnrichmentEmptyState};
 use crate::code_graph_provenance::{
     discloses_executed_target_code, dynamic_edge_explanation, fidelity_method_description,
 };
@@ -237,11 +238,7 @@ pub fn CodeGraphView() -> impl IntoView {
                 let data = state.data.get();
                 match &data.code_graph {
                     None => view! {
-                        <div class="code-graph-view__empty">
-                            <h2>"No code graph yet"</h2>
-                            <p>"This project has no " <code>"code-graph.json"</code> " registered under "
-                               <code>"manifest.files.codeGraph"</code> "."</p>
-                        </div>
+                        <EnrichmentEmptyState kind=Enrichment::CodeGraph/>
                     }.into_view(),
                     Some(Err(err)) => view! {
                         <div class="code-graph-view__empty">

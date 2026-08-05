@@ -6,6 +6,7 @@ pub mod code_graph_view;
 pub mod config_field;
 pub mod config_panel;
 pub mod data_risks_panel;
+pub mod enrichment_empty_state;
 pub mod release_planning;
 pub mod release_trend_chart;
 pub mod release_truth_panel;
