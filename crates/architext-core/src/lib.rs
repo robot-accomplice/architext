@@ -26,6 +26,7 @@ pub fn validate_data_dir(data_dir: &Path, schema_dir: &Path) -> ValidationOutcom
     validation::schema::validate_schema(data_dir, schema_dir, &mut errors);
     validation::references::validate_references(data_dir, &mut errors);
     validation::code_graph::validate_code_graph(data_dir, &mut errors);
+    validation::slop_ferret::validate_slop_ferret(data_dir, &mut errors);
 
     // Load manifest to check for optional releases/roadmap sections.
     let manifest = read_manifest(data_dir);
