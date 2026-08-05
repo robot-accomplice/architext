@@ -10,7 +10,7 @@ use leptos::*;
 
 use crate::code_graph_graph::{format_signature, reach_badges, Reach};
 use crate::code_graph_paths::format_location;
-use crate::code_graph_provenance::dynamic_edge_explanation;
+use crate::code_graph_provenance::{dynamic_edge_explanation, reachability_caveat};
 use crate::code_graph_view_model::Tier;
 use crate::components::data_risks_panel::DataRisksPanel;
 use crate::components::notes_editor::NotesSection;
@@ -344,6 +344,12 @@ pub fn InspectorPanel() -> impl IntoView {
                                         kind,
                                         dynamic_calls,
                                     } = code_graph_function_detail(&f, calls, &cg.fidelity);
+                                    // Computed once per selection alongside the rest of the
+                                    // detail, never per render. `None` when the producer
+                                    // discloses nothing erring this way, so an honest artifact
+                                    // gains no caveat it did not earn.
+                                    let reachability_caveat_text =
+                                        (!badges.is_empty()).then(|| reachability_caveat(cg)).flatten();
                                     let clear = move |_| state.set_selected_code_graph_node(None);
                                     return view! {
                                         <button class="inspector__back" on:click=clear>
@@ -389,6 +395,17 @@ pub fn InspectorPanel() -> impl IntoView {
                                                         }).collect_view()}
                                                     </div>
                                                 }
+                                            })}
+                                            // The producer's own disclosure, when it admits it
+                                            // over-reports live code. Without this an empty
+                                            // dead-code result reads as a clean bill of health
+                                            // rather than as suppressed evidence — measured at
+                                            // 87% of nodes rooted with ZERO dead functions found
+                                            // on a derive-heavy Rust crate. Rendered as panel
+                                            // text, not a tooltip: a caveat nobody hovers is a
+                                            // caveat nobody reads.
+                                            {reachability_caveat_text.map(|c| view! {
+                                                <p class="inspector__meta cg-reach-caveat">{c}</p>
                                             })}
                                         </div>
                                     }

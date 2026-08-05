@@ -3194,3 +3194,13 @@ button.blast-chip { cursor: pointer; }
   border: 1px solid var(--line);
   color: var(--dim);
 }
+
+/* The producer's disclosed over-approximation, shown beside the reachability
+   badges. Deliberately panel text rather than a tooltip: a caveat nobody hovers
+   is a caveat nobody reads. */
+.cg-reach-caveat {
+  margin-top: 0.4rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--line);
+  color: var(--dim);
+}

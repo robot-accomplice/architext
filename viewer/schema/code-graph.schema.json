@@ -4,64 +4,204 @@
   "type": "object",
   "additionalProperties": false,
   "required": [
-    "contract_version", "generator", "language", "module", "sha",
-    "tree", "fidelity", "computable"
+    "contract_version",
+    "generator",
+    "language",
+    "module",
+    "sha",
+    "tree",
+    "fidelity",
+    "computable"
   ],
   "properties": {
-    "contract_version": { "type": "string", "minLength": 1 },
-    "generator": { "type": "string", "minLength": 1 },
-    "language": { "type": "string", "minLength": 1 },
-    "module": { "type": "string" },
-    "sha": { "type": "string" },
-    "tree": { "type": "string", "enum": ["clean", "dirty"] },
-    "fidelity": { "type": "string" },
-    "computable": { "type": "boolean" },
-    "executed_target_code": { "type": "boolean" },
-    "not_computable_reason": { "type": "string" },
-    "functions": { "type": ["array", "null"], "items": { "$ref": "#/$defs/function" } },
-    "calls": { "type": ["array", "null"], "items": { "$ref": "#/$defs/call" } },
-    "modules": { "type": ["array", "null"], "items": { "$ref": "#/$defs/module" } },
-    "module_calls": { "type": ["array", "null"], "items": { "$ref": "#/$defs/moduleCall" } }
+    "contract_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "generator": {
+      "type": "string",
+      "minLength": 1
+    },
+    "language": {
+      "type": "string",
+      "minLength": 1
+    },
+    "module": {
+      "type": "string"
+    },
+    "sha": {
+      "type": "string"
+    },
+    "tree": {
+      "type": "string",
+      "enum": [
+        "clean",
+        "dirty"
+      ]
+    },
+    "fidelity": {
+      "type": "string"
+    },
+    "computable": {
+      "type": "boolean"
+    },
+    "executed_target_code": {
+      "type": "boolean"
+    },
+    "not_computable_reason": {
+      "type": "string"
+    },
+    "functions": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/function"
+      }
+    },
+    "calls": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/call"
+      }
+    },
+    "modules": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/module"
+      }
+    },
+    "module_calls": {
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "$ref": "#/$defs/moduleCall"
+      }
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/limitation"
+      }
+    },
+    "disclosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "nodes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "roots": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "generated": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "dynamic_edges": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "root_ratio": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    }
   },
   "allOf": [
     {
-      "if": { "properties": { "computable": { "const": false } } },
-      "then": {
-        "required": ["not_computable_reason"],
+      "if": {
         "properties": {
-          "functions": { "type": "null" },
-          "calls": { "type": "null" },
-          "modules": { "type": "null" },
-          "module_calls": { "type": "null" }
+          "computable": {
+            "const": false
+          }
+        }
+      },
+      "then": {
+        "required": [
+          "not_computable_reason"
+        ],
+        "properties": {
+          "functions": {
+            "type": "null"
+          },
+          "calls": {
+            "type": "null"
+          },
+          "modules": {
+            "type": "null"
+          },
+          "module_calls": {
+            "type": "null"
+          }
         }
       },
       "else": {
-        "required": ["functions", "calls", "modules", "module_calls"],
+        "required": [
+          "functions",
+          "calls",
+          "modules",
+          "module_calls"
+        ],
         "properties": {
-          "functions": { "type": "array" },
-          "calls": { "type": "array" },
-          "modules": { "type": "array" },
-          "module_calls": { "type": "array" }
+          "functions": {
+            "type": "array"
+          },
+          "calls": {
+            "type": "array"
+          },
+          "modules": {
+            "type": "array"
+          },
+          "module_calls": {
+            "type": "array"
+          }
         }
       }
     }
   ],
   "$defs": {
-    "id": { "type": "string", "pattern": "^[a-z][a-z0-9-]*$" },
+    "id": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*$"
+    },
     "signature": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["params", "results"],
+      "required": [
+        "params",
+        "results"
+      ],
       "properties": {
         "params": {
           "type": "array",
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["type"],
+            "required": [
+              "type"
+            ],
             "properties": {
-              "name": { "type": "string" },
-              "type": { "type": "string", "minLength": 1 }
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string",
+                "minLength": 1
+              }
             }
           }
         },
@@ -70,8 +210,15 @@
           "items": {
             "type": "object",
             "additionalProperties": false,
-            "required": ["type"],
-            "properties": { "type": { "type": "string", "minLength": 1 } }
+            "required": [
+              "type"
+            ],
+            "properties": {
+              "type": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
           }
         }
       }
@@ -80,72 +227,221 @@
       "type": "object",
       "additionalProperties": false,
       "required": [
-        "id", "symbol", "pkg", "file", "line", "kind", "exported", "test",
-        "root", "generated", "reachable", "prod_reachable", "signature",
-        "fan_in", "fan_out"
+        "id",
+        "symbol",
+        "pkg",
+        "file",
+        "line",
+        "kind",
+        "exported",
+        "test",
+        "root",
+        "generated",
+        "reachable",
+        "prod_reachable",
+        "signature",
+        "fan_in",
+        "fan_out"
       ],
       "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "symbol": { "type": "string", "minLength": 1 },
-        "pkg": { "type": "string" },
-        "file": { "type": "string" },
-        "line": { "type": "integer" },
-        "kind": { "type": "string", "enum": ["func", "method", "init"] },
-        "exported": { "type": "boolean" },
-        "test": { "type": "boolean" },
-        "root": { "type": "boolean" },
-        "generated": { "type": "boolean" },
-        "reachable": { "type": "boolean" },
-        "prod_reachable": { "type": "boolean" },
-        "signature": { "$ref": "#/$defs/signature" },
-        "doc": { "type": "string" },
-        "fan_in": { "type": "integer" },
-        "fan_out": { "type": "integer" }
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "symbol": {
+          "type": "string",
+          "minLength": 1
+        },
+        "pkg": {
+          "type": "string"
+        },
+        "file": {
+          "type": "string"
+        },
+        "line": {
+          "type": "integer"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "func",
+            "method",
+            "init"
+          ]
+        },
+        "exported": {
+          "type": "boolean"
+        },
+        "test": {
+          "type": "boolean"
+        },
+        "root": {
+          "type": "boolean"
+        },
+        "generated": {
+          "type": "boolean"
+        },
+        "reachable": {
+          "type": "boolean"
+        },
+        "prod_reachable": {
+          "type": "boolean"
+        },
+        "signature": {
+          "$ref": "#/$defs/signature"
+        },
+        "doc": {
+          "type": "string"
+        },
+        "fan_in": {
+          "type": "integer"
+        },
+        "fan_out": {
+          "type": "integer"
+        }
       }
     },
     "call": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["from", "to", "site_file", "site_line", "kind"],
+      "required": [
+        "from",
+        "to",
+        "site_file",
+        "site_line",
+        "kind"
+      ],
       "properties": {
-        "from": { "$ref": "#/$defs/id" },
-        "to": { "$ref": "#/$defs/id" },
-        "site_file": { "type": "string" },
-        "site_line": { "type": "integer" },
-        "kind": { "type": "string", "enum": ["static", "dynamic"] }
+        "from": {
+          "$ref": "#/$defs/id"
+        },
+        "to": {
+          "$ref": "#/$defs/id"
+        },
+        "site_file": {
+          "type": "string"
+        },
+        "site_line": {
+          "type": "integer"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "static",
+            "dynamic"
+          ]
+        }
       }
     },
     "module": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["id", "pkg", "function_ids", "counts", "fan_in", "fan_out"],
+      "required": [
+        "id",
+        "pkg",
+        "function_ids",
+        "counts",
+        "fan_in",
+        "fan_out"
+      ],
       "properties": {
-        "id": { "$ref": "#/$defs/id" },
-        "pkg": { "type": "string" },
-        "function_ids": { "type": "array", "items": { "$ref": "#/$defs/id" } },
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "pkg": {
+          "type": "string"
+        },
+        "function_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          }
+        },
         "counts": {
           "type": "object",
           "additionalProperties": false,
-          "required": ["functions", "dead", "test_only"],
+          "required": [
+            "functions",
+            "dead",
+            "test_only"
+          ],
           "properties": {
-            "functions": { "type": "integer" },
-            "dead": { "type": "integer" },
-            "test_only": { "type": "integer" }
+            "functions": {
+              "type": "integer"
+            },
+            "dead": {
+              "type": "integer"
+            },
+            "test_only": {
+              "type": "integer"
+            }
           }
         },
-        "fan_in": { "type": "integer" },
-        "fan_out": { "type": "integer" }
+        "fan_in": {
+          "type": "integer"
+        },
+        "fan_out": {
+          "type": "integer"
+        }
       }
     },
     "moduleCall": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["from", "to", "count", "has_dynamic"],
+      "required": [
+        "from",
+        "to",
+        "count",
+        "has_dynamic"
+      ],
       "properties": {
-        "from": { "$ref": "#/$defs/id" },
-        "to": { "$ref": "#/$defs/id" },
-        "count": { "type": "integer" },
-        "has_dynamic": { "type": "boolean" }
+        "from": {
+          "$ref": "#/$defs/id"
+        },
+        "to": {
+          "$ref": "#/$defs/id"
+        },
+        "count": {
+          "type": "integer"
+        },
+        "has_dynamic": {
+          "type": "boolean"
+        }
+      }
+    },
+    "limitation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "scope",
+        "attribution",
+        "description",
+        "effect"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "scope": {
+          "type": "string",
+          "minLength": 1
+        },
+        "attribution": {
+          "type": "string",
+          "minLength": 1
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1
+        },
+        "effect": {
+          "type": "string",
+          "minLength": 1
+        },
+        "evidenced_by": {
+          "type": "string",
+          "minLength": 1
+        }
       }
     }
   }
