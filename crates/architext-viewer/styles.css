@@ -3194,3 +3194,127 @@ button.blast-chip { cursor: pointer; }
   border: 1px solid var(--line);
   color: var(--dim);
 }
+
+/* The producer's disclosed over-approximation, shown beside the reachability
+   badges. Deliberately panel text rather than a tooltip: a caveat nobody hovers
+   is a caveat nobody reads. */
+.cg-reach-caveat {
+  margin-top: 0.4rem;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--line);
+  color: var(--dim);
+}
+
+/* Open candidates: leads the plan raised mechanically, not findings. Styled
+   distinctly from findings so nothing here reads as a confirmed accusation. */
+.slop-ferret-panel__candidates {
+  padding: 0.75rem 1rem;
+  margin-bottom: 1rem;
+  border: 1px dashed var(--line);
+  border-radius: var(--radius, 6px);
+}
+.slop-ferret-panel__candidates-note { margin: 0.2rem 0 0.75rem; color: var(--dim); font-size: 0.85rem; }
+.slop-ferret-panel__candidate { padding: 0.5rem 0; border-top: 1px solid var(--line); }
+.slop-ferret-panel__candidate:first-of-type { border-top: none; }
+.slop-ferret-panel__candidate-head { display: flex; gap: 0.6rem; align-items: baseline; flex-wrap: wrap; }
+.slop-ferret-panel__symbol { font-family: var(--font-mono); color: var(--ink); }
+.slop-ferret-panel__family { color: var(--dim); font-size: 0.78rem; }
+
+/* Enrichment empty states. These carry a dependency explanation, so they get
+   real reading width rather than the terse centred card the terse message had. */
+.enrichment-empty { max-width: 46rem; padding: 2rem; display: flex; flex-direction: column; gap: 0.6rem; }
+.enrichment-empty h2 { margin: 0; }
+.enrichment-empty__what { color: var(--dim); margin: 0 0 0.4rem; }
+.enrichment-empty__label { margin: 0.6rem 0 0.2rem; color: var(--dim); font-size: 0.85rem; }
+.enrichment-empty__cmd {
+  margin: 0; padding: 0.6rem 0.8rem; background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: var(--radius, 6px);
+  font-family: var(--font-mono); font-size: 0.85rem; overflow-x: auto;
+}
+.enrichment-empty__repo { color: var(--accent); }
+.enrichment-empty__note { color: var(--dim); font-size: 0.85rem; margin: 0.4rem 0 0; }
+.enrichment-empty__run {
+  align-self: flex-start; padding: 0.45rem 1rem; cursor: pointer;
+  border: 1px solid var(--accent); border-radius: var(--radius, 6px);
+  background: transparent; color: var(--accent); font: inherit;
+}
+.enrichment-empty__run:disabled { opacity: 0.6; cursor: default; }
+.enrichment-empty__out {
+  margin: 0.6rem 0 0; padding: 0.6rem 0.8rem; white-space: pre-wrap;
+  background: var(--panel-2); border-left: 2px solid var(--line);
+  font-family: var(--font-mono); font-size: 0.8rem; max-height: 16rem; overflow: auto;
+}
+.enrichment-empty__out--err { border-left-color: var(--danger, #e5484d); }
+
+/* Confirmation shown when a sweep is requested before a code graph exists.
+   Not a blocker: the sweep is weaker without the map, not invalid, so the user
+   is offered the better order rather than refused. */
+.enrichment-empty__confirm {
+  margin-top: 0.8rem; padding: 0.9rem 1rem;
+  border: 1px solid var(--accent); border-radius: var(--radius, 6px);
+  background: var(--panel-2);
+}
+.enrichment-empty__confirm p { margin: 0 0 0.5rem; }
+.enrichment-empty__confirm-head { font-weight: 600; }
+.enrichment-empty__confirm-actions { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.6rem; }
+.enrichment-empty__secondary {
+  padding: 0.45rem 1rem; cursor: pointer; font: inherit;
+  border: 1px solid var(--line); border-radius: var(--radius, 6px);
+  background: transparent; color: var(--dim);
+}
+
+/* Pipeline stages. Each stage names its tool and stays visible after it
+   finishes, so the list doubles as the record of what ran.
+
+   The running stage uses a track-and-fill, matching `.release-progress` and the
+   code-graph settle panel, rather than a rotating glyph: the app already speaks
+   that language, and a spinning half-disc at 1rem reads as a googly eye. The
+   fill is indeterminate because magma and ferret report no fraction; it sweeps
+   to say "working", never to imply a percentage. */
+.enrichment-empty__stages {
+  list-style: none; margin: 0.9rem 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 0.45rem;
+}
+.enrichment-empty__stage {
+  display: grid; grid-template-columns: 1rem minmax(0, max-content) 1fr;
+  gap: 0.6rem; align-items: center; color: var(--dim);
+}
+.enrichment-empty__stage-mark { font-family: var(--font-mono); text-align: center; }
+.enrichment-empty__stage-label { white-space: nowrap; }
+.enrichment-empty__stage--running,
+.enrichment-empty__stage--partial { color: var(--ink); }
+.enrichment-empty__stage--done .enrichment-empty__stage-mark { color: var(--accent-base); }
+.enrichment-empty__stage--partial .enrichment-empty__stage-mark { color: var(--sev-medium, #d6a020); }
+.enrichment-empty__stage--failed .enrichment-empty__stage-mark { color: var(--sev-high, #e5484d); }
+
+.enrichment-empty__scan {
+  position: relative; display: block; height: 6px; min-width: 6rem; max-width: 14rem;
+  border-radius: var(--pill-radius); background: var(--panel-2);
+  border: var(--hairline) solid var(--line); overflow: hidden;
+}
+.enrichment-empty__scan-fill {
+  position: absolute; inset-block: 0; inline-size: 38%;
+  border-radius: var(--pill-radius); background: var(--accent-base);
+  animation: architext-scan 1.5s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+@keyframes architext-scan {
+  from { inset-inline-start: -2%; }
+  to   { inset-inline-start: 64%; }
+}
+/* Motion-reduced users still need to see WHICH stage is live, so the fill stays
+   and only the sweep stops. */
+@media (prefers-reduced-motion: reduce) {
+  .enrichment-empty__scan-fill { animation: none; inset-inline-start: 0; inline-size: 100%; opacity: 0.45; }
+}
+
+/* A stale producer is a correctness warning, not a footnote: an artifact from a
+   magma without the disclosure fields cannot report its own limitations, so an
+   empty dead-code result looks clean when it is merely unmeasured. */
+.code-graph-view__stale,
+.enrichment-empty__stale {
+  margin: 0.5rem 0 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--sev-medium, #d6a020);
+  color: var(--ink);
+  font-size: 0.85rem;
+}

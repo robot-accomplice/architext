@@ -42,6 +42,41 @@ fn require_unique(items: &[Value], label: &str, errors: &mut Vec<String>) {
 
 /// Validate the code-graph document referenced by `manifest.files.codeGraph`.
 /// No-op (pass) when the key is absent — the file is optional.
+/// Fields a `limitation.evidenced_by` may name.
+///
+/// Mirrors `disclosure`'s properties in `code-graph.schema.json`. Kept as an
+/// explicit list because `evidenced_by` is a POINTER: an id that resolves to
+/// nothing is a dangling reference, and the viewer would silently show a
+/// limitation whose supporting number never appears. Unlike `scope`/`effect`
+/// — producer VOCABULARY, deliberately unpinned so an unknown value degrades —
+/// this names OUR own structure, so a mismatch is a real integrity error.
+const DISCLOSURE_FIELDS: &[&str] =
+    &["nodes", "roots", "generated", "dynamic_edges", "root_ratio"];
+
+/// Referential integrity for the disclosure surface.
+pub fn validate_limitations(doc: &Value, errors: &mut Vec<String>) {
+    let limitations = match doc.get("limitations").and_then(Value::as_array) {
+        Some(l) => l,
+        None => return, // optional; absent means "not disclosed"
+    };
+    require_unique(limitations, "code-graph limitations", errors);
+
+    let has_disclosure = doc.get("disclosure").and_then(Value::as_object).is_some();
+    for lim in limitations {
+        let Some(ev) = lim.get("evidenced_by").and_then(Value::as_str) else { continue };
+        let id = lim.get("id").and_then(Value::as_str).unwrap_or("?");
+        if !DISCLOSURE_FIELDS.contains(&ev) {
+            errors.push(format!(
+                "code-graph limitation \"{id}\" is evidenced_by \"{ev}\", which is not a disclosure field"
+            ));
+        } else if !has_disclosure {
+            errors.push(format!(
+                "code-graph limitation \"{id}\" is evidenced_by \"{ev}\" but the document has no disclosure object"
+            ));
+        }
+    }
+}
+
 pub fn validate_code_graph(data_dir: &Path, errors: &mut Vec<String>) {
     let manifest = match read_json(&data_dir.join("manifest.json"), errors) {
         Some(v) => v,
@@ -68,6 +103,8 @@ pub fn validate_code_graph(data_dir: &Path, errors: &mut Vec<String>) {
         ));
         return;
     }
+
+    validate_limitations(&doc, errors);
 
     // --- refusal: computable=false => valid, nothing further to check --------
     if doc.get("computable").and_then(Value::as_bool) == Some(false) {
@@ -124,5 +161,83 @@ pub fn validate_code_graph(data_dir: &Path, errors: &mut Vec<String>) {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod limitation_tests {
+    use super::validate_limitations;
+    use serde_json::json;
+
+    #[test]
+    fn a_dangling_evidence_pointer_is_an_error() {
+        // WHY: `evidenced_by` is a POINTER into our own disclosure struct. If it
+        // resolves to nothing the viewer shows a limitation whose supporting
+        // number never appears — a claim with invisible evidence, which is
+        // exactly the shape this field exists to prevent.
+        let doc = json!({
+            "limitations": [{
+                "id": "x", "scope": "backend", "attribution": "magma",
+                "description": "d", "effect": "may-omit-edges",
+                "evidenced_by": "not_a_field"
+            }],
+            "disclosure": { "nodes": 1 }
+        });
+        let mut errors = Vec::new();
+        validate_limitations(&doc, &mut errors);
+        assert!(errors.iter().any(|e| e.contains("not a disclosure field")), "{errors:?}");
+    }
+
+    #[test]
+    fn evidence_without_a_disclosure_object_is_an_error() {
+        let doc = json!({
+            "limitations": [{
+                "id": "x", "scope": "backend", "attribution": "magma",
+                "description": "d", "effect": "over-approximates-live",
+                "evidenced_by": "root_ratio"
+            }]
+        });
+        let mut errors = Vec::new();
+        validate_limitations(&doc, &mut errors);
+        assert!(errors.iter().any(|e| e.contains("no disclosure object")), "{errors:?}");
+    }
+
+    #[test]
+    fn unknown_scope_and_effect_are_accepted() {
+        // The governance rule, pinned as a test: `scope`/`effect` are producer
+        // VOCABULARY and deliberately unpinned, so a value this build predates
+        // must pass. Pinning them would reproduce the kind:"init" outage, where
+        // one unknown value invalidated a 15MB artifact.
+        let doc = json!({
+            "limitations": [{
+                "id": "future", "scope": "sandbox-mode", "attribution": "magma 9.9",
+                "description": "d", "effect": "may-invent-nodes"
+            }]
+        });
+        let mut errors = Vec::new();
+        validate_limitations(&doc, &mut errors);
+        assert!(errors.is_empty(), "unknown vocabulary must not be an error: {errors:?}");
+    }
+
+    #[test]
+    fn duplicate_limitation_ids_are_rejected() {
+        // ids are the suppression handle a consumer uses; two limitations
+        // sharing one makes targeted suppression ambiguous.
+        let l = json!({
+            "id": "dupe", "scope": "backend", "attribution": "m",
+            "description": "d", "effect": "may-omit-edges"
+        });
+        let doc = json!({ "limitations": [l, l] });
+        let mut errors = Vec::new();
+        validate_limitations(&doc, &mut errors);
+        assert!(errors.iter().any(|e| e.contains("duplicate id")), "{errors:?}");
+    }
+
+    #[test]
+    fn an_absent_limitations_array_is_not_an_error() {
+        // Optional by design: artifacts predating the field stay valid.
+        let mut errors = Vec::new();
+        validate_limitations(&json!({ "functions": [] }), &mut errors);
+        assert!(errors.is_empty(), "{errors:?}");
     }
 }

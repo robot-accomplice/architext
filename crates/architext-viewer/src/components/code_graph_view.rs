@@ -66,8 +66,10 @@ use leptos::*;
 use wasm_bindgen::JsCast;
 
 use crate::code_graph_graph::FilterState;
+use crate::components::enrichment_empty_state::{Enrichment, EnrichmentEmptyState};
 use crate::code_graph_provenance::{
     discloses_executed_target_code, dynamic_edge_explanation, fidelity_method_description,
+    stale_generator_warning,
 };
 use crate::code_graph_layout::LayoutDriver;
 use crate::code_graph_view_model::{
@@ -237,11 +239,7 @@ pub fn CodeGraphView() -> impl IntoView {
                 let data = state.data.get();
                 match &data.code_graph {
                     None => view! {
-                        <div class="code-graph-view__empty">
-                            <h2>"No code graph yet"</h2>
-                            <p>"This project has no " <code>"code-graph.json"</code> " registered under "
-                               <code>"manifest.files.codeGraph"</code> "."</p>
-                        </div>
+                        <EnrichmentEmptyState kind=Enrichment::CodeGraph/>
                     }.into_view(),
                     Some(Err(err)) => view! {
                         <div class="code-graph-view__empty">
@@ -392,6 +390,11 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // cloned out for the same reason as `cg_sha`/`cg_tree` above — `cg`
     // itself is moved into the tier-entry effect below.
     let cg_generator = cg.generator.clone();
+    // Computed once per document. The popover already PRINTED this generator
+    // verbatim and two sessions still spent a day on maps from a producer two
+    // minor versions stale, because printing a version is not the same as
+    // checking it. The viewer performs the comparison itself now.
+    let cg_stale_warning = stale_generator_warning(&cg.generator);
     let cg_executed_target_code = cg.executed_target_code;
     // Computed once from `cg.fidelity` (fixed for this component instance's
     // life) so nothing downstream needs to hold onto `cg.fidelity` itself —
@@ -924,7 +927,32 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // Task 3: this also catches an app-load worker warm that already
             // finished — its result lands here via `state.layout_cache`.
             let cache_key = LayoutKey::new(cg_sha.clone(), cg_tree.clone(), t);
-            let cache_hit = state.layout_cache.with_untracked(|c| c.get(&cache_key).map(|p| p.to_vec()));
+            // The length check is NOT redundant with the key. A dirty-tree map
+            // stamps `sha` from the commit and `tree` as the literal "dirty",
+            // and NEITHER encodes the working tree's CONTENT — so two runs at
+            // one commit over different uncommitted code produce an identical
+            // key and alias in this cache (pinned by
+            // `layout_cache::collision_tests`). Magma is proposing
+            // `<sha>+<diffhash>` to fix that at the source, but a consumer must
+            // not depend on a producer's key being collision-free: cached
+            // positions are indexed BY NODE INDEX in `static_interleaves`
+            // (`positions[i]`), so a short entry panics, and a panic in wasm
+            // traps the whole instance. Treat a size mismatch as a miss and
+            // settle fresh — slower, always correct.
+            let cache_hit = state
+                .layout_cache
+                .with_untracked(|c| c.get(&cache_key).map(|p| p.to_vec()))
+                .filter(|p| {
+                    let ok = p.len() == n;
+                    if !ok {
+                        diagnostics::record(
+                            diag_instance,
+                            "layout_cache_mismatch",
+                            Some(format!("cached={} nodes={n} tier={t:?}", p.len())),
+                        );
+                    }
+                    ok
+                });
 
             user_moved_camera.set(false);
             first_paint_logged.set(false);
@@ -1695,6 +1723,9 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                             >
                                 <p class="code-graph-view__provenance-line">
                                     {format!("Generator: {cg_generator}")}
+                                    {cg_stale_warning.clone().map(|w| view! {
+                                        <p class="code-graph-view__stale">{w}</p>
+                                    })}
                                 </p>
                                 <p class="code-graph-view__provenance-line">{cg_method_description}</p>
                                 {show_exec.then(|| view! {

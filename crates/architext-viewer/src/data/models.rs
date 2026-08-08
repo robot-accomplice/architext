@@ -438,6 +438,68 @@ pub struct CodeGraph {
     pub modules: Option<Vec<CodeGraphModule>>,
     #[serde(default)]
     pub module_calls: Option<Vec<CodeGraphModuleCall>>,
+    /// Known limitations of the analysis that produced this graph.
+    ///
+    /// Optional: artifacts predating the field are still valid, and an absent
+    /// list means "not disclosed", NEVER "no limitations" — every backend has
+    /// them, which is why magma retrofitted Go and Rust together rather than
+    /// shipping the field for one language and letting the others look
+    /// unlimited by omission.
+    #[serde(default)]
+    pub limitations: Vec<CodeGraphLimitation>,
+    /// Per-run measurements. Separate from [`CodeGraphLimitation`] on purpose:
+    /// a limitation is a property of (backend, version) and is identical across
+    /// every artifact that backend emits, while these are properties of THIS
+    /// run against THIS repository. Collapsing them would destroy the
+    /// tool-versus-your-code distinction that `attribution` exists to draw.
+    #[serde(default)]
+    pub disclosure: Option<CodeGraphDisclosure>,
+}
+
+/// One disclosed limitation of the producing analysis.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+pub struct CodeGraphLimitation {
+    pub id: String,
+    /// WHO is limited — canonically `language` | `analyzer` | `backend`, but
+    /// deliberately not an enum here or in the schema. The value answers "does
+    /// waiting help?": a language limit never moves, an analyzer limit moves
+    /// when the pin moves, a backend limit is someone's to-do. An unrecognised
+    /// scope must degrade to "we cannot tell whether waiting helps" rather than
+    /// reject the artifact.
+    pub scope: String,
+    /// The specific limiter, including a version where relevant — e.g.
+    /// "not supported by TypeScript 5.9.3" versus "not supported by JavaScript".
+    pub attribution: String,
+    pub description: String,
+    /// WHICH WAY the analysis errs — canonically `over-approximates-live` |
+    /// `may-omit-edges` | `may-omit-nodes`, also unpinned. This is the field
+    /// that lets a reader weight a finding rather than distrust the whole map.
+    pub effect: String,
+    /// Optional name of a [`CodeGraphDisclosure`] field that quantifies this
+    /// limitation. Magma's inverse of a `relates_to` on the count, and the
+    /// better direction: `disclosure` is a struct of named scalars rather than
+    /// a list, so the pointer belongs on the thing being iterated.
+    #[serde(default)]
+    pub evidenced_by: Option<String>,
+}
+
+/// Per-run counts that quantify the disclosed limitations.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+pub struct CodeGraphDisclosure {
+    #[serde(default)]
+    pub nodes: Option<i64>,
+    #[serde(default)]
+    pub roots: Option<i64>,
+    #[serde(default)]
+    pub generated: Option<i64>,
+    #[serde(default)]
+    pub dynamic_edges: Option<i64>,
+    /// Roots as a fraction of nodes. The number that makes over-rooting
+    /// visible: magma's own graph sits at 0.028, a derive-heavy Bevy crate at
+    /// 0.872 — and at that level our Dead and Test-only badge sets collapse to
+    /// empty, which a reader would otherwise read as a clean bill of health.
+    #[serde(default)]
+    pub root_ratio: Option<f64>,
 }
 
 /// One parameter. `name` is omitted for unnamed params; `type` is always present.
@@ -564,6 +626,13 @@ pub struct SlopFerret {
     pub checked_clean: Vec<SlopFerretCheckedClean>,
     #[serde(default, rename = "near_misses")]
     pub near_misses: Vec<String>,
+    /// Mechanically-derived candidates from `ferret plan` — located and
+    /// classified with no model involved. NOT findings: nothing has verified
+    /// them, and the panel must never present them as confirmed slop. The
+    /// skill's own rule is that a false accusation costs more than a missed
+    /// one, so these render as leads with the bar that would settle each.
+    #[serde(default)]
+    pub candidates: Vec<SlopFerretCandidate>,
     #[serde(default, rename = "findings_verified")]
     pub findings_verified: Option<i64>,
     #[serde(default, rename = "findings_suspected")]
@@ -1097,4 +1166,22 @@ mod config_payload_tests {
         assert!(fns[0].doc.is_none());
         assert!(fns[0].signature.params.is_empty());
     }
+}
+
+/// One undispositioned candidate from the sweep plan.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+pub struct SlopFerretCandidate {
+    #[serde(default)]
+    pub family: String,
+    pub class: String,
+    pub file: String,
+    #[serde(default)]
+    pub line: i64,
+    pub symbol: String,
+    /// What would have to be proven to confirm or refute this. Carried through
+    /// verbatim because it is the actionable half — "16 candidates" tells a
+    /// reader nothing; "prove nothing reaches it, reflection and codegen
+    /// checked" tells them exactly what the next hour looks like.
+    #[serde(default)]
+    pub bar: String,
 }

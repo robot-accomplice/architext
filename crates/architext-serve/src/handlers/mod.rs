@@ -15,3 +15,4 @@ pub mod session;
 pub mod static_files;
 pub mod status;
 pub mod sync_repair;
+pub mod tools;

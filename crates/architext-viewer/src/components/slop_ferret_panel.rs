@@ -2,7 +2,8 @@
 
 use leptos::*;
 
-use crate::data::models::{SlopFerret, SlopFerretFinding};
+use crate::data::models::{SlopFerret, SlopFerretCandidate, SlopFerretFinding};
+use crate::components::enrichment_empty_state::{Enrichment, EnrichmentEmptyState};
 use crate::state::use_app_state;
 
 const SEV_ORDER: &[&str] = &["blocking", "fix-or-file", "note"];
@@ -43,10 +44,7 @@ pub fn SlopFerretPanel() -> impl IntoView {
                 match snapshot() {
                     Some(doc) => render_snapshot(&doc),
                     None => view! {
-                        <div class="slop-ferret-panel__empty">
-                            <span class="overline">"SLOP FERRET"</span>
-                            <p>"No slop-ferret snapshot is registered in this project. Run `architext slop-ferret --plan ... --discharge ... --findings ...` to create one."</p>
-                        </div>
+                        <EnrichmentEmptyState kind=Enrichment::SlopDetection/>
                     }.into_view(),
                 }
             }}
@@ -135,6 +133,7 @@ fn render_snapshot(doc: &SlopFerret) -> View {
                 </div>
             </div>
             {coverage_section(doc)}
+            {candidates_section(&doc.candidates)}
             <div class="slop-ferret-panel__findings">
                 {findings.into_iter().map(finding_card).collect_view()}
             </div>
@@ -194,6 +193,59 @@ fn coverage_section(doc: &SlopFerret) -> Option<View> {
         }
         .into_view(),
     )
+}
+
+/// Undispositioned candidates from the plan.
+///
+/// `ferret plan` locates and classifies these mechanically — no model involved
+/// — so they are available the moment a plan exists, long before anyone has
+/// swept anything. Rendering only the COUNT (which is all the bundle carried
+/// before) threw away the entire actionable payload: file, line, symbol, class,
+/// and the bar that settles it.
+///
+/// Presented as OPEN QUESTIONS, never as findings. The skill's own operating
+/// rule is that a false accusation costs more than a missed one, so nothing
+/// here may read as confirmed slop — each row states what would have to be
+/// proven, which is also the reader's next action.
+fn candidates_section(candidates: &[SlopFerretCandidate]) -> Option<View> {
+    if candidates.is_empty() {
+        return None;
+    }
+    let n = candidates.len();
+    let rows = candidates.to_vec();
+    Some(view! {
+        <div class="slop-ferret-panel__candidates">
+            <span class="overline">"OPEN CANDIDATES"</span>
+            <p class="slop-ferret-panel__candidates-note">
+                {format!("{n} raised by the plan and not yet dispositioned. \
+                          These are leads, not findings \u{2014} nothing has verified them.")}
+            </p>
+            {rows.into_iter().map(candidate_row).collect_view()}
+        </div>
+    }.into_view())
+}
+
+fn candidate_row(c: SlopFerretCandidate) -> View {
+    view! {
+        <div class="slop-ferret-panel__candidate">
+            <div class="slop-ferret-panel__candidate-head">
+                <span class="slop-ferret-panel__class">{c.class.clone()}</span>
+                <code class="slop-ferret-panel__symbol">{c.symbol.clone()}</code>
+                {(!c.family.is_empty()).then(|| view! {
+                    <span class="slop-ferret-panel__family">{format!("family {}", c.family)}</span>
+                })}
+            </div>
+            <div class="slop-ferret-panel__meta">
+                {if c.line > 0 { format!("{}:{}", c.file, c.line) } else { c.file.clone() }}
+            </div>
+            {(!c.bar.is_empty()).then(|| view! {
+                <div class="slop-ferret-panel__section">
+                    <span class="overline">"BAR TO SETTLE"</span>
+                    <p>{c.bar.clone()}</p>
+                </div>
+            })}
+        </div>
+    }.into_view()
 }
 
 fn finding_card(f: SlopFerretFinding) -> View {

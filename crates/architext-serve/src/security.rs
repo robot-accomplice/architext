@@ -144,6 +144,11 @@ pub fn is_mutating_api_request(path: &str, method: &axum::http::Method) -> bool 
     matches!(
         path,
         "/api/doctor"
+            // Spawns external processes (magma / ferret) against the target
+            // repo. This list is an ALLOWLIST — a new POST route is
+            // unauthenticated until it is added here, so the most dangerous
+            // endpoint in the server is exactly the kind that gets forgotten.
+            | "/api/tools/run"
             | "/api/sync-repair"
             | "/api/release-plans"
             | "/api/rules"
@@ -292,5 +297,28 @@ mod tests {
             token.chars().all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_'),
             "token must be base64url alphabet: {token}"
         );
+    }
+}
+
+#[cfg(test)]
+mod tools_run_guard {
+    use super::is_mutating_api_request;
+    use axum::http::Method;
+
+    #[test]
+    fn tools_run_requires_mutation_authorization() {
+        // WHY: `/api/tools/run` spawns external binaries against the target
+        // repository. `is_mutating_api_request` is an allowlist, so a route
+        // absent from it is unauthenticated — this pins the single most
+        // dangerous endpoint in the server against that silent default.
+        assert!(is_mutating_api_request("/api/tools/run", &Method::POST));
+    }
+
+    #[test]
+    fn tool_discovery_stays_read_only() {
+        // GET /api/tools only reports whether two binaries exist on PATH, so
+        // it is deliberately NOT a mutation and needs no token.
+        assert!(!is_mutating_api_request("/api/tools", &Method::GET));
+        assert!(!is_mutating_api_request("/api/tools", &Method::POST), "no POST route at /api/tools");
     }
 }
