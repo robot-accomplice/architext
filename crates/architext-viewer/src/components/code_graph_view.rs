@@ -69,6 +69,7 @@ use crate::code_graph_graph::FilterState;
 use crate::components::enrichment_empty_state::{Enrichment, EnrichmentEmptyState};
 use crate::code_graph_provenance::{
     discloses_executed_target_code, dynamic_edge_explanation, fidelity_method_description,
+    stale_generator_warning,
 };
 use crate::code_graph_layout::LayoutDriver;
 use crate::code_graph_view_model::{
@@ -389,6 +390,11 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     // cloned out for the same reason as `cg_sha`/`cg_tree` above — `cg`
     // itself is moved into the tier-entry effect below.
     let cg_generator = cg.generator.clone();
+    // Computed once per document. The popover already PRINTED this generator
+    // verbatim and two sessions still spent a day on maps from a producer two
+    // minor versions stale, because printing a version is not the same as
+    // checking it. The viewer performs the comparison itself now.
+    let cg_stale_warning = stale_generator_warning(&cg.generator);
     let cg_executed_target_code = cg.executed_target_code;
     // Computed once from `cg.fidelity` (fixed for this component instance's
     // life) so nothing downstream needs to hold onto `cg.fidelity` itself —
@@ -1717,6 +1723,9 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                             >
                                 <p class="code-graph-view__provenance-line">
                                     {format!("Generator: {cg_generator}")}
+                                    {cg_stale_warning.clone().map(|w| view! {
+                                        <p class="code-graph-view__stale">{w}</p>
+                                    })}
                                 </p>
                                 <p class="code-graph-view__provenance-line">{cg_method_description}</p>
                                 {show_exec.then(|| view! {

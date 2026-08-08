@@ -25,6 +25,16 @@ use serde_json::{json, Value};
 
 use crate::AppState;
 
+/// Where magma's Obsidian map is written. Stable (not a fresh temp dir per
+/// call) so the ferret stage can reuse the map the magma stage just built
+/// instead of paying for a second full analysis.
+fn vault_dir() -> PathBuf {
+    std::env::temp_dir().join("architext-enrichment-vault")
+}
+
+/// magma's map folder name inside the vault.
+const MAP_LABEL: &str = "map";
+
 /// Tools the enrichment modes depend on, with where to get them.
 ///
 /// The repo URL is part of the CONTRACT of this struct, not decoration: an
@@ -150,6 +160,11 @@ pub async fn post_tools_run(Extension(state): Extension<AppState>, body: Bytes) 
 
     let result = tokio::task::spawn_blocking(move || match tool.as_str() {
         "magma" => run_magma(&target),
+        // Reuses the map from a preceding magma stage. Split out so the client
+        // can show WHICH tool is running: a single call that silently does both
+        // leaves the user watching a spinner with no idea what it is doing, or
+        // how much is left.
+        "ferret" => run_ferret_only(&target),
         "slop-ferret" => run_slop_ferret(&target),
         other => json!({ "ok": false, "error": format!("unknown tool \"{other}\"") }),
     })
@@ -184,17 +199,64 @@ fn run_magma(target: &Path) -> Value {
     let Some(bin) = find_on_path(MAGMA.bin) else {
         return json!({ "ok": false, "error": format!("`{}` is not installed", MAGMA.bin), "repo": MAGMA.repo });
     };
-    let vault = std::env::temp_dir().join("architext-magma-vault");
+    let vault = vault_dir();
     let _ = std::fs::create_dir_all(&vault);
-    let (ok, stdout, stderr) = run(Command::new(&bin).arg(target).arg("map").arg(&vault));
-    if !ok {
+    // `--architext` is REQUIRED: without it magma writes only its Obsidian map
+    // and never emits code-graph.json, so Code Graph could never populate no
+    // matter how successfully magma ran.
+    let (ok, stdout, stderr) =
+        run(Command::new(&bin).arg("--architext").arg(target).arg(MAP_LABEL).arg(&vault));
+
+    // magma can FAIL OVERALL while still emitting a complete contract. Its
+    // per-function Obsidian notes are written from the symbol name, and a
+    // heavily-generic Rust symbol (a Leptos props builder, say) exceeds the
+    // 255-byte filename limit; magma exits 1, having already written a valid
+    // 9MB code-graph.json. Treating that as fatal threw away a perfectly good
+    // graph. Judge on the ARTIFACT, not the exit code, and report the warning.
+    let artifact = target.join("docs/architext/data/code-graph.json");
+    let produced = artifact.is_file();
+    if !ok && !produced {
         return tool_failure(
             "magma",
             &stderr,
-            Some("The message above is verbatim from magma. It writes code-graph.json itself, so this is an upstream failure, not an Architext one."),
+            Some("Verbatim from magma. It emits code-graph.json itself, so this is an upstream failure."),
         );
     }
-    json!({ "ok": true, "tool": "magma", "stdout": stdout, "stderr": stderr })
+    // The contract exists but the manifest may not point at it yet; magma does
+    // not register the key. Doctor owns that repair, so use it rather than
+    // hand-editing the manifest here.
+    let registered = register_code_graph(target);
+    json!({
+        "ok": true,
+        "tool": "magma",
+        "stdout": stdout,
+        "stderr": stderr,
+        "partial": !ok,
+        "warning": if ok { Value::Null } else { json!(stderr.trim()) },
+        "registered": registered,
+    })
+}
+
+/// Point `manifest.files.codeGraph` at the file magma just wrote, using this
+/// binary's own doctor so the repair matches the one the CLI performs.
+fn register_code_graph(target: &Path) -> bool {
+    let Ok(me) = std::env::current_exe() else { return false };
+    let (ok, _, _) = run(Command::new(me).arg("doctor").arg(target).arg("--yes"));
+    ok
+}
+
+/// The ferret half alone, against the map a previous magma stage wrote.
+///
+/// Refuses rather than silently rebuilding when no map is present: a sweep of a
+/// tree nobody mapped is exactly the false-confidence outcome this mode exists
+/// to avoid.
+fn run_ferret_only(target: &Path) -> Value {
+    let map_dir = vault_dir().join(MAP_LABEL);
+    if !map_dir.join(".magma/_dead.json").is_file() {
+        return json!({ "ok": false, "tool": "ferret", "error":
+            "No call map is present for this tree. Build the code graph first; ferret reads the map magma produces." });
+    }
+    sweep_with_map(target, &map_dir)
 }
 
 /// The sweep pipeline: magma builds the map ferret reads, ferret derives the
@@ -205,35 +267,46 @@ fn run_magma(target: &Path) -> Value {
 /// content on its own. Verifying a candidate into a finding is separate work
 /// (the slop-ferret skill), and the panel labels the difference.
 fn run_slop_ferret(target: &Path) -> Value {
-    let Some(ferret) = find_on_path(FERRET.bin) else {
-        return json!({ "ok": false, "error": format!("`{}` is not installed", FERRET.bin), "repo": FERRET.repo });
-    };
     let Some(magma) = find_on_path(MAGMA.bin) else {
         return json!({ "ok": false, "error":
             format!("`{}` is not installed, and ferret reads the map it builds", MAGMA.bin), "repo": MAGMA.repo });
     };
+    let vault = vault_dir();
+    let _ = std::fs::create_dir_all(&vault);
+    // Judge on the ARTIFACT, not the exit code: magma can exit non-zero after a
+    // per-function note hits the filename limit while still having written a
+    // complete map. See `run_magma`.
+    let (ok, _, stderr) =
+        run(Command::new(&magma).arg("--architext").arg(target).arg(MAP_LABEL).arg(&vault));
+    let map_dir = vault.join(MAP_LABEL);
+    if !map_dir.join(".magma/_dead.json").is_file() {
+        return tool_failure("magma", &stderr, Some("ferret cannot plan without a map of this tree."));
+    }
+    let _ = ok;
+    sweep_with_map(target, &map_dir)
+}
+
+/// Plan, discharge and bundle a sweep against an existing map.
+fn sweep_with_map(target: &Path, map_dir: &Path) -> Value {
+    let Some(ferret) = find_on_path(FERRET.bin) else {
+        return json!({ "ok": false, "error": format!("`{}` is not installed", FERRET.bin), "repo": FERRET.repo });
+    };
     let work = std::env::temp_dir().join("architext-ferret");
     let _ = std::fs::create_dir_all(&work);
 
-    let (ok, _, stderr) = run(Command::new(&magma).arg(target).arg("map").arg(&work));
-    if !ok {
-        return tool_failure("magma", &stderr, Some("ferret cannot plan without a map of this tree."));
-    }
     // magma stamps the SHORT sha; ferret compares the argument literally, so
     // read it back rather than passing our own `git rev-parse` (which is long
     // and would be refused with a misleading "different tree" message).
-    let dead = work.join("map/.magma/_dead.json");
-    let sha = std::fs::read_to_string(&dead)
+    let sha = std::fs::read_to_string(map_dir.join(".magma/_dead.json"))
         .ok()
         .and_then(|t| serde_json::from_str::<Value>(&t).ok())
         .and_then(|v| v.get("sha").and_then(Value::as_str).map(str::to_string))
         .unwrap_or_default();
     if sha.is_empty() {
-        return tool_failure("magma", &stderr, Some("magma produced no map sha."));
+        return json!({ "ok": false, "tool": "magma", "error": "the map carries no sha" });
     }
 
-    let map_dir = work.join("map");
-    let (ok, plan, stderr) = run(Command::new(&ferret).arg("plan").arg(&map_dir).arg(&sha).arg(target));
+    let (ok, plan, stderr) = run(Command::new(&ferret).arg("plan").arg(map_dir).arg(&sha).arg(target));
     if !ok {
         return tool_failure("ferret plan", &stderr, None);
     }

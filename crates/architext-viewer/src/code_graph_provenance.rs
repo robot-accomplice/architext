@@ -332,3 +332,118 @@ mod limitation_tests {
         assert!(scope_meaning("sandbox-mode").contains("cannot tell"));
     }
 }
+
+// ---------------------------------------------------------------------------
+// Producer staleness
+// ---------------------------------------------------------------------------
+
+/// Oldest magma this build trusts to have produced a code graph.
+///
+/// 0.3.0 is where `limitations[]` and `disclosure` were introduced — the fields
+/// this viewer's whole provenance surface reads. An artifact from an earlier
+/// magma is not corrupt, it is SILENTLY LESS HONEST: it cannot disclose that a
+/// derive-heavy Rust crate over-roots, so the reachability badges render an
+/// empty dead-code set with no caveat, which reads as a clean bill of health.
+///
+/// This constant exists because of a specific failure. Two sessions spent a day
+/// reading maps from a magma that was two minor versions stale, reporting fixed
+/// bugs as live and a corrected help string as misleading. The detection
+/// mechanism was present the whole time — every artifact carries `generator`,
+/// and this viewer RENDERS it verbatim in the "How this map was made" popover —
+/// and nobody consulted it. A control nobody is forced to consult is a note,
+/// not a control. So the viewer now performs the comparison itself rather than
+/// printing a version string and hoping someone checks.
+pub const MIN_MAGMA_VERSION: (u32, u32, u32) = (0, 3, 0);
+
+/// Split a `name/version` generator string, e.g. `magma/0.3.0`.
+fn generator_parts(generator: &str) -> Option<(&str, &str)> {
+    let (name, version) = generator.split_once('/')?;
+    (!name.is_empty() && !version.is_empty()).then_some((name, version))
+}
+
+/// Parse a dotted version into comparable parts. Extra components and any
+/// pre-release suffix are ignored; a component that will not parse yields
+/// `None` so an unrecognisable version is treated as UNKNOWN rather than as
+/// zero (which would flag every odd version string as ancient).
+pub fn parse_version(version: &str) -> Option<(u32, u32, u32)> {
+    let core = version.trim_start_matches('v');
+    let core = core.split(['-', '+']).next()?;
+    let mut it = core.split('.');
+    let major = it.next()?.parse().ok()?;
+    let minor = it.next().unwrap_or("0").parse().ok()?;
+    let patch = it.next().unwrap_or("0").parse().ok()?;
+    Some((major, minor, patch))
+}
+
+/// Is this generator older than the minimum this build trusts?
+///
+/// `None` when the answer is not knowable: an unparseable version, or a
+/// producer that is not magma. Deliberately not `Some(true)`: warning about a
+/// producer we cannot assess would train the reader to dismiss the warning,
+/// which is worse than staying quiet.
+pub fn generator_is_outdated(generator: &str) -> Option<bool> {
+    let (name, version) = generator_parts(generator)?;
+    if name != "magma" {
+        return None;
+    }
+    Some(parse_version(version)? < MIN_MAGMA_VERSION)
+}
+
+/// The sentence shown when the artifact on screen came from a stale producer.
+pub fn stale_generator_warning(generator: &str) -> Option<String> {
+    generator_is_outdated(generator)?.then(|| {
+        let (maj, min, patch) = MIN_MAGMA_VERSION;
+        format!(
+            "This map was produced by {generator}, older than the magma {maj}.{min}.{patch} this \
+             build expects. It predates the disclosure fields, so it CANNOT report known analysis \
+             limitations: an empty dead-code result here may be a limitation of the producer rather \
+             than a fact about your code. Re-run the code graph with a current magma."
+        )
+    })
+}
+
+#[cfg(test)]
+mod staleness_tests {
+    use super::*;
+
+    #[test]
+    fn a_generator_older_than_the_minimum_is_flagged() {
+        // WHY: this is the exact artifact that misled two sessions for a day.
+        assert_eq!(generator_is_outdated("magma/0.2.0"), Some(true));
+        assert_eq!(generator_is_outdated("magma/0.1.0"), Some(true));
+        let w = stale_generator_warning("magma/0.2.0").expect("must warn");
+        assert!(w.contains("0.3.0"), "names the required version: {w}");
+        assert!(
+            w.contains("limitation of the producer rather than a fact about your code"),
+            "must say what the reader would otherwise wrongly conclude: {w}"
+        );
+    }
+
+    #[test]
+    fn the_current_generator_and_newer_are_not_flagged() {
+        assert_eq!(generator_is_outdated("magma/0.3.0"), Some(false));
+        assert_eq!(generator_is_outdated("magma/0.4.0"), Some(false));
+        assert_eq!(generator_is_outdated("magma/1.0.0"), Some(false));
+        assert!(stale_generator_warning("magma/0.3.0").is_none());
+    }
+
+    #[test]
+    fn an_unassessable_generator_stays_quiet() {
+        // Warning about something we cannot judge trains the reader to dismiss
+        // the warning, which costs more than the silence.
+        assert_eq!(generator_is_outdated("someone-else/9.9.9"), None);
+        assert_eq!(generator_is_outdated("magma/not-a-version"), None);
+        assert_eq!(generator_is_outdated("magma"), None);
+        assert_eq!(generator_is_outdated(""), None);
+        assert!(stale_generator_warning("someone-else/1.0.0").is_none());
+    }
+
+    #[test]
+    fn version_parsing_tolerates_real_world_shapes() {
+        assert_eq!(parse_version("0.3.0"), Some((0, 3, 0)));
+        assert_eq!(parse_version("v1.2.3"), Some((1, 2, 3)));
+        assert_eq!(parse_version("0.3.0-rc.1"), Some((0, 3, 0)));
+        assert_eq!(parse_version("1.2"), Some((1, 2, 0)));
+        assert_eq!(parse_version("nonsense"), None);
+    }
+}

@@ -3262,3 +3262,59 @@ button.blast-chip { cursor: pointer; }
   border: 1px solid var(--line); border-radius: var(--radius, 6px);
   background: transparent; color: var(--dim);
 }
+
+/* Pipeline stages. Each stage names its tool and stays visible after it
+   finishes, so the list doubles as the record of what ran.
+
+   The running stage uses a track-and-fill, matching `.release-progress` and the
+   code-graph settle panel, rather than a rotating glyph: the app already speaks
+   that language, and a spinning half-disc at 1rem reads as a googly eye. The
+   fill is indeterminate because magma and ferret report no fraction; it sweeps
+   to say "working", never to imply a percentage. */
+.enrichment-empty__stages {
+  list-style: none; margin: 0.9rem 0 0; padding: 0;
+  display: flex; flex-direction: column; gap: 0.45rem;
+}
+.enrichment-empty__stage {
+  display: grid; grid-template-columns: 1rem minmax(0, max-content) 1fr;
+  gap: 0.6rem; align-items: center; color: var(--dim);
+}
+.enrichment-empty__stage-mark { font-family: var(--font-mono); text-align: center; }
+.enrichment-empty__stage-label { white-space: nowrap; }
+.enrichment-empty__stage--running,
+.enrichment-empty__stage--partial { color: var(--ink); }
+.enrichment-empty__stage--done .enrichment-empty__stage-mark { color: var(--accent-base); }
+.enrichment-empty__stage--partial .enrichment-empty__stage-mark { color: var(--sev-medium, #d6a020); }
+.enrichment-empty__stage--failed .enrichment-empty__stage-mark { color: var(--sev-high, #e5484d); }
+
+.enrichment-empty__scan {
+  position: relative; display: block; height: 6px; min-width: 6rem; max-width: 14rem;
+  border-radius: var(--pill-radius); background: var(--panel-2);
+  border: var(--hairline) solid var(--line); overflow: hidden;
+}
+.enrichment-empty__scan-fill {
+  position: absolute; inset-block: 0; inline-size: 38%;
+  border-radius: var(--pill-radius); background: var(--accent-base);
+  animation: architext-scan 1.5s cubic-bezier(0.45, 0, 0.55, 1) infinite alternate;
+}
+@keyframes architext-scan {
+  from { inset-inline-start: -2%; }
+  to   { inset-inline-start: 64%; }
+}
+/* Motion-reduced users still need to see WHICH stage is live, so the fill stays
+   and only the sweep stops. */
+@media (prefers-reduced-motion: reduce) {
+  .enrichment-empty__scan-fill { animation: none; inset-inline-start: 0; inline-size: 100%; opacity: 0.45; }
+}
+
+/* A stale producer is a correctness warning, not a footnote: an artifact from a
+   magma without the disclosure fields cannot report its own limitations, so an
+   empty dead-code result looks clean when it is merely unmeasured. */
+.code-graph-view__stale,
+.enrichment-empty__stale {
+  margin: 0.5rem 0 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--sev-medium, #d6a020);
+  color: var(--ink);
+  font-size: 0.85rem;
+}
