@@ -52,7 +52,7 @@ impl Mode {
             Mode::BlastRadius => "Blast Radius",
             Mode::ReleaseTruth => "Release Truth",
             Mode::Rules => "Rules",
-            Mode::SlopFerret => "Slop Ferret",
+            Mode::SlopFerret => "Slop Detection",
         }
     }
 
@@ -92,7 +92,7 @@ impl Mode {
             Mode::CodeGraph => Some("Explore the Magma-derived call graph: modules, then functions."),
             Mode::BlastRadius => Some("Trace what a change to a node reaches across the model."),
             Mode::Rules => Some("Review the project's rules, ranked by criticality."),
-            Mode::SlopFerret => Some("Review slop-ferret sweep coverage and findings."),
+            Mode::SlopFerret => Some("Sweep coverage, open candidates, and findings."),
             _ => None,
         }
     }

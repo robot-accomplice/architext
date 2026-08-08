@@ -48,6 +48,17 @@ struct Snapshot {
     checked_clean: Vec<CheckedClean>,
     #[serde(skip_serializing_if = "Vec::is_empty", rename = "near_misses")]
     near_misses: Vec<String>,
+    /// The plan's mechanically-derived candidates, carried through verbatim.
+    ///
+    /// `ferret plan` locates and classifies these with NO model involved — each
+    /// carries file, line, symbol, class and the `bar` that would confirm or
+    /// refute it. Before this they were dropped at the bundler and the viewer
+    /// showed only a COUNT, which is the least useful part: "16 candidates" is
+    /// not actionable, "dead-on-arrival: `is_zero` at src/x.rs:12, prove
+    /// nothing reaches it" is. They are NOT findings — nothing has verified
+    /// them — and the viewer must keep that distinction.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    candidates: Vec<Candidate>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "findings_verified")]
     findings_verified: Option<i64>,
     #[serde(skip_serializing_if = "Option::is_none", rename = "findings_suspected")]
@@ -59,6 +70,24 @@ struct Snapshot {
 
 fn is_zero(n: &i64) -> bool {
     *n == 0
+}
+
+/// One plan candidate, passed through unchanged from `ferret plan`.
+///
+/// Located and classified with NO model involved: file, line, symbol, class,
+/// and the `bar` that would confirm or refute it. These are CANDIDATES, not
+/// findings — nothing has verified them — and the viewer must preserve that.
+#[derive(Debug, Serialize, Deserialize)]
+struct Candidate {
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    family: String,
+    class: String,
+    file: String,
+    #[serde(default, skip_serializing_if = "is_zero")]
+    line: i64,
+    symbol: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    bar: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -315,6 +344,11 @@ fn build_snapshot(
             })
             .unwrap_or_default(),
         near_misses: string_array(discharge, "near_misses"),
+        candidates: plan
+            .get("candidates")
+            .and_then(|v| v.as_array())
+            .map(|a| a.iter().filter_map(|c| serde_json::from_value(c.clone()).ok()).collect())
+            .unwrap_or_default(),
         findings_verified: discharge.get("findings_verified").and_then(|v| v.as_i64()),
         findings_suspected: discharge.get("findings_suspected").and_then(|v| v.as_i64()),
         report_path: discharge

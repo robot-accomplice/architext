@@ -626,6 +626,13 @@ pub struct SlopFerret {
     pub checked_clean: Vec<SlopFerretCheckedClean>,
     #[serde(default, rename = "near_misses")]
     pub near_misses: Vec<String>,
+    /// Mechanically-derived candidates from `ferret plan` — located and
+    /// classified with no model involved. NOT findings: nothing has verified
+    /// them, and the panel must never present them as confirmed slop. The
+    /// skill's own rule is that a false accusation costs more than a missed
+    /// one, so these render as leads with the bar that would settle each.
+    #[serde(default)]
+    pub candidates: Vec<SlopFerretCandidate>,
     #[serde(default, rename = "findings_verified")]
     pub findings_verified: Option<i64>,
     #[serde(default, rename = "findings_suspected")]
@@ -1159,4 +1166,22 @@ mod config_payload_tests {
         assert!(fns[0].doc.is_none());
         assert!(fns[0].signature.params.is_empty());
     }
+}
+
+/// One undispositioned candidate from the sweep plan.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+pub struct SlopFerretCandidate {
+    #[serde(default)]
+    pub family: String,
+    pub class: String,
+    pub file: String,
+    #[serde(default)]
+    pub line: i64,
+    pub symbol: String,
+    /// What would have to be proven to confirm or refute this. Carried through
+    /// verbatim because it is the actionable half — "16 candidates" tells a
+    /// reader nothing; "prove nothing reaches it, reflection and codegen
+    /// checked" tells them exactly what the next hour looks like.
+    #[serde(default)]
+    pub bar: String,
 }
