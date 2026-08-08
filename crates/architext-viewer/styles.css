@@ -3306,3 +3306,15 @@ button.blast-chip { cursor: pointer; }
 @media (prefers-reduced-motion: reduce) {
   .enrichment-empty__scan-fill { animation: none; inset-inline-start: 0; inline-size: 100%; opacity: 0.45; }
 }
+
+/* A stale producer is a correctness warning, not a footnote: an artifact from a
+   magma without the disclosure fields cannot report its own limitations, so an
+   empty dead-code result looks clean when it is merely unmeasured. */
+.code-graph-view__stale,
+.enrichment-empty__stale {
+  margin: 0.5rem 0 0;
+  padding-left: 0.6rem;
+  border-left: 2px solid var(--sev-medium, #d6a020);
+  color: var(--ink);
+  font-size: 0.85rem;
+}

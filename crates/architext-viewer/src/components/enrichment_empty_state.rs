@@ -24,6 +24,7 @@
 use leptos::*;
 use serde_json::{json, Value};
 
+use crate::code_graph_provenance::{parse_version, MIN_MAGMA_VERSION};
 use crate::data::mutate::post_mutation;
 use crate::state::use_app_state;
 
@@ -257,6 +258,11 @@ pub fn EnrichmentEmptyState(kind: Enrichment) -> impl IntoView {
                     t.as_ref().and_then(|t| tool_field(t, key, "provides")).unwrap_or("").to_string();
                 let version = t.as_ref().and_then(|t| tool_field(t, key, "version")).unwrap_or("").to_string();
 
+                // The same judgement applied to the INSTALLED binary, so a
+                // stale tool is caught before it produces a stale artifact
+                // rather than after someone has drawn conclusions from one.
+                let binary_stale = kind == Enrichment::CodeGraph
+                    && parse_version(&version).is_some_and(|v| v < MIN_MAGMA_VERSION);
                 if installed {
                     view! {
                         <div class="enrichment-empty__ready">
@@ -269,6 +275,19 @@ pub fn EnrichmentEmptyState(kind: Enrichment) -> impl IntoView {
                             <button class="enrichment-empty__run" on:click=run disabled=move || running.get()>
                                 {move || if running.get() { "Running…" } else { "Run now" }}
                             </button>
+                            {binary_stale.then(|| {
+                                let (a, b, c) = MIN_MAGMA_VERSION;
+                                view! {
+                                    <p class="enrichment-empty__stale">
+                                        {format!(
+                                            "This magma is older than the {a}.{b}.{c} this build expects. It \
+                                             predates the disclosure fields, so the graph it produces cannot \
+                                             report known analysis limitations. Update before running: "
+                                        )}
+                                        <code>{kind.install_hint()}</code>
+                                    </p>
+                                }
+                            })}
                             <p class="enrichment-empty__note">
                                 "Runs against the current commit. A dirty working tree is refused on \
                                  purpose: a map of uncommitted code reports work-in-progress as dead."
