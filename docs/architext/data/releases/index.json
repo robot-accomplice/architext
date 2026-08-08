@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-8-0",
+  "currentReleaseId": "v1-9-0",
   "releases": [
     {
       "id": "v1-1-2",
@@ -748,6 +748,27 @@
         "stretch": 0
       },
       "file": "v1-8-0.json"
+    },
+    {
+      "id": "v1-9-0",
+      "version": "1.9.0",
+      "name": "Architext 1.9.0 Enrichment Controls",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-08-08",
+      "lastUpdated": "2026-08-08T11:24:13.000Z",
+      "summary": "Makes the two enrichment modes usable without a terminal, and makes them honest about the tools they depend on. Code Graph and Slop Detection are the only modes whose data Architext does not produce itself; their empty state now names the tool, reports whether it is installed, links the repository, and offers to RUN it. Also consumes Magma's limitations[] and disclosure, so a producer that admits it over-reports live code can no longer have an empty dead-code result read as a clean bill of health. Data schema 1.7.0: two schemas gained optional fields, additively, so every artifact valid under 1.8.0 stays valid.",
+      "counts": {
+        "features": 4,
+        "bugFixes": 4,
+        "workstreams": 3,
+        "blockers": 0,
+        "complete": 7,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-9-0.json"
     }
   ]
 }

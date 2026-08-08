@@ -1,0 +1,284 @@
+{
+  "id": "v1-9-0",
+  "version": "1.9.0",
+  "name": "Architext 1.9.0 Enrichment Controls",
+  "status": "implementing",
+  "posture": "release-candidate",
+  "summary": "Makes the two enrichment modes usable without a terminal, and makes them honest about the tools they depend on. Code Graph and Slop Detection are the only modes whose data Architext does not produce itself; their empty state now names the tool, reports whether it is installed, links the repository, and offers to RUN it. Also consumes Magma's limitations[] and disclosure, so a producer that admits it over-reports live code can no longer have an empty dead-code result read as a clean bill of health. Data schema 1.7.0: two schemas gained optional fields, additively, so every artifact valid under 1.8.0 stays valid.",
+  "targetDate": "2026-08-08",
+  "lastUpdated": "2026-08-08T11:24:13.000Z",
+  "updateSource": "Code complete on develop. Verified in a clean detached worktree and live over CDP against magma 0.3.1 on architext itself (3,638 functions, root_ratio 0.515). Not yet shipped: no merge to main and no v1.9.0 tag.",
+  "scope": {
+    "required": [
+      {
+        "id": "magma-limitations-consumer",
+        "title": "Consume magma's limitations[] and disclosure",
+        "kind": "feature",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "summary": "Unblocked magma v0.3.0, whose tag was gated on this. Both fields optional, so existing artifacts stay valid. scope and effect are unconstrained strings: pinning them reproduces the kind:\"init\" outage where one unknown value invalidates a whole document. Validation covers what the schema cannot: evidenced_by must resolve to a real disclosure field, and limitation ids must be unique. CONSUMED, not stored: a limitation declaring effect: over-approximates-live renders a caveat beside the reachability badges, because dead = !reachable && !generated && !root means an over-rooting backend drives Dead and Test-only toward empty, and empty reads as 'no dead code'.",
+        "evidence": [
+          "pr-290",
+          "real-artifact-0-3-1"
+        ],
+        "dependsOn": [],
+        "source": "ad-hoc",
+        "workstreamId": "magma-contract"
+      },
+      {
+        "id": "layout-cache-collision",
+        "title": "Never index a colliding layout-cache entry",
+        "kind": "bug-fix",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "critical",
+        "summary": "Reported by the magma session, confirmed here rather than taken on trust. A dirty-tree map stamps sha from the commit and tree as the literal \"dirty\"; neither encodes working-tree CONTENT, so two runs at one commit over different uncommitted code produced an identical (sha, tree, tier) and aliased in the cache. static_interleaves indexes cached positions BY NODE INDEX, so a shorter entry panics, and a panic in wasm traps the whole instance. A length mismatch is now a MISS.",
+        "evidence": [
+          "pr-292"
+        ],
+        "dependsOn": [],
+        "source": "ad-hoc",
+        "workstreamId": "code-graph-viewer"
+      },
+      {
+        "id": "enrichment-run-controls",
+        "title": "Run Code Graph and Slop Detection from the UI",
+        "kind": "feature",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "summary": "The empty state said only 'no data registered under manifest.files.X', restating the condition the user was already looking at, with a CLI incantation as the only way forward. It now names the tool, reports installed/version, links the repo, gives the install command, and offers a Run control. GET /api/tools reports discovery; POST /api/tools/run executes the pipeline. That route is in the is_mutating_api_request ALLOWLIST, pinned by a test: a new POST route is UNAUTHENTICATED until added, and the endpoint that spawns external processes is exactly the kind that gets forgotten.",
+        "evidence": [
+          "pr-293",
+          "live-ui-verification"
+        ],
+        "dependsOn": [],
+        "source": "ad-hoc",
+        "workstreamId": "enrichment-controls"
+      },
+      {
+        "id": "slop-ferret-candidates",
+        "title": "Carry the plan's candidates through to the viewer",
+        "kind": "bug-fix",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "summary": "ferret plan locates and classifies candidates mechanically, with no model involved: family, class, file, line, symbol, and the bar that would confirm or refute each. The bundler dropped every one, so the viewer showed the integer 16. Rendered as OPEN CANDIDATES rather than findings, since the skill's own rule is that a false accusation costs more than a missed one.",
+        "evidence": [
+          "pr-293"
+        ],
+        "dependsOn": [],
+        "source": "ad-hoc",
+        "workstreamId": "enrichment-controls"
+      },
+      {
+        "id": "enrichment-staged-progress",
+        "title": "Stage the run and report per-tool progress",
+        "kind": "bug-fix",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "summary": "Three bugs in the magma invocation: --architext was never passed, so magma emitted only its Obsidian map and Code Graph could not populate no matter how well it ran; success was judged on the EXIT CODE when magma can exit 1 having already written a complete contract; and the manifest was never registered. Judged on the ARTIFACT now. A two-tool pipeline taking minutes behind one opaque request also told the user nothing, so the client drives named stages with a track-and-fill matching the app's existing progress vocabulary.",
+        "evidence": [
+          "pr-294",
+          "live-ui-verification"
+        ],
+        "dependsOn": [],
+        "source": "ad-hoc",
+        "workstreamId": "enrichment-controls"
+      },
+      {
+        "id": "stale-producer-detection",
+        "title": "Judge the producer version instead of printing it",
+        "kind": "feature",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "high",
+        "summary": "The provenance popover always rendered generator verbatim, and that was not enough: two sessions spent a day reading maps from a magma two minor versions stale, reporting a fixed crash as live, while the version sat on screen in a UI one of them was writing. A control nobody is forced to consult is a note, not a control. The viewer now compares: an artifact whose generator predates magma 0.3.0 gets a warning (it predates the disclosure fields, so it CANNOT report its own limitations), and the same judgement is applied to the installed binary. An unassessable generator stays quiet, because warning about what we cannot judge trains readers to dismiss warnings.",
+        "evidence": [
+          "pr-294",
+          "staleness-verification"
+        ],
+        "dependsOn": [],
+        "source": "ad-hoc",
+        "workstreamId": "code-graph-viewer"
+      },
+      {
+        "id": "data-schema-1-7-0",
+        "title": "Data schema 1.7.0 (additive)",
+        "kind": "chore",
+        "status": "complete",
+        "owner": "maintainer",
+        "priority": "medium",
+        "summary": "code-graph gained limitations and disclosure; slop-ferret gained candidates and unpinned severity/status. All additive or loosening: no newly-required fields, no removed properties, and all three real magma artifacts that validated under 1.8.0 still validate. Doctor's additive-migration repair bumps manifest.schemaVersion and converges on the second run.",
+        "evidence": [
+          "schema-compat-check"
+        ],
+        "dependsOn": [],
+        "source": "ad-hoc",
+        "workstreamId": "magma-contract"
+      }
+    ],
+    "planned": [],
+    "stretch": [],
+    "deferred": [
+      {
+        "id": "richer-ui-design-track",
+        "title": "Carry the code-graph visual quality across the SVG modes",
+        "kind": "architecture",
+        "status": "deferred",
+        "owner": "maintainer",
+        "priority": "medium",
+        "summary": "Approved in principle; tracked in roadmap.json.",
+        "evidence": [],
+        "dependsOn": [],
+        "source": "ad-hoc",
+        "deferredReason": "SEQUENCING. Still unstarted, and 1.9.0 is a coherent shippable slice without it. Folding an unstarted design track into a release that is otherwise complete would hold verified work behind unbegun work, which is the same trade rejected for 1.8.0."
+      },
+      {
+        "id": "slop-ferret-filtering-detail",
+        "title": "Slop Detection filtering, master/detail, cross-links",
+        "kind": "feature",
+        "status": "deferred",
+        "owner": "maintainer",
+        "priority": "medium",
+        "summary": "Richer interaction over the sweep once the data contract has settled.",
+        "evidence": [],
+        "dependsOn": [],
+        "source": "ad-hoc",
+        "deferredReason": "SEQUENCING. The candidates surface landed in this release and the file format does not change when the UI gets richer, so the interaction work is genuinely separable."
+      },
+      {
+        "id": "magma-absolute-path-emission",
+        "title": "Magma emits absolute build-cache paths for some Go stubs",
+        "kind": "bug-fix",
+        "status": "deferred",
+        "owner": "maintainer",
+        "priority": "low",
+        "summary": "201 of 17,814 functions in a real Go artifact carry an absolute build-cache path.",
+        "evidence": [],
+        "dependsOn": [],
+        "source": "ad-hoc",
+        "deferredReason": "NOT OURS TO FIX. Upstream emission defect, logged with magma. Architext's consumer-side mitigation shipped in 1.8.0, so no reader is misled meanwhile."
+      }
+    ],
+    "outOfScope": []
+  },
+  "workstreams": [
+    {
+      "id": "magma-contract",
+      "name": "Magma contract",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "shipped",
+      "progress": 100,
+      "summary": "Consuming the producer's own disclosure of what its analysis cannot see, and the schema version bump that carries it.",
+      "itemIds": [
+        "magma-limitations-consumer",
+        "data-schema-1-7-0"
+      ],
+      "evidence": [
+        "pr-290",
+        "real-artifact-0-3-1",
+        "schema-compat-check"
+      ]
+    },
+    {
+      "id": "enrichment-controls",
+      "name": "Enrichment controls",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "progress": 100,
+      "summary": "Making the two tool-dependent modes runnable, and honest about the dependency, without a terminal.",
+      "itemIds": [
+        "enrichment-run-controls",
+        "slop-ferret-candidates",
+        "enrichment-staged-progress"
+      ],
+      "evidence": [
+        "pr-293",
+        "pr-294",
+        "live-ui-verification"
+      ]
+    },
+    {
+      "id": "code-graph-viewer",
+      "name": "Code Graph viewer",
+      "owner": "maintainer",
+      "status": "complete",
+      "posture": "release-candidate",
+      "progress": 100,
+      "summary": "Correctness and honesty fixes found by consuming real producer output rather than fixtures.",
+      "itemIds": [
+        "layout-cache-collision",
+        "stale-producer-detection"
+      ],
+      "evidence": [
+        "pr-292",
+        "pr-294",
+        "staleness-verification"
+      ]
+    }
+  ],
+  "blockers": [],
+  "milestones": [],
+  "dependencies": [],
+  "evidence": [
+    {
+      "id": "pr-290",
+      "label": "PR #290: consume magma's limitations[] and disclosure",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "pr-292",
+      "label": "PR #292: never index a colliding layout-cache entry",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "pr-293",
+      "label": "PR #293: enrichment run controls, candidates, Slop Detection rename",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "pr-294",
+      "label": "PR #294: staged progress, --architext fix, stale-producer detection",
+      "kind": "build",
+      "status": "complete"
+    },
+    {
+      "id": "real-artifact-0-3-1",
+      "label": "magma 0.3.1 against architext itself: 3,638 functions, limitations + disclosure present, root_ratio 0.515, architext validate passes with the artifact REGISTERED (an unregistered optional file is skipped, so an earlier pass proved nothing)",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "schema-compat-check",
+      "label": "Backward compatibility proven mechanically: no newly-required fields, no removed properties, and all three real magma artifacts valid under 1.8.0 still validate",
+      "kind": "test",
+      "status": "complete"
+    },
+    {
+      "id": "live-ui-verification",
+      "label": "Live over CDP: both empty-state branches (installed and missing), the confirm-before-ungraphed-sweep flow, staged progress with per-tool labels, and an unauthenticated POST to /api/tools/run rejected 403",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "staleness-verification",
+      "label": "Live: an artifact stamped magma/0.2.0 warns with the full explanation; magma/0.3.1 is silent",
+      "kind": "manual-check",
+      "status": "complete"
+    },
+    {
+      "id": "test-suites",
+      "label": "Clean detached worktree: viewer 254, routing 372, core 187, serve 76, cli 39; wasm32 build and clippy clean; architext validate passes and doctor converges",
+      "kind": "test",
+      "status": "complete"
+    }
+  ]
+}
