@@ -3413,10 +3413,14 @@ button.blast-chip { cursor: pointer; }
 
 /* --- the diagram --- */
 
+/* Natural size, deliberately NOT scaled to fit.
+   `max-width: 100%` shrank the whole diagram into the panel -- a 1541px map in
+   a 654px panel rendered at 42%, which turned 11px attribute text into 5px and
+   made the entities unreadable specks. The panel scrolls instead; a diagram is
+   allowed to be bigger than the window. Print re-enables fitting, because paper
+   genuinely cannot scroll. */
 .er-diagram {
   display: block;
-  max-width: 100%;
-  height: auto;
 }
 
 .er-box__frame {

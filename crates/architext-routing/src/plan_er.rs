@@ -11,20 +11,21 @@
 //! yields the same plan, byte for byte), no wall-clock, no randomness, and one
 //! source compiled both native (serve) and to WASM (viewer).
 //!
-//! ## Why layering rather than a grid
+//! ## Why there are no columns
 //!
-//! A column-wrapping grid is simpler and renders acceptably for a chain of
-//! one-to-many relationships. It falls apart on the shape real schemas
-//! actually have: a `user` or `account` table that half the model points at.
-//! Dropped in an arbitrary grid cell, a hub's edges cross most of the diagram.
+//! An earlier version laid entities out in layered columns, the way flows and
+//! C4 are laid out. That was wrong for this data. Layering encodes DIRECTION,
+//! and it earns its place when a graph is directed and roughly acyclic -- a
+//! call graph, a flow. ER relationships are an undirected graph with cycles, so
+//! the columns carried no label, encoded no category, and could not be read for
+//! anything. They were pure constraint, paid for in a tall canvas, a routing
+//! channel every edge had to share, and ports crammed onto one face of a box.
 //!
-//! So entities are placed in layers seeded from the highest-degree entity and
-//! ordered within each layer by barycenter, which is the standard remedy for
-//! exactly that problem: a hub lands at the head of its component and its
-//! neighbours stack in the next column, turning what a grid renders as
-//! spaghetti into a fan.
+//! Placement is free 2D instead: related entities pull together, all of them
+//! push apart, and overlapping boxes separate. Proximity carries the structure,
+//! which is what a reader can actually use.
 
-use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -55,26 +56,36 @@ const BOX_MIN_W: f64 = 132.0;
 // column names next to snake_case entity names are the normal case, not the
 // pathological one, so the cap has headroom for them now.
 const BOX_MAX_W: f64 = 380.0;
-/// Horizontal gap between adjacent layers.
-///
-/// Generous on purpose. The canvas scrolls, so horizontal room is free, and it
-/// is the channel every edge between two columns has to share -- a hub with
-/// eight relationships needs somewhere to fan out.
-const COL_GAP: f64 = 130.0;
-/// Vertical gap between boxes within a layer.
-const ROW_GAP: f64 = 34.0;
+/// Minimum clear space between any two boxes.
+const BOX_CLEARANCE: f64 = 44.0;
+/// Preferred clear space between two boxes joined by a relationship. Related
+/// entities sit closer than unrelated ones; that proximity is what carries the
+/// structure now that there are no columns to read it from.
+const IDEAL_EDGE_GAP: f64 = 55.0;
 
 /// How far in from a box's top and bottom corners the outermost edge port sits,
 /// so a line never appears to attach to the corner itself.
 const PORT_INSET: f64 = 10.0;
 /// Canvas margin on every side.
 const MARGIN: f64 = 28.0;
-/// Barycenter sweeps (down, up, down...). Two full passes settle this size of
-/// graph; more sweeps stop changing the result.
-const BARYCENTER_SWEEPS: usize = 4;
-/// Transpose passes after barycenter. Bounded so layout time stays predictable;
-/// the loop also exits early as soon as a pass makes no strict improvement.
-const TRANSPOSE_PASSES: usize = 4;
+/// Placement iterations. Fixed rather than convergence-based so the result is
+/// identical every run; the layout is settled well before this at ER scale
+/// (tens of entities), and the cost is trivial -- 60 entities is 3,600 pairs.
+const PLACEMENT_TICKS: usize = 420;
+/// Overlap-resolution passes per tick. Boxes are rectangles, so separation is
+/// resolved directly rather than left to the repulsion term.
+const SEPARATION_PASSES: usize = 4;
+/// Pull toward the centroid, per unit of distance from it.
+///
+/// Repulsion acts between every pair, attraction only along relationships, so a
+/// sparse model -- and a schema is sparse, sixteen entities with sixteen
+/// relationships -- has far more push than pull and drifts apart. Gravity is
+/// what closes that gap; without it the fixture settled at 6% of the canvas
+/// covered, against 17% for the layout it replaced.
+const GRAVITY: f64 = 1.1;
+/// Golden angle, for the deterministic phyllotaxis seed positions. A spiral
+/// spreads the starting points evenly without needing a random seed.
+const GOLDEN_ANGLE: f64 = 2.399_963_229_728_653;
 
 // ---------------------------------------------------------------------------
 // Input — mirrors entities.json
@@ -130,11 +141,34 @@ pub struct ErRelationshipInput {
 // Output
 // ---------------------------------------------------------------------------
 
-/// Which vertical edge of a box a line attaches to.
+/// Which edge of a box a line attaches to.
+///
+/// All four, because with free placement a neighbour can be in any direction.
+/// While entities sat in columns only Left and Right were reachable, which is
+/// why every line used to leave sideways even when its target was directly
+/// above or below.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Side {
     Right,
     Left,
+    Bottom,
+    Top,
+}
+
+impl Side {
+    fn opposite(self) -> Side {
+        match self {
+            Side::Right => Side::Left,
+            Side::Left => Side::Right,
+            Side::Bottom => Side::Top,
+            Side::Top => Side::Bottom,
+        }
+    }
+    /// Whether ports on this side are spread horizontally (top/bottom) rather
+    /// than vertically (left/right).
+    fn is_horizontal_face(self) -> bool {
+        matches!(self, Side::Top | Side::Bottom)
+    }
 }
 
 /// Which crow's-foot glyph terminates one end of an edge.
@@ -318,176 +352,21 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
         }
     }
 
-    // --- layer assignment ----------------------------------------------------
-    // Seed each component at its highest-degree entity so a hub heads its
-    // component and its neighbours fan out into the next column, rather than
-    // landing in an arbitrary cell with edges crossing the diagram.
-    let mut layer: Vec<usize> = vec![usize::MAX; n];
-    let mut order: Vec<Vec<usize>> = Vec::new(); // order[layer] = entity indices
-
-    // Entities with no relationships are held back from the layering.
+    // --- placement: free 2D, no columns --------------------------------------
     //
-    // Each would otherwise seed its own component at layer 0 and stack into the
-    // hub's column, making the busiest column taller for entities that carry no
-    // edges at all. On Architext's own model that was four of sixteen. They are
-    // packed into trailing columns below instead.
-    let isolated: Vec<usize> = (0..n).filter(|&i| adj[i].is_empty()).collect();
-    let mut remaining: BTreeSet<usize> = (0..n).filter(|&i| !adj[i].is_empty()).collect();
-    while let Some(&seed) = remaining
-        .iter()
-        .max_by_key(|&&i| (adj[i].len(), std::cmp::Reverse(entities[i].id.as_str())))
-    {
-        let mut queue = VecDeque::new();
-        queue.push_back((seed, 0usize));
-        layer[seed] = 0;
-        remaining.remove(&seed);
-
-        while let Some((i, depth)) = queue.pop_front() {
-            if order.len() <= depth {
-                order.resize(depth + 1, Vec::new());
-            }
-            order[depth].push(i);
-            for &j in &adj[i] {
-                if remaining.remove(&j) {
-                    layer[j] = depth + 1;
-                    queue.push_back((j, depth + 1));
-                }
-            }
-        }
-    }
-
-    // --- barycenter ordering within each layer -------------------------------
-    for sweep in 0..BARYCENTER_SWEEPS {
-        let downward = sweep % 2 == 0;
-        let layer_indices: Vec<usize> = if downward {
-            (1..order.len()).collect()
-        } else {
-            (0..order.len().saturating_sub(1)).rev().collect()
-        };
-        for li in layer_indices {
-            let neighbour_layer = if downward { li - 1 } else { li + 1 };
-            // position within the reference layer, by entity index
-            let mut pos: BTreeMap<usize, f64> = BTreeMap::new();
-            for (p, &idx) in order[neighbour_layer].iter().enumerate() {
-                pos.insert(idx, p as f64);
-            }
-            let mut scored: Vec<(f64, &str, usize)> = order[li]
-                .iter()
-                .enumerate()
-                .map(|(current, &idx)| {
-                    let vals: Vec<f64> =
-                        adj[idx].iter().filter_map(|j| pos.get(j).copied()).collect();
-                    let bary = if vals.is_empty() {
-                        // No anchor in the reference layer: hold position, so a
-                        // disconnected entity does not drift to the top on
-                        // every sweep and make the layout unstable.
-                        current as f64
-                    } else {
-                        vals.iter().sum::<f64>() / vals.len() as f64
-                    };
-                    (bary, entities[idx].id.as_str(), idx)
-                })
-                .collect();
-            // Explicit tie-break on id: `sort_by` alone would leave equal
-            // barycenters in whatever order the previous sweep produced, which
-            // is stable here but not obviously so. Being explicit makes
-            // determinism a property of the code, not of an invariant a reader
-            // has to reconstruct.
-            scored.sort_by(|a, b| {
-                a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal).then(a.1.cmp(b.1))
-            });
-            order[li] = scored.into_iter().map(|(_, _, idx)| idx).collect();
-        }
-    }
-
-    // --- transpose: remove the crossings barycenter leaves behind ------------
+    // ER relationships are an undirected graph with cycles. Layering them into
+    // columns imposes a hierarchy the data does not have: the columns carry no
+    // label, encode no category, and cannot be read for anything. They were
+    // paid for in a tall canvas, a routing channel every edge had to share, and
+    // ports crammed onto one face of each box -- all to satisfy a constraint
+    // nothing asked for.
     //
-    // Barycenter positions a layer by the AVERAGE of its neighbours, which is a
-    // good global guess and routinely leaves adjacent pairs inverted -- two
-    // edges into the next column whose endpoints are ordered the other way
-    // round. Swapping such a pair is the textbook companion pass, and on the
-    // 14-entity fixture it is the difference between one crossing and none.
+    // Entities are placed freely instead. Related ones pull together, every
+    // pair pushes apart, and overlapping boxes are separated outright. What a
+    // reader gets is proximity: neighbours cluster, and that IS the structure.
     //
-    // Bounded and deterministic: a fixed pass count, swaps only on a STRICT
-    // improvement (so equal-cost swaps cannot oscillate), and layers walked in
-    // index order.
-    for _ in 0..TRANSPOSE_PASSES {
-        let mut improved = false;
-        for li in 0..order.len() {
-            for k in 0..order[li].len().saturating_sub(1) {
-                let before = local_crossings(&order, &adj, li);
-                order[li].swap(k, k + 1);
-                let after = local_crossings(&order, &adj, li);
-                if after < before {
-                    improved = true;
-                } else {
-                    order[li].swap(k, k + 1); // revert
-                }
-            }
-        }
-        if !improved {
-            break;
-        }
-    }
-
-    // --- pack the isolated entities into trailing columns --------------------
-    //
-    // They belong in the diagram -- an entity with no relationships is a real
-    // part of the model, not an orphan to hide -- but they carry no edges, so
-    // nothing is gained by interleaving them with the connected structure.
-    // Filling columns to the height the layered part already needs adds width
-    // instead of height, and costs no vertical space at all until the connected
-    // layers are taller than the isolated ones.
-    if !isolated.is_empty() {
-        let heights_of = |i: usize| box_height(entities[i].attributes.len());
-        let connected_h = order
-            .iter()
-            .map(|l| {
-                l.iter().map(|&i| heights_of(i)).sum::<f64>()
-                    + ROW_GAP * (l.len().saturating_sub(1)) as f64
-            })
-            .fold(0.0_f64, f64::max);
-        // With nothing connected there is no height to match, so fall back to a
-        // roughly square block rather than one very long column.
-        let target_h = if connected_h > 0.0 {
-            connected_h
-        } else {
-            let total: f64 = isolated.iter().map(|&i| heights_of(i)).sum();
-            let cols = (isolated.len() as f64).sqrt().ceil().max(1.0);
-            total / cols
-        };
-
-        let mut column: Vec<usize> = Vec::new();
-        let mut used = 0.0_f64;
-        for &i in &isolated {
-            let h = heights_of(i);
-            let added = if column.is_empty() { h } else { ROW_GAP + h };
-            if !column.is_empty() && used + added > target_h {
-                order.push(std::mem::take(&mut column));
-                used = h;
-                column.push(i);
-            } else {
-                used += added;
-                column.push(i);
-            }
-        }
-        if !column.is_empty() {
-            order.push(column);
-        }
-        // Isolated entities have no edges, so their layer index is never used
-        // for routing; it is set only so nothing is left at the sentinel.
-        for (li, l) in order.iter().enumerate() {
-            for &i in l {
-                if layer[i] == usize::MAX {
-                    layer[i] = li;
-                }
-            }
-        }
-    }
-
-    // --- geometry ------------------------------------------------------------
-    // Sizing needs declared-ness: an undeclared foreign key carries a marker,
-    // and a box that is not sized for it overflows into its neighbour.
+    // Deterministic by construction -- phyllotaxis seed positions, a fixed tick
+    // count, and no randomness or wall-clock anywhere.
     let widths: Vec<f64> = entities
         .iter()
         .map(|e| {
@@ -497,61 +376,172 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
         .collect();
     let heights: Vec<f64> = entities.iter().map(|e| box_height(e.attributes.len())).collect();
 
-    let layer_widths: Vec<f64> = order
-        .iter()
-        .map(|l| l.iter().map(|&i| widths[i]).fold(0.0_f64, f64::max))
-        .collect();
-    let layer_heights: Vec<f64> = order
-        .iter()
-        .map(|l| {
-            let stack: f64 = l.iter().map(|&i| heights[i]).sum();
-            stack + ROW_GAP * (l.len().saturating_sub(1)) as f64
-        })
-        .collect();
-    let tallest = layer_heights.iter().copied().fold(0.0_f64, f64::max);
-
-    let mut layer_x = Vec::with_capacity(order.len());
-    let mut x = MARGIN;
-    for w in &layer_widths {
-        layer_x.push(x);
-        x += w + COL_GAP;
+    // Seed on a phyllotaxis spiral, scaled so the initial spread is roughly the
+    // area the boxes need. Starting them all at one point would make the first
+    // ticks a scramble and the result far more sensitive to tick count.
+    let total_area: f64 = widths.iter().zip(&heights).map(|(w, h)| w * h).sum();
+    let spread = (total_area * 2.0 / std::f64::consts::PI).sqrt().max(1.0);
+    let mut px: Vec<f64> = Vec::with_capacity(n);
+    let mut py: Vec<f64> = Vec::with_capacity(n);
+    for i in 0..n {
+        let t = i as f64;
+        let r = spread * (t / n as f64).sqrt();
+        let a = t * GOLDEN_ANGLE;
+        px.push(r * a.cos());
+        py.push(r * a.sin());
     }
-    let canvas_width = x - COL_GAP + MARGIN;
-    let canvas_height = tallest + MARGIN * 2.0;
 
-    let mut boxes: Vec<Option<ErBox>> = vec![None; n];
-    for (li, entity_indices) in order.iter().enumerate() {
-        // Centre each layer vertically so short columns sit beside tall ones.
-        let mut y = MARGIN + (tallest - layer_heights[li]) / 2.0;
-        for &i in entity_indices {
-            let entity = &entities[i];
-            boxes[i] = Some(ErBox {
-                id: entity.id.clone(),
-                name: entity.name.clone(),
-                // Centre boxes narrower than their layer.
-                x: layer_x[li] + (layer_widths[li] - widths[i]) / 2.0,
-                y,
-                width: widths[i],
-                height: heights[i],
-                rows: entity
-                    .attributes
-                    .iter()
-                    .map(|a| ErRow {
-                        name: a.name.clone(),
-                        type_name: a.type_name.clone(),
-                        key: a.key.clone(),
-                        required: a.required,
-                        references: a.references.clone(),
-                        relationship_declared: a.references.as_deref().is_none_or(|t| {
-                            related_pairs.contains(&(entity.id.as_str(), t))
-                        }),
-                    })
-                    .collect(),
-            });
-            y += heights[i] + ROW_GAP;
+    // Fruchterman-Reingold. `k` is the distance the model settles at: repulsion
+    // k^2/d pushes everything apart, attraction d^2/k pulls related pairs in,
+    // and they balance around k.
+    //
+    // The temperature cap is the part that matters. WITHOUT it the layout
+    // exploded -- 6742x3099 for fourteen boxes, 1.7% of the canvas covered,
+    // rendering as specks once the SVG was scaled to fit. Capping each node's
+    // displacement per tick, and cooling that cap toward zero, is what makes
+    // the simulation settle instead of drift.
+    let k = (total_area / n as f64).sqrt() + IDEAL_EDGE_GAP;
+
+    for tick in 0..PLACEMENT_TICKS {
+        let mut fx = vec![0.0_f64; n];
+        let mut fy = vec![0.0_f64; n];
+
+        // Repulsion, every pair. O(n^2) is the right call at ER scale: a
+        // Barnes-Hut tree costs more to build than it saves under ~100 nodes.
+        for i in 0..n {
+            for j in (i + 1)..n {
+                let (mut dx, mut dy) = (px[i] - px[j], py[i] - py[j]);
+                let mut d = (dx * dx + dy * dy).sqrt();
+                if d < 1e-6 {
+                    // Coincident: separate along a deterministic axis rather
+                    // than dividing by zero.
+                    dx = if i % 2 == 0 { 1.0 } else { -1.0 };
+                    dy = 0.0;
+                    d = 1.0;
+                }
+                let f = k * k / d;
+                let (ux, uy) = (dx / d, dy / d);
+                fx[i] += ux * f;
+                fy[i] += uy * f;
+                fx[j] -= ux * f;
+                fy[j] -= uy * f;
+            }
+        }
+
+        // Attraction along relationships.
+        for (i, entity) in entities.iter().enumerate() {
+            for rel in &entity.relationships {
+                let j = match index_of.get(rel.to.as_str()) {
+                    Some(&j) if j != i => j,
+                    _ => continue,
+                };
+                let (dx, dy) = (px[j] - px[i], py[j] - py[i]);
+                let d = (dx * dx + dy * dy).sqrt();
+                if d < 1e-6 {
+                    continue;
+                }
+                let f = d * d / k;
+                let (ux, uy) = (dx / d, dy / d);
+                fx[i] += ux * f;
+                fy[i] += uy * f;
+                fx[j] -= ux * f;
+                fy[j] -= uy * f;
+            }
+        }
+
+        // Gravity toward the centroid. Uses the centroid rather than the origin
+        // so the whole layout is never dragged across the plane just because it
+        // drifted; only its spread is constrained.
+        let (cx, cy) = (px.iter().sum::<f64>() / n as f64, py.iter().sum::<f64>() / n as f64);
+        for i in 0..n {
+            fx[i] += (cx - px[i]) * GRAVITY * k / k;
+            fy[i] += (cy - py[i]) * GRAVITY;
+        }
+
+        // Cool from a bold first move down to a fine final one, and never let a
+        // node travel further than the current temperature in one tick.
+        let temperature = k * (1.0 - tick as f64 / PLACEMENT_TICKS as f64).powi(2) + 1.0;
+        for i in 0..n {
+            let d = (fx[i] * fx[i] + fy[i] * fy[i]).sqrt();
+            if d < 1e-9 {
+                continue;
+            }
+            let scale = d.min(temperature) / d;
+            px[i] += fx[i] * scale;
+            py[i] += fy[i] * scale;
+        }
+
+        // Hard separation. The force terms treat boxes as points, so actual
+        // rectangle overlap is resolved directly -- along the cheaper axis,
+        // which is what keeps the result compact rather than merely legal.
+        for _ in 0..SEPARATION_PASSES {
+            for i in 0..n {
+                for j in (i + 1)..n {
+                    let need_x = (widths[i] + widths[j]) / 2.0 + BOX_CLEARANCE;
+                    let need_y = (heights[i] + heights[j]) / 2.0 + BOX_CLEARANCE;
+                    let (dx, dy) = (px[j] - px[i], py[j] - py[i]);
+                    let (ox, oy) = (need_x - dx.abs(), need_y - dy.abs());
+                    if ox <= 0.0 || oy <= 0.0 {
+                        continue; // already clear on at least one axis
+                    }
+                    if ox < oy {
+                        let push = ox / 2.0 * if dx >= 0.0 { 1.0 } else { -1.0 };
+                        px[i] -= push;
+                        px[j] += push;
+                    } else {
+                        let push = oy / 2.0 * if dy >= 0.0 { 1.0 } else { -1.0 };
+                        py[i] -= push;
+                        py[j] += push;
+                    }
+                }
+            }
         }
     }
-    let boxes: Vec<ErBox> = boxes.into_iter().map(|b| b.expect("every entity placed")).collect();
+
+    // --- geometry ------------------------------------------------------------
+    // Shift into positive space and round, so the plan is stable to read and
+    // diff rather than carrying float noise.
+    let min_x = px
+        .iter()
+        .zip(&widths)
+        .map(|(x, w)| x - w / 2.0)
+        .fold(f64::INFINITY, f64::min);
+    let min_y = py
+        .iter()
+        .zip(&heights)
+        .map(|(y, h)| y - h / 2.0)
+        .fold(f64::INFINITY, f64::min);
+
+    let mut boxes: Vec<ErBox> = Vec::with_capacity(n);
+    for (i, entity) in entities.iter().enumerate() {
+        boxes.push(ErBox {
+            id: entity.id.clone(),
+            name: entity.name.clone(),
+            x: ((px[i] - widths[i] / 2.0 - min_x + MARGIN) * 10.0).round() / 10.0,
+            y: ((py[i] - heights[i] / 2.0 - min_y + MARGIN) * 10.0).round() / 10.0,
+            width: widths[i],
+            height: heights[i],
+            rows: entity
+                .attributes
+                .iter()
+                .map(|a| ErRow {
+                    name: a.name.clone(),
+                    type_name: a.type_name.clone(),
+                    key: a.key.clone(),
+                    required: a.required,
+                    references: a.references.clone(),
+                    relationship_declared: a.references.as_deref().is_none_or(|t| {
+                        related_pairs.contains(&(entity.id.as_str(), t))
+                    }),
+                })
+                .collect(),
+        });
+    }
+
+    let canvas_width =
+        boxes.iter().map(|b| b.x + b.width).fold(0.0_f64, f64::max) + MARGIN;
+    let canvas_height =
+        boxes.iter().map(|b| b.y + b.height).fold(0.0_f64, f64::max) + MARGIN;
 
     // --- edges ---------------------------------------------------------------
     //
@@ -570,14 +560,29 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
         }
     }
 
-    // Which side of each box an edge leaves from and arrives at.
+    // Which face of each box an edge leaves from and arrives at, decided by
+    // where the other box actually IS. Dominant axis wins: a neighbour mostly
+    // to the right is met on the right face, one mostly below on the bottom
+    // face. That is only possible without columns -- when everything was in a
+    // column, every line had to leave sideways however its target was placed.
     let sides: Vec<(Side, Side)> = pending
         .iter()
-        .map(|&(i, j, _)| match layer[i].cmp(&layer[j]) {
-            std::cmp::Ordering::Less => (Side::Right, Side::Left),
-            std::cmp::Ordering::Greater => (Side::Left, Side::Right),
-            // Same column: both ends leave rightwards and the path jogs clear.
-            std::cmp::Ordering::Equal => (Side::Right, Side::Right),
+        .map(|&(i, j, _)| {
+            let (a, b) = (&boxes[i], &boxes[j]);
+            let dx = (b.x + b.width / 2.0) - (a.x + a.width / 2.0);
+            let dy = (b.y + b.height / 2.0) - (a.y + a.height / 2.0);
+            // Compare each axis against the boxes' own extent, so a wide pair
+            // that is slightly offset vertically still meets face to face.
+            let span_x = (a.width + b.width) / 2.0;
+            let span_y = (a.height + b.height) / 2.0;
+            let from = if (dx.abs() / span_x.max(1.0)) >= (dy.abs() / span_y.max(1.0)) {
+                if dx >= 0.0 { Side::Right } else { Side::Left }
+            } else if dy >= 0.0 {
+                Side::Bottom
+            } else {
+                Side::Top
+            };
+            (from, from.opposite())
         })
         .collect();
 
@@ -589,7 +594,10 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
         slots.entry((i, sides[pi].0)).or_default().push(pi);
         slots.entry((j, sides[pi].1)).or_default().push(pi);
     }
-    let mut port_y: Vec<(f64, f64)> = vec![(0.0, 0.0); pending.len()];
+    let mut ports: Vec<(Point, Point)> = vec![
+        (Point { x: 0.0, y: 0.0 }, Point { x: 0.0, y: 0.0 });
+        pending.len()
+    ];
     for ((owner, side), mut members) in slots {
         members.sort_by(|&a, &b| {
             let other = |pi: usize| {
@@ -604,32 +612,35 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
                 .then(entities[oa].id.cmp(&entities[ob].id))
         });
         let b = &boxes[owner];
-        let span = (b.height - PORT_INSET * 2.0).max(0.0);
+        let horizontal = side.is_horizontal_face();
+        let extent = if horizontal { b.width } else { b.height };
+        let span = (extent - PORT_INSET * 2.0).max(0.0);
         let n_ports = members.len();
         for (k, pi) in members.into_iter().enumerate() {
-            let y = b.y + PORT_INSET + span * (k as f64 + 1.0) / (n_ports as f64 + 1.0);
+            let along = PORT_INSET + span * (k as f64 + 1.0) / (n_ports as f64 + 1.0);
+            let point = match side {
+                Side::Right => Point { x: b.x + b.width, y: b.y + along },
+                Side::Left => Point { x: b.x, y: b.y + along },
+                Side::Bottom => Point { x: b.x + along, y: b.y + b.height },
+                Side::Top => Point { x: b.x + along, y: b.y },
+            };
             let (i, _, _) = pending[pi];
-            // An edge can start and end on the same box only if it is a
-            // self-relationship, in which case both entries are wanted.
-            if i == owner && sides[pi].0 == side && port_y[pi].0 == 0.0 {
-                port_y[pi].0 = y;
+            // An edge could start and end on the same box (a self
+            // relationship), so the "from" slot is only claimed once.
+            let unset = ports[pi].0.x == 0.0 && ports[pi].0.y == 0.0;
+            if i == owner && sides[pi].0 == side && unset {
+                ports[pi].0 = point;
             } else {
-                port_y[pi].1 = y;
+                ports[pi].1 = point;
             }
         }
     }
 
     let mut edges = Vec::new();
-    for (pi, &(i, j, rel)) in pending.iter().enumerate() {
+    for (pi, &(i, _, rel)) in pending.iter().enumerate() {
         let (from_foot, to_foot) = feet(&rel.cardinality);
-        let (points, label_x, label_y) = route(
-            &boxes[i],
-            &boxes[j],
-            sides[pi].0,
-            sides[pi].1,
-            port_y[pi].0,
-            port_y[pi].1,
-        );
+        let (points, label_x, label_y) =
+            route(&ports[pi].0, &ports[pi].1, sides[pi].0);
         edges.push(ErEdge {
             from: entities[i].id.clone(),
             to: rel.to.clone(),
@@ -646,43 +657,6 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
     ErPlan { boxes, edges, canvas_width, canvas_height }
 }
 
-/// Edge crossings between layer `li` and its immediate neighbours, counted from
-/// ORDERING alone rather than geometry.
-///
-/// Two edges into the same adjacent layer cross exactly when their endpoints
-/// are ordered oppositely, so this is a pair-inversion count. It is what the
-/// transpose pass optimises; the geometric counter in the tests is the
-/// independent check on the result.
-fn local_crossings(order: &[Vec<usize>], adj: &[BTreeSet<usize>], li: usize) -> usize {
-    let mut total = 0;
-    for other in [li.checked_sub(1), (li + 1 < order.len()).then_some(li + 1)]
-        .into_iter()
-        .flatten()
-    {
-        let pos: BTreeMap<usize, usize> =
-            order[other].iter().enumerate().map(|(p, &i)| (i, p)).collect();
-        // Edges as (position in this layer, position in the other layer).
-        let mut pairs: Vec<(usize, usize)> = Vec::new();
-        for (p, &node) in order[li].iter().enumerate() {
-            for j in &adj[node] {
-                if let Some(&q) = pos.get(j) {
-                    pairs.push((p, q));
-                }
-            }
-        }
-        for a in 0..pairs.len() {
-            for b in (a + 1)..pairs.len() {
-                let (p1, q1) = pairs[a];
-                let (p2, q2) = pairs[b];
-                if (p1 < p2 && q1 > q2) || (p2 < p1 && q2 > q1) {
-                    total += 1;
-                }
-            }
-        }
-    }
-    total
-}
-
 /// Crow's-foot glyphs for a cardinality. An unrecognised value cannot reach
 /// here through validated data (`cardinality` is an enumerated field), so it
 /// degrades to one-to-one rather than failing the render.
@@ -694,53 +668,47 @@ fn feet(cardinality: &str) -> (ErFoot, ErFoot) {
     }
 }
 
-/// Orthogonal route between two boxes, plus the label anchor.
+/// Orthogonal route between two assigned ports, plus the label anchor.
 ///
-/// `a_y`/`b_y` are the assigned ports on each box, not its midpoint, so
-/// parallel edges between the same pair of columns stay separated.
-fn route(
-    a: &ErBox,
-    b: &ErBox,
-    a_side: Side,
-    b_side: Side,
-    a_y: f64,
-    b_y: f64,
-) -> (Vec<Point>, f64, f64) {
-    let port_x = |bx: &ErBox, side: Side| match side {
-        Side::Right => bx.x + bx.width,
-        Side::Left => bx.x,
-    };
-    let start = Point { x: port_x(a, a_side), y: a_y };
-    let end = Point { x: port_x(b, b_side), y: b_y };
+/// Takes the ports rather than the boxes: which face each end uses, and where
+/// on that face, is already decided, so this only has to get between them
+/// cleanly. Leaving a face means stepping away from it first, so a line never
+/// runs flush along the box it just left.
+fn route(start: &Point, end: &Point, from_side: Side) -> (Vec<Point>, f64, f64) {
+    let label = ((start.x + end.x) / 2.0, (start.y + end.y) / 2.0);
 
-    // Same column: both ends leave rightwards, so the path steps clear of the
-    // column and runs vertically beside it rather than back through the boxes.
-    if a_side == b_side {
-        let jog = a.x.max(b.x) + a.width.max(b.width) + COL_GAP / 3.0;
-        let label_y = (start.y + end.y) / 2.0;
-        let points = vec![
-            Point { x: start.x, y: start.y },
-            Point { x: jog, y: start.y },
-            Point { x: jog, y: end.y },
-            end,
-        ];
-        return (points, jog, label_y);
+    // Already aligned on the travelling axis: a single straight run.
+    if from_side.is_horizontal_face() {
+        if (start.x - end.x).abs() < f64::EPSILON {
+            return (vec![start.clone(), end.clone()], label.0, label.1);
+        }
+        let mid_y = (start.y + end.y) / 2.0;
+        return (
+            vec![
+                start.clone(),
+                Point { x: start.x, y: mid_y },
+                Point { x: end.x, y: mid_y },
+                end.clone(),
+            ],
+            label.0,
+            mid_y,
+        );
     }
 
-    // Different columns: a straight run when the ports already line up,
-    // otherwise a three-segment step through the middle of the channel.
+    if (start.y - end.y).abs() < f64::EPSILON {
+        return (vec![start.clone(), end.clone()], label.0, label.1);
+    }
     let mid_x = (start.x + end.x) / 2.0;
-    let points = if (start.y - end.y).abs() < f64::EPSILON {
-        vec![start.clone(), end.clone()]
-    } else {
+    (
         vec![
             start.clone(),
             Point { x: mid_x, y: start.y },
             Point { x: mid_x, y: end.y },
             end.clone(),
-        ]
-    };
-    (points, mid_x, (start.y + end.y) / 2.0)
+        ],
+        mid_x,
+        label.1,
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -851,31 +819,10 @@ mod tests {
         assert!(!rows[1].relationship_declared, "plan_id has none and draws no edge");
     }
 
-    #[test]
-    fn hub_neighbours_land_in_one_column_beside_the_hub() {
-        // WHY: this is the concrete quality claim the layering exists to make.
-        // A grid would scatter these five across rows and columns and cross the
-        // hub's edges over each other. Here the hub heads its component and its
-        // five neighbours stack in the next column, which is a fan, not
-        // spaghetti.
-        let plan = plan_er(&hub_input());
-        let hub = plan.boxes.iter().find(|b| b.id == "account").unwrap();
-        let others: Vec<&ErBox> = plan.boxes.iter().filter(|b| b.id != "account").collect();
-        assert_eq!(others.len(), 5);
-        let col_x = others[0].x;
-        for o in &others {
-            assert_eq!(o.x, col_x, "{} should share the neighbour column", o.id);
-            assert!(o.x > hub.x, "{} should sit to the right of the hub", o.id);
-        }
-    }
-
-    /// Two hubs sharing the same three children, declared in OPPOSITE orders.
+    /// Two hubs over the same three children, declared in OPPOSITE orders.
     ///
-    /// The single-hub fan cannot test crossing-minimisation at all: every edge
-    /// shares the hub as an endpoint, so no pair is even eligible to cross.
-    /// This shape is the smallest one where ordering decides the outcome --
-    /// with the children in the wrong order the two hubs' edges cross, and with
-    /// them in the right order they do not.
+    /// The smallest shape where placement decides whether edges cross: a single
+    /// hub's fan cannot cross itself, because every edge shares the hub.
     fn shared_children_input() -> ErInput {
         ErInput {
             entities: vec![
@@ -902,6 +849,237 @@ mod tests {
                 ),
             ],
         }
+    }
+
+    fn realistic_fixture_input() -> ErInput {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test/fixtures/entities-viewer/docs/architext/data/entities.json");
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("fixture unreadable at {}: {e}", path.display()));
+        serde_json::from_str(&text).expect("fixture parses as ErInput")
+    }
+
+    #[test]
+    fn related_entities_cluster_and_unrelated_ones_stay_apart() {
+        // THE claim that justifies dropping columns. Columns encoded nothing a
+        // reader could use; proximity has to earn its place by actually meaning
+        // something. Two disconnected triangles: every within-cluster distance
+        // must be smaller than every between-cluster distance, or "related
+        // things are near each other" is not true and the layout says nothing.
+        let mut entities = vec![
+            entity("a1", 3, &[("a2", "one-to-many"), ("a3", "one-to-many")]),
+            entity("a2", 3, &[("a3", "one-to-many")]),
+            entity("a3", 3, &[]),
+            entity("b1", 3, &[("b2", "one-to-many"), ("b3", "one-to-many")]),
+            entity("b2", 3, &[("b3", "one-to-many")]),
+            entity("b3", 3, &[]),
+        ];
+        entities.rotate_left(1); // input order must not decide the outcome
+        let plan = plan_er(&ErInput { entities });
+        let centre = |id: &str| {
+            let b = plan.boxes.iter().find(|b| b.id == id).unwrap();
+            (b.x + b.width / 2.0, b.y + b.height / 2.0)
+        };
+        let dist = |p: (f64, f64), q: (f64, f64)| ((p.0 - q.0).powi(2) + (p.1 - q.1).powi(2)).sqrt();
+        let a = ["a1", "a2", "a3"];
+        let b = ["b1", "b2", "b3"];
+        let within = a
+            .iter()
+            .flat_map(|x| a.iter().map(move |y| (x, y)))
+            .chain(b.iter().flat_map(|x| b.iter().map(move |y| (x, y))))
+            .filter(|(x, y)| x != y)
+            .map(|(x, y)| dist(centre(x), centre(y)))
+            .fold(0.0_f64, f64::max);
+        let between = a
+            .iter()
+            .flat_map(|x| b.iter().map(move |y| (x, y)))
+            .map(|(x, y)| dist(centre(x), centre(y)))
+            .fold(f64::INFINITY, f64::min);
+        assert!(
+            within < between,
+            "widest cluster pair {within:.0} should be closer than the nearest \
+             cross-cluster pair {between:.0}"
+        );
+    }
+
+    #[test]
+    fn boxes_never_overlap() {
+        // The invariant free placement has to hold that a grid got for free.
+        // Repulsion treats boxes as points, so overlap is resolved explicitly;
+        // if that pass regresses, entities render on top of each other.
+        for (name, input) in [
+            ("hub", hub_input()),
+            ("shared children", shared_children_input()),
+            ("realistic fixture", realistic_fixture_input()),
+        ] {
+            let plan = plan_er(&input);
+            for i in 0..plan.boxes.len() {
+                for j in (i + 1)..plan.boxes.len() {
+                    let (a, b) = (&plan.boxes[i], &plan.boxes[j]);
+                    let overlap = a.x < b.x + b.width
+                        && b.x < a.x + a.width
+                        && a.y < b.y + b.height
+                        && b.y < a.y + a.height;
+                    assert!(!overlap, "{name}: {} overlaps {}", a.id, b.id);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn the_layout_stays_compact() {
+        // THE test that was missing when free placement first shipped, and the
+        // reason a broken layout reached the browser looking green.
+        //
+        // Without a displacement cap the simulation drifted apart every tick:
+        // the fixture settled at 6742x3099 with 1.7% of the canvas covered, and
+        // rendered as specks once the SVG scaled to fit. Every existing test
+        // still passed, because all of them checked RELATIVE properties --
+        // clusters were still clusters, boxes still did not overlap, the aspect
+        // ratio was still fine. Nothing measured whether the diagram was a
+        // sensible SIZE.
+        //
+        // Fill ratio is the check that cannot be satisfied by an exploded
+        // layout. The floor is set below the measured 0.23 so ordinary layout
+        // changes do not trip it, and far above the 0.017 that shipped.
+        const MIN_FILL: f64 = 0.15;
+        for (name, input) in [("fixture", realistic_fixture_input()), ("hub", hub_input())] {
+            let plan = plan_er(&input);
+            let box_area: f64 = plan.boxes.iter().map(|b| b.width * b.height).sum();
+            let fill = box_area / (plan.canvas_width * plan.canvas_height);
+            assert!(
+                fill >= MIN_FILL,
+                "{name}: boxes cover {fill:.3} of a {:.0}x{:.0} canvas; the layout has \
+                 spread out until the diagram is unreadable",
+                plan.canvas_width,
+                plan.canvas_height
+            );
+        }
+    }
+
+    #[test]
+    fn the_canvas_is_not_a_tall_strip() {
+        // The complaint that started this: layering produced 1473x1383 and
+        // before that 1055x1335 -- a column of boxes to scroll through. Free
+        // placement should use both axes.
+        let plan = plan_er(&realistic_fixture_input());
+        let aspect = plan.canvas_width / plan.canvas_height;
+        assert!(
+            (0.5..=2.5).contains(&aspect),
+            "canvas {}x{} has aspect {aspect:.2}; it should read as a diagram, not a strip",
+            plan.canvas_width,
+            plan.canvas_height
+        );
+    }
+
+    #[test]
+    fn a_hubs_edges_leave_from_distinct_points() {
+        // REGRESSION, found by dogfooding: every endpoint was pinned to the
+        // box's vertical midpoint, so all eight of `node`'s edges started at one
+        // identical pixel -- overlapping for their whole first run, with eight
+        // crow's feet drawn on top of each other. The box edge has the height to
+        // separate them; only the midpoint convention was in the way.
+        let plan = plan_er(&hub_input());
+        let starts: Vec<(i64, i64)> = plan
+            .edges
+            .iter()
+            .map(|e| ((e.points[0].x * 100.0) as i64, (e.points[0].y * 100.0) as i64))
+            .collect();
+        let distinct: std::collections::BTreeSet<_> = starts.iter().collect();
+        assert_eq!(
+            distinct.len(),
+            starts.len(),
+            "each of the hub's {} edges needs its own exit point; got {} distinct",
+            starts.len(),
+            distinct.len()
+        );
+
+        // ...and the ports must stay ON the box edge, not drift past its corners.
+        let hub = plan.boxes.iter().find(|b| b.id == "account").unwrap();
+        for e in &plan.edges {
+            let y = e.points[0].y;
+            assert!(
+                y >= hub.y && y <= hub.y + hub.height,
+                "port {y} is outside the hub box ({}..{})",
+                hub.y,
+                hub.y + hub.height
+            );
+        }
+    }
+
+    #[test]
+    fn unrelated_entities_settle_outside_the_connected_cluster() {
+        // Under columns these piled into the hub's column and made it taller.
+        // With free placement nothing pins them anywhere, so the property worth
+        // holding is that repulsion carries them clear of the connected group
+        // rather than leaving them sitting in the middle of it.
+        let mut entities = vec![
+            entity("hub", 3, &[("leaf1", "one-to-many"), ("leaf2", "one-to-many")]),
+            entity("leaf1", 3, &[]),
+            entity("leaf2", 3, &[]),
+        ];
+        for id in ["rule", "glossary", "note"] {
+            entities.push(entity(id, 3, &[]));
+        }
+        let plan = plan_er(&ErInput { entities });
+        let centre = |id: &str| {
+            let b = plan.boxes.iter().find(|b| b.id == id).unwrap();
+            (b.x + b.width / 2.0, b.y + b.height / 2.0)
+        };
+        let d = |id: &str| {
+            let (hx, hy) = centre("hub");
+            let (x, y) = centre(id);
+            ((x - hx).powi(2) + (y - hy).powi(2)).sqrt()
+        };
+        let farthest_leaf = d("leaf1").max(d("leaf2"));
+        for id in ["rule", "glossary", "note"] {
+            assert!(
+                d(id) > farthest_leaf,
+                "{id} has no relationships and should sit outside the hub's leaves \
+                 ({:.0} vs {farthest_leaf:.0})",
+                d(id)
+            );
+        }
+    }
+
+    #[test]
+    fn a_box_is_wide_enough_for_its_widest_rendered_row() {
+        // REGRESSION: found by measuring the rendered SVG, not by a unit test.
+        // The width estimate ignored both the undeclared marker and the 32px
+        // key-column offset the renderer uses, so an annotated row overflowed
+        // its box by 153px into the entity beside it.
+        //
+        // This asserts the estimate against the SAME constants the renderer
+        // lays out with, which is what makes it capable of catching a repeat.
+        let e = ErEntityInput {
+            id: "category".into(),
+            name: "Category".into(),
+            attributes: vec![ErAttributeInput {
+                name: "parent_id".into(),
+                type_name: "uuid".into(),
+                key: Some("foreign".into()),
+                references: Some("category".into()),
+                required: false,
+            }],
+            ..Default::default()
+        };
+        let plan = plan_er(&ErInput { entities: vec![e] });
+        let b = &plan.boxes[0];
+        assert!(!b.rows[0].relationship_declared, "self-reference declares nothing");
+
+        let rendered = ROW_TEXT_X
+            + (b.rows[0].name.chars().count()
+                + 2
+                + b.rows[0].type_name.chars().count()
+                + b.rows[0].references.as_ref().unwrap().chars().count()
+                + REF_SEPARATOR_CHARS
+                + UNDECLARED_MARKER.chars().count()) as f64
+                * CHAR_W;
+        assert!(
+            b.width >= rendered.min(BOX_MAX_W),
+            "box {} wide cannot hold a {rendered} row",
+            b.width
+        );
     }
 
     #[test]
@@ -967,46 +1145,6 @@ mod tests {
     }
 
     #[test]
-    fn a_box_is_wide_enough_for_its_widest_rendered_row() {
-        // REGRESSION: found by measuring the rendered SVG, not by a unit test.
-        // The width estimate ignored both the undeclared marker and the 32px
-        // key-column offset the renderer uses, so an annotated row overflowed
-        // its box by 153px into the entity beside it.
-        //
-        // This asserts the estimate against the SAME constants the renderer
-        // lays out with, which is what makes it capable of catching a repeat.
-        let e = ErEntityInput {
-            id: "category".into(),
-            name: "Category".into(),
-            attributes: vec![ErAttributeInput {
-                name: "parent_id".into(),
-                type_name: "uuid".into(),
-                key: Some("foreign".into()),
-                references: Some("category".into()),
-                required: false,
-            }],
-            ..Default::default()
-        };
-        let plan = plan_er(&ErInput { entities: vec![e] });
-        let b = &plan.boxes[0];
-        assert!(!b.rows[0].relationship_declared, "self-reference declares nothing");
-
-        let rendered = ROW_TEXT_X
-            + (b.rows[0].name.chars().count()
-                + 2
-                + b.rows[0].type_name.chars().count()
-                + b.rows[0].references.as_ref().unwrap().chars().count()
-                + REF_SEPARATOR_CHARS
-                + UNDECLARED_MARKER.chars().count()) as f64
-                * CHAR_W;
-        assert!(
-            b.width >= rendered.min(BOX_MAX_W),
-            "box {} wide cannot hold a {rendered} row",
-            b.width
-        );
-    }
-
-    #[test]
     fn crossing_counter_can_detect_a_crossing() {
         // GUARD: proves the fitness metric below is capable of failing. A
         // counter that always returns 0 would make every fitness assertion pass
@@ -1046,35 +1184,43 @@ mod tests {
     }
 
     #[test]
-    fn shared_children_are_ordered_without_crossings() {
-        // The fitness assertion. Deliberately NOT folded into the routing
-        // corpus ratchet: crossing-minimisation between variable-height boxes
-        // is a different quality metric than lane-based flow routing, and one
-        // number cannot answer both questions.
+    fn shared_children_stay_within_their_crossing_budget() {
+        // Two hubs over the same three children. A single hub's fan cannot
+        // cross itself -- every edge shares the hub -- so this is the smallest
+        // shape where placement genuinely decides the outcome.
         let plan = plan_er(&shared_children_input());
         let crossings = count_crossings(&plan);
-        assert_eq!(
-            crossings, 0,
-            "barycenter ordering should resolve two hubs over shared children; \
-             got {crossings} crossings"
+
+        // ONE, not zero, and that is a deliberate trade rather than a defect
+        // left unexplained.
+        //
+        // This is K(2,3): both hubs join all three children. Its zero-crossing
+        // embedding puts the hubs at opposite ends with the children stacked
+        // between them. Force placement optimises DISTANCE, not planarity, and
+        // settles the hubs side by side with the children around them -- a
+        // legitimate energy minimum that costs one crossing.
+        //
+        // Layering used to score 0 here, because a two-layer graph cannot do
+        // otherwise; it paid for that with columns that meant nothing, a canvas
+        // that read as a strip, and every edge sharing one channel. The
+        // realistic 14-entity fixture scores 0 under free placement, so this is
+        // a synthetic worst case rather than what a reader will meet.
+        //
+        // Still a ratchet: lower it if placement improves, never raise it.
+        const BUDGET: usize = 1;
+        assert!(
+            crossings <= BUDGET,
+            "crossings {crossings} exceeds budget {BUDGET}; offending: {:?}",
+            crossing_pairs(&plan)
         );
     }
 
-    /// Fitness on the realistic fixture rather than a hand-built shape.
-    ///
-    /// 14 entities with a six-way hub, a shared-child diamond, and a
-    /// self-reference. Toy graphs agree with any layout; this is the one that
-    /// disagrees, and it is the same data the viewer renders, so the number
-    /// here and what a reader sees cannot drift apart.
     #[test]
     fn realistic_fixture_stays_within_its_crossing_budget() {
-        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../test/fixtures/entities-viewer/docs/architext/data/entities.json");
-        let text = std::fs::read_to_string(&path)
-            .unwrap_or_else(|e| panic!("fixture unreadable at {}: {e}", path.display()));
-        let input: ErInput = serde_json::from_str(&text).expect("fixture parses as ErInput");
+        // Fitness on the 14-entity fixture -- the same data the viewer renders,
+        // so this number and what a reader sees cannot drift apart.
+        let input = realistic_fixture_input();
         assert_eq!(input.entities.len(), 14, "fixture size changed; revisit the budget");
-
         let plan = plan_er(&input);
         let crossings = count_crossings(&plan);
 
@@ -1083,67 +1229,9 @@ mod tests {
         const BUDGET: usize = 0;
         assert!(
             crossings <= BUDGET,
-            "crossings {crossings} exceeds budget {BUDGET}; the layout regressed. \
-             Offending pairs: {:?}",
+            "crossings {crossings} exceeds budget {BUDGET}; offending: {:?}",
             crossing_pairs(&plan)
         );
-    }
-
-    #[test]
-    fn a_hubs_edges_leave_from_distinct_points() {
-        // REGRESSION, found by dogfooding: every endpoint was pinned to the
-        // box's vertical midpoint, so all eight of `node`'s edges started at one
-        // identical pixel -- overlapping for their whole first run, with eight
-        // crow's feet drawn on top of each other. The box edge has the height to
-        // separate them; only the midpoint convention was in the way.
-        let plan = plan_er(&hub_input());
-        let starts: Vec<(i64, i64)> = plan
-            .edges
-            .iter()
-            .map(|e| ((e.points[0].x * 100.0) as i64, (e.points[0].y * 100.0) as i64))
-            .collect();
-        let distinct: std::collections::BTreeSet<_> = starts.iter().collect();
-        assert_eq!(
-            distinct.len(),
-            starts.len(),
-            "each of the hub's {} edges needs its own exit point; got {} distinct",
-            starts.len(),
-            distinct.len()
-        );
-
-        // ...and the ports must stay ON the box edge, not drift past its corners.
-        let hub = plan.boxes.iter().find(|b| b.id == "account").unwrap();
-        for e in &plan.edges {
-            let y = e.points[0].y;
-            assert!(
-                y >= hub.y && y <= hub.y + hub.height,
-                "port {y} is outside the hub box ({}..{})",
-                hub.y,
-                hub.y + hub.height
-            );
-        }
-    }
-
-    #[test]
-    fn isolated_entities_do_not_make_the_hub_column_taller() {
-        // Found by dogfooding on Architext's own model: four of sixteen
-        // entities had no relationships, and each seeded its own component at
-        // layer 0, stacking into the hub's column. They add nothing there --
-        // they have no edges -- so they belong beside the layered part, adding
-        // width rather than height.
-        let mut entities = vec![entity("hub", 3, &[("leaf", "one-to-many")]), entity("leaf", 3, &[])];
-        for id in ["rule", "glossary", "note", "code_graph"] {
-            entities.push(entity(id, 3, &[]));
-        }
-        let plan = plan_er(&ErInput { entities });
-        let x_of = |id: &str| plan.boxes.iter().find(|b| b.id == id).unwrap().x;
-        let hub_x = x_of("hub");
-        for id in ["rule", "glossary", "note", "code_graph"] {
-            assert!(
-                x_of(id) > hub_x,
-                "{id} has no relationships and must not share the hub's column"
-            );
-        }
     }
 
     #[test]
