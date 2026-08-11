@@ -8,10 +8,13 @@ use leptos::*;
 
 use architext_routing::model::Point;
 use architext_routing::plan_er::{
-    plan_er, ErBox, ErEdge, ErFoot, ErPlan, BOX_PAD_Y, HEADER_H, ROW_H,
+    plan_er, ErBox, ErEdge, ErFoot, ErPlan, BOX_PAD_X, BOX_PAD_Y, CHAR_W, HEADER_H, ROW_H,
+    ROW_TEXT_X,
 };
 
-use crate::data_model_view_model::{fk_annotation, key_glyph, to_er_input, Projection};
+use crate::data_model_view_model::{
+    fk_annotation, fk_tooltip, key_glyph, to_er_input, Projection,
+};
 use crate::state::use_app_state;
 
 /// Length of the tick/prong drawn at an edge endpoint.
@@ -228,15 +231,16 @@ fn EntityBox(entity: ErBox) -> impl IntoView {
                     // descenders stay inside the row band.
                     let y = rows_top + (i as f64) * ROW_H + ROW_H - 4.0;
                     let annotation = fk_annotation(row);
-                    let unresolved = annotation
-                        .as_deref()
-                        .is_some_and(|a| a.ends_with("(no relationship declared)"));
+                    let tooltip = fk_tooltip(row);
+                    let unresolved = tooltip.is_some();
                     let label = match annotation {
                         Some(a) => format!("{}  {}  \u{2192} {}", row.name, row.type_name, a),
                         None => format!("{}  {}", row.name, row.type_name),
                     };
+                    let label = truncate_to_box(&label, entity.width);
                     view! {
                         <g class="er-row" class:is-unresolved=unresolved>
+                            {tooltip.map(|t| view! { <title>{t}</title> })}
                             <text class="er-row__key" x=x_text y=y>
                                 {key_glyph(row.key.as_deref())}
                             </text>
@@ -249,6 +253,27 @@ fn EntityBox(entity: ErBox) -> impl IntoView {
                 .collect_view()}
         </g>
     }
+}
+
+/// Clip a row's text to the width the layout allocated.
+///
+/// Box width comes from an ESTIMATE (layout runs in WASM with no font metrics
+/// and must match native byte for byte), and it is clamped to a maximum. Either
+/// can leave a row wider than its box, which renders as text running out of one
+/// entity and across the next. Truncating here makes that structurally
+/// impossible for any content, rather than merely unlikely for this fixture.
+fn truncate_to_box(text: &str, box_width: f64) -> String {
+    let usable = box_width - ROW_TEXT_X - BOX_PAD_X;
+    // The epsilon matters: box width is computed as `n * CHAR_W`, so dividing it
+    // back by CHAR_W lands a hair under `n` in binary floating point (191.4/6.6
+    // = 28.999...). Without it, `floor` truncates a row that fits EXACTLY --
+    // which is every row that determined its own box's width.
+    let max_chars = (usable / CHAR_W + 1e-6).floor().max(1.0) as usize;
+    if text.chars().count() <= max_chars {
+        return text.to_string();
+    }
+    let kept: String = text.chars().take(max_chars.saturating_sub(1)).collect();
+    format!("{kept}\u{2026}")
 }
 
 /// Orthogonal polyline as an SVG path.
@@ -350,6 +375,27 @@ mod tests {
         // put NaN into the path and silently blank the edge.
         let p = Point { x: 5.0, y: 5.0 };
         assert!(foot_at(&p, &p, ErFoot::Many).is_empty());
+    }
+
+    #[test]
+    fn a_row_wider_than_its_box_is_truncated() {
+        // The layout estimates text width and clamps box width, so a row CAN
+        // exceed its box. Unclipped, it renders across the neighbouring entity
+        // -- which is exactly what a 153px overflow looked like on screen.
+        let long = "parent_id  uuid  \u{2192} category (not drawn)";
+        let clipped = truncate_to_box(long, 120.0);
+        assert!(clipped.ends_with('\u{2026}'), "expected an ellipsis, got {clipped:?}");
+        assert!(clipped.chars().count() < long.chars().count());
+        // and a row that fits is left exactly alone
+        assert_eq!(truncate_to_box("id  uuid", 320.0), "id  uuid");
+
+        // A row that fits EXACTLY must survive. This is the case floating point
+        // got wrong: a box sized to n characters divided back to 28.999..., so
+        // the row that set the box's own width was the one clipped.
+        let n = 29;
+        let exact: String = "x".repeat(n);
+        let width = ROW_TEXT_X + n as f64 * CHAR_W + BOX_PAD_X;
+        assert_eq!(truncate_to_box(&exact, width), exact, "an exactly-fitting row must not clip");
     }
 
     #[test]

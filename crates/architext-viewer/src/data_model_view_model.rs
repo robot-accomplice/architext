@@ -5,7 +5,7 @@
 //! `components::data_model_panel` renders what these functions return.
 
 use architext_routing::plan_er::{
-    ErAttributeInput, ErEntityInput, ErInput, ErRelationshipInput, ErRow,
+    ErAttributeInput, ErEntityInput, ErInput, ErRelationshipInput, ErRow, UNDECLARED_MARKER,
 };
 
 use crate::data::models::EntitiesDoc;
@@ -117,8 +117,24 @@ pub fn fk_annotation(row: &ErRow) -> Option<String> {
     Some(if row.relationship_declared {
         target.clone()
     } else {
-        format!("{target} (no relationship declared)")
+        format!("{target}{UNDECLARED_MARKER}")
     })
+}
+
+/// The full explanation behind the terse inline marker, shown on hover.
+///
+/// The marker is short so a schema with many undeclared foreign keys does not
+/// size every box to fit a sentence; the sentence still has to be reachable,
+/// so it lives here.
+pub fn fk_tooltip(row: &ErRow) -> Option<String> {
+    let target = row.references.as_ref()?;
+    if row.relationship_declared {
+        return None;
+    }
+    Some(format!(
+        "No relationship declares a link to \"{target}\", so this foreign key draws no edge. \
+         Relationships are the only source of rendered edges."
+    ))
 }
 
 #[cfg(test)]
@@ -128,41 +144,62 @@ mod tests {
 
     fn doc() -> EntitiesDoc {
         EntitiesDoc {
-            entities: vec![Entity {
-                id: "release".into(),
-                name: "Release".into(),
-                summary: None,
-                owner_node_id: None,
-                data_class_ids: vec![],
-                attributes: vec![
-                    EntityAttribute {
+            entities: vec![
+                Entity {
+                    id: "release".into(),
+                    name: "Release".into(),
+                    summary: None,
+                    owner_node_id: None,
+                    data_class_ids: vec![],
+                    attributes: vec![
+                        EntityAttribute {
+                            name: "id".into(),
+                            type_name: "uuid".into(),
+                            key: Some("primary".into()),
+                            required: false,
+                            references: None,
+                        },
+                        EntityAttribute {
+                            name: "item_id".into(),
+                            type_name: "uuid".into(),
+                            key: Some("foreign".into()),
+                            required: false,
+                            references: Some("item".into()),
+                        },
+                    ],
+                    relationships: vec![EntityRelationship {
+                        to: "item".into(),
+                        cardinality: "one-to-many".into(),
+                        label: None,
+                    }],
+                },
+                // `item` must exist. Validation guarantees every `references`
+                // and `relationships.to` resolves, so a fixture that names an
+                // absent entity tests a state the product cannot reach -- and
+                // it hid a real annotation defect once already.
+                Entity {
+                    id: "item".into(),
+                    name: "Item".into(),
+                    summary: None,
+                    owner_node_id: None,
+                    data_class_ids: vec![],
+                    attributes: vec![EntityAttribute {
                         name: "id".into(),
                         type_name: "uuid".into(),
                         key: Some("primary".into()),
                         required: false,
                         references: None,
-                    },
-                    EntityAttribute {
-                        name: "item_id".into(),
-                        type_name: "uuid".into(),
-                        key: Some("foreign".into()),
-                        required: false,
-                        references: Some("item".into()),
-                    },
-                ],
-                relationships: vec![EntityRelationship {
-                    to: "item".into(),
-                    cardinality: "one-to-many".into(),
-                    label: None,
-                }],
-            }],
+                    }],
+                    relationships: vec![],
+                },
+            ],
         }
     }
 
     #[test]
     fn entities_convert_to_layout_input_without_loss() {
         let input = to_er_input(&doc());
-        assert_eq!(input.entities.len(), 1);
+        assert_eq!(input.entities.len(), 2);
         assert_eq!(input.entities[0].attributes.len(), 2);
         assert_eq!(input.entities[0].relationships.len(), 1);
         assert_eq!(input.entities[0].attributes[1].references.as_deref(), Some("item"));
@@ -183,7 +220,8 @@ mod tests {
         d.entities[0].relationships.clear();
         let without = architext_routing::plan_er::plan_er(&to_er_input(&d));
         let row = &without.boxes.iter().find(|b| b.id == "release").unwrap().rows[1];
-        assert_eq!(fk_annotation(row).as_deref(), Some("item (no relationship declared)"));
+        assert_eq!(fk_annotation(row).as_deref(), Some("item (not drawn)"));
+        assert!(fk_tooltip(row).is_some(), "the terse marker must be explained on hover");
     }
 
     #[test]

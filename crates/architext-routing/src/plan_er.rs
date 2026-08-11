@@ -44,12 +44,13 @@ pub const HEADER_H: f64 = 26.0;
 pub const ROW_H: f64 = 17.0;
 /// Vertical padding inside the box, above and below the attribute rows.
 pub const BOX_PAD_Y: f64 = 5.0;
-/// Nominal advance width of one character at the box's font size.
-const CHAR_W: f64 = 6.6;
+/// Nominal advance width of one character at the box's font size. Published
+/// so the renderer can truncate a row to the width the layout gave it.
+pub const CHAR_W: f64 = 6.6;
 /// Horizontal padding inside the box, left and right.
-const BOX_PAD_X: f64 = 12.0;
+pub const BOX_PAD_X: f64 = 12.0;
 const BOX_MIN_W: f64 = 132.0;
-const BOX_MAX_W: f64 = 268.0;
+const BOX_MAX_W: f64 = 320.0;
 /// Horizontal gap between adjacent layers.
 const COL_GAP: f64 = 88.0;
 /// Vertical gap between boxes within a layer.
@@ -59,6 +60,9 @@ const MARGIN: f64 = 28.0;
 /// Barycenter sweeps (down, up, down...). Two full passes settle this size of
 /// graph; more sweeps stop changing the result.
 const BARYCENTER_SWEEPS: usize = 4;
+/// Transpose passes after barycenter. Bounded so layout time stays predictable;
+/// the loop also exits early as soon as a pass makes no strict improvement.
+const TRANSPOSE_PASSES: usize = 4;
 
 // ---------------------------------------------------------------------------
 // Input — mirrors entities.json
@@ -185,26 +189,59 @@ fn box_height(attribute_count: usize) -> f64 {
     HEADER_H + BOX_PAD_Y * 2.0 + attribute_count as f64 * ROW_H
 }
 
-/// Estimated rendered width of an attribute row, `name  type` plus the key
-/// glyph column.
-fn row_text_len(attr: &ErAttributeInput) -> usize {
-    let key_len = match attr.key.as_deref() {
-        Some(_) => 4, // "PK  " / "FK  " / "UK  "
+/// Marker the renderer appends to a foreign key that draws no edge.
+///
+/// Published so the width estimate sizes for the text that is ACTUALLY drawn.
+/// It was not, and the annotated row overflowed its box by 153px into the
+/// neighbouring entity -- visible immediately on screen and invisible to every
+/// unit test, because nothing in Rust knew what the viewer appended.
+///
+/// Kept short deliberately. The full sentence is a tooltip; inlining it would
+/// add 27 characters to a row, and a schema where many foreign keys go
+/// undeclared would size every box to fit a sentence.
+pub const UNDECLARED_MARKER: &str = " (not drawn)";
+
+/// X offset from the box's left edge to the key glyph column.
+pub const KEY_X: f64 = 10.0;
+/// X offset from the box's left edge to the attribute text.
+pub const ROW_TEXT_X: f64 = 32.0;
+
+/// Characters the renderer spends joining a row to its reference clause:
+/// two spaces, the arrow, and a space ("  \u{2192} ").
+///
+/// Named because it was counted as 3 while the renderer drew 4, which cost one
+/// character of width and clipped the marker to "(not dra\u{2026}". An estimate
+/// that is even one character short truncates the very text it is estimating.
+const REF_SEPARATOR_CHARS: usize = 4;
+
+/// Estimated character count of an attribute row's text: `name  type` plus the
+/// reference clause when there is one.
+fn row_text_len(attr: &ErAttributeInput, declared: bool) -> usize {
+    let ref_len = match attr.references.as_deref() {
         None => 0,
+        Some(r) => {
+            r.chars().count()
+                + REF_SEPARATOR_CHARS
+                + if declared { 0 } else { UNDECLARED_MARKER.chars().count() }
+        }
     };
-    let ref_len = attr.references.as_ref().map_or(0, |r| r.chars().count() + 3); // " > x"
-    key_len + attr.name.chars().count() + 2 + attr.type_name.chars().count() + ref_len
+    attr.name.chars().count() + 2 + attr.type_name.chars().count() + ref_len
 }
 
-fn box_width(entity: &ErEntityInput) -> f64 {
-    let widest = entity
+/// `is_declared` answers whether a foreign key's target is joined by a
+/// relationship, which decides whether the row carries the marker and so how
+/// wide the box has to be.
+fn box_width(entity: &ErEntityInput, is_declared: &impl Fn(&str) -> bool) -> f64 {
+    let widest_row = entity
         .attributes
         .iter()
-        .map(row_text_len)
-        .chain(std::iter::once(entity.name.chars().count()))
-        .max()
-        .unwrap_or(0);
-    (widest as f64 * CHAR_W + BOX_PAD_X * 2.0).clamp(BOX_MIN_W, BOX_MAX_W)
+        .map(|a| {
+            let declared = a.references.as_deref().is_none_or(|t| is_declared(t));
+            ROW_TEXT_X + row_text_len(a, declared) as f64 * CHAR_W
+        })
+        .fold(0.0_f64, f64::max);
+    let header = KEY_X + entity.name.chars().count() as f64 * CHAR_W;
+    (widest_row.max(header) + BOX_PAD_X).clamp(BOX_MIN_W, BOX_MAX_W)
 }
 
 // ---------------------------------------------------------------------------
@@ -240,6 +277,24 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
                     adj[i].insert(j);
                     adj[j].insert(i);
                 }
+            }
+        }
+    }
+
+    // Which entity pairs an edge actually connects, in EITHER direction.
+    //
+    // An attribute's annotation answers "does this foreign key draw an edge?",
+    // and an edge exists if either end declared it. Checking only the entity's
+    // own `relationships` marks every child's foreign key as undeclared when
+    // the parent is the one that declared the link -- which is the normal
+    // shape, so nearly every foreign key in a real schema would be flagged
+    // while its edge was plainly visible on the diagram.
+    let mut related_pairs: BTreeSet<(&str, &str)> = BTreeSet::new();
+    for entity in entities {
+        for rel in &entity.relationships {
+            if index_of.contains_key(rel.to.as_str()) {
+                related_pairs.insert((entity.id.as_str(), rel.to.as_str()));
+                related_pairs.insert((rel.to.as_str(), entity.id.as_str()));
             }
         }
     }
@@ -319,8 +374,46 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
         }
     }
 
+    // --- transpose: remove the crossings barycenter leaves behind ------------
+    //
+    // Barycenter positions a layer by the AVERAGE of its neighbours, which is a
+    // good global guess and routinely leaves adjacent pairs inverted -- two
+    // edges into the next column whose endpoints are ordered the other way
+    // round. Swapping such a pair is the textbook companion pass, and on the
+    // 14-entity fixture it is the difference between one crossing and none.
+    //
+    // Bounded and deterministic: a fixed pass count, swaps only on a STRICT
+    // improvement (so equal-cost swaps cannot oscillate), and layers walked in
+    // index order.
+    for _ in 0..TRANSPOSE_PASSES {
+        let mut improved = false;
+        for li in 0..order.len() {
+            for k in 0..order[li].len().saturating_sub(1) {
+                let before = local_crossings(&order, &adj, li);
+                order[li].swap(k, k + 1);
+                let after = local_crossings(&order, &adj, li);
+                if after < before {
+                    improved = true;
+                } else {
+                    order[li].swap(k, k + 1); // revert
+                }
+            }
+        }
+        if !improved {
+            break;
+        }
+    }
+
     // --- geometry ------------------------------------------------------------
-    let widths: Vec<f64> = entities.iter().map(box_width).collect();
+    // Sizing needs declared-ness: an undeclared foreign key carries a marker,
+    // and a box that is not sized for it overflows into its neighbour.
+    let widths: Vec<f64> = entities
+        .iter()
+        .map(|e| {
+            let eid = e.id.as_str();
+            box_width(e, &|target: &str| related_pairs.contains(&(eid, target)))
+        })
+        .collect();
     let heights: Vec<f64> = entities.iter().map(|e| box_height(e.attributes.len())).collect();
 
     let layer_widths: Vec<f64> = order
@@ -351,8 +444,6 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
         let mut y = MARGIN + (tallest - layer_heights[li]) / 2.0;
         for &i in entity_indices {
             let entity = &entities[i];
-            let declared: BTreeSet<&str> =
-                entity.relationships.iter().map(|r| r.to.as_str()).collect();
             boxes[i] = Some(ErBox {
                 id: entity.id.clone(),
                 name: entity.name.clone(),
@@ -370,10 +461,9 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
                         key: a.key.clone(),
                         required: a.required,
                         references: a.references.clone(),
-                        relationship_declared: a
-                            .references
-                            .as_deref()
-                            .is_none_or(|t| declared.contains(t)),
+                        relationship_declared: a.references.as_deref().is_none_or(|t| {
+                            related_pairs.contains(&(entity.id.as_str(), t))
+                        }),
                     })
                     .collect(),
             });
@@ -407,6 +497,43 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
     }
 
     ErPlan { boxes, edges, canvas_width, canvas_height }
+}
+
+/// Edge crossings between layer `li` and its immediate neighbours, counted from
+/// ORDERING alone rather than geometry.
+///
+/// Two edges into the same adjacent layer cross exactly when their endpoints
+/// are ordered oppositely, so this is a pair-inversion count. It is what the
+/// transpose pass optimises; the geometric counter in the tests is the
+/// independent check on the result.
+fn local_crossings(order: &[Vec<usize>], adj: &[BTreeSet<usize>], li: usize) -> usize {
+    let mut total = 0;
+    for other in [li.checked_sub(1), (li + 1 < order.len()).then_some(li + 1)]
+        .into_iter()
+        .flatten()
+    {
+        let pos: BTreeMap<usize, usize> =
+            order[other].iter().enumerate().map(|(p, &i)| (i, p)).collect();
+        // Edges as (position in this layer, position in the other layer).
+        let mut pairs: Vec<(usize, usize)> = Vec::new();
+        for (p, &node) in order[li].iter().enumerate() {
+            for j in &adj[node] {
+                if let Some(&q) = pos.get(j) {
+                    pairs.push((p, q));
+                }
+            }
+        }
+        for a in 0..pairs.len() {
+            for b in (a + 1)..pairs.len() {
+                let (p1, q1) = pairs[a];
+                let (p2, q2) = pairs[b];
+                if (p1 < p2 && q1 > q2) || (p2 < p1 && q2 > q1) {
+                    total += 1;
+                }
+            }
+        }
+    }
+    total
 }
 
 /// Crow's-foot glyphs for a cardinality. An unrecognised value cannot reach
@@ -629,6 +756,108 @@ mod tests {
     }
 
     #[test]
+    fn a_foreign_key_is_declared_when_the_OTHER_end_declares_the_link() {
+        // REGRESSION: found by rendering the fixture, not by a unit test.
+        //
+        // The original check looked only at the entity's own `relationships`.
+        // In the normal parent-declares-children shape, the child holds the
+        // foreign key and the PARENT holds the relationship, so every child's
+        // foreign key was annotated "no relationship declared" while its edge
+        // was drawn plainly on the diagram. 10 of 11 flags in a 14-entity
+        // fixture were wrong.
+        //
+        // The earlier test missed it because it put the foreign key and the
+        // relationship on the same entity, which is the one arrangement where
+        // both readings agree.
+        let parent = ErEntityInput {
+            id: "account".into(),
+            name: "Account".into(),
+            attributes: vec![attr("id", "uuid")],
+            relationships: vec![ErRelationshipInput {
+                to: "order".into(),
+                cardinality: "one-to-many".into(),
+                label: None,
+            }],
+            ..Default::default()
+        };
+        let child = ErEntityInput {
+            id: "order".into(),
+            name: "Order".into(),
+            attributes: vec![
+                attr("id", "uuid"),
+                ErAttributeInput {
+                    name: "account_id".into(),
+                    type_name: "uuid".into(),
+                    key: Some("foreign".into()),
+                    references: Some("account".into()),
+                    required: true,
+                },
+                // Self-reference with no relationship at either end: this one
+                // genuinely draws no edge and MUST stay flagged, so the fix
+                // cannot be "never flag anything".
+                ErAttributeInput {
+                    name: "parent_order_id".into(),
+                    type_name: "uuid".into(),
+                    key: Some("foreign".into()),
+                    references: Some("order".into()),
+                    required: false,
+                },
+            ],
+            ..Default::default()
+        };
+        let plan = plan_er(&ErInput { entities: vec![parent, child] });
+        let rows = &plan.boxes.iter().find(|b| b.id == "order").unwrap().rows;
+        assert!(
+            rows[1].relationship_declared,
+            "account_id is backed by the edge account -> order and must not be flagged"
+        );
+        assert!(
+            !rows[2].relationship_declared,
+            "parent_order_id has no relationship at either end and must stay flagged"
+        );
+    }
+
+    #[test]
+    fn a_box_is_wide_enough_for_its_widest_rendered_row() {
+        // REGRESSION: found by measuring the rendered SVG, not by a unit test.
+        // The width estimate ignored both the undeclared marker and the 32px
+        // key-column offset the renderer uses, so an annotated row overflowed
+        // its box by 153px into the entity beside it.
+        //
+        // This asserts the estimate against the SAME constants the renderer
+        // lays out with, which is what makes it capable of catching a repeat.
+        let e = ErEntityInput {
+            id: "category".into(),
+            name: "Category".into(),
+            attributes: vec![ErAttributeInput {
+                name: "parent_id".into(),
+                type_name: "uuid".into(),
+                key: Some("foreign".into()),
+                references: Some("category".into()),
+                required: false,
+            }],
+            ..Default::default()
+        };
+        let plan = plan_er(&ErInput { entities: vec![e] });
+        let b = &plan.boxes[0];
+        assert!(!b.rows[0].relationship_declared, "self-reference declares nothing");
+
+        let rendered = ROW_TEXT_X
+            + (b.rows[0].name.chars().count()
+                + 2
+                + b.rows[0].type_name.chars().count()
+                + b.rows[0].references.as_ref().unwrap().chars().count()
+                + REF_SEPARATOR_CHARS
+                + UNDECLARED_MARKER.chars().count()) as f64
+                * CHAR_W;
+        assert!(
+            b.width >= rendered.min(BOX_MAX_W),
+            "box {} wide cannot hold a {rendered} row",
+            b.width
+        );
+    }
+
+    #[test]
     fn crossing_counter_can_detect_a_crossing() {
         // GUARD: proves the fitness metric below is capable of failing. A
         // counter that always returns 0 would make every fitness assertion pass
@@ -682,6 +911,35 @@ mod tests {
         );
     }
 
+    /// Fitness on the realistic fixture rather than a hand-built shape.
+    ///
+    /// 14 entities with a six-way hub, a shared-child diamond, and a
+    /// self-reference. Toy graphs agree with any layout; this is the one that
+    /// disagrees, and it is the same data the viewer renders, so the number
+    /// here and what a reader sees cannot drift apart.
+    #[test]
+    fn realistic_fixture_stays_within_its_crossing_budget() {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../test/fixtures/entities-viewer/docs/architext/data/entities.json");
+        let text = std::fs::read_to_string(&path)
+            .unwrap_or_else(|e| panic!("fixture unreadable at {}: {e}", path.display()));
+        let input: ErInput = serde_json::from_str(&text).expect("fixture parses as ErInput");
+        assert_eq!(input.entities.len(), 14, "fixture size changed; revisit the budget");
+
+        let plan = plan_er(&input);
+        let crossings = count_crossings(&plan);
+
+        // A RATCHET, not an aspiration: lower it when the layout improves,
+        // never raise it to make a regression pass.
+        const BUDGET: usize = 0;
+        assert!(
+            crossings <= BUDGET,
+            "crossings {crossings} exceeds budget {BUDGET}; the layout regressed. \
+             Offending pairs: {:?}",
+            crossing_pairs(&plan)
+        );
+    }
+
     #[test]
     fn empty_input_is_a_valid_empty_plan() {
         let plan = plan_er(&ErInput::default());
@@ -690,6 +948,24 @@ mod tests {
     }
 
     // --- crossing counter (test-only fitness helper) ------------------------
+
+    fn crossing_pairs(plan: &ErPlan) -> Vec<(String, String)> {
+        let mut out = Vec::new();
+        for a in 0..plan.edges.len() {
+            for b in (a + 1)..plan.edges.len() {
+                let (ea, eb) = (&plan.edges[a], &plan.edges[b]);
+                if ea.from == eb.from || ea.to == eb.to || ea.from == eb.to || ea.to == eb.from {
+                    continue;
+                }
+                let sa: Vec<_> = ea.points.windows(2).map(|w| (w[0].clone(), w[1].clone())).collect();
+                let sb: Vec<_> = eb.points.windows(2).map(|w| (w[0].clone(), w[1].clone())).collect();
+                if sa.iter().any(|s| sb.iter().any(|t| segments_cross(s, t))) {
+                    out.push((format!("{}->{}", ea.from, ea.to), format!("{}->{}", eb.from, eb.to)));
+                }
+            }
+        }
+        out
+    }
 
     fn count_crossings(plan: &ErPlan) -> usize {
         let segs: Vec<Vec<(Point, Point)>> = plan
