@@ -50,11 +50,23 @@ pub const CHAR_W: f64 = 6.6;
 /// Horizontal padding inside the box, left and right.
 pub const BOX_PAD_X: f64 = 12.0;
 const BOX_MIN_W: f64 = 132.0;
-const BOX_MAX_W: f64 = 320.0;
+// 320 clipped a real row on the first real schema Architext modelled
+// ("target_release_id  slug  -> release_summary" needs 321.2px). Snake_case
+// column names next to snake_case entity names are the normal case, not the
+// pathological one, so the cap has headroom for them now.
+const BOX_MAX_W: f64 = 380.0;
 /// Horizontal gap between adjacent layers.
-const COL_GAP: f64 = 88.0;
+///
+/// Generous on purpose. The canvas scrolls, so horizontal room is free, and it
+/// is the channel every edge between two columns has to share -- a hub with
+/// eight relationships needs somewhere to fan out.
+const COL_GAP: f64 = 130.0;
 /// Vertical gap between boxes within a layer.
-const ROW_GAP: f64 = 28.0;
+const ROW_GAP: f64 = 34.0;
+
+/// How far in from a box's top and bottom corners the outermost edge port sits,
+/// so a line never appears to attach to the corner itself.
+const PORT_INSET: f64 = 10.0;
 /// Canvas margin on every side.
 const MARGIN: f64 = 28.0;
 /// Barycenter sweeps (down, up, down...). Two full passes settle this size of
@@ -117,6 +129,13 @@ pub struct ErRelationshipInput {
 // ---------------------------------------------------------------------------
 // Output
 // ---------------------------------------------------------------------------
+
+/// Which vertical edge of a box a line attaches to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Side {
+    Right,
+    Left,
+}
 
 /// Which crow's-foot glyph terminates one end of an edge.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -306,7 +325,14 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
     let mut layer: Vec<usize> = vec![usize::MAX; n];
     let mut order: Vec<Vec<usize>> = Vec::new(); // order[layer] = entity indices
 
-    let mut remaining: BTreeSet<usize> = (0..n).collect();
+    // Entities with no relationships are held back from the layering.
+    //
+    // Each would otherwise seed its own component at layer 0 and stack into the
+    // hub's column, making the busiest column taller for entities that carry no
+    // edges at all. On Architext's own model that was four of sixteen. They are
+    // packed into trailing columns below instead.
+    let isolated: Vec<usize> = (0..n).filter(|&i| adj[i].is_empty()).collect();
+    let mut remaining: BTreeSet<usize> = (0..n).filter(|&i| !adj[i].is_empty()).collect();
     while let Some(&seed) = remaining
         .iter()
         .max_by_key(|&&i| (adj[i].len(), std::cmp::Reverse(entities[i].id.as_str())))
@@ -404,6 +430,61 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
         }
     }
 
+    // --- pack the isolated entities into trailing columns --------------------
+    //
+    // They belong in the diagram -- an entity with no relationships is a real
+    // part of the model, not an orphan to hide -- but they carry no edges, so
+    // nothing is gained by interleaving them with the connected structure.
+    // Filling columns to the height the layered part already needs adds width
+    // instead of height, and costs no vertical space at all until the connected
+    // layers are taller than the isolated ones.
+    if !isolated.is_empty() {
+        let heights_of = |i: usize| box_height(entities[i].attributes.len());
+        let connected_h = order
+            .iter()
+            .map(|l| {
+                l.iter().map(|&i| heights_of(i)).sum::<f64>()
+                    + ROW_GAP * (l.len().saturating_sub(1)) as f64
+            })
+            .fold(0.0_f64, f64::max);
+        // With nothing connected there is no height to match, so fall back to a
+        // roughly square block rather than one very long column.
+        let target_h = if connected_h > 0.0 {
+            connected_h
+        } else {
+            let total: f64 = isolated.iter().map(|&i| heights_of(i)).sum();
+            let cols = (isolated.len() as f64).sqrt().ceil().max(1.0);
+            total / cols
+        };
+
+        let mut column: Vec<usize> = Vec::new();
+        let mut used = 0.0_f64;
+        for &i in &isolated {
+            let h = heights_of(i);
+            let added = if column.is_empty() { h } else { ROW_GAP + h };
+            if !column.is_empty() && used + added > target_h {
+                order.push(std::mem::take(&mut column));
+                used = h;
+                column.push(i);
+            } else {
+                used += added;
+                column.push(i);
+            }
+        }
+        if !column.is_empty() {
+            order.push(column);
+        }
+        // Isolated entities have no edges, so their layer index is never used
+        // for routing; it is set only so nothing is left at the sentinel.
+        for (li, l) in order.iter().enumerate() {
+            for &i in l {
+                if layer[i] == usize::MAX {
+                    layer[i] = li;
+                }
+            }
+        }
+    }
+
     // --- geometry ------------------------------------------------------------
     // Sizing needs declared-ness: an undeclared foreign key carries a marker,
     // and a box that is not sized for it overflows into its neighbour.
@@ -473,27 +554,93 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
     let boxes: Vec<ErBox> = boxes.into_iter().map(|b| b.expect("every entity placed")).collect();
 
     // --- edges ---------------------------------------------------------------
-    let mut edges = Vec::new();
+    //
+    // Endpoints are DISTRIBUTED along the box edge rather than pinned to its
+    // vertical midpoint. Pinning them meant a hub's edges all left from one
+    // identical point: on Architext's own model eight edges shared a single
+    // pixel, overlapping for their whole first run with eight crow's feet drawn
+    // on top of each other. The box edge already has the height to separate
+    // them, so nothing but the midpoint convention was in the way.
+    let mut pending: Vec<(usize, usize, &ErRelationshipInput)> = Vec::new();
     for (i, entity) in entities.iter().enumerate() {
         for rel in &entity.relationships {
-            let j = match index_of.get(rel.to.as_str()) {
-                Some(&j) => j,
-                None => continue, // dangling; validation already rejected it
-            };
-            let (from_foot, to_foot) = feet(&rel.cardinality);
-            let (points, label_x, label_y) = route(&boxes[i], &boxes[j], layer[i], layer[j]);
-            edges.push(ErEdge {
-                from: entity.id.clone(),
-                to: rel.to.clone(),
-                label: rel.label.clone(),
-                cardinality: rel.cardinality.clone(),
-                points,
-                from_foot,
-                to_foot,
-                label_x,
-                label_y,
-            });
+            if let Some(&j) = index_of.get(rel.to.as_str()) {
+                pending.push((i, j, rel)); // dangling targets already rejected by validation
+            }
         }
+    }
+
+    // Which side of each box an edge leaves from and arrives at.
+    let sides: Vec<(Side, Side)> = pending
+        .iter()
+        .map(|&(i, j, _)| match layer[i].cmp(&layer[j]) {
+            std::cmp::Ordering::Less => (Side::Right, Side::Left),
+            std::cmp::Ordering::Greater => (Side::Left, Side::Right),
+            // Same column: both ends leave rightwards and the path jogs clear.
+            std::cmp::Ordering::Equal => (Side::Right, Side::Right),
+        })
+        .collect();
+
+    // Order the ports on each (box, side) by where the other end sits, so the
+    // lines fan without crossing each other on the way out. Sorted by the other
+    // box's centre with an id tie-break, so the result is deterministic.
+    let mut slots: BTreeMap<(usize, Side), Vec<usize>> = BTreeMap::new();
+    for (pi, &(i, j, _)) in pending.iter().enumerate() {
+        slots.entry((i, sides[pi].0)).or_default().push(pi);
+        slots.entry((j, sides[pi].1)).or_default().push(pi);
+    }
+    let mut port_y: Vec<(f64, f64)> = vec![(0.0, 0.0); pending.len()];
+    for ((owner, side), mut members) in slots {
+        members.sort_by(|&a, &b| {
+            let other = |pi: usize| {
+                let (i, j, _) = pending[pi];
+                if i == owner { j } else { i }
+            };
+            let (oa, ob) = (other(a), other(b));
+            let (ca, cb) =
+                (boxes[oa].y + boxes[oa].height / 2.0, boxes[ob].y + boxes[ob].height / 2.0);
+            ca.partial_cmp(&cb)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then(entities[oa].id.cmp(&entities[ob].id))
+        });
+        let b = &boxes[owner];
+        let span = (b.height - PORT_INSET * 2.0).max(0.0);
+        let n_ports = members.len();
+        for (k, pi) in members.into_iter().enumerate() {
+            let y = b.y + PORT_INSET + span * (k as f64 + 1.0) / (n_ports as f64 + 1.0);
+            let (i, _, _) = pending[pi];
+            // An edge can start and end on the same box only if it is a
+            // self-relationship, in which case both entries are wanted.
+            if i == owner && sides[pi].0 == side && port_y[pi].0 == 0.0 {
+                port_y[pi].0 = y;
+            } else {
+                port_y[pi].1 = y;
+            }
+        }
+    }
+
+    let mut edges = Vec::new();
+    for (pi, &(i, j, rel)) in pending.iter().enumerate() {
+        let (from_foot, to_foot) = feet(&rel.cardinality);
+        let (points, label_x, label_y) = route(
+            &boxes[i],
+            &boxes[j],
+            sides[pi].0,
+            sides[pi].1,
+            port_y[pi].0,
+            port_y[pi].1,
+        );
+        edges.push(ErEdge {
+            from: entities[i].id.clone(),
+            to: rel.to.clone(),
+            label: rel.label.clone(),
+            cardinality: rel.cardinality.clone(),
+            points,
+            from_foot,
+            to_foot,
+            label_x,
+            label_y,
+        });
     }
 
     ErPlan { boxes, edges, canvas_width, canvas_height }
@@ -549,21 +696,27 @@ fn feet(cardinality: &str) -> (ErFoot, ErFoot) {
 
 /// Orthogonal route between two boxes, plus the label anchor.
 ///
-/// Layering makes most edges go left-to-right between adjacent columns, so the
-/// common case is a clean three-segment path out of one box's side and into the
-/// other's. Same-layer edges leave and enter vertically instead, so they do not
-/// run along the column and through the boxes between them.
-fn route(a: &ErBox, b: &ErBox, layer_a: usize, layer_b: usize) -> (Vec<Point>, f64, f64) {
-    let a_mid_y = a.y + a.height / 2.0;
-    let b_mid_y = b.y + b.height / 2.0;
+/// `a_y`/`b_y` are the assigned ports on each box, not its midpoint, so
+/// parallel edges between the same pair of columns stay separated.
+fn route(
+    a: &ErBox,
+    b: &ErBox,
+    a_side: Side,
+    b_side: Side,
+    a_y: f64,
+    b_y: f64,
+) -> (Vec<Point>, f64, f64) {
+    let port_x = |bx: &ErBox, side: Side| match side {
+        Side::Right => bx.x + bx.width,
+        Side::Left => bx.x,
+    };
+    let start = Point { x: port_x(a, a_side), y: a_y };
+    let end = Point { x: port_x(b, b_side), y: b_y };
 
-    if layer_a == layer_b {
-        // Same column: exit the bottom of the upper box, enter the top of the
-        // lower one, jogging clear of the column on the right.
-        let (top, bottom) = if a.y <= b.y { (a, b) } else { (b, a) };
-        let jog = top.x + top.width.max(bottom.width) + COL_GAP / 3.0;
-        let start = Point { x: top.x + top.width, y: top.y + top.height / 2.0 };
-        let end = Point { x: bottom.x + bottom.width, y: bottom.y + bottom.height / 2.0 };
+    // Same column: both ends leave rightwards, so the path steps clear of the
+    // column and runs vertically beside it rather than back through the boxes.
+    if a_side == b_side {
+        let jog = a.x.max(b.x) + a.width.max(b.width) + COL_GAP / 3.0;
         let label_y = (start.y + end.y) / 2.0;
         let points = vec![
             Point { x: start.x, y: start.y },
@@ -574,12 +727,8 @@ fn route(a: &ErBox, b: &ErBox, layer_a: usize, layer_b: usize) -> (Vec<Point>, f
         return (points, jog, label_y);
     }
 
-    // Different columns: leave the right side of the left box, enter the left
-    // side of the right box.
-    let (left, right, left_y, right_y) =
-        if layer_a < layer_b { (a, b, a_mid_y, b_mid_y) } else { (b, a, b_mid_y, a_mid_y) };
-    let start = Point { x: left.x + left.width, y: left_y };
-    let end = Point { x: right.x, y: right_y };
+    // Different columns: a straight run when the ports already line up,
+    // otherwise a three-segment step through the middle of the channel.
     let mid_x = (start.x + end.x) / 2.0;
     let points = if (start.y - end.y).abs() < f64::EPSILON {
         vec![start.clone(), end.clone()]
@@ -938,6 +1087,78 @@ mod tests {
              Offending pairs: {:?}",
             crossing_pairs(&plan)
         );
+    }
+
+    #[test]
+    fn a_hubs_edges_leave_from_distinct_points() {
+        // REGRESSION, found by dogfooding: every endpoint was pinned to the
+        // box's vertical midpoint, so all eight of `node`'s edges started at one
+        // identical pixel -- overlapping for their whole first run, with eight
+        // crow's feet drawn on top of each other. The box edge has the height to
+        // separate them; only the midpoint convention was in the way.
+        let plan = plan_er(&hub_input());
+        let starts: Vec<(i64, i64)> = plan
+            .edges
+            .iter()
+            .map(|e| ((e.points[0].x * 100.0) as i64, (e.points[0].y * 100.0) as i64))
+            .collect();
+        let distinct: std::collections::BTreeSet<_> = starts.iter().collect();
+        assert_eq!(
+            distinct.len(),
+            starts.len(),
+            "each of the hub's {} edges needs its own exit point; got {} distinct",
+            starts.len(),
+            distinct.len()
+        );
+
+        // ...and the ports must stay ON the box edge, not drift past its corners.
+        let hub = plan.boxes.iter().find(|b| b.id == "account").unwrap();
+        for e in &plan.edges {
+            let y = e.points[0].y;
+            assert!(
+                y >= hub.y && y <= hub.y + hub.height,
+                "port {y} is outside the hub box ({}..{})",
+                hub.y,
+                hub.y + hub.height
+            );
+        }
+    }
+
+    #[test]
+    fn isolated_entities_do_not_make_the_hub_column_taller() {
+        // Found by dogfooding on Architext's own model: four of sixteen
+        // entities had no relationships, and each seeded its own component at
+        // layer 0, stacking into the hub's column. They add nothing there --
+        // they have no edges -- so they belong beside the layered part, adding
+        // width rather than height.
+        let mut entities = vec![entity("hub", 3, &[("leaf", "one-to-many")]), entity("leaf", 3, &[])];
+        for id in ["rule", "glossary", "note", "code_graph"] {
+            entities.push(entity(id, 3, &[]));
+        }
+        let plan = plan_er(&ErInput { entities });
+        let x_of = |id: &str| plan.boxes.iter().find(|b| b.id == id).unwrap().x;
+        let hub_x = x_of("hub");
+        for id in ["rule", "glossary", "note", "code_graph"] {
+            assert!(
+                x_of(id) > hub_x,
+                "{id} has no relationships and must not share the hub's column"
+            );
+        }
+    }
+
+    #[test]
+    fn an_entirely_unrelated_model_still_lays_out() {
+        // Every entity isolated means there is no connected height to match.
+        // Without a fallback that divides by zero or stacks everything into one
+        // very long column.
+        let entities = (0..9).map(|i| entity(&format!("t{i}"), 3, &[])).collect();
+        let plan = plan_er(&ErInput { entities });
+        assert_eq!(plan.boxes.len(), 9);
+        assert!(plan.edges.is_empty());
+        let distinct_columns: std::collections::BTreeSet<i64> =
+            plan.boxes.iter().map(|b| b.x as i64).collect();
+        assert!(distinct_columns.len() > 1, "9 unrelated entities should not be one column");
+        assert!(plan.canvas_height.is_finite() && plan.canvas_height > 0.0);
     }
 
     #[test]
