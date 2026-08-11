@@ -26,6 +26,8 @@ pub fn mode_icon_path(mode: Mode) -> &'static str {
         // Reused `shield`: data classification / risk posture.
         Mode::DataRisks => "M12 3l7 3v5c0 5-3 8-7 10-4-2-7-5-7-10V6z",
         // Reused `folder`: repository tree root.
+        // Stacked table: a header band over two record rows.
+        Mode::DataModel => "M4 5h16v14H4z M4 9h16 M4 13h16 M10 13v6 M10 5v4",
         Mode::RepoTree => "M4 18h16V8h-9l-2-2H4z",
         // New: a small call graph — one caller node fanning out to two callees.
         Mode::CodeGraph => "M5 12a2 2 0 1 0 0-4 2 2 0 0 0 0 4 M19 8a2 2 0 1 0 0-4 2 2 0 0 0 0 4 M19 20a2 2 0 1 0 0-4 2 2 0 0 0 0 4 M7 9l10-3 M7 11l10 6",

@@ -7,7 +7,7 @@
 //! components) follows the workspace's "no magic literals" convention and gives
 //! later slices one place to attach per-mode data wiring.
 
-/// The eleven viewer modes, in nav order (DESIGN.md "one product, not nine").
+/// The twelve viewer modes, in nav order (DESIGN.md "one product, not nine").
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Mode {
     Flows,
@@ -15,6 +15,7 @@ pub enum Mode {
     C4,
     Deployment,
     DataRisks,
+    DataModel,
     RepoTree,
     CodeGraph,
     BlastRadius,
@@ -25,12 +26,13 @@ pub enum Mode {
 
 impl Mode {
     /// Nav order, rendered as the left-nav mode list.
-    pub const ALL: [Mode; 11] = [
+    pub const ALL: [Mode; 12] = [
         Mode::Flows,
         Mode::Sequence,
         Mode::C4,
         Mode::Deployment,
         Mode::DataRisks,
+        Mode::DataModel,
         Mode::RepoTree,
         Mode::CodeGraph,
         Mode::BlastRadius,
@@ -47,6 +49,7 @@ impl Mode {
             Mode::C4 => "C4",
             Mode::Deployment => "Deployment",
             Mode::DataRisks => "Data / Risks",
+            Mode::DataModel => "Data Model",
             Mode::RepoTree => "Repo Tree",
             Mode::CodeGraph => "Code Graph",
             Mode::BlastRadius => "Blast Radius",
@@ -65,6 +68,7 @@ impl Mode {
             Mode::C4 => "c4",
             Mode::Deployment => "deployment",
             Mode::DataRisks => "data-risks",
+            Mode::DataModel => "data-model",
             Mode::RepoTree => "repo-tree",
             Mode::CodeGraph => "code-graph",
             Mode::BlastRadius => "blast-radius",
@@ -88,6 +92,7 @@ impl Mode {
     /// where the rail already has an affordance and no note is shown.
     pub fn rail_summary(self) -> Option<&'static str> {
         match self {
+            Mode::DataModel => Some("Read the persistence model: entities, keys, and relationships."),
             Mode::RepoTree => Some("Browse the repository file tree with ownership tags."),
             Mode::CodeGraph => Some("Explore the Magma-derived call graph: modules, then functions."),
             Mode::BlastRadius => Some("Trace what a change to a node reaches across the model."),
@@ -118,7 +123,14 @@ impl Mode {
     /// Rules and Release Truth have no clickable architecture node. Drives the
     /// inspector's "select a node" hint for node-bearing modes without a flow.
     pub fn has_clickable_nodes(self) -> bool {
-        !matches!(self, Mode::Rules | Mode::ReleaseTruth | Mode::CodeGraph | Mode::SlopFerret)
+        !matches!(
+            self,
+            Mode::Rules
+                | Mode::ReleaseTruth
+                | Mode::CodeGraph
+                | Mode::SlopFerret
+                | Mode::DataModel
+        )
     }
 
     pub fn projects_flows(self) -> bool {

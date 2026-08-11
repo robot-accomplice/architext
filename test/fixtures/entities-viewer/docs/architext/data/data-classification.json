@@ -1,0 +1,10 @@
+{
+  "classes": [
+    {
+      "id": "public",
+      "name": "Public",
+      "sensitivity": "low",
+      "handling": "No special handling."
+    }
+  ]
+}

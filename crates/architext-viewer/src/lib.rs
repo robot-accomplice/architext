@@ -24,6 +24,7 @@ pub mod code_graph_provenance;
 pub mod code_graph_view_model;
 pub mod components;
 pub mod data;
+pub mod data_model_view_model;
 pub mod diagnostics;
 pub mod diagram;
 pub mod flow_step_display;

@@ -1,0 +1,72 @@
+{
+  "entities": [
+    {
+      "id": "release",
+      "name": "Release",
+      "summary": "A shipped or planned version.",
+      "ownerNodeId": "node-a",
+      "dataClassIds": [
+        "data-ghost"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "version",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "plan_id",
+          "type": "uuid",
+          "key": "foreign",
+          "references": "plan"
+        }
+      ],
+      "relationships": [
+        {
+          "to": "release_item",
+          "cardinality": "one-to-many",
+          "label": "contains"
+        }
+      ]
+    },
+    {
+      "id": "release_item",
+      "name": "Release Item",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "release_id",
+          "type": "uuid",
+          "key": "foreign",
+          "references": "release"
+        }
+      ],
+      "relationships": [
+        {
+          "to": "release",
+          "cardinality": "one-to-one"
+        }
+      ]
+    },
+    {
+      "id": "plan",
+      "name": "Plan",
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        }
+      ]
+    }
+  ]
+}
