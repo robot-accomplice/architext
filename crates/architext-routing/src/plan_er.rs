@@ -236,7 +236,7 @@ fn box_width(entity: &ErEntityInput, is_declared: &impl Fn(&str) -> bool) -> f64
         .attributes
         .iter()
         .map(|a| {
-            let declared = a.references.as_deref().is_none_or(|t| is_declared(t));
+            let declared = a.references.as_deref().is_none_or(is_declared);
             ROW_TEXT_X + row_text_len(a, declared) as f64 * CHAR_W
         })
         .fold(0.0_f64, f64::max);
