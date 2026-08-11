@@ -18,7 +18,10 @@ use std::process::Command;
 use regex::Regex;
 use serde_json::{json, Map, Value};
 
-use crate::domain::doctor_repairs::{CODE_GRAPH_REGISTER_SUMMARY, DATA_SCHEMA_VERSION, DEFAULT_CODE_GRAPH_FILE};
+use crate::domain::doctor_repairs::{
+    CODE_GRAPH_REGISTER_SUMMARY, DATA_SCHEMA_VERSION, DEFAULT_CODE_GRAPH_FILE,
+    DEFAULT_ENTITIES_FILE, ENTITIES_REGISTER_SUMMARY,
+};
 use crate::domain::{c4_quality, instruction_rules, release_recovery, schema_migration};
 
 // ─── Constants (mirrors target-layout.mjs) ───────────────────────────────────
@@ -334,16 +337,27 @@ fn collect_instruction_rule_status(target: &Path) -> Option<Value> {
 
 // ─── collectCodeGraphStatus ───────────────────────────────────────────────────
 
-fn collect_code_graph_status(target: &Path) -> Option<Value> {
+/// Present/configured status for an optional document, plus the registration
+/// repair to advertise when it is on disk but unlisted.
+///
+/// Shared by every optional document. The advertised summary is the SAME
+/// constant the repair applies, so status and apply cannot drift apart -- the
+/// pair is pinned by `code_graph_status_and_repair_summaries_agree` below.
+fn collect_optional_file_status(
+    target: &Path,
+    manifest_key: &str,
+    filename: &str,
+    register_summary: &str,
+) -> Option<Value> {
     let manifest_path = data_dir(target).join("manifest.json");
     if !manifest_path.exists() {
         return None;
     }
     let manifest = read_json_file(&manifest_path)?;
-    let file_present = data_dir(target).join(DEFAULT_CODE_GRAPH_FILE).exists();
-    let configured = manifest["files"]["codeGraph"].is_string();
+    let file_present = data_dir(target).join(filename).exists();
+    let configured = manifest["files"][manifest_key].is_string();
     let repair_changes: Vec<Value> = if file_present && !configured {
-        vec![Value::String(CODE_GRAPH_REGISTER_SUMMARY.to_string())]
+        vec![Value::String(register_summary.to_string())]
     } else {
         vec![]
     };
@@ -352,6 +366,24 @@ fn collect_code_graph_status(target: &Path) -> Option<Value> {
         "configured": configured,
         "repairChanges": repair_changes
     }))
+}
+
+fn collect_code_graph_status(target: &Path) -> Option<Value> {
+    collect_optional_file_status(
+        target,
+        "codeGraph",
+        DEFAULT_CODE_GRAPH_FILE,
+        CODE_GRAPH_REGISTER_SUMMARY,
+    )
+}
+
+fn collect_entities_status(target: &Path) -> Option<Value> {
+    collect_optional_file_status(
+        target,
+        "entities",
+        DEFAULT_ENTITIES_FILE,
+        ENTITIES_REGISTER_SUMMARY,
+    )
 }
 
 // ─── doctorRepairsForStatus ───────────────────────────────────────────────────
@@ -426,6 +458,18 @@ fn doctor_repairs_for_status(status: &Value) -> Value {
         }
     }
 
+    // entities
+    for change in status["entities"]["repairChanges"].as_array().into_iter().flatten() {
+        if let Some(s) = change.as_str() {
+            repairs.push(json!({
+                "id": format!("entities:{s}"),
+                "category": "entities",
+                "file": "docs/architext/data/entities.json",
+                "summary": s
+            }));
+        }
+    }
+
     Value::Array(repairs)
 }
 
@@ -484,6 +528,7 @@ pub fn collect_status(target: &Path, version: &str, run_validation: bool) -> Val
     let manifest_status = if installed { collect_manifest_status(target).unwrap_or(Value::Null) } else { Value::Null };
     let instruction_rules = if installed { collect_instruction_rule_status(target).unwrap_or(Value::Null) } else { Value::Null };
     let code_graph = if installed { collect_code_graph_status(target).unwrap_or(Value::Null) } else { Value::Null };
+    let entities = if installed { collect_entities_status(target).unwrap_or(Value::Null) } else { Value::Null };
 
     // gitignoreMissing
     let gitignore_text = read_text_file(&target.join(".gitignore"));
@@ -543,6 +588,7 @@ pub fn collect_status(target: &Path, version: &str, run_validation: bool) -> Val
         "c4": c4,
         "releaseTruth": release_truth,
         "codeGraph": code_graph,
+        "entities": entities,
         "repairAdvice": repair_advice_status(&target_data_dir),
         "validation": validation
     });
@@ -652,6 +698,54 @@ mod tests {
 
         assert_eq!(advertised, applied_summary, "status and apply must agree");
         assert_eq!(advertised, CODE_GRAPH_REGISTER_SUMMARY);
+    }
+
+    #[test]
+    fn entities_status_and_repair_summaries_agree() {
+        // Same guard as the code-graph pair above: doctor advertises what
+        // status computed and then applies what a different function produced.
+        // If the two strings drift, doctor offers one repair and performs
+        // another, and nothing else in the suite would notice.
+        let td = temp_dir();
+        let data_dir = td.path().join("docs/architext/data");
+        fs::create_dir_all(&data_dir).unwrap();
+        fs::write(
+            data_dir.join("manifest.json"),
+            r#"{ "schemaVersion": "1.8.0", "files": {} }"#,
+        )
+        .unwrap();
+        fs::write(data_dir.join("entities.json"), r#"{ "entities": [] }"#).unwrap();
+
+        let status = collect_entities_status(td.path()).expect("status");
+        let advertised = status["repairChanges"][0].as_str().expect("advertised summary");
+
+        let applied =
+            crate::domain::doctor_repairs::repair_entities_registration(td.path(), false);
+        assert_eq!(advertised, applied[0].summary.as_str(), "status and apply must agree");
+        assert_eq!(advertised, ENTITIES_REGISTER_SUMMARY);
+    }
+
+    #[test]
+    fn entities_status_reports_unregistered_file_as_repairable() {
+        // Present but unlisted is the whole trigger condition. If `present`
+        // stopped tracking the file on disk, doctor would silently stop
+        // offering the registration and the mode would stay empty with no
+        // explanation.
+        let td = temp_dir();
+        let data_dir = td.path().join("docs/architext/data");
+        fs::create_dir_all(&data_dir).unwrap();
+        fs::write(data_dir.join("manifest.json"), r#"{ "schemaVersion": "1.8.0", "files": {} }"#)
+            .unwrap();
+
+        let absent = collect_entities_status(td.path()).expect("status");
+        assert_eq!(absent["present"], false);
+        assert_eq!(absent["repairChanges"].as_array().map(|a| a.len()), Some(0));
+
+        fs::write(data_dir.join("entities.json"), r#"{ "entities": [] }"#).unwrap();
+        let present = collect_entities_status(td.path()).expect("status");
+        assert_eq!(present["present"], true);
+        assert_eq!(present["configured"], false);
+        assert_eq!(present["repairChanges"].as_array().map(|a| a.len()), Some(1));
     }
 
     #[test]
