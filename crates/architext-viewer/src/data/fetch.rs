@@ -44,6 +44,10 @@ pub struct ArchitectureData {
     /// manifest; `Some(Err(_))` = registered but malformed, surfaced by the Slop
     /// Ferret panel.
     pub slop_ferret: Option<Result<SlopFerret, FetchError>>,
+    /// The optional persistence model. `None` = not registered in the
+    /// manifest; `Some(Err(_))` = registered but malformed, surfaced by the
+    /// Data Model panel rather than blanking the whole viewer.
+    pub entities: Option<Result<EntitiesDoc, FetchError>>,
     pub config: Option<ConfigPayload>,
 }
 
@@ -238,6 +242,12 @@ pub async fn load_architecture_data() -> Result<ArchitectureData, FetchError> {
     // Slop Ferret sweep snapshot is likewise an optional third-party enrichment.
     if let Some(url) = data_url(&manifest, "slopFerret") {
         data.slop_ferret = Some(get_json::<SlopFerret>(&url).await);
+    }
+
+    // The persistence model is optional and hand-authored; like the
+    // enrichments above, a malformed one must not blank the viewer.
+    if let Some(url) = data_url(&manifest, "entities") {
+        data.entities = Some(get_json::<EntitiesDoc>(&url).await);
     }
 
     if let Some(index_path) = manifest.files.get("releases").cloned() {

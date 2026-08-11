@@ -39,11 +39,11 @@ use crate::model::Point;
 // depend on the host's font stack and break determinism.
 
 /// Height of the entity-name header band.
-const HEADER_H: f64 = 26.0;
+pub const HEADER_H: f64 = 26.0;
 /// Height of one attribute row.
-const ROW_H: f64 = 17.0;
+pub const ROW_H: f64 = 17.0;
 /// Vertical padding inside the box, above and below the attribute rows.
-const BOX_PAD_Y: f64 = 5.0;
+pub const BOX_PAD_Y: f64 = 5.0;
 /// Nominal advance width of one character at the box's font size.
 const CHAR_W: f64 = 6.6;
 /// Horizontal padding inside the box, left and right.
