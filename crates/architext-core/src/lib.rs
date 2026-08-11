@@ -328,4 +328,43 @@ mod tests {
         let outcome = validate_data_dir(&repo_data_dir(), &schema_dir());
         assert!(outcome.ok, "absent code-graph must pass; errors: {:?}", outcome.errors);
     }
+
+    #[test]
+    fn entities_absent_passes() {
+        // WHY: entities.json is OPTIONAL. Every repository that does not model a
+        // persistence model must keep validating exactly as it did before this
+        // file existed. The self-hosted data dir has no entities.json.
+        let outcome = validate_data_dir(&repo_data_dir(), &schema_dir());
+        assert!(outcome.ok, "absent entities must pass; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn valid_entities_passes() {
+        // WHY: proves the schema accepts the documented shape AND that
+        // `manifest.files` (additionalProperties: false) admits the new key.
+        // The fixture deliberately carries a foreign key (`release.plan_id ->
+        // plan`) with no matching relationship: per the design that resolves,
+        // draws no edge, and is NOT an error.
+        let outcome = validate_data_dir(&fixture("valid-entities"), &schema_dir());
+        assert!(outcome.ok, "expected pass; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn entities_unknown_key_value_is_rejected() {
+        // WHY: `key` is one of the few things we pin, because the renderer draws
+        // a specific glyph per value and an unknown value has no rendering. This
+        // guards the pin against being loosened by accident.
+        let outcome = validate_data_dir(&fixture("invalid-entities-bad-key"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection of key: \"pk\"");
+        // Assert the SPECIFIC error. Before `entities` was declared in
+        // manifest.files, this test passed for the wrong reason -- the manifest
+        // key was rejected and the enum was never reached. Asserting the text
+        // is what stops it silently going vacuous again.
+        assert!(
+            outcome.errors.iter().any(|e| e.contains("attributes/0/key")
+                && e.contains("is not one of")),
+            "expected the key enum to reject \"pk\"; got: {:?}",
+            outcome.errors
+        );
+    }
 }

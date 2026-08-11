@@ -35,7 +35,8 @@
         "releases": { "type": "string", "minLength": 1 },
         "notes": { "type": "string", "minLength": 1 },
         "codeGraph": { "type": "string", "minLength": 1 },
-        "slopFerret": { "type": "string", "minLength": 1 }
+        "slopFerret": { "type": "string", "minLength": 1 },
+        "entities": { "type": "string", "minLength": 1 }
       }
     },
     "notes": {
