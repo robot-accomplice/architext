@@ -339,7 +339,56 @@ pub struct Simulation {
     /// Per-node cluster anchor. Empty when the layout is unclustered, in which
     /// case only the origin-directed `gravity` applies.
     anchors: Vec<(f64, f64)>,
+    /// INTERACTION mode. Off for every settle, so the cached, corpus-measured
+    /// layout is bit-identical to before this existed — see
+    /// `live_mode_is_opt_in_so_the_settle_is_bit_identical_to_before_it_existed`.
+    live: bool,
+    /// Per-node velocity. Live mode only, and the whole reason it exists: the
+    /// settle integrator moves a body straight down the force direction, which
+    /// cannot store energy and so can never swing back through equilibrium.
+    /// Rebound IS overshoot, and overshoot needs momentum.
+    vel: Vec<(f64, f64)>,
+    /// The node held under the cursor, and where it is held. One at a time —
+    /// a mouse drags one thing.
+    pin: Option<(usize, f64, f64)>,
+    /// Ticks granted beyond `cfg.max_ticks` by [`Simulation::reheat`]. Kept
+    /// separate from `cfg.max_ticks` because that value is the DENOMINATOR of
+    /// the cooling schedule; extending it there would change the settle's
+    /// temperature curve, which is exactly what must not move.
+    extra_ticks: usize,
 }
+
+/// Fraction of velocity shed per live tick — d3-force's `velocityDecay`.
+/// Damping turns an oscillation into a rebound that comes to rest instead of
+/// ringing forever; too much of it and there is no rebound at all, because
+/// velocity just tracks the force and the body slides into equilibrium.
+///
+/// MEASURED against `a_released_node_swings_back_through_equilibrium...`,
+/// which pulls a settled pair to 3x its rest length and releases:
+///
+/// | damping | closest approach vs 59.2 rest | overshoot |
+/// | --- | --- | --- |
+/// | 0.40 (d3's default) | 59.3 | none — overdamped |
+/// | 0.30 | 59.2 | none |
+/// | 0.20 | 58.0 | 2% — under the visible floor |
+/// | 0.12 | passes | >= 3% |
+///
+/// d3's own 0.4 does not transfer, because its integrator scales forces
+/// differently. 0.12 is the most damped value that still rebounds visibly:
+/// springy, but it settles rather than wobbling.
+const LIVE_DAMPING: f64 = 0.12;
+
+/// Force-to-velocity scale for one live tick — the integrator's `dt`. Small
+/// because forces are of order `k` (60) at equilibrium, and a body that moves
+/// a full edge length per tick is a body that has exploded.
+const LIVE_STEP: f64 = 0.05;
+
+/// Ceiling on how far a body may move in one live tick, as a multiple of the
+/// ideal edge length. The settle's stability comes from its cooling schedule,
+/// which live mode does not have; this is the blow-up guard that replaces it.
+/// FR attraction grows as `d^2/k`, so a node dragged far exerts a large pull —
+/// that IS the tension, and the clamp only stops it becoming a teleport.
+const LIVE_MAX_SPEED_K: f64 = 1.0;
 
 impl Simulation {
     /// Seed the bodies and precompute the derived constants. Runs NO ticks —
@@ -378,6 +427,10 @@ impl Simulation {
             tick: 0,
             converged: false,
             anchors: Vec::new(),
+            live: false,
+            vel: Vec::new(),
+            pin: None,
+            extra_ticks: 0,
         }
     }
 
@@ -413,7 +466,14 @@ impl Simulation {
 
     /// No more ticks will run: converged early, or `max_ticks` exhausted.
     pub fn is_done(&self) -> bool {
-        self.converged || self.tick >= self.cfg.max_ticks
+        // Live mode runs until the motion dies, NOT until a tick budget runs
+        // out: a settle has a known amount of work to do, whereas a hand on
+        // the graph decides when it is finished. `converged` still stops it,
+        // so a released graph comes to rest instead of ticking forever.
+        if self.live {
+            return self.converged;
+        }
+        self.converged || self.tick >= self.cfg.max_ticks + self.extra_ticks
     }
 
     pub fn ticks_run(&self) -> usize {
@@ -471,7 +531,14 @@ impl Simulation {
             if a == b || a >= node_count || b >= node_count {
                 continue;
             }
-            // FR attraction kernel: d^2 / k.
+            // FR attraction kernel: d^2 / k. Deliberately UNCHANGED in live
+            // mode. A Hooke spring about `k` was tried and reverted: it
+            // balances repulsion at d = 94 rather than d = 60, so merely
+            // touching the graph would have breathed it outward by half an
+            // edge length. Elasticity is a property of the INTEGRATOR (stored
+            // momentum), not of the force law — keeping one kernel keeps one
+            // equilibrium, so live mode starts exactly where the settle
+            // stopped.
             let (dx, dy, dist) = delta(self.bodies[b].x, self.bodies[b].y, self.bodies[a].x, self.bodies[a].y);
             let f = (dist * dist) / self.cfg.k;
             fx[a] += dx / dist * f;
@@ -490,20 +557,87 @@ impl Simulation {
         let temperature =
             self.initial_temperature * (1.0 - self.tick as f64 / self.cfg.max_ticks as f64).max(0.0);
         let mut max_disp = 0.0_f64;
-        for (i, b) in self.bodies.iter_mut().enumerate() {
-            let disp = (fx[i] * fx[i] + fy[i] * fy[i]).sqrt().max(0.001);
-            // Cap the move at the current temperature — direction from the
-            // force, magnitude never exceeding what this tick's "heat" allows.
-            let step = disp.min(temperature);
-            b.x += fx[i] / disp * step;
-            b.y += fy[i] / disp * step;
-            max_disp = max_disp.max(step);
+        if self.live {
+            // Velocity Verlet: force accelerates, damping bleeds the energy
+            // off, position integrates the velocity. A body arrives at
+            // equilibrium still MOVING, carries through it, and is pulled
+            // back — the rebound. Speed is clamped at one edge length per
+            // tick purely as a blow-up guard; it is not a cooling schedule.
+            for (i, b) in self.bodies.iter_mut().enumerate() {
+                let v = &mut self.vel[i];
+                v.0 = (v.0 + fx[i] * LIVE_STEP) * (1.0 - LIVE_DAMPING);
+                v.1 = (v.1 + fy[i] * LIVE_STEP) * (1.0 - LIVE_DAMPING);
+                let speed = (v.0 * v.0 + v.1 * v.1).sqrt();
+                let max_speed = self.cfg.k * LIVE_MAX_SPEED_K;
+                if speed > max_speed {
+                    v.0 *= max_speed / speed;
+                    v.1 *= max_speed / speed;
+                }
+                b.x += v.0;
+                b.y += v.1;
+                max_disp = max_disp.max((v.0 * v.0 + v.1 * v.1).sqrt());
+            }
+            // The held node goes exactly where the cursor is, with no residual
+            // velocity to carry it off when released mid-motion. It still
+            // EXERTS force on its neighbours above, which is what transmits
+            // the tension along the edges.
+            if let Some((i, px, py)) = self.pin {
+                if i < self.bodies.len() {
+                    self.bodies[i] = Body { x: px, y: py };
+                    self.vel[i] = (0.0, 0.0);
+                    // A hand on the graph is energy going in: never let the
+                    // convergence check call this settled while dragging.
+                    max_disp = max_disp.max(self.cfg.convergence_eps * 2.0);
+                }
+            }
+        } else {
+            for (i, b) in self.bodies.iter_mut().enumerate() {
+                let disp = (fx[i] * fx[i] + fy[i] * fy[i]).sqrt().max(0.001);
+                // Cap the move at the current temperature — direction from the
+                // force, magnitude never exceeding what this tick's "heat" allows.
+                let step = disp.min(temperature);
+                b.x += fx[i] / disp * step;
+                b.y += fy[i] / disp * step;
+                max_disp = max_disp.max(step);
+            }
         }
         self.tick += 1;
         if max_disp < self.cfg.convergence_eps {
             self.converged = true;
         }
         true
+    }
+
+    /// Switch between the settle integrator and the INTERACTION one.
+    ///
+    /// Enabling reopens the simulation (a settled one is `converged`, and
+    /// `step` is a no-op in that state) and allocates the velocity vector.
+    /// Nothing else in the crate turns this on, which is what keeps every
+    /// settle — and therefore the layout cache and the corpus ratchet —
+    /// exactly as it was.
+    pub fn set_live(&mut self, live: bool) {
+        self.live = live;
+        if live {
+            self.vel.resize(self.bodies.len(), (0.0, 0.0));
+            self.converged = false;
+        } else {
+            self.pin = None;
+        }
+    }
+
+    /// Hold node `i` at `(x, y)` — the node under the cursor during a drag.
+    /// `None` releases it, leaving whatever tension the edges have stored to
+    /// pull it back.
+    pub fn set_pin(&mut self, pin: Option<(usize, f64, f64)>) {
+        self.pin = pin;
+    }
+
+    /// Grant `ticks` more and clear convergence, so a finished simulation can
+    /// run again. `is_done()` is otherwise a one-way door: interaction needs a
+    /// way back through it.
+    pub fn reheat(&mut self, ticks: usize) {
+        self.extra_ticks += ticks;
+        self.converged = false;
     }
 
     /// Current positions, index-aligned with the input node count.
@@ -558,6 +692,108 @@ pub fn simulate_clustered(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Settle a 2-node/1-edge pair and report their resting distance — the
+    /// equilibrium an elastic rebound has to swing THROUGH.
+    fn settled_pair(cfg: &ForceConfig) -> (Simulation, f64) {
+        let mut sim = Simulation::new(2, &[(0, 1)], 42, cfg);
+        while sim.step() {}
+        let p = sim.positions();
+        let d = ((p[0].0 - p[1].0).powi(2) + (p[0].1 - p[1].1).powi(2)).sqrt();
+        (sim, d)
+    }
+
+    #[test]
+    fn a_released_node_swings_back_through_equilibrium_instead_of_sliding_to_it() {
+        // WHY: this IS the "elastic edges that rebound" requirement, and it is
+        // the one behaviour the settle integrator cannot produce at any
+        // setting. `step` moves a body straight down the force direction,
+        // capped by temperature (`b.x += fx/disp * step`) — there is no
+        // velocity, so energy is never stored and a node can only approach
+        // equilibrium, never pass it. Overshoot is the observable difference
+        // between a spring and a slide, so it is what the test asserts.
+        let cfg = ForceConfig { max_ticks: 400, ..ForceConfig::default() };
+        let (mut sim, rest) = settled_pair(&cfg);
+
+        // Pull node 1 out to 3x its resting distance and hold it there, so the
+        // edge is under tension, then let go.
+        sim.set_live(true);
+        let p = sim.positions();
+        let (ax, ay) = p[0];
+        sim.set_pin(Some((1, ax + rest * 3.0, ay)));
+        for _ in 0..30 {
+            sim.step();
+        }
+        sim.set_pin(None);
+
+        let mut min_seen = f64::MAX;
+        for _ in 0..400 {
+            sim.step();
+            let p = sim.positions();
+            let d = ((p[0].0 - p[1].0).powi(2) + (p[0].1 - p[1].1).powi(2)).sqrt();
+            min_seen = min_seen.min(d);
+        }
+        // A 3% floor, not "any amount below rest": an overshoot of 0.1 units
+        // is numerical noise that a user cannot see, and a test that passes on
+        // it would be asserting the feature exists while it does not.
+        assert!(
+            min_seen < rest * 0.97,
+            "released node must VISIBLY overshoot: rest {rest:.1}, closest approach {min_seen:.1}"
+        );
+    }
+
+    #[test]
+    fn a_pinned_node_stays_exactly_where_it_is_held_while_its_neighbour_follows() {
+        // WHY: a drag must move the node under the cursor EXACTLY (any drift
+        // and the node slides out from under the pointer), while the tension
+        // it applies still reaches its neighbours — that pull is what makes
+        // the web read as connected rather than as independent dots.
+        let cfg = ForceConfig { max_ticks: 400, ..ForceConfig::default() };
+        let (mut sim, rest) = settled_pair(&cfg);
+        sim.set_live(true);
+        let before = sim.positions()[0];
+        let (tx, ty) = (before.0 + rest * 4.0, before.1 + rest * 2.0);
+        sim.set_pin(Some((1, tx, ty)));
+        for _ in 0..40 {
+            sim.step();
+        }
+        let after = sim.positions();
+        assert!(
+            (after[1].0 - tx).abs() < 1e-9 && (after[1].1 - ty).abs() < 1e-9,
+            "pinned node must sit exactly on its pin, got {:?} want {:?}",
+            after[1],
+            (tx, ty)
+        );
+        let moved = ((after[0].0 - before.0).powi(2) + (after[0].1 - before.1).powi(2)).sqrt();
+        assert!(moved > 1.0, "the neighbour must be dragged along, moved {moved:.2}");
+    }
+
+    #[test]
+    fn live_mode_is_opt_in_so_the_settle_is_bit_identical_to_before_it_existed() {
+        // WHY: THE FIREWALL. The cold settle feeds the layout cache and the
+        // corpus fitness ratchet, so live mode must be a path the settle never
+        // takes. If this fails, every cached layout and every corpus
+        // measurement has silently moved.
+        let edges = vec![(0, 1), (1, 2), (2, 0), (2, 3)];
+        let cfg = ForceConfig { max_ticks: 50, ..ForceConfig::default() };
+        let baseline = simulate(4, &edges, 42, &cfg);
+        let mut sim = Simulation::new(4, &edges, 42, &cfg);
+        while sim.step() {}
+        assert_eq!(sim.positions(), baseline.positions, "a default sim must not change at all");
+    }
+
+    #[test]
+    fn reheating_reopens_a_finished_simulation() {
+        // WHY: `is_done()` is a one-way door today (converged OR max_ticks),
+        // and the driver is dropped behind it. Interaction needs a way back in.
+        let cfg = ForceConfig { max_ticks: 30, ..ForceConfig::default() };
+        let (mut sim, _) = settled_pair(&cfg);
+        assert!(sim.is_done(), "the pair settles inside its tick budget");
+        assert!(!sim.step(), "a done simulation is a no-op");
+        sim.reheat(60);
+        assert!(!sim.is_done(), "reheat must reopen it");
+        assert!(sim.step(), "and ticking must resume");
+    }
 
     #[test]
     fn simulate_places_every_node_and_is_deterministic() {
