@@ -129,6 +129,14 @@ const GRAB_RADIUS_PX: f32 = 26.0;
 /// the pre-rework "instant reveal" (see `code_graph_view_model::Wavefront`'s
 /// `growth` field and `ViewState::advance_animation`'s cadence choice)
 /// instead of the progressive edge-growth animation.
+/// The display's device-pixel ratio, defaulting to 1.0 off-browser. Read in one
+/// place because THREE things now depend on it agreeing — the canvas backing
+/// store, the ink floor, and the diagnostics that report the drawn width — and
+/// a disagreement between any two of them is invisible until it looks wrong.
+fn device_pixel_ratio() -> f32 {
+    web_sys::window().map(|w| w.device_pixel_ratio() as f32).unwrap_or(1.0)
+}
+
 fn prefers_reduced_motion() -> bool {
     web_sys::window()
         .and_then(|w| w.match_media("(prefers-reduced-motion: reduce)").ok().flatten())
@@ -844,7 +852,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             let (zoom, pan_x, pan_y) = fit_camera(&positions, &graph.radius, w, h);
             // Summarised BEFORE `positions` moves into the view state, so the
             // trail costs a string rather than a copy of every position.
-            let camera_detail = camera_fit_detail(&positions, zoom, w, h);
+            let camera_detail = camera_fit_detail(&positions, zoom, w, h, device_pixel_ratio());
             let tree = QuadTree::from_positions_f32(&positions);
             let mut new_vs =
                 ViewState::new(graph, positions, tree, pan_x, pan_y, zoom, prefers_reduced_motion());
@@ -1543,7 +1551,8 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                         // describing a framing that never reached the screen.
                         // Fires only when the size genuinely changed (mount,
                         // window resize, panel toggle), so it cannot flood.
-                        reframed = Some(camera_fit_detail(&v.positions, zoom, w, h));
+                        reframed =
+                            Some(camera_fit_detail(&v.positions, zoom, w, h, device_pixel_ratio()));
                     }
                 }
             }
@@ -1557,7 +1566,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             if let (Some(canvas), Some(g), Some(v)) =
                 (canvas_ref.get_untracked(), gpu.borrow().as_ref(), vs.borrow().as_ref())
             {
-                g.draw(&canvas, v.pan_x, v.pan_y, v.zoom);
+                g.draw(&canvas, v.pan_x, v.pan_y, v.zoom, device_pixel_ratio());
                 drew = true;
 
                 // Labels ride the same frame as the draw, using the SAME

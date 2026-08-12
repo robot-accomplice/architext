@@ -140,7 +140,12 @@ impl Default for FilterState {
             show_test_only: false,
             show_generated: false,
             show_static: true,
-            show_dynamic: true,
+            // Resolved calls only. The 13,148 `dynamic` edges on this repo's
+            // own graph are the analyser's guesses, 84% of them cross-cluster,
+            // and they outnumber the facts 3:1 — drawing them by default is
+            // what made 17,247 edges read as haze instead of structure. Opt-in,
+            // exactly like `dead` and the other unproven classes above.
+            show_dynamic: false,
         }
     }
 }
@@ -433,9 +438,23 @@ mod tests {
     #[test]
     fn edge_visible_respects_static_and_dynamic_flags() {
         let mut f = FilterState::default();
-        assert!(f.edge_visible(false) && f.edge_visible(true), "both kinds shown by default");
-        f.show_dynamic = false;
-        assert!(f.edge_visible(false) && !f.edge_visible(true));
+        assert!(f.edge_visible(false), "resolved calls are shown by default");
+        f.show_dynamic = true;
+        assert!(f.edge_visible(true), "and the guesses can be turned on");
+    }
+
+    #[test]
+    fn the_default_view_draws_resolved_calls_and_not_the_analysers_guesses() {
+        // WHY: on Architext's own graph 13,148 of 17,247 edges are `dynamic` —
+        // calls the analyser could not resolve — and 84% of those cross
+        // between clusters, so they are most of the ink AND the least
+        // trustworthy thing on screen. Drawing them by default buries the
+        // 4,159 resolved calls, which are 80% intra-cluster and are what makes
+        // the structure legible. They stay one toggle away; this is about what
+        // the view ASSERTS when you open it.
+        let f = FilterState::default();
+        assert!(f.show_static);
+        assert!(!f.show_dynamic, "guesses are opt-in, like every other unproven class here");
     }
 
     // --- Reach / reach_badges / format_signature (from the retired code_graph_model.rs) ---

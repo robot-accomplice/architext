@@ -64,6 +64,11 @@ pub const EDGE_HALF_WIDTH: f32 = 0.55; // world units
 /// Held at 1.0 rather than lower because a sub-pixel line is not a thin line:
 /// it is a line whose coverage the rasteriser turns into alpha, which is the
 /// same trade this floor exists to stop making.
+///
+/// CSS pixels, NOT device pixels — the callers below multiply by the device
+/// pixel ratio. As device pixels this was a 0.5-CSS-px hairline on any 2x
+/// display: half the ink the reference draws, and half of what "one pixel"
+/// means to the person looking at it.
 pub const MIN_INK_WIDTH_PX: f32 = 1.0;
 
 /// The half-width to extrude an edge by at `zoom`, in WORLD units: the
@@ -73,8 +78,8 @@ pub const MIN_INK_WIDTH_PX: f32 = 1.0;
 /// Zoomed IN this returns [`EDGE_HALF_WIDTH`] unchanged, so edges keep
 /// growing with the graph and the floor costs nothing. Zoomed OUT it holds
 /// them at a pixel instead of letting them vanish.
-pub fn edge_half_width_world(zoom: f32) -> f32 {
-    let floor_world = MIN_INK_WIDTH_PX / 2.0 / zoom.max(1e-6);
+pub fn edge_half_width_world(zoom: f32, dpr: f32) -> f32 {
+    let floor_world = MIN_INK_WIDTH_PX * dpr.max(1.0) / 2.0 / zoom.max(1e-6);
     EDGE_HALF_WIDTH.max(floor_world)
 }
 
@@ -82,8 +87,8 @@ pub fn edge_half_width_world(zoom: f32) -> f32 {
 /// floor as [`edge_half_width_world`], applied per-node in `NODE_VS` because
 /// node radius is PER-INSTANCE static buffer data (degree-derived) and must
 /// not be rewritten every time the camera moves.
-pub fn min_node_radius_world(zoom: f32) -> f32 {
-    MIN_INK_WIDTH_PX / 2.0 / zoom.max(1e-6)
+pub fn min_node_radius_world(zoom: f32, dpr: f32) -> f32 {
+    MIN_INK_WIDTH_PX * dpr.max(1.0) / 2.0 / zoom.max(1e-6)
 }
 
 fn compile_shader(gl: &Gl, kind: u32, src: &str) -> Result<web_sys::WebGlShader, String> {
@@ -313,7 +318,7 @@ impl Renderer {
     /// pan`); the viewport and `uResolution` come from the canvas's intrinsic
     /// (backing-store) size, which the caller keeps in sync with its CSS size
     /// and device pixel ratio.
-    pub fn draw(&self, canvas: &HtmlCanvasElement, pan_x: f32, pan_y: f32, zoom: f32) {
+    pub fn draw(&self, canvas: &HtmlCanvasElement, pan_x: f32, pan_y: f32, zoom: f32, dpr: f32) {
         let gl = &self.gl;
         gl.viewport(0, 0, canvas.width() as i32, canvas.height() as i32);
         gl.clear_color(COLOR_CANVAS[0], COLOR_CANVAS[1], COLOR_CANVAS[2], 1.0);
@@ -329,7 +334,7 @@ impl Renderer {
         let loc = gl.get_uniform_location(&self.edge_program, "uZoom");
         gl.uniform1f(loc.as_ref(), zoom);
         let loc = gl.get_uniform_location(&self.edge_program, "uHalfWidth");
-        gl.uniform1f(loc.as_ref(), edge_half_width_world(zoom));
+        gl.uniform1f(loc.as_ref(), edge_half_width_world(zoom, dpr));
         let loc = gl.get_uniform_location(&self.edge_program, "uColorBase");
         gl.uniform3f(loc.as_ref(), COLOR_EDGE[0], COLOR_EDGE[1], COLOR_EDGE[2]);
         let loc = gl.get_uniform_location(&self.edge_program, "uColorAccent");
@@ -347,7 +352,7 @@ impl Renderer {
         let loc = gl.get_uniform_location(&self.node_program, "uZoom");
         gl.uniform1f(loc.as_ref(), zoom);
         let loc = gl.get_uniform_location(&self.node_program, "uMinRadius");
-        gl.uniform1f(loc.as_ref(), min_node_radius_world(zoom));
+        gl.uniform1f(loc.as_ref(), min_node_radius_world(zoom, dpr));
         let loc = gl.get_uniform_location(&self.node_program, "uColorBase");
         gl.uniform3f(loc.as_ref(), COLOR_NODE[0], COLOR_NODE[1], COLOR_NODE[2]);
         let loc = gl.get_uniform_location(&self.node_program, "uColorAccent");
@@ -373,7 +378,7 @@ mod tests {
         // The zoom Architext's own function tier frames at, recorded by the
         // `camera_fit` trail: 3,638 nodes across a ~3,500-unit field.
         let overview = 0.0619_f32;
-        let drawn_px = 2.0 * edge_half_width_world(overview) * overview;
+        let drawn_px = 2.0 * edge_half_width_world(overview, 1.0) * overview;
         assert!(
             (drawn_px - MIN_INK_WIDTH_PX).abs() < 1e-3,
             "at the measured overview zoom an edge must be held at the floor, got {drawn_px} px"
@@ -385,13 +390,13 @@ mod tests {
         // the floor must be inert -- edges scale with the graph again.
         let close = 4.0_f32;
         assert_eq!(
-            edge_half_width_world(close),
+            edge_half_width_world(close, 1.0),
             EDGE_HALF_WIDTH,
             "the floor must not cap edge width once the camera is close"
         );
 
         // A degenerate zoom must not divide by zero into an infinite quad.
-        assert!(edge_half_width_world(0.0).is_finite());
-        assert!(min_node_radius_world(0.0).is_finite());
+        assert!(edge_half_width_world(0.0, 1.0).is_finite());
+        assert!(min_node_radius_world(0.0, 1.0).is_finite());
     }
 }

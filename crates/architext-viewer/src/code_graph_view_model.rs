@@ -1118,7 +1118,7 @@ pub fn fit_camera(positions: &[(f32, f32)], weights: &[f32], w: f32, h: f32) -> 
 ///   shrinks with the camera. Below about one pixel an edge cannot render at
 ///   full strength no matter what alpha it is given, which is a different
 ///   defect from "the layout put them somewhere wrong".
-pub fn camera_fit_detail(positions: &[(f32, f32)], zoom: f32, w: f32, h: f32) -> String {
+pub fn camera_fit_detail(positions: &[(f32, f32)], zoom: f32, w: f32, h: f32, dpr: f32) -> String {
     let (lo_x, hi_x, lo_y, hi_y) = robust_bounds(positions);
     let (mut fx0, mut fx1, mut fy0, mut fy1) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
     for &(x, y) in positions {
@@ -1135,7 +1135,7 @@ pub fn camera_fit_detail(positions: &[(f32, f32)], zoom: f32, w: f32, h: f32) ->
     // enough out that ink no longer scales with the graph -- which is the
     // fact worth knowing, not the world-space width it would have had.
     let unfloored_px = 2.0 * crate::gl::renderer::EDGE_HALF_WIDTH * zoom;
-    let drawn_px = 2.0 * crate::gl::renderer::edge_half_width_world(zoom) * zoom;
+    let drawn_px = 2.0 * crate::gl::renderer::edge_half_width_world(zoom, dpr) * zoom;
     let floored = if drawn_px > unfloored_px { " floored" } else { "" };
     format!(
         "zoom={zoom:.4} viewport={w:.0}x{h:.0} robust={robust_w:.0}x{robust_h:.0} \
@@ -1576,7 +1576,7 @@ mod tests {
         ]);
         let weights = vec![5.0_f32; positions.len()];
         let (zoom, _, _) = fit_camera(&positions, &weights, 1600.0, 1000.0);
-        let detail = camera_fit_detail(&positions, zoom, 1600.0, 1000.0);
+        let detail = camera_fit_detail(&positions, zoom, 1600.0, 1000.0, 1.0);
 
         assert!(detail.contains("full=2000x2000"), "full extent must report the outliers: {detail}");
         assert!(
@@ -1593,7 +1593,7 @@ mod tests {
         // everything and reports nothing.
         let compact: Vec<(f32, f32)> =
             (0..100).map(|i| ((i % 10) as f32, (i / 10) as f32)).collect();
-        let compact_detail = camera_fit_detail(&compact, 1.0, 1600.0, 1000.0);
+        let compact_detail = camera_fit_detail(&compact, 1.0, 1600.0, 1000.0, 1.0);
         assert!(
             compact_detail.contains("spread=1.29x"),
             "a compact layout must not read as scattered: {compact_detail}"
@@ -1604,14 +1604,14 @@ mod tests {
         // trail must report the pixel actually drawn AND say the floor is
         // what is holding it there -- reporting only the world width would
         // describe ink the renderer no longer puts down.
-        let starved = camera_fit_detail(&positions, 0.02, 1600.0, 1000.0);
+        let starved = camera_fit_detail(&positions, 0.02, 1600.0, 1000.0, 1.0);
         assert!(
             starved.contains("edge_px=1.000 floored") && starved.contains("(world=0.022)"),
             "a floored edge must report both the drawn width and the regime: {starved}"
         );
 
         // Zoomed in, the floor is inert and the two agree.
-        let close = camera_fit_detail(&positions, 4.0, 1600.0, 1000.0);
+        let close = camera_fit_detail(&positions, 4.0, 1600.0, 1000.0, 1.0);
         assert!(
             close.contains("edge_px=4.400 (world=4.400)") && !close.contains("floored"),
             "an unfloored edge must not claim a regime it is not in: {close}"
@@ -2171,12 +2171,18 @@ mod tests {
         for &(a, b, _) in &c.edges {
             assert!(c.visible[a] && c.visible[b], "edge endpoint was culled but the edge survived");
         }
+        // Both gates, not just the endpoints: an edge survives when its two
+        // endpoints survive AND the filter shows its kind. Written against
+        // endpoints alone this passed only because `show_dynamic` used to
+        // default on — the default now draws resolved calls only.
+        let filter = FilterState::default();
         let expected_edges = g
             .directed_edges
             .iter()
-            .filter(|&&(a, b, _)| c.visible[a] && c.visible[b])
+            .filter(|&&(a, b, dynamic)| c.visible[a] && c.visible[b] && filter.edge_visible(dynamic))
             .count();
-        assert_eq!(c.edges.len(), expected_edges, "cull drops exactly the endpoint-culled edges");
+        assert_eq!(c.edges.len(), expected_edges, "cull drops exactly the endpoint- and kind-culled edges");
+        assert!(expected_edges > 0, "premise: the default filter still leaves edges to draw");
     }
 
     #[test]
