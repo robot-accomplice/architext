@@ -915,6 +915,42 @@ mod tests {
     }
 
     #[test]
+    fn live_mode_does_not_collapse_the_graph_at_scale() {
+        // WHY: this module's own header records velocity + damping collapsing
+        // the 205-node module tier into a single point — hubs accelerate
+        // inward under FR's UNBOUNDED d^2/k attraction and momentum carries
+        // them past any equilibrium. Live mode reintroduces velocity, so that
+        // failure mode is back in scope, and the 2-node rebound test
+        // structurally cannot see it: collapse needs hubs and scale.
+        //
+        // NOT a regression test — no collapse has been observed. It was
+        // written while chasing one, and the graph turned out to be intact:
+        // what looked like a collapse in the browser was the camera holding a
+        // stale frame across a canvas resize (`user_moved_camera` suppresses
+        // the refit). Kept because the hazard it guards is real and documented
+        // above, and because live mode is exactly what could reawaken it.
+        let (n, edges) = interconnected(1000, 3);
+        let cfg = ForceConfig { max_ticks: 300, ..ForceConfig::default() };
+        let settled = run_layout(n, &edges, 300);
+        let (w0, h0) = extent(&settled);
+
+        let f32s: Vec<(f32, f32)> = settled.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
+        let mut sim = Simulation::from_positions(&f32s, &edges, &[], &cfg);
+        for _ in 0..300 {
+            sim.step();
+        }
+        let (w1, h1) = extent(&sim.positions());
+
+        // Half the settled extent is a generous floor: live mode may breathe,
+        // but a graph that has fallen to a fraction of its own footprint has
+        // stopped being a graph.
+        assert!(
+            w1 > w0 * 0.5 && h1 > h0 * 0.5,
+            "live mode collapsed the layout: {w0:.0}x{h0:.0} -> {w1:.0}x{h1:.0}"
+        );
+    }
+
+    #[test]
     fn layout_is_stable_and_bounded_at_1000_interconnected_nodes() {
         let (n, edges) = interconnected(1000, 3);
         let pos = run_layout(n, &edges, 400);
