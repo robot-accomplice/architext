@@ -44,11 +44,31 @@ pub struct ForceConfig {
     pub max_ticks: usize,
     /// Stop early once the max per-tick displacement drops below this.
     pub convergence_eps: f64,
+    /// Pull toward a node's CLUSTER anchor, per unit of distance from it.
+    ///
+    /// Zero means unclustered, which is the historical behaviour: every node
+    /// is pulled only toward the origin, and a system where everything repels
+    /// everything and edges pull has one shape -- a ball. That is why the code
+    /// graph rendered as a single contiguous sphere at both tiers, however few
+    /// nodes were drawn: aggregating 3,638 functions down to 306 modules
+    /// changed the count and not the shape.
+    ///
+    /// With an anchor per node, members of a cluster are held near a shared
+    /// point and the graph resolves into lobes. Firmer than `gravity`, which
+    /// only has to stop a disconnected component drifting away.
+    pub cluster_pull: f64,
 }
 
 impl Default for ForceConfig {
     fn default() -> Self {
-        Self { theta: 0.85, k: 60.0, gravity: 0.02, max_ticks: 400, convergence_eps: 0.05 }
+        Self {
+            theta: 0.85,
+            k: 60.0,
+            gravity: 0.02,
+            max_ticks: 400,
+            convergence_eps: 0.05,
+            cluster_pull: 0.0,
+        }
     }
 }
 
@@ -316,6 +336,9 @@ pub struct Simulation {
     tick: usize,
     /// Converged early (max displacement under `convergence_eps`).
     converged: bool,
+    /// Per-node cluster anchor. Empty when the layout is unclustered, in which
+    /// case only the origin-directed `gravity` applies.
+    anchors: Vec<(f64, f64)>,
 }
 
 impl Simulation {
@@ -354,7 +377,38 @@ impl Simulation {
             initial_temperature: cfg.k * 2.0,
             tick: 0,
             converged: false,
+            anchors: Vec::new(),
         }
+    }
+
+    /// Seed the simulation with a per-node cluster anchor.
+    ///
+    /// `anchors[i]` is the point node `i` is held near. Positions are also
+    /// seeded AT the anchors rather than on the usual circle, so a node starts
+    /// in its own neighbourhood instead of being flung across the graph and
+    /// dragged back -- which both settles faster and stops early frames
+    /// showing a shape the final layout will not have.
+    pub fn new_clustered(
+        node_count: usize,
+        edges: &[(usize, usize)],
+        anchors: &[(f64, f64)],
+        seed: u64,
+        cfg: &ForceConfig,
+    ) -> Self {
+        let mut sim = Self::new(node_count, edges, seed, cfg);
+        if anchors.len() == node_count {
+            let mut rng = SplitMix64::new(seed ^ 0x9E37_79B9_7F4A_7C15);
+            for (i, b) in sim.bodies.iter_mut().enumerate() {
+                let (ax, ay) = anchors[i];
+                // A small deterministic jitter, so co-anchored nodes do not
+                // start exactly coincident (which divides by zero in the
+                // repulsion kernel and wastes the first ticks separating them).
+                b.x = ax + rng.next_f64(-cfg.k / 2.0, cfg.k / 2.0);
+                b.y = ay + rng.next_f64(-cfg.k / 2.0, cfg.k / 2.0);
+            }
+            sim.anchors = anchors.to_vec();
+        }
+        sim
     }
 
     /// No more ticks will run: converged early, or `max_ticks` exhausted.
@@ -386,9 +440,32 @@ impl Simulation {
             fx[i] += rx;
             fy[i] += ry;
             // Centering gravity keeps a disconnected component from drifting
-            // off to infinity under pure repulsion (see `gravity` above).
-            fx[i] -= b.x * self.gravity;
-            fy[i] -= b.y * self.gravity;
+            // off to infinity under pure repulsion (see `gravity` above). When
+            // the node has a cluster anchor, that anchor IS the centre it is
+            // held to -- which is what turns one contiguous sphere into
+            // separate lobes.
+            //
+            // The anchor has to REPLACE the origin pull rather than be added
+            // alongside it. `gravity` is pre-scaled by node count (0.02 x 3638
+            // = 72.8 per unit here), so a separately-tuned anchor force of 0.55
+            // was outweighed 132 to 1: the clustered settle ran with correct
+            // anchors for every node and produced a picture identical to the
+            // unclustered one, because everything was still being dragged to
+            // the same point.
+            //
+            // Repulsion and edge attraction are untouched, so structure INSIDE
+            // a lobe is still the graph's own; the anchor only decides which
+            // neighbourhood a node occupies.
+            let (gx, gy) = self.anchors.get(i).copied().unwrap_or((0.0, 0.0));
+            // `cluster_pull` scales the node-count-scaled gravity. Above ~1 it
+            // crushes each lobe to a point; the useful range is well below.
+            let pull = if self.anchors.is_empty() {
+                self.gravity
+            } else {
+                self.gravity * self.cfg.cluster_pull
+            };
+            fx[i] -= (b.x - gx) * pull;
+            fy[i] -= (b.y - gy) * pull;
         }
         for &(a, b) in &self.edges {
             if a == b || a >= node_count || b >= node_count {
@@ -452,10 +529,26 @@ impl Simulation {
 /// so tests and small-scale callers keep working unchanged. `edges` are
 /// (from_index, to_index) pairs into `0..node_count`.
 pub fn simulate(node_count: usize, edges: &[(usize, usize)], seed: u64, cfg: &ForceConfig) -> SimResult {
+    simulate_clustered(node_count, edges, seed, cfg, &[])
+}
+
+/// `simulate` with per-node cluster anchors. An empty `anchors` behaves
+/// exactly like the unclustered settle.
+pub fn simulate_clustered(
+    node_count: usize,
+    edges: &[(usize, usize)],
+    seed: u64,
+    cfg: &ForceConfig,
+    anchors: &[(f64, f64)],
+) -> SimResult {
     if node_count == 0 {
         return SimResult { positions: Vec::new(), tree: QuadTree { root: QNode::Empty }, ticks_run: 0 };
     }
-    let mut sim = Simulation::new(node_count, edges, seed, cfg);
+    let mut sim = if anchors.len() == node_count {
+        Simulation::new_clustered(node_count, edges, anchors, seed, cfg)
+    } else {
+        Simulation::new(node_count, edges, seed, cfg)
+    };
     while sim.step() {}
     let positions = sim.positions();
     let tree = QuadTree::build(&positions);

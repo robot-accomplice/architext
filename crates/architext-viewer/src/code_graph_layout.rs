@@ -35,6 +35,24 @@ impl LayoutDriver {
         Self { sim: Simulation::new(node_count, edges, seed, cfg), max_ticks: cfg.max_ticks }
     }
 
+    /// Progressive settle with per-node cluster anchors.
+    ///
+    /// The local settle is a SEPARATE path from the worker warm, so wiring
+    /// clustering into only one of them left the view rendering an unclustered
+    /// sphere while the code read as though clustering had shipped.
+    pub fn new_clustered(
+        node_count: usize,
+        edges: &[(usize, usize)],
+        anchors: &[(f64, f64)],
+        seed: u64,
+        cfg: &ForceConfig,
+    ) -> Self {
+        Self {
+            sim: Simulation::new_clustered(node_count, edges, anchors, seed, cfg),
+            max_ticks: cfg.max_ticks,
+        }
+    }
+
     /// Advance the layout until it is done or `now()` reports more than
     /// `budget_ms` elapsed — but ALWAYS at least one tick per call, so a tick
     /// slower than the budget can't starve progress. Returns `true` when the

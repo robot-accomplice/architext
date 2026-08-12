@@ -20,6 +20,7 @@
 //!
 //! Traversal/filter primitives are Task 2's (`code_graph_graph::GraphIndex`,
 //! `bfs`, `FilterState`) — used, never reimplemented.
+use crate::force_layout::ForceConfig;
 use crate::code_graph_graph::{Direction, FilterState, GraphIndex};
 use crate::data::models::CodeGraph;
 use crate::force_layout::QuadTree;
@@ -200,6 +201,15 @@ pub struct GraphModel {
     pub neighbors: Vec<Vec<usize>>,
     /// Directed adjacency for BFS wavefronts (Task 2's index).
     pub index: GraphIndex,
+    /// Which cluster each node belongs to, and how many clusters there are.
+    ///
+    /// Carried ON the model because the layout is settled in two separate
+    /// places -- the worker warm and the view's local settle -- and both need
+    /// it. Deriving it at each call site meant wiring one and forgetting the
+    /// other, which left the view rendering an unclustered sphere while the
+    /// code read as though clustering had shipped.
+    pub clusters: Vec<usize>,
+    pub cluster_count: usize,
 }
 
 impl GraphModel {
@@ -246,6 +256,127 @@ fn radius_for(degree: u32) -> f32 {
 }
 
 /// Build one tier's [`GraphModel`] from the Magma document.
+/// How firmly a node is held toward its cluster anchor.
+///
+/// Strong enough that lobes separate and stay separated; loose enough that the
+/// graph's own edges still shape what happens inside one. Tuned by looking at
+/// the result, which is the only way this can be judged.
+pub const CLUSTER_PULL: f64 = 0.12;
+
+/// How many `::` segments of a package path define a cluster.
+///
+/// Depth 2 gives 86 groups over Architext's 306 modules -- lobes of roughly
+/// forty functions, which is a readable size. Depth 1 collapses to the five
+/// crates (too coarse to navigate), depth 3 fragments into 242 (barely
+/// coarser than the modules themselves).
+const CLUSTER_PKG_DEPTH: usize = 2;
+
+/// The cluster each node belongs to, plus the cluster count.
+///
+/// Clusters are what turn the graph from one contiguous sphere into lobes.
+/// Both tiers use the same key -- a package prefix -- so a module and the
+/// functions inside it land in the same neighbourhood at either zoom level,
+/// and moving between tiers does not rearrange the reader's mental map.
+///
+/// Node ORDER mirrors `build_graph` exactly (`modules.iter()` /
+/// `functions.iter()`); the two are read together and must stay in step.
+pub fn cluster_ids(cg: &CodeGraph, tier: Tier) -> (Vec<usize>, usize) {
+    let prefix = |pkg: &str| -> String {
+        pkg.split("::").take(CLUSTER_PKG_DEPTH).collect::<Vec<_>>().join("::")
+    };
+    let mut keys: Vec<String> = Vec::new();
+    let empty_m = Vec::new();
+    let modules = cg.modules.as_ref().unwrap_or(&empty_m);
+
+    match tier {
+        Tier::Modules => {
+            for m in modules {
+                keys.push(prefix(&m.pkg));
+            }
+        }
+        Tier::Functions => {
+            // Functions carry a symbol, not a package, so ownership comes from
+            // the module that lists them. A function no module claims gets its
+            // own key rather than being lumped into someone else's lobe.
+            let mut owner: std::collections::HashMap<&str, String> =
+                std::collections::HashMap::new();
+            for m in modules {
+                for fid in &m.function_ids {
+                    owner.insert(fid.as_str(), prefix(&m.pkg));
+                }
+            }
+            let empty_f = Vec::new();
+            for f in cg.functions.as_ref().unwrap_or(&empty_f) {
+                keys.push(owner.get(f.id.as_str()).cloned().unwrap_or_else(|| f.id.clone()));
+            }
+        }
+    }
+
+    // Stable numbering by first appearance, so the same graph always yields
+    // the same cluster ids and therefore the same layout.
+    let mut seen: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    let mut ids = Vec::with_capacity(keys.len());
+    for k in &keys {
+        let next = seen.len();
+        ids.push(*seen.entry(k.as_str()).or_insert(next));
+    }
+    let count = seen.len();
+    (ids, count)
+}
+
+/// Per-node anchor points, one per node, derived by laying the CLUSTERS out
+/// against each other first.
+///
+/// This is the two-level part: clusters are settled as their own small graph
+/// (86 nodes rather than 3,638), then every member is anchored to its
+/// cluster's position. The member simulation still runs in full, so structure
+/// inside a lobe is the real graph -- the anchor only decides which
+/// neighbourhood it occupies.
+pub fn cluster_anchors(
+    clusters: &[usize],
+    cluster_count: usize,
+    edges: &[(usize, usize)],
+    cfg: &ForceConfig,
+) -> Vec<(f64, f64)> {
+    if cluster_count <= 1 {
+        return Vec::new();
+    }
+    // Aggregate member edges into cluster-to-cluster edges.
+    let mut pairs: std::collections::BTreeSet<(usize, usize)> = Default::default();
+    for &(a, b) in edges {
+        let (ca, cb) = (clusters[a], clusters[b]);
+        if ca != cb {
+            pairs.insert((ca.min(cb), ca.max(cb)));
+        }
+    }
+    let cluster_edges: Vec<(usize, usize)> = pairs.into_iter().collect();
+
+    // Spread the clusters far enough apart that their members do not merge
+    // back into one mass: the ideal separation scales with how many members
+    // the biggest lobe has to hold.
+    let mut sizes = vec![0usize; cluster_count];
+    for &c in clusters {
+        sizes[c] += 1;
+    }
+    // Space the clusters by the TYPICAL lobe, not the largest one. Sizing off
+    // the biggest cluster spread 86 lobes across ~10,000 units, so each lobe
+    // rendered as a dot in mostly empty space -- the separation was real and
+    // useless. The mean keeps lobes large relative to the whole.
+    let mean_size = (clusters.len() as f64 / cluster_count as f64).max(1.0);
+    let cluster_cfg = ForceConfig {
+        k: cfg.k * mean_size.sqrt().max(2.0),
+        cluster_pull: 0.0,
+        ..*cfg
+    };
+    let settled = crate::force_layout::simulate(
+        cluster_count,
+        &cluster_edges,
+        LAYOUT_SEED ^ 0x5EED_C105,
+        &cluster_cfg,
+    );
+    clusters.iter().map(|&c| settled.positions[c]).collect()
+}
+
 pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
     let mut labels = Vec::new();
     let mut degree = Vec::new();
@@ -329,6 +460,9 @@ pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
         &directed_edges.iter().map(|&(a, b, _)| (a, b)).collect::<Vec<_>>(),
     );
 
+    // Cluster membership travels with the model so every settle path gets it.
+    let (clusters, cluster_count) = cluster_ids(cg, tier);
+
     GraphModel {
         labels,
         degree,
@@ -342,6 +476,8 @@ pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
         directed_edges,
         neighbors,
         index,
+        clusters,
+        cluster_count,
     }
 }
 
@@ -2197,5 +2333,84 @@ mod tests {
         // not sail far past it — that is what `RADIUS_PX_PER_DOUBLING` buys.
         assert_eq!(radius_for(888), RADIUS_MAX);
         assert!(radius_for(444) < RADIUS_MAX, "the ceiling should be reached at the tail, not before it");
+    }
+}
+
+#[cfg(test)]
+mod cluster_tests {
+    use super::*;
+
+    /// Load Architext's own code graph, which is the artifact the viewer shows.
+    fn real_graph() -> Option<CodeGraph> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../docs/architext/data/code-graph.json");
+        let text = std::fs::read_to_string(path).ok()?;
+        serde_json::from_str(&text).ok()
+    }
+
+    #[test]
+    fn measure_cluster_separation() {
+        let Some(cg) = real_graph() else { return };
+        let graph = build_graph(&cg, Tier::Functions);
+        let (ids, count) = cluster_ids(&cg, Tier::Functions);
+        for pull in [0.05_f64, 0.12, 0.25, 0.5, 1.0] {
+            let cfg = ForceConfig { cluster_pull: pull, ..ForceConfig::default() };
+            let anchors = cluster_anchors(&ids, count, &graph.layout_edges, &cfg);
+            let r = crate::force_layout::simulate_clustered(
+                graph.node_count(), &graph.layout_edges, LAYOUT_SEED, &cfg, &anchors);
+            let p = &r.positions;
+            // mean within-cluster radius vs overall extent
+            let mut sum_c = vec![(0.0_f64, 0.0_f64); count];
+            let mut n_c = vec![0usize; count];
+            for (i, &(x, y)) in p.iter().enumerate() {
+                sum_c[ids[i]].0 += x; sum_c[ids[i]].1 += y; n_c[ids[i]] += 1;
+            }
+            let cen: Vec<(f64,f64)> = sum_c.iter().zip(&n_c)
+                .map(|(&(sx,sy), &n)| if n>0 {(sx/n as f64, sy/n as f64)} else {(0.0,0.0)}).collect();
+            let within: f64 = p.iter().enumerate()
+                .map(|(i,&(x,y))| {let c=cen[ids[i]]; ((x-c.0).powi(2)+(y-c.1).powi(2)).sqrt()})
+                .sum::<f64>() / p.len() as f64;
+            let ext = p.iter().map(|&(x,y)| x.abs().max(y.abs())).fold(0.0_f64, f64::max);
+            println!("PULL {pull}: within {within:.0}  extent {ext:.0}  ratio {:.3}", within/ext.max(1.0));
+        }
+    }
+
+    #[test]
+    fn clustering_actually_partitions_the_real_graph() {
+        // Guards the thing three rebuilds failed to change on screen: if
+        // cluster_ids returns one cluster (or one per node) the anchors are
+        // useless and the layout is the old sphere, with nothing in the code
+        // to say so.
+        let Some(cg) = real_graph() else {
+            eprintln!("no code-graph.json checked in; skipping");
+            return;
+        };
+        for tier in [Tier::Modules, Tier::Functions] {
+            let (ids, count) = cluster_ids(&cg, tier);
+            assert!(!ids.is_empty(), "{tier:?}: no cluster ids");
+            assert!(count > 1, "{tier:?}: only {count} cluster — nothing to separate");
+            assert!(
+                count < ids.len() / 2,
+                "{tier:?}: {count} clusters over {} nodes is barely a partition",
+                ids.len()
+            );
+            let anchors = cluster_anchors(
+                &ids,
+                count,
+                &build_graph(&cg, tier).layout_edges,
+                &ForceConfig { cluster_pull: CLUSTER_PULL, ..ForceConfig::default() },
+            );
+            assert_eq!(anchors.len(), ids.len(), "{tier:?}: one anchor per node");
+            let distinct: std::collections::BTreeSet<(i64, i64)> = anchors
+                .iter()
+                .map(|&(x, y)| ((x * 10.0) as i64, (y * 10.0) as i64))
+                .collect();
+            assert!(
+                distinct.len() > 1,
+                "{tier:?}: every anchor is the same point, so nothing is pulled apart"
+            );
+            println!("CLUSTERS {tier:?}: {count} clusters, {} nodes, {} distinct anchors",
+                ids.len(), distinct.len());
+        }
     }
 }

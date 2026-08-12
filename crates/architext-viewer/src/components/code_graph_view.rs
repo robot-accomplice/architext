@@ -73,7 +73,8 @@ use crate::code_graph_provenance::{
 };
 use crate::code_graph_layout::LayoutDriver;
 use crate::code_graph_view_model::{
-    build_graph, fit_camera, should_autoplay, AnimMode, GraphModel, Tier, ViewState, LAYOUT_SEED,
+    build_graph, cluster_anchors, fit_camera, should_autoplay, AnimMode, GraphModel, Tier,
+    ViewState, CLUSTER_PULL, LAYOUT_SEED,
 };
 use crate::data::models::CodeGraph;
 use crate::diagnostics;
@@ -406,6 +407,19 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     let layout_t0: Rc<Cell<f64>> = Rc::new(Cell::new(0.0));
     let first_paint_logged: Rc<Cell<bool>> = Rc::new(Cell::new(false));
     let user_moved_camera: Rc<Cell<bool>> = Rc::new(Cell::new(false));
+    // Canvas size the camera was last framed for.
+    //
+    // The continuous refit lives inside the SETTLING branch, so a layout that
+    // arrives from cache -- which is the common case, and which reports
+    // `layout_settle_end source=cache` about 40ms after mount -- gets one fit
+    // and no more. At that moment the canvas has not been sized by layout yet,
+    // so the camera is framed for a viewport that is not the one on screen:
+    // the graph paints as a small clump in the top-left of an empty canvas.
+    //
+    // Tracking the size the fit was computed for lets the draw loop notice the
+    // canvas has changed and reframe, which also covers window and panel
+    // resizes for free.
+    let fitted_for: Rc<Cell<(u32, u32)>> = Rc::new(Cell::new((0, 0)));
     // RAF resilience: the timestamp (RAF clock) of the last frame that
     // actually ran. The `visibilitychange` handler below compares against
     // this to tell a genuinely stalled loop from a merely-slow one.
@@ -780,7 +794,24 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         move |t: Tier, graph: GraphModel, w: f32, h: f32, build_ms: f64| {
             let n = graph.node_count();
             let edge_count = graph.directed_edges.len();
-            let driver = LayoutDriver::new(n, &graph.layout_edges, LAYOUT_SEED, &ForceConfig::default());
+            // Cluster this settle too. The worker warm and this local settle
+            // are separate paths to the same picture, so anchoring only one of
+            // them leaves the view unclustered whenever the local path runs.
+            let cfg = ForceConfig { cluster_pull: CLUSTER_PULL, ..ForceConfig::default() };
+            let anchors =
+                cluster_anchors(&graph.clusters, graph.cluster_count, &graph.layout_edges, &cfg);
+            diagnostics::record(
+                diag_instance,
+                "layout_clustering",
+                Some(format!(
+                    "source=local tier={t:?} nodes={n} clusters={} anchors={} pull={}",
+                    graph.cluster_count,
+                    anchors.len(),
+                    cfg.cluster_pull
+                )),
+            );
+            let driver =
+                LayoutDriver::new_clustered(n, &graph.layout_edges, &anchors, LAYOUT_SEED, &cfg);
             let max_ticks = driver.max_ticks();
             // Tick-0 positions (the seeded circle) upload IMMEDIATELY so the
             // first frame paints a real graph, not a spinner.
@@ -1111,6 +1142,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let layout_t0 = layout_t0.clone();
         let first_paint_logged = first_paint_logged.clone();
         let user_moved_camera = user_moved_camera.clone();
+        let fitted_for = fitted_for.clone();
         let last_frame_at = last_frame_at.clone();
         let last_anim_frame_at = last_anim_frame_at.clone();
         let perf = web_sys::window().and_then(|w| w.performance());
@@ -1348,6 +1380,25 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                     }
                 }
             }
+            // Reframe when the canvas is a different size than the camera was
+            // fitted for, unless the user has taken control of it. Cheap: two
+            // integer comparisons per frame, and a fit only when they differ.
+            if !user_moved_camera.get() {
+                if let (Some(canvas), Some(v)) =
+                    (canvas_ref.get_untracked(), vs.borrow_mut().as_mut())
+                {
+                    let size = (canvas.width(), canvas.height());
+                    if size != fitted_for.get() && size.0 > 0 && size.1 > 0 {
+                        let (zoom, pan_x, pan_y) =
+                            fit_camera(&v.positions, &v.graph.radius, size.0 as f32, size.1 as f32);
+                        v.zoom = zoom;
+                        v.pan_x = pan_x;
+                        v.pan_y = pan_y;
+                        fitted_for.set(size);
+                    }
+                }
+            }
+
             let mut drew = false;
             if let (Some(canvas), Some(g), Some(v)) =
                 (canvas_ref.get_untracked(), gpu.borrow().as_ref(), vs.borrow().as_ref())

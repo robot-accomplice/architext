@@ -25,13 +25,25 @@ pub struct LayoutKey {
     sha: String,
     tree: String,
     tier: Tier,
+    /// Which layout ALGORITHM produced the entry.
+    ///
+    /// Without this the key describes only the input data, so a change to how
+    /// the layout is computed silently replays positions from the previous
+    /// algorithm: clustering shipped and the graph kept rendering as the
+    /// unclustered sphere, because the sha, tree and tier were all unchanged.
+    /// A cached layout is only valid for the code that produced it.
+    algorithm: u32,
 }
 
 impl LayoutKey {
     pub fn new(sha: impl Into<String>, tree: impl Into<String>, tier: Tier) -> Self {
-        Self { sha: sha.into(), tree: tree.into(), tier }
+        Self { sha: sha.into(), tree: tree.into(), tier, algorithm: LAYOUT_ALGORITHM }
     }
 }
+
+/// Bumped whenever the layout changes shape. 1 = the original unclustered
+/// force settle; 2 = cluster-anchored lobes.
+pub const LAYOUT_ALGORITHM: u32 = 2;
 
 /// This is a viewer SESSION cache, not a persistent store: it holds at most
 /// `MAX_ENTRIES` settled layouts, enough to cover both tiers (modules +
