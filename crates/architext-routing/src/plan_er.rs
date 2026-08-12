@@ -70,6 +70,20 @@ const SIDES: [Side; 4] = [Side::Right, Side::Left, Side::Bottom, Side::Top];
 /// Passes of surface re-selection. Each edge re-picks against the others'
 /// current choices; the loop exits early once a pass changes nothing.
 const SURFACE_PASSES: usize = 3;
+/// Half-height of a relationship label, for the clearance test.
+const LABEL_HALF_H: f64 = 9.0;
+/// How many positions either side of the middle to try when a label lands on a
+/// box. Bounded so layout time stays predictable.
+const LABEL_SAMPLES: usize = 12;
+
+/// How far a self-relationship's loop stands off the box it belongs to.
+///
+/// A relationship from an entity to ITSELF has both ends on one box. Treated
+/// like any other edge it ran from the right face to the left face -- straight
+/// through the entity, with its label stranded inside the box and unreadable.
+/// It needs to leave the box and come back, visibly.
+const SELF_LOOP_EXT: f64 = 38.0;
+
 /// Clearance a path keeps from a box it is routing around.
 const DETOUR_CLEARANCE: f64 = 18.0;
 
@@ -92,7 +106,7 @@ const SEPARATION_PASSES: usize = 4;
 /// relationships -- has far more push than pull and drifts apart. Gravity is
 /// what closes that gap; without it the fixture settled at 6% of the canvas
 /// covered, against 17% for the layout it replaced.
-const GRAVITY: f64 = 1.1;
+const GRAVITY: f64 = 0.7;
 /// Golden angle, for the deterministic phyllotaxis seed positions. A spiral
 /// spreads the starting points evenly without needing a random seed.
 const GOLDEN_ANGLE: f64 = 2.399_963_229_728_653;
@@ -393,16 +407,29 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
     // Seed on a phyllotaxis spiral, scaled so the initial spread is roughly the
     // area the boxes need. Starting them all at one point would make the first
     // ticks a scramble and the result far more sensitive to tick count.
-    let total_area: f64 = widths.iter().zip(&heights).map(|(w, h)| w * h).sum();
+    // Entities with no relationships are kept OUT of the simulation.
+    //
+    // Forces cannot position them meaningfully -- nothing attracts them, so
+    // repulsion alone drives them to the corners, and on Architext's own model
+    // four strays inflated the canvas to 1654x1769 and left the connected core
+    // looking bunched inside it. They are parked deliberately below, which
+    // costs the layout nothing and gives the connected entities the whole
+    // canvas to spread across.
+    let sim: Vec<usize> = (0..n).filter(|&i| !adj[i].is_empty()).collect();
+    let parked: Vec<usize> = (0..n).filter(|&i| adj[i].is_empty()).collect();
+
+    let total_area: f64 = sim.iter().map(|&i| widths[i] * heights[i]).sum::<f64>().max(1.0);
     let spread = (total_area * 2.0 / std::f64::consts::PI).sqrt().max(1.0);
     let mut px: Vec<f64> = Vec::with_capacity(n);
     let mut py: Vec<f64> = Vec::with_capacity(n);
-    for i in 0..n {
-        let t = i as f64;
-        let r = spread * (t / n as f64).sqrt();
+    px.resize(n, 0.0);
+    py.resize(n, 0.0);
+    for (k, &i) in sim.iter().enumerate() {
+        let t = k as f64;
+        let r = spread * (t / sim.len().max(1) as f64).sqrt();
         let a = t * GOLDEN_ANGLE;
-        px.push(r * a.cos());
-        py.push(r * a.sin());
+        px[i] = r * a.cos();
+        py[i] = r * a.sin();
     }
 
     // Fruchterman-Reingold. `k` is the distance the model settles at: repulsion
@@ -422,8 +449,8 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
 
         // Repulsion, every pair. O(n^2) is the right call at ER scale: a
         // Barnes-Hut tree costs more to build than it saves under ~100 nodes.
-        for i in 0..n {
-            for j in (i + 1)..n {
+        for (ai, &i) in sim.iter().enumerate() {
+            for &j in &sim[ai + 1..] {
                 let (mut dx, mut dy) = (px[i] - px[j], py[i] - py[j]);
                 let mut d = (dx * dx + dy * dy).sqrt();
                 if d < 1e-6 {
@@ -466,16 +493,18 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
         // Gravity toward the centroid. Uses the centroid rather than the origin
         // so the whole layout is never dragged across the plane just because it
         // drifted; only its spread is constrained.
-        let (cx, cy) = (px.iter().sum::<f64>() / n as f64, py.iter().sum::<f64>() / n as f64);
-        for i in 0..n {
-            fx[i] += (cx - px[i]) * GRAVITY * k / k;
+        let cnt = sim.len().max(1) as f64;
+        let cx = sim.iter().map(|&i| px[i]).sum::<f64>() / cnt;
+        let cy = sim.iter().map(|&i| py[i]).sum::<f64>() / cnt;
+        for &i in &sim {
+            fx[i] += (cx - px[i]) * GRAVITY;
             fy[i] += (cy - py[i]) * GRAVITY;
         }
 
         // Cool from a bold first move down to a fine final one, and never let a
         // node travel further than the current temperature in one tick.
         let temperature = k * (1.0 - tick as f64 / PLACEMENT_TICKS as f64).powi(2) + 1.0;
-        for i in 0..n {
+        for &i in &sim {
             let d = (fx[i] * fx[i] + fy[i] * fy[i]).sqrt();
             if d < 1e-9 {
                 continue;
@@ -489,8 +518,8 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
         // rectangle overlap is resolved directly -- along the cheaper axis,
         // which is what keeps the result compact rather than merely legal.
         for _ in 0..SEPARATION_PASSES {
-            for i in 0..n {
-                for j in (i + 1)..n {
+            for (ai, &i) in sim.iter().enumerate() {
+                for &j in &sim[ai + 1..] {
                     let need_x = (widths[i] + widths[j]) / 2.0 + BOX_CLEARANCE;
                     let need_y = (heights[i] + heights[j]) / 2.0 + BOX_CLEARANCE;
                     let (dx, dy) = (px[j] - px[i], py[j] - py[i]);
@@ -509,6 +538,53 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
                     }
                 }
             }
+        }
+    }
+
+    // --- park the unrelated entities ----------------------------------------
+    //
+    // They belong in the diagram -- an entity with no relationships is part of
+    // the model, not an orphan to hide -- but they carry no edges, so their
+    // position says nothing. A tidy row under the connected model reads as
+    // exactly what it is: the things that stand alone, listed together, out of
+    // the way of the structure that has something to show.
+    if !parked.is_empty() {
+        let (mut min_x, mut max_x, mut max_y) = (f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        for &i in &sim {
+            min_x = min_x.min(px[i] - widths[i] / 2.0);
+            max_x = max_x.max(px[i] + widths[i] / 2.0);
+            max_y = max_y.max(py[i] + heights[i] / 2.0);
+        }
+        let row_width = if min_x.is_finite() {
+            (max_x - min_x).max(1.0)
+        } else {
+            // Nothing connected at all: the parked block IS the diagram, so it
+            // wraps to a roughly square shape of its own rather than becoming
+            // one very long column.
+            min_x = 0.0;
+            max_y = 0.0;
+            let total: f64 = parked.iter().map(|&i| widths[i] * heights[i]).sum();
+            (total * 1.6).sqrt().max(
+                parked.iter().map(|&i| widths[i]).fold(0.0_f64, f64::max),
+            )
+        };
+
+        let mut cursor_x = min_x;
+        let mut row_top = max_y + BOX_CLEARANCE * 2.0;
+        let mut row_tallest = 0.0_f64;
+        for &i in &parked {
+            // Wrap to a new row rather than running off past the connected
+            // model's width, so the block stays as wide as the diagram already
+            // is instead of stretching the canvas sideways.
+            if cursor_x > min_x && cursor_x + widths[i] > min_x + row_width {
+                cursor_x = min_x;
+                row_top += row_tallest + BOX_CLEARANCE;
+                row_tallest = 0.0;
+            }
+            px[i] = cursor_x + widths[i] / 2.0;
+            py[i] = row_top + heights[i] / 2.0;
+            cursor_x += widths[i] + BOX_CLEARANCE;
+            row_tallest = row_tallest.max(heights[i]);
         }
     }
 
@@ -571,6 +647,76 @@ fn feet(cardinality: &str) -> (ErFoot, ErFoot) {
         "many-to-many" => (ErFoot::Many, ErFoot::Many),
         _ => (ErFoot::One, ErFoot::One),
     }
+}
+
+/// Where a relationship's label sits on its path.
+///
+/// The midpoint is the obvious choice and often the wrong one: on Architext's
+/// own model six of sixteen labels landed on top of an entity. Painting labels
+/// last made them readable, but a label lying across a box is still noise. So
+/// the path is sampled and the position closest to the middle that is CLEAR of
+/// every box wins; if the whole path is covered, the midpoint stands, because
+/// somewhere is better than nowhere.
+fn label_anchor(path: &[Point], boxes: &[ErBox], half_w: f64) -> (f64, f64) {
+    let point_at = |t: f64| -> (f64, f64) {
+        let total: f64 = path
+            .windows(2)
+            .map(|w| ((w[1].x - w[0].x).powi(2) + (w[1].y - w[0].y).powi(2)).sqrt())
+            .sum();
+        let mut want = total * t;
+        for w in path.windows(2) {
+            let seg = ((w[1].x - w[0].x).powi(2) + (w[1].y - w[0].y).powi(2)).sqrt();
+            if seg >= want {
+                let f = if seg > 0.0 { want / seg } else { 0.0 };
+                return (w[0].x + (w[1].x - w[0].x) * f, w[0].y + (w[1].y - w[0].y) * f);
+            }
+            want -= seg;
+        }
+        let last = path.last().unwrap();
+        (last.x, last.y)
+    };
+
+    let clear = |x: f64, y: f64| -> bool {
+        !boxes.iter().any(|b| {
+            x + half_w > b.x
+                && x - half_w < b.x + b.width
+                && y + LABEL_HALF_H > b.y
+                && y - LABEL_HALF_H < b.y + b.height
+        })
+    };
+
+    // Walk outward from the middle so the label stays as central as it can.
+    for step in 0..=LABEL_SAMPLES {
+        let delta = step as f64 / LABEL_SAMPLES as f64 * 0.42;
+        for t in [0.5 - delta, 0.5 + delta] {
+            if !(0.05..=0.95).contains(&t) {
+                continue;
+            }
+            let (x, y) = point_at(t);
+            if clear(x, y) {
+                return (x, y);
+            }
+        }
+    }
+    point_at(0.5)
+}
+
+/// The loop drawn for a relationship from an entity to itself.
+///
+/// Out of the right face, up and over the top-right corner, and back down into
+/// the top face. Entirely outside the box, so both the line and its label are
+/// legible; the label lands on the outer corner because that is the midpoint of
+/// this path.
+fn self_loop_path(b: &ErBox) -> Vec<Point> {
+    let out_x = b.x + b.width + SELF_LOOP_EXT;
+    let up_y = b.y - SELF_LOOP_EXT;
+    vec![
+        Point { x: b.x + b.width, y: b.y + b.height * 0.35 },
+        Point { x: out_x, y: b.y + b.height * 0.35 },
+        Point { x: out_x, y: up_y },
+        Point { x: b.x + b.width * 0.6, y: up_y },
+        Point { x: b.x + b.width * 0.6, y: b.y },
+    ]
 }
 
 /// The path shapes worth considering between two ports on two given faces.
@@ -764,6 +910,9 @@ pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
         .iter()
         .enumerate()
         .map(|(pi, &(i, j, _))| {
+            if i == j {
+                return self_loop_path(&boxes[i]);
+            }
             let (sa, sb) = sides[pi];
             candidate_shapes(&anchor(&boxes[i], sa), &anchor(&boxes[j], sb), sa, sb)
                 .into_iter()
@@ -776,6 +925,9 @@ pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
         let mut improved = false;
         for pi in 0..pending.len() {
             let (i, j, _) = pending[pi];
+            if i == j {
+                continue; // its loop is fixed geometry, not a face choice
+            }
             let mut best: Option<(f64, (Side, Side), Vec<Point>)> = None;
             for &sa in &SIDES {
                 for &sb in &SIDES {
@@ -813,6 +965,9 @@ pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
     // of braiding at the surface.
     let mut slots: BTreeMap<(usize, Side), Vec<usize>> = BTreeMap::new();
     for (pi, &(i, j, _)) in pending.iter().enumerate() {
+        if i == j {
+            continue; // routed as a fixed loop, so it mounts no shared port
+        }
         slots.entry((i, sides[pi].0)).or_default().push(pi);
         slots.entry((j, sides[pi].1)).or_default().push(pi);
     }
@@ -869,6 +1024,10 @@ pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
     // they have moved off the face centres the scoring used.
     for pi in 0..pending.len() {
         let (i, j, _) = pending[pi];
+        if i == j {
+            paths[pi] = self_loop_path(&boxes[i]);
+            continue;
+        }
         let (sa, sb) = sides[pi];
         let mut best: Option<(f64, Vec<Point>)> = None;
         for shape in candidate_shapes(&ports[pi].0, &ports[pi].1, sa, sb) {
@@ -886,15 +1045,13 @@ pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
     for (pi, &(i, _, rel)) in pending.iter().enumerate() {
         let (from_foot, to_foot) = feet(&rel.cardinality);
         let points = paths[pi].clone();
-        let mid = points.len() / 2;
-        let (label_x, label_y) = if points.len().is_multiple_of(2) {
-            (
-                (points[mid - 1].x + points[mid].x) / 2.0,
-                (points[mid - 1].y + points[mid].y) / 2.0,
-            )
-        } else {
-            (points[mid].x, points[mid].y)
-        };
+        // Width the pill will occupy, so the clearance test matches what the
+        // viewer actually draws rather than a bare point.
+        let half_w = rel
+            .label
+            .as_deref()
+            .map_or(0.0, |t| (t.chars().count() as f64 * CHAR_W + 12.0) / 2.0);
+        let (label_x, label_y) = label_anchor(&points, boxes, half_w);
         edges.push(ErEdge {
             from: entities[i].id.clone(),
             to: rel.to.clone(),
@@ -1185,6 +1342,39 @@ mod tests {
                     assert!(!overlap, "{name}: {} overlaps {}", a.id, b.id);
                 }
             }
+        }
+    }
+
+    #[test]
+    fn measure_distribution() {
+        for (name, input) in [("fixture", realistic_fixture_input())] {
+            let plan = plan_er(&input);
+            let c: Vec<(f64, f64)> = plan.boxes.iter()
+                .map(|b| (b.x + b.width / 2.0, b.y + b.height / 2.0)).collect();
+            // nearest-neighbour distance per box
+            let nn: Vec<f64> = c.iter().enumerate().map(|(i, p)| {
+                c.iter().enumerate().filter(|(j, _)| *j != i)
+                 .map(|(_, q)| ((p.0 - q.0).powi(2) + (p.1 - q.1).powi(2)).sqrt())
+                 .fold(f64::INFINITY, f64::min)
+            }).collect();
+            let mean = nn.iter().sum::<f64>() / nn.len() as f64;
+            let sd = (nn.iter().map(|d| (d - mean).powi(2)).sum::<f64>() / nn.len() as f64).sqrt();
+            // how much of the canvas is genuinely occupied, by 4x4 cell coverage
+            let (cw, ch) = (plan.canvas_width, plan.canvas_height);
+            let mut cells = vec![false; 16];
+            for b in &plan.boxes {
+                for gx in 0..4 { for gy in 0..4 {
+                    let (x0, x1) = (cw * gx as f64 / 4.0, cw * (gx + 1) as f64 / 4.0);
+                    let (y0, y1) = (ch * gy as f64 / 4.0, ch * (gy + 1) as f64 / 4.0);
+                    if b.x < x1 && x0 < b.x + b.width && b.y < y1 && y0 < b.y + b.height {
+                        cells[gy * 4 + gx] = true;
+                    }
+                }}
+            }
+            let occupied = cells.iter().filter(|c| **c).count();
+            let area: f64 = plan.boxes.iter().map(|b| b.width * b.height).sum();
+            println!("DIST {name}: {:.0}x{:.0} fill {:.3} nn_mean {:.0} nn_cv {:.2} cells {}/16",
+                cw, ch, area / (cw * ch), mean, sd / mean, occupied);
         }
     }
 

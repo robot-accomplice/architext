@@ -208,8 +208,7 @@ fn ErDiagram(plan: architext_routing::plan_er::ErPlan, input: ErInput) -> impl I
                             .map(|e| {
                                 let d = path_with_hops(&e);
                                 let feet = foot_paths(&e);
-                                let label = e.label.clone();
-                                let (lx, ly) = (e.label_x, e.label_y);
+                                let _ = &e.label;
                                 view! {
                                     <g class="er-edge">
                                         <path class="er-edge__line" d=d/>
@@ -217,35 +216,6 @@ fn ErDiagram(plan: architext_routing::plan_er::ErPlan, input: ErInput) -> impl I
                                             .into_iter()
                                             .map(|fd| view! { <path class="er-edge__foot" d=fd/> })
                                             .collect_view()}
-                                        {label
-                                            .map(|text| {
-                                                // A pill behind the text, so a
-                                                // label crossing a line stays
-                                                // readable instead of tangling
-                                                // with it.
-                                                let w = text.chars().count() as f64 * CHAR_W
-                                                    + PILL_PAD_X * 2.0;
-                                                view! {
-                                                    <g class="er-edge__label-group">
-                                                        <rect
-                                                            class="er-edge__label-pill"
-                                                            x=lx - w / 2.0
-                                                            y=ly - PILL_H / 2.0
-                                                            width=w
-                                                            height=PILL_H
-                                                            rx=PILL_H / 2.0
-                                                        />
-                                                        <text
-                                                            class="er-edge__label"
-                                                            x=lx
-                                                            y=ly + 3.5
-                                                            text-anchor="middle"
-                                                        >
-                                                            {text}
-                                                        </text>
-                                                    </g>
-                                                }
-                                            })}
                                     </g>
                                 }
                             })
@@ -272,6 +242,45 @@ fn ErDiagram(plan: architext_routing::plan_er::ErPlan, input: ErInput) -> impl I
                                     ev.prevent_default();
                                 };
                                 view! { <EntityBox entity=b on_pointer_down=on_down/> }
+                            })
+                            .collect_view()
+                    }}
+                </g>
+                // Labels are painted LAST, in their own layer.
+                // Inside the edge group they were drawn before the boxes, so
+                // any box overlapping a label's midpoint covered it -- on
+                // Architext's own model that hid "depends on", "participates
+                // in" and "returns to" behind entities. A label is never worth
+                // less than the box it lands on.
+                <g class="er-diagram__labels">
+                    {move || {
+                        edges
+                            .get()
+                            .into_iter()
+                            .filter_map(|e| {
+                                let text = e.label.clone()?;
+                                let (lx, ly) = (e.label_x, e.label_y);
+                                let w = text.chars().count() as f64 * CHAR_W + PILL_PAD_X * 2.0;
+                                Some(view! {
+                                    <g class="er-edge__label-group">
+                                        <rect
+                                            class="er-edge__label-pill"
+                                            x=lx - w / 2.0
+                                            y=ly - PILL_H / 2.0
+                                            width=w
+                                            height=PILL_H
+                                            rx=PILL_H / 2.0
+                                        />
+                                        <text
+                                            class="er-edge__label"
+                                            x=lx
+                                            y=ly + 3.5
+                                            text-anchor="middle"
+                                        >
+                                            {text}
+                                        </text>
+                                    </g>
+                                })
                             })
                             .collect_view()
                     }}
