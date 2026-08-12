@@ -156,15 +156,11 @@ pub enum Tier {
 /// but not cache-shareable) layout.
 pub const LAYOUT_SEED: u64 = 1_469_598_103_934_665_603;
 
-/// Whether entering `tier` should auto-play the roots animation once its
-/// layout settles. Maintainer spec: the function tier only — modules stay
-/// static (small and legible without a wavefront). Pulled out as its own
-/// pure predicate so the trigger condition is unit-testable without a
-/// browser: the view (`code_graph_view.rs`) calls this instead of inlining
-/// the tier comparison at the RAF-loop settle site.
-pub fn should_autoplay(tier: Tier) -> bool {
-    tier == Tier::Functions
-}
+// `should_autoplay` lived here: entering the function tier auto-played the
+// roots wavefront once its layout settled. Removed 2026-08-12 — the wavefront
+// leaves every node it reaches at PEAK ACCENT, so arrival painted the entire
+// graph in the colour reserved for "this one, selected". No predicate replaces
+// it: arrival is unconditionally at rest, and the sweep is a button.
 
 /// Call-order animation wavefront: `Roots` sweeps from the entrypoints,
 /// `Outbound`/`Inbound` sweep from the selected node (callees / callers).
@@ -1961,17 +1957,12 @@ mod tests {
         assert_eq!(vs.anim_current_depth, 0);
     }
 
-    #[test]
-    fn should_autoplay_arms_only_the_function_tier() {
-        // Maintainer spec, shipped-but-unverified until now: entering the
-        // function tier auto-plays the roots animation; modules stay static
-        // (small and legible without a wavefront). `code_graph_view.rs`
-        // calls this exact predicate at the layout-settle site instead of
-        // inlining the tier comparison, so the trigger condition is
-        // unit-testable without a browser.
-        assert!(should_autoplay(Tier::Functions));
-        assert!(!should_autoplay(Tier::Modules));
-    }
+    // `should_autoplay_arms_only_the_function_tier` lived here. Deleted with
+    // the predicate it covered (see the note where it was defined). NOT
+    // replaced with a `ViewState::new` "starts at rest" assertion: that would
+    // pass whether or not the view re-armed auto-play at its own call site,
+    // so it could not fail for the change it claims to guard. Arrival-at-rest
+    // is verified in the live UI instead.
 
     #[test]
     fn advance_hop_reaches_a_hop_boundary_in_the_expected_frame_count() {

@@ -73,7 +73,7 @@ use crate::code_graph_provenance::{
 };
 use crate::code_graph_layout::LayoutDriver;
 use crate::code_graph_view_model::{
-    build_graph, camera_fit_detail, cluster_anchors, fit_camera, should_autoplay, AnimMode,
+    build_graph, camera_fit_detail, cluster_anchors, fit_camera, AnimMode,
     GraphModel, Tier, ViewState, CLUSTER_PULL, LAYOUT_SEED,
 };
 use crate::data::models::CodeGraph;
@@ -827,7 +827,6 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let layout = layout.clone();
         let full_upload = full_upload.clone();
         let set_anim_mode = set_anim_mode.clone();
-        let play = play.clone();
         move |t: Tier, graph: GraphModel, positions: Vec<(f32, f32)>, w: f32, h: f32, source: &'static str| {
             let n = graph.node_count();
             let edge_count = graph.directed_edges.len();
@@ -857,14 +856,13 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             status.set(format!("{n} nodes / {edge_count} edges"));
             render_progress.set(None);
             filter.set(FilterState::default());
-            // Honours auto-play on the function tier even though there is
-            // no local settle event to hang it off.
-            if should_autoplay(t) {
-                set_anim_mode(AnimMode::Roots);
-                play();
-            } else {
-                set_anim_mode(AnimMode::Off);
-            }
+            // ARRIVAL IS AT REST. The roots wavefront used to auto-play here;
+            // it uploads every reached node and edge at PEAK ACCENT and leaves
+            // them there, so the mode's resting appearance was 3,638 nodes
+            // wearing the selection colour -- against the maintainer's own
+            // criterion, "muted grey with ONE accent for the focused node".
+            // The sweep is one click away on the chrome, unchanged.
+            set_anim_mode(AnimMode::Off);
         }
     };
 
@@ -1228,8 +1226,6 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         let cg_tree = cg_tree.clone();
         let full_upload = full_upload.clone();
         let sync_and_upload = sync_and_upload.clone();
-        let set_anim_mode = set_anim_mode.clone();
-        let play = play.clone();
         let layout_t0 = layout_t0.clone();
         let first_paint_logged = first_paint_logged.clone();
         let user_moved_camera = user_moved_camera.clone();
@@ -1411,16 +1407,11 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                             tier.get_untracked()
                         )),
                     );
-                    // AUTO-PLAY ON OPEN (deferred from the tier effect until
-                    // the positions stop moving): the function tier starts
-                    // the roots animation automatically; the chrome offers
-                    // an obvious pause and stop & reset so it is never
-                    // imposed. Modules stay static (no per-module root flags
-                    // to sweep from).
-                    if should_autoplay(tier.get_untracked()) {
-                        set_anim_mode(AnimMode::Roots);
-                        play();
-                    }
+                    // (Auto-play on open used to fire here, once positions
+                    // stopped moving. Removed: see the settle handler above --
+                    // the wavefront's end state painted the whole graph in the
+                    // selection accent, which is the one thing the accent must
+                    // not mean.)
                 }
             }
             // --- Animation playback slice (progressive edge-draw rework) ---
