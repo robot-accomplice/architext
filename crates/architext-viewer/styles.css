@@ -3494,3 +3494,24 @@ button.blast-chip { cursor: pointer; }
     height: auto;
   }
 }
+
+/* Relationship label pills. A label sitting directly on a line is hard to read
+   where they overlap, so it gets its own ground. */
+.er-edge__label-pill {
+  fill: var(--panel);
+  stroke: var(--line);
+  stroke-width: 0.75;
+}
+
+/* Entities can be dragged, so say so on hover and while moving. */
+.er-box {
+  cursor: grab;
+}
+
+.er-diagram.is-dragging .er-box {
+  cursor: grabbing;
+}
+
+.er-box:hover .er-box__frame {
+  stroke: var(--accent-ring);
+}

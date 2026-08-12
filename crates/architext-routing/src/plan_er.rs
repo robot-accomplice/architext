@@ -221,6 +221,10 @@ pub struct ErEdge {
     pub to_foot: ErFoot,
     pub label_x: f64,
     pub label_y: f64,
+    /// Points where this edge passes OVER one drawn earlier, in order along the
+    /// line. The renderer draws a small arc at each so a crossing cannot be
+    /// mistaken for a join.
+    pub hops: Vec<Point>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -543,7 +547,52 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
     let canvas_height =
         boxes.iter().map(|b| b.y + b.height).fold(0.0_f64, f64::max) + MARGIN;
 
-    // --- edges ---------------------------------------------------------------
+    let edges = route_edges(&boxes, input);
+
+    ErPlan { boxes, edges, canvas_width, canvas_height }
+}
+
+/// Crow's-foot glyphs for a cardinality. An unrecognised value cannot reach
+/// here through validated data (`cardinality` is an enumerated field), so it
+/// degrades to one-to-one rather than failing the render.
+fn feet(cardinality: &str) -> (ErFoot, ErFoot) {
+    match cardinality {
+        "one-to-many" => (ErFoot::One, ErFoot::Many),
+        "many-to-many" => (ErFoot::Many, ErFoot::Many),
+        _ => (ErFoot::One, ErFoot::One),
+    }
+}
+
+/// A straight run between two assigned ports, plus the label anchor.
+///
+/// No bends. Orthogonal routing earns its place when boxes sit on fixed tracks
+/// -- a grid, or the columns this engine used to impose -- because a line then
+/// has channels to follow and corners to turn. Nothing here is on a track:
+/// placement is free, so the shortest path between two ports is the straight
+/// one, and every bend was decoration that added length and crossings.
+///
+/// The port assignment is what makes this work. Ports are already spread along
+/// the face pointing at the other box, so parallel lines stay separated without
+/// needing a jog to hold them apart.
+fn route(start: &Point, end: &Point) -> (Vec<Point>, f64, f64) {
+    (
+        vec![start.clone(), end.clone()],
+        (start.x + end.x) / 2.0,
+        (start.y + end.y) / 2.0,
+    )
+}
+
+/// Build every edge for a set of PLACED boxes.
+///
+/// Separate from `plan_er` so it can be re-run when a box moves without
+/// redoing placement. Dragging an entity has to re-pick faces, redistribute
+/// ports and recompute hops -- all of which is layout, so it lives here rather
+/// than being reimplemented in the viewer.
+pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
+    let entities = &input.entities;
+    let index_of: BTreeMap<&str, usize> =
+        entities.iter().enumerate().map(|(i, e)| (e.id.as_str(), i)).collect();
+
     //
     // Endpoints are DISTRIBUTED along the box edge rather than pinned to its
     // vertical midpoint. Pinning them meant a hub's edges all left from one
@@ -639,8 +688,7 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
     let mut edges = Vec::new();
     for (pi, &(i, _, rel)) in pending.iter().enumerate() {
         let (from_foot, to_foot) = feet(&rel.cardinality);
-        let (points, label_x, label_y) =
-            route(&ports[pi].0, &ports[pi].1, sides[pi].0);
+        let (points, label_x, label_y) = route(&ports[pi].0, &ports[pi].1);
         edges.push(ErEdge {
             from: entities[i].id.clone(),
             to: rel.to.clone(),
@@ -651,64 +699,72 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
             to_foot,
             label_x,
             label_y,
+            hops: Vec::new(),
         });
     }
 
-    ErPlan { boxes, edges, canvas_width, canvas_height }
-}
-
-/// Crow's-foot glyphs for a cardinality. An unrecognised value cannot reach
-/// here through validated data (`cardinality` is an enumerated field), so it
-/// degrades to one-to-one rather than failing the render.
-fn feet(cardinality: &str) -> (ErFoot, ErFoot) {
-    match cardinality {
-        "one-to-many" => (ErFoot::One, ErFoot::Many),
-        "many-to-many" => (ErFoot::Many, ErFoot::Many),
-        _ => (ErFoot::One, ErFoot::One),
+    let hops = hop_points(&edges);
+    for (e, h) in edges.iter_mut().zip(hops) {
+        e.hops = h;
     }
+    edges
 }
 
-/// Orthogonal route between two assigned ports, plus the label anchor.
+/// Where an edge passes over one drawn before it.
 ///
-/// Takes the ports rather than the boxes: which face each end uses, and where
-/// on that face, is already decided, so this only has to get between them
-/// cleanly. Leaving a face means stepping away from it first, so a line never
-/// runs flush along the box it just left.
-fn route(start: &Point, end: &Point, from_side: Side) -> (Vec<Point>, f64, f64) {
-    let label = ((start.x + end.x) / 2.0, (start.y + end.y) / 2.0);
-
-    // Already aligned on the travelling axis: a single straight run.
-    if from_side.is_horizontal_face() {
-        if (start.x - end.x).abs() < f64::EPSILON {
-            return (vec![start.clone(), end.clone()], label.0, label.1);
+/// Crossings are unavoidable in a graph that is not planar, and two lines
+/// meeting at a point are ambiguous: a reader cannot tell whether they cross or
+/// join. A hop resolves it. Computed here rather than in the viewer so the
+/// choice of which line hops is deterministic -- always the later edge, by a
+/// fixed order -- instead of depending on paint order.
+fn hop_points(edges: &[ErEdge]) -> Vec<Vec<Point>> {
+    let mut hops: Vec<Vec<Point>> = vec![Vec::new(); edges.len()];
+    for i in 0..edges.len() {
+        for j in 0..i {
+            // Edges sharing an entity meet at a box, not in open space.
+            if edges[i].from == edges[j].from
+                || edges[i].to == edges[j].to
+                || edges[i].from == edges[j].to
+                || edges[i].to == edges[j].from
+            {
+                continue;
+            }
+            if let Some(p) = segment_intersection(
+                &edges[i].points[0],
+                &edges[i].points[1],
+                &edges[j].points[0],
+                &edges[j].points[1],
+            ) {
+                hops[i].push(p);
+            }
         }
-        let mid_y = (start.y + end.y) / 2.0;
-        return (
-            vec![
-                start.clone(),
-                Point { x: start.x, y: mid_y },
-                Point { x: end.x, y: mid_y },
-                end.clone(),
-            ],
-            label.0,
-            mid_y,
-        );
+        // Along the line, so the renderer can walk them in order.
+        let origin = edges[i].points[0].clone();
+        hops[i].sort_by(|a, b| {
+            let da = (a.x - origin.x).powi(2) + (a.y - origin.y).powi(2);
+            let db = (b.x - origin.x).powi(2) + (b.y - origin.y).powi(2);
+            da.partial_cmp(&db).unwrap_or(std::cmp::Ordering::Equal)
+        });
     }
+    hops
+}
 
-    if (start.y - end.y).abs() < f64::EPSILON {
-        return (vec![start.clone(), end.clone()], label.0, label.1);
+/// Intersection of two segments, or None when they do not properly cross.
+fn segment_intersection(p1: &Point, p2: &Point, p3: &Point, p4: &Point) -> Option<Point> {
+    let (r1, r2) = (p2.x - p1.x, p2.y - p1.y);
+    let (s1, s2) = (p4.x - p3.x, p4.y - p3.y);
+    let denom = r1 * s2 - r2 * s1;
+    if denom.abs() < 1e-9 {
+        return None; // parallel or collinear
     }
-    let mid_x = (start.x + end.x) / 2.0;
-    (
-        vec![
-            start.clone(),
-            Point { x: mid_x, y: start.y },
-            Point { x: mid_x, y: end.y },
-            end.clone(),
-        ],
-        mid_x,
-        label.1,
-    )
+    let t = ((p3.x - p1.x) * s2 - (p3.y - p1.y) * s1) / denom;
+    let u = ((p3.x - p1.x) * r2 - (p3.y - p1.y) * r1) / denom;
+    // Strictly interior, so a line touching another's endpoint is not a hop.
+    if (0.02..=0.98).contains(&t) && (0.02..=0.98).contains(&u) {
+        Some(Point { x: p1.x + t * r1, y: p1.y + t * r2 })
+    } else {
+        None
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1164,6 +1220,7 @@ mod tests {
                     to_foot: ErFoot::One,
                     label_x: 0.0,
                     label_y: 0.0,
+                    hops: Vec::new(),
                 },
                 ErEdge {
                     from: "b".into(),
@@ -1175,6 +1232,7 @@ mod tests {
                     to_foot: ErFoot::One,
                     label_x: 0.0,
                     label_y: 0.0,
+                    hops: Vec::new(),
                 },
             ],
             canvas_width: 100.0,
