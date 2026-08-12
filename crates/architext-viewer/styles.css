@@ -1797,9 +1797,14 @@ button.c4-breadcrumb__crumb:hover {
    cap lives on .repo-tree__body inside it, so the table stays compact while
    this column still yields its slack to the preview pane. */
 .repo-tree__main {
-  flex: 1 1 0;
-  min-width: 0;
-  max-width: 52rem;       /* mirrors the F16 body cap: on a wide center the table stops here and the preview takes the freed width; on a narrow center the two panes share 50/50 instead of the table starving the preview */
+  /* Both panes used to be `flex: 1 1 0`, which splits the row evenly however
+     little either side needs -- a file list and a source file given identical
+     width, serving neither. While a file is open the tree is navigation and the
+     file is the thing being read, so the tree takes a fixed share and the
+     preview takes everything left. It can still shrink on a narrow panel, and
+     it goes back to full width the moment nothing is selected. */
+  flex: 0 1 28rem;
+  min-width: 18rem;
   overflow: auto;
 }
 /* No file selected → the preview collapses and the table reclaims the full
@@ -1812,7 +1817,10 @@ button.c4-breadcrumb__crumb:hover {
    tree opens in -- roughly a third of the panel sat empty and the table never
    actually reclaimed anything. The cap exists to stop the table starving the
    preview, so it only belongs while the preview is on screen. */
-.repo-tree:not(.repo-tree--previewing) .repo-tree__main { max-width: none; }
+.repo-tree:not(.repo-tree--previewing) .repo-tree__main {
+  flex: 1 1 auto;
+  max-width: none;
+}
 /* Right pane: the file preview, filling the width the F16 cap freed up. A
    hairline border separates it from the table; it scrolls on its own. */
 .repo-file-preview {
@@ -3530,4 +3538,18 @@ button.blast-chip { cursor: pointer; }
 
 .er-box:hover .er-box__frame {
   stroke: var(--accent-ring);
+}
+
+/* While a file is open the tree is a navigator, not a table. At that width the
+   size/modified/owner columns cost roughly 180px of a 392px pane and push the
+   filenames -- the only thing being scanned -- into ellipsis. They come back
+   the moment the preview closes and the full width is available again. */
+.repo-tree--previewing .repo-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.repo-tree--previewing .repo-row__size,
+.repo-tree--previewing .repo-row__time,
+.repo-tree--previewing .repo-row__owner {
+  display: none;
 }
