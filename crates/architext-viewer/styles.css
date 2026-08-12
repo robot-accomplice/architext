@@ -1562,11 +1562,17 @@ button.c4-breadcrumb__crumb:hover {
 /* Same fluid-canvas contract as the flows SVG. Message lines reuse --edge +
    non-scaling-stroke so they stay a constant ~1.5px in screen space at any
    zoom (never thinning to sub-pixel like the flows-edge fix). */
+/* A lifeline is STRUCTURE -- the participant's axis, the thing every message
+   attaches to -- so it is drawn in the same stroke family as other structure.
+   It previously stacked three separate reductions on one element: the faintest
+   token (--line), 60% opacity, AND a sparse 2/4 dash, which left it barely
+   visible in either theme. Dashed still reads as "not a message"; it no longer
+   has to be nearly invisible to say so. */
 .sequence-lifeline {
-  stroke: var(--line);
-  stroke-width: 1;
-  stroke-dasharray: 2 4;
-  opacity: 0.6;
+  stroke: var(--line-strong);
+  stroke-width: 1.25;
+  stroke-dasharray: 3 3;
+  opacity: 0.85;
   vector-effect: non-scaling-stroke;
 }
 /* Open (stick) arrowhead for return/async replies — UML: filled head = sync call,

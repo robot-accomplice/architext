@@ -751,7 +751,18 @@ fn candidate_shapes(
     ba: &ErBox,
     bb: &ErBox,
 ) -> Vec<Vec<Point>> {
-    let mut out = vec![vec![a.clone(), b.clone()]];
+    // Orthogonal, to match every other diagram in the product.
+    //
+    // A straight diagonal was right while placement was free -- a bend between
+    // two boxes that could sit anywhere is decoration. Placement is a GRID now,
+    // which is exactly the condition orthogonal routing is for: boxes on fixed
+    // tracks, with lanes between them. The straight run survives only where the
+    // two ports already line up, in which case it IS the orthogonal path.
+    let mut out: Vec<Vec<Point>> = Vec::new();
+    let aligned = (a.x - b.x).abs() < f64::EPSILON || (a.y - b.y).abs() < f64::EPSILON;
+    if aligned {
+        out.push(vec![a.clone(), b.clone()]);
+    }
 
     // Two L shapes: turn on one axis first, then the other.
     out.push(vec![a.clone(), Point { x: b.x, y: a.y }, b.clone()]);
@@ -832,7 +843,11 @@ fn route_cost(
         len += ((w[1].x - w[0].x).powi(2) + (w[1].y - w[0].y).powi(2)).sqrt();
     }
     cost += len * MOUNT_COST.length;
-    cost += (path.len().saturating_sub(2)) as f64 * MOUNT_COST.bend;
+    // Bends beyond the first two are charged; an L or a Z is the house style
+    // on a grid, not something to be talked out of. Without this the bend cost
+    // reinstated the diagonal by making every orthogonal path more expensive
+    // than the straight line it replaced.
+    cost += (path.len().saturating_sub(4)) as f64 * MOUNT_COST.bend;
 
     // Passing through any box that is not one of its own endpoints. This is the
     // term the greedy version violated ten times over.

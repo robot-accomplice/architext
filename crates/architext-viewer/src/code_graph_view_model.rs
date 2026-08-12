@@ -256,6 +256,19 @@ fn radius_for(degree: u32) -> f32 {
 }
 
 /// Build one tier's [`GraphModel`] from the Magma document.
+/// Radius a lobe is allotted per sqrt(member).
+///
+/// NOT `k`. `k` is the ideal EDGE length (60), and using it here reserved
+/// about two and a half times the room a lobe actually settles into: a
+/// 634-member cluster claimed a 1,511-unit radius to hold members that occupy
+/// roughly 600. Multiplied across 86 lobes the field inflated until the graph
+/// read as a star chart -- correctly separated, and far too sparse to use.
+///
+/// Calibrated against the radius members really occupy under the anchor
+/// spring, so a territory is the size of its contents rather than a multiple
+/// of an unrelated constant.
+const LOBE_RADIUS_K: f64 = 24.0;
+
 /// Passes that push cluster centres apart until each has room for its members.
 /// Bounded for predictable layout time; exits early once nothing overlaps.
 const CLUSTER_SEPARATION_PASSES: usize = 12;
@@ -393,7 +406,7 @@ pub fn cluster_anchors(
     // proportional to what it holds, which is the whole of the fix: no
     // constant can serve both a 400-member cluster and a 1-member one.
     let radius: Vec<f64> =
-        sizes.iter().map(|&n| cfg.k * (n as f64).sqrt().max(1.0)).collect();
+        sizes.iter().map(|&n| LOBE_RADIUS_K * (n as f64).sqrt().max(1.0)).collect();
 
     for _ in 0..CLUSTER_SEPARATION_PASSES {
         let mut moved = false;
@@ -2418,7 +2431,18 @@ mod cluster_tests {
                 .map(|(i,&(x,y))| {let c=cen[ids[i]]; ((x-c.0).powi(2)+(y-c.1).powi(2)).sqrt()})
                 .sum::<f64>() / p.len() as f64;
             let ext = p.iter().map(|&(x,y)| x.abs().max(y.abs())).fold(0.0_f64, f64::max);
-            println!("PULL {pull}: within {within:.0}  extent {ext:.0}  ratio {:.3}", within/ext.max(1.0));
+            let lobe_area: f64 = (0..count)
+                .map(|c| {
+                    let n = n_c[c] as f64;
+                    std::f64::consts::PI * (LOBE_RADIUS_K * n.sqrt()).powi(2)
+                })
+                .sum();
+            let field = (2.0 * ext).powi(2);
+            println!(
+                "PULL {pull}: within {within:.0}  extent {ext:.0}  ratio {:.3}  packing {:.3}",
+                within / ext.max(1.0),
+                lobe_area / field.max(1.0)
+            );
         }
     }
 
