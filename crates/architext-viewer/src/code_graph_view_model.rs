@@ -256,6 +256,10 @@ fn radius_for(degree: u32) -> f32 {
 }
 
 /// Build one tier's [`GraphModel`] from the Magma document.
+/// Passes that push cluster centres apart until each has room for its members.
+/// Bounded for predictable layout time; exits early once nothing overlaps.
+const CLUSTER_SEPARATION_PASSES: usize = 12;
+
 /// How firmly a node is held toward its cluster anchor.
 ///
 /// Strong enough that lobes separate and stay separated; loose enough that the
@@ -374,7 +378,50 @@ pub fn cluster_anchors(
         LAYOUT_SEED ^ 0x5EED_C105,
         &cluster_cfg,
     );
-    clusters.iter().map(|&c| settled.positions[c]).collect()
+    let mut centres = settled.positions;
+
+    // Give every lobe the room its membership needs.
+    //
+    // Members repel each other against a central spring, so a lobe's natural
+    // radius already grows as sqrt(members) -- the same law the seed circle
+    // uses. The CLUSTER layout did not know that: it spaced all 86 centres
+    // uniformly, so `architext_viewer::components` (hundreds of functions) got
+    // the same allowance as a singleton. The big lobe swallowed its
+    // neighbours and everything else scattered thin.
+    //
+    // Separating centres by the sum of their radii makes each territory
+    // proportional to what it holds, which is the whole of the fix: no
+    // constant can serve both a 400-member cluster and a 1-member one.
+    let radius: Vec<f64> =
+        sizes.iter().map(|&n| cfg.k * (n as f64).sqrt().max(1.0)).collect();
+
+    for _ in 0..CLUSTER_SEPARATION_PASSES {
+        let mut moved = false;
+        for i in 0..cluster_count {
+            for j in (i + 1)..cluster_count {
+                let (dx, dy) = (centres[j].0 - centres[i].0, centres[j].1 - centres[i].1);
+                let d = (dx * dx + dy * dy).sqrt();
+                let need = radius[i] + radius[j];
+                if d >= need {
+                    continue;
+                }
+                // Coincident centres have no direction to separate along, so
+                // pick a deterministic one rather than dividing by zero.
+                let (ux, uy) = if d > 1e-9 { (dx / d, dy / d) } else { (1.0, 0.0) };
+                let push = (need - d) / 2.0;
+                centres[i].0 -= ux * push;
+                centres[i].1 -= uy * push;
+                centres[j].0 += ux * push;
+                centres[j].1 += uy * push;
+                moved = true;
+            }
+        }
+        if !moved {
+            break;
+        }
+    }
+
+    clusters.iter().map(|&c| centres[c]).collect()
 }
 
 pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
