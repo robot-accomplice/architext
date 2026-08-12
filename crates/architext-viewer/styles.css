@@ -1806,6 +1806,13 @@ button.c4-breadcrumb__crumb:hover {
    width (the F16 layout). Clicking a file reveals the preview and the panes
    share the row. */
 .repo-tree:not(.repo-tree--previewing) .repo-file-preview { display: none; }
+
+/* ...and the cap has to lift with it. Hiding the preview freed the space but
+   the 52rem cap above still applied, so with nothing selected -- the state the
+   tree opens in -- roughly a third of the panel sat empty and the table never
+   actually reclaimed anything. The cap exists to stop the table starving the
+   preview, so it only belongs while the preview is on screen. */
+.repo-tree:not(.repo-tree--previewing) .repo-tree__main { max-width: none; }
 /* Right pane: the file preview, filling the width the F16 cap freed up. A
    hairline border separates it from the table; it scrolls on its own. */
 .repo-file-preview {
@@ -1939,12 +1946,21 @@ button.c4-breadcrumb__crumb:hover {
   margin: 0 0 var(--pad-tight);
 }
 
-/* The tree caps its width so the metadata gutter sits near the names instead
-   of being flung to the far edge of a wide panel (the "extraordinary
-   whitespace"). Header + rows share this cap, so their columns stay aligned. */
+/* The tree fills the panel.
+   It used to cap at 52rem so the metadata gutter sat near the names, but that
+   only moved the whitespace: instead of a gap between name and metadata there
+   was a dead third of the panel to the right of the whole block. Name left,
+   metadata right, full width is what every file browser does; the striping
+   below is what makes a row trackable across the gap. */
 .repo-tree__body {
-  --repo-tree-max-width: 52rem;
-  max-width: var(--repo-tree-max-width);
+  width: 100%;
+}
+
+/* Alternating row tint, so the eye can follow a filename across to its size
+   and owner without a ruler. Hover stays a step stronger so it still reads as
+   the active row on a striped background. */
+.repo-row:nth-of-type(even) {
+  background: var(--panel);
 }
 
 /* A tree row: a 3px left rail (owner color on files), then a grid of
