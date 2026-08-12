@@ -73,8 +73,8 @@ use crate::code_graph_provenance::{
 };
 use crate::code_graph_layout::LayoutDriver;
 use crate::code_graph_view_model::{
-    build_graph, cluster_anchors, fit_camera, should_autoplay, AnimMode, GraphModel, Tier,
-    ViewState, CLUSTER_PULL, LAYOUT_SEED,
+    build_graph, camera_fit_detail, cluster_anchors, fit_camera, should_autoplay, AnimMode,
+    GraphModel, Tier, ViewState, CLUSTER_PULL, LAYOUT_SEED,
 };
 use crate::data::models::CodeGraph;
 use crate::diagnostics;
@@ -745,6 +745,9 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             let n = graph.node_count();
             let edge_count = graph.directed_edges.len();
             let (zoom, pan_x, pan_y) = fit_camera(&positions, &graph.radius, w, h);
+            // Summarised BEFORE `positions` moves into the view state, so the
+            // trail costs a string rather than a copy of every position.
+            let camera_detail = camera_fit_detail(&positions, zoom, w, h);
             let tree = QuadTree::from_positions_f32(&positions);
             let mut new_vs =
                 ViewState::new(graph, positions, tree, pan_x, pan_y, zoom, prefers_reduced_motion());
@@ -762,6 +765,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 "layout_settle_end",
                 Some(format!("source={source} tier={t:?} nodes={n} edges={edge_count}")),
             );
+            diagnostics::record(diag_instance, "camera_fit", Some(camera_detail));
             full_upload();
             status.set(format!("{n} nodes / {edge_count} edges"));
             render_progress.set(None);
@@ -1383,20 +1387,34 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             // Reframe when the canvas is a different size than the camera was
             // fitted for, unless the user has taken control of it. Cheap: two
             // integer comparisons per frame, and a fit only when they differ.
+            let mut reframed: Option<String> = None;
             if !user_moved_camera.get() {
                 if let (Some(canvas), Some(v)) =
                     (canvas_ref.get_untracked(), vs.borrow_mut().as_mut())
                 {
                     let size = (canvas.width(), canvas.height());
                     if size != fitted_for.get() && size.0 > 0 && size.1 > 0 {
-                        let (zoom, pan_x, pan_y) =
-                            fit_camera(&v.positions, &v.graph.radius, size.0 as f32, size.1 as f32);
+                        let (w, h) = (size.0 as f32, size.1 as f32);
+                        let (zoom, pan_x, pan_y) = fit_camera(&v.positions, &v.graph.radius, w, h);
                         v.zoom = zoom;
                         v.pan_x = pan_x;
                         v.pan_y = pan_y;
                         fitted_for.set(size);
+                        // The camera the user actually LOOKS at. The settle's
+                        // own `camera_fit` runs before layout has sized the
+                        // canvas, so it reports the 300x150 HTML default --
+                        // recording only that one would leave the trail
+                        // describing a framing that never reached the screen.
+                        // Fires only when the size genuinely changed (mount,
+                        // window resize, panel toggle), so it cannot flood.
+                        reframed = Some(camera_fit_detail(&v.positions, zoom, w, h));
                     }
                 }
+            }
+            // Recorded outside the `vs` borrow: `record` is cheap but the
+            // borrow above is held across the whole reframe block.
+            if let Some(detail) = reframed {
+                diagnostics::record(diag_instance, "camera_refit", Some(detail));
             }
 
             let mut drew = false;

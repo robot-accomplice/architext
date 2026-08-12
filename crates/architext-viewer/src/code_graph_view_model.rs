@@ -783,9 +783,34 @@ pub fn node_state(
     out
 }
 
+/// A resting edge's alpha on a tier dense enough that edges overlap heavily.
+///
+/// Low because overlap composites: inside a lobe twenty edges may cross the
+/// same pixel, and `1 - (1 - a)^20` saturates long before `a` is large, which
+/// is what makes a lobe read as a solid disc rather than a scribble. High
+/// enough that a LONE edge -- the handful of bridges between lobes, the ones
+/// worth following -- still carries colour on its own.
+///
+/// Raised from the 0.05 the spike used because 0.05 was chosen while edges
+/// were being drawn 0.068 px wide (see `gl/renderer.rs`'s `MIN_INK_WIDTH_PX`):
+/// at that width the alpha was academic, since the fragment shader discarded
+/// the fragments regardless. Now that an edge is at least a pixel, this is
+/// the number that decides whether the graph reads as a web or a wash, so it
+/// is a value to look at the result of -- not one to derive.
+///
+/// Judged against `COLOR_EDGE` (#3b494b) on `COLOR_CANVAS` (#08090b), which
+/// is a dark line on a nearly black ground: 0.16 composites to about #0f1214
+/// and disappears, and a lone bridge between two lobes is exactly the edge
+/// that has no overlap to help it.
+const DENSE_EDGE_ALPHA: f32 = 0.4;
+
+/// A resting edge's alpha when few enough edges are shown that they rarely
+/// overlap, so each has to carry itself. Unchanged from the spike.
+const SPARSE_EDGE_ALPHA: f32 = 0.28;
+
 /// Per-uploaded-edge `[alpha, colorMix, progress, hopAge]`. The base alpha
 /// drops at scale (>4000 visible edges) so a dense tier stays readable —
-/// same threshold as the spike. `progress` (slot 2, previously always-zero
+/// same threshold as the spike; see [`DENSE_EDGE_ALPHA`]. `progress` (slot 2, previously always-zero
 /// padding — see `gl/shaders.rs`'s `EDGE_VS`) is the GPU interpolation
 /// factor the vertex shader draws the line to, `mix(loDepthEnd, hiDepthEnd,
 /// progress)`: `1.0` for every edge outside an active animation (fully
@@ -816,7 +841,7 @@ pub fn edge_state(
     hop_progress: f32,
     reduced_motion: bool,
 ) -> Vec<f32> {
-    let base = if c.edges.len() > 4000 { 0.05 } else { 0.28 };
+    let base = if c.edges.len() > 4000 { DENSE_EDGE_ALPHA } else { SPARSE_EDGE_ALPHA };
     let mut out = Vec::with_capacity(c.edges.len() * 4);
     for &(a, b, _) in &c.edges {
         let (mut alpha, mut mix, mut progress, mut age) = (base, 0.0_f32, 1.0_f32, 0.0_f32);
@@ -1059,6 +1084,57 @@ pub fn fit_camera(positions: &[(f32, f32)], weights: &[f32], w: f32, h: f32) -> 
     let pan_x = w / 2.0 - cx * zoom;
     let pan_y = h / 2.0 - cy * zoom;
     (zoom, pan_x, pan_y)
+}
+
+/// One-line camera-fit summary for the diagnostics trail (Rule 13): what
+/// `fit_camera` framed, and what that framing does to the two quantities the
+/// picture is actually made of.
+///
+/// Recorded because every camera defect so far has been invisible from the
+/// screen alone -- "the graph is a speck" and "the edges are missing" look
+/// identical whether the cause is the layout, the fit, or the ink width, and
+/// three rounds of tuning-by-eye moved numbers without moving the picture.
+/// The four facts below separate those causes at a glance:
+///
+/// - `zoom` / `robust` -- the box `fit_camera` actually fitted.
+/// - `full` / `spread` -- the FULL extent including outliers, and how many
+///   times wider than the robust box it is. `spread=1.0x` is a graph that
+///   ends where the framing does; a large `spread` means the reader is
+///   looking at empty space around a scattered minority that did not dictate
+///   the zoom. Deliberately NOT a count of nodes outside the box: a
+///   10th/90th-percentile box excludes about a fifth of the nodes per axis
+///   BY CONSTRUCTION, so that count sits near a third of the graph however
+///   compact or scattered the layout is -- it reads like a finding while
+///   being incapable of reporting one.
+/// - `edge_px` -- the on-screen WIDTH of an edge at this zoom, since edge
+///   half-width is specified in WORLD units ([`EDGE_HALF_WIDTH`]) and so
+///   shrinks with the camera. Below about one pixel an edge cannot render at
+///   full strength no matter what alpha it is given, which is a different
+///   defect from "the layout put them somewhere wrong".
+pub fn camera_fit_detail(positions: &[(f32, f32)], zoom: f32, w: f32, h: f32) -> String {
+    let (lo_x, hi_x, lo_y, hi_y) = robust_bounds(positions);
+    let (mut fx0, mut fx1, mut fy0, mut fy1) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
+    for &(x, y) in positions {
+        fx0 = fx0.min(x);
+        fx1 = fx1.max(x);
+        fy0 = fy0.min(y);
+        fy1 = fy1.max(y);
+    }
+    let (full_w, full_h) = if positions.is_empty() { (0.0, 0.0) } else { (fx1 - fx0, fy1 - fy0) };
+    let (robust_w, robust_h) = (hi_x - lo_x, hi_y - lo_y);
+    let spread = (full_w / robust_w.max(1.0)).max(full_h / robust_h.max(1.0)).max(1.0);
+    // The width actually DRAWN, plus whether the screen-space floor is what
+    // is holding it there. `floored` marks the regime where the camera is far
+    // enough out that ink no longer scales with the graph -- which is the
+    // fact worth knowing, not the world-space width it would have had.
+    let unfloored_px = 2.0 * crate::gl::renderer::EDGE_HALF_WIDTH * zoom;
+    let drawn_px = 2.0 * crate::gl::renderer::edge_half_width_world(zoom) * zoom;
+    let floored = if drawn_px > unfloored_px { " floored" } else { "" };
+    format!(
+        "zoom={zoom:.4} viewport={w:.0}x{h:.0} robust={robust_w:.0}x{robust_h:.0} \
+         full={full_w:.0}x{full_h:.0} spread={spread:.2}x edge_px={drawn_px:.3}{floored} \
+         (world={unfloored_px:.3})"
+    )
 }
 
 /// The imperative per-frame state. Kept out of Leptos signals by the view —
@@ -1443,6 +1519,71 @@ mod tests {
         assert_eq!(ee.len(), c.edges.len() * 4, "[fx, fy, tx, ty] per edge");
         assert_eq!(&npr[0..3], &[0.0, 0.0, g.radius[0]]);
         assert_eq!(&ee[0..4], &[0.0, 0.0, 10.0, 0.0], "main→handler endpoints");
+    }
+
+    /// WHY: the trail exists to tell apart two failures that look identical
+    /// on screen -- a graph framed too wide because a scattered minority sits
+    /// far out, and edges that cannot draw because the camera made them
+    /// thinner than a pixel. If the summary did not separate the robust box
+    /// from the full extent, or did not carry the on-screen edge width, the
+    /// recorded state would be no more use than the screenshot.
+    #[test]
+    fn camera_fit_detail_exposes_outlier_spread_and_sub_pixel_edges() {
+        // A compact 100-node mass plus 6 nodes flung 1000 units out: too few
+        // to move the 10th/90th-percentile box, far enough to dominate what
+        // the reader sees.
+        let mut positions: Vec<(f32, f32)> =
+            (0..100).map(|i| ((i % 10) as f32, (i / 10) as f32)).collect();
+        positions.extend([
+            (-1000.0, 0.0),
+            (1000.0, 0.0),
+            (0.0, -1000.0),
+            (0.0, 1000.0),
+            (900.0, 900.0),
+            (-900.0, -900.0),
+        ]);
+        let weights = vec![5.0_f32; positions.len()];
+        let (zoom, _, _) = fit_camera(&positions, &weights, 1600.0, 1000.0);
+        let detail = camera_fit_detail(&positions, zoom, 1600.0, 1000.0);
+
+        assert!(detail.contains("full=2000x2000"), "full extent must report the outliers: {detail}");
+        assert!(
+            detail.contains("robust=9x9"),
+            "the robust box must stay on the mass, not the outliers: {detail}"
+        );
+        assert!(
+            detail.contains("spread=222.22x"),
+            "spread is what separates a scattered layout from a compact one: {detail}"
+        );
+
+        // The discriminating half of that claim: a layout with NO outliers
+        // must report a spread near 1, or the number says "scattered" about
+        // everything and reports nothing.
+        let compact: Vec<(f32, f32)> =
+            (0..100).map(|i| ((i % 10) as f32, (i / 10) as f32)).collect();
+        let compact_detail = camera_fit_detail(&compact, 1.0, 1600.0, 1000.0);
+        assert!(
+            compact_detail.contains("spread=1.29x"),
+            "a compact layout must not read as scattered: {compact_detail}"
+        );
+
+        // Same layout at a zoom that would starve the edges: 0.02 is
+        // `fit_camera`'s floor, where the world width is 1.1 * 0.02 px. The
+        // trail must report the pixel actually drawn AND say the floor is
+        // what is holding it there -- reporting only the world width would
+        // describe ink the renderer no longer puts down.
+        let starved = camera_fit_detail(&positions, 0.02, 1600.0, 1000.0);
+        assert!(
+            starved.contains("edge_px=1.000 floored") && starved.contains("(world=0.022)"),
+            "a floored edge must report both the drawn width and the regime: {starved}"
+        );
+
+        // Zoomed in, the floor is inert and the two agree.
+        let close = camera_fit_detail(&positions, 4.0, 1600.0, 1000.0);
+        assert!(
+            close.contains("edge_px=4.400 (world=4.400)") && !close.contains("floored"),
+            "an unfloored edge must not claim a regime it is not in: {close}"
+        );
     }
 
     #[test]
