@@ -25,7 +25,7 @@
 //! push apart, and overlapping boxes separate. Proximity carries the structure,
 //! which is what a reader can actually use.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde::{Deserialize, Serialize};
 
@@ -57,12 +57,21 @@ const BOX_MIN_W: f64 = 132.0;
 // column names next to snake_case entity names are the normal case, not the
 // pathological one, so the cap has headroom for them now.
 const BOX_MAX_W: f64 = 380.0;
-/// Minimum clear space between any two boxes.
-const BOX_CLEARANCE: f64 = 44.0;
-/// Preferred clear space between two boxes joined by a relationship. Related
-/// entities sit closer than unrelated ones; that proximity is what carries the
-/// structure now that there are no columns to read it from.
-const IDEAL_EDGE_GAP: f64 = 55.0;
+
+/// How much wider than tall the grid aims to be. A diagram is read on a screen
+/// that is wider than tall, so the grid matches that rather than being square.
+const GRID_ASPECT: f64 = 1.6;
+/// Clear space between grid columns and rows. Uniform, which is what makes the
+/// spacing balanced everywhere instead of dense in the middle.
+const GRID_GAP_X: f64 = 96.0;
+const GRID_GAP_Y: f64 = 64.0;
+/// What a crossing costs the arrangement, in the same units as edge length.
+/// High enough that trading a crossing for a longer edge is worthwhile, which
+/// is the trade a reader wants.
+const CROSSING_PENALTY: f64 = 12.0;
+/// Passes of pairwise cell swapping. Bounded for predictable layout time; the
+/// loop also exits as soon as a pass finds no strict improvement.
+const ARRANGEMENT_PASSES: usize = 6;
 
 /// Every face a line may attach to, in a fixed order so scoring ties resolve
 /// the same way on every run.
@@ -92,24 +101,6 @@ const DETOUR_CLEARANCE: f64 = 18.0;
 const PORT_INSET: f64 = 10.0;
 /// Canvas margin on every side.
 const MARGIN: f64 = 28.0;
-/// Placement iterations. Fixed rather than convergence-based so the result is
-/// identical every run; the layout is settled well before this at ER scale
-/// (tens of entities), and the cost is trivial -- 60 entities is 3,600 pairs.
-const PLACEMENT_TICKS: usize = 420;
-/// Overlap-resolution passes per tick. Boxes are rectangles, so separation is
-/// resolved directly rather than left to the repulsion term.
-const SEPARATION_PASSES: usize = 4;
-/// Pull toward the centroid, per unit of distance from it.
-///
-/// Repulsion acts between every pair, attraction only along relationships, so a
-/// sparse model -- and a schema is sparse, sixteen entities with sixteen
-/// relationships -- has far more push than pull and drifts apart. Gravity is
-/// what closes that gap; without it the fixture settled at 6% of the canvas
-/// covered, against 17% for the layout it replaced.
-const GRAVITY: f64 = 0.7;
-/// Golden angle, for the deterministic phyllotaxis seed positions. A spiral
-/// spreads the starting points evenly without needing a random seed.
-const GOLDEN_ANGLE: f64 = 2.399_963_229_728_653;
 
 // ---------------------------------------------------------------------------
 // Input — mirrors entities.json
@@ -380,21 +371,9 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
         }
     }
 
-    // --- placement: free 2D, no columns --------------------------------------
-    //
-    // ER relationships are an undirected graph with cycles. Layering them into
-    // columns imposes a hierarchy the data does not have: the columns carry no
-    // label, encode no category, and cannot be read for anything. They were
-    // paid for in a tall canvas, a routing channel every edge had to share, and
-    // ports crammed onto one face of each box -- all to satisfy a constraint
-    // nothing asked for.
-    //
-    // Entities are placed freely instead. Related ones pull together, every
-    // pair pushes apart, and overlapping boxes are separated outright. What a
-    // reader gets is proximity: neighbours cluster, and that IS the structure.
-    //
-    // Deterministic by construction -- phyllotaxis seed positions, a fixed tick
-    // count, and no randomness or wall-clock anywhere.
+    // Box sizes first: the grid's column widths and row heights are derived
+    // from them, and declared-ness decides whether a row carries the undeclared
+    // marker and so how wide its box has to be.
     let widths: Vec<f64> = entities
         .iter()
         .map(|e| {
@@ -404,188 +383,176 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
         .collect();
     let heights: Vec<f64> = entities.iter().map(|e| box_height(e.attributes.len())).collect();
 
-    // Seed on a phyllotaxis spiral, scaled so the initial spread is roughly the
-    // area the boxes need. Starting them all at one point would make the first
-    // ticks a scramble and the result far more sensitive to tick count.
-    // Entities with no relationships are kept OUT of the simulation.
+    // --- placement: a balanced grid, ordered for legibility -----------------
     //
-    // Forces cannot position them meaningfully -- nothing attracts them, so
-    // repulsion alone drives them to the corners, and on Architext's own model
-    // four strays inflated the canvas to 1654x1769 and left the connected core
-    // looking bunched inside it. They are parked deliberately below, which
-    // costs the layout nothing and gives the connected entities the whole
-    // canvas to spread across.
-    let sim: Vec<usize> = (0..n).filter(|&i| !adj[i].is_empty()).collect();
-    let parked: Vec<usize> = (0..n).filter(|&i| adj[i].is_empty()).collect();
-
-    let total_area: f64 = sim.iter().map(|&i| widths[i] * heights[i]).sum::<f64>().max(1.0);
-    let spread = (total_area * 2.0 / std::f64::consts::PI).sqrt().max(1.0);
-    let mut px: Vec<f64> = Vec::with_capacity(n);
-    let mut py: Vec<f64> = Vec::with_capacity(n);
-    px.resize(n, 0.0);
-    py.resize(n, 0.0);
-    for (k, &i) in sim.iter().enumerate() {
-        let t = k as f64;
-        let r = spread * (t / sim.len().max(1) as f64).sqrt();
-        let a = t * GOLDEN_ANGLE;
-        px[i] = r * a.cos();
-        py[i] = r * a.sin();
-    }
-
-    // Fruchterman-Reingold. `k` is the distance the model settles at: repulsion
-    // k^2/d pushes everything apart, attraction d^2/k pulls related pairs in,
-    // and they balance around k.
+    // Not a force simulation. Physics optimises ENERGY, and a settled energy
+    // minimum is a dense core with a sparse rim -- which is what a hub always
+    // produces and what made this diagram read as bunched however the constants
+    // were tuned. Legibility is a different objective, so it is optimised
+    // directly.
     //
-    // The temperature cap is the part that matters. WITHOUT it the layout
-    // exploded -- 6742x3099 for fourteen boxes, 1.7% of the canvas covered,
-    // rendering as specks once the SVG was scaled to fit. Capping each node's
-    // displacement per tick, and cooling that cap toward zero, is what makes
-    // the simulation settle instead of drift.
-    let k = (total_area / n as f64).sqrt() + IDEAL_EDGE_GAP;
+    // A grid gives even spacing by CONSTRUCTION: every entity sits in a cell,
+    // so no region is ever crowded or empty, and a reader can scan rows and
+    // columns instead of hunting a cloud. What is optimised is which entity
+    // goes in which cell -- ordered so related entities land near each other
+    // and edges stay short.
+    //
+    // Column count is derived from the BOX shape, not just the entity count.
+    // Entity boxes are far wider than tall (roughly 300x120), so picking
+    // columns from sqrt(n) alone produced a 2.94:1 strip. Solving
+    // cols^2 = aspect * n * avg_height / avg_width gives a grid whose RENDERED
+    // proportions land near the target instead of its cell counts.
+    let avg_w = widths.iter().sum::<f64>() / n as f64;
+    let avg_h = heights.iter().sum::<f64>() / n as f64;
+    let n_cols = ((GRID_ASPECT * n as f64 * avg_h / avg_w).sqrt().round() as usize)
+        .clamp(1, n);
 
-    for tick in 0..PLACEMENT_TICKS {
-        let mut fx = vec![0.0_f64; n];
-        let mut fy = vec![0.0_f64; n];
-
-        // Repulsion, every pair. O(n^2) is the right call at ER scale: a
-        // Barnes-Hut tree costs more to build than it saves under ~100 nodes.
-        for (ai, &i) in sim.iter().enumerate() {
-            for &j in &sim[ai + 1..] {
-                let (mut dx, mut dy) = (px[i] - px[j], py[i] - py[j]);
-                let mut d = (dx * dx + dy * dy).sqrt();
-                if d < 1e-6 {
-                    // Coincident: separate along a deterministic axis rather
-                    // than dividing by zero.
-                    dx = if i % 2 == 0 { 1.0 } else { -1.0 };
-                    dy = 0.0;
-                    d = 1.0;
-                }
-                let f = k * k / d;
-                let (ux, uy) = (dx / d, dy / d);
-                fx[i] += ux * f;
-                fy[i] += uy * f;
-                fx[j] -= ux * f;
-                fy[j] -= uy * f;
-            }
-        }
-
-        // Attraction along relationships.
-        for (i, entity) in entities.iter().enumerate() {
-            for rel in &entity.relationships {
-                let j = match index_of.get(rel.to.as_str()) {
-                    Some(&j) if j != i => j,
-                    _ => continue,
-                };
-                let (dx, dy) = (px[j] - px[i], py[j] - py[i]);
-                let d = (dx * dx + dy * dy).sqrt();
-                if d < 1e-6 {
-                    continue;
-                }
-                let f = d * d / k;
-                let (ux, uy) = (dx / d, dy / d);
-                fx[i] += ux * f;
-                fy[i] += uy * f;
-                fx[j] -= ux * f;
-                fy[j] -= uy * f;
-            }
-        }
-
-        // Gravity toward the centroid. Uses the centroid rather than the origin
-        // so the whole layout is never dragged across the plane just because it
-        // drifted; only its spread is constrained.
-        let cnt = sim.len().max(1) as f64;
-        let cx = sim.iter().map(|&i| px[i]).sum::<f64>() / cnt;
-        let cy = sim.iter().map(|&i| py[i]).sum::<f64>() / cnt;
-        for &i in &sim {
-            fx[i] += (cx - px[i]) * GRAVITY;
-            fy[i] += (cy - py[i]) * GRAVITY;
-        }
-
-        // Cool from a bold first move down to a fine final one, and never let a
-        // node travel further than the current temperature in one tick.
-        let temperature = k * (1.0 - tick as f64 / PLACEMENT_TICKS as f64).powi(2) + 1.0;
-        for &i in &sim {
-            let d = (fx[i] * fx[i] + fy[i] * fy[i]).sqrt();
-            if d < 1e-9 {
-                continue;
-            }
-            let scale = d.min(temperature) / d;
-            px[i] += fx[i] * scale;
-            py[i] += fy[i] * scale;
-        }
-
-        // Hard separation. The force terms treat boxes as points, so actual
-        // rectangle overlap is resolved directly -- along the cheaper axis,
-        // which is what keeps the result compact rather than merely legal.
-        for _ in 0..SEPARATION_PASSES {
-            for (ai, &i) in sim.iter().enumerate() {
-                for &j in &sim[ai + 1..] {
-                    let need_x = (widths[i] + widths[j]) / 2.0 + BOX_CLEARANCE;
-                    let need_y = (heights[i] + heights[j]) / 2.0 + BOX_CLEARANCE;
-                    let (dx, dy) = (px[j] - px[i], py[j] - py[i]);
-                    let (ox, oy) = (need_x - dx.abs(), need_y - dy.abs());
-                    if ox <= 0.0 || oy <= 0.0 {
-                        continue; // already clear on at least one axis
-                    }
-                    if ox < oy {
-                        let push = ox / 2.0 * if dx >= 0.0 { 1.0 } else { -1.0 };
-                        px[i] -= push;
-                        px[j] += push;
-                    } else {
-                        let push = oy / 2.0 * if dy >= 0.0 { 1.0 } else { -1.0 };
-                        py[i] -= push;
-                        py[j] += push;
-                    }
+    // Seed order: breadth-first from the highest-degree entity, so a hub and
+    // its neighbours enter the grid consecutively and start out adjacent.
+    // Entities with no relationships come last -- nothing places them, so they
+    // fill the trailing cells rather than displacing anything that has
+    // structure to show.
+    let mut slot: Vec<usize> = Vec::with_capacity(n);
+    let mut seen = vec![false; n];
+    let mut remaining: BTreeSet<usize> = (0..n).filter(|&i| !adj[i].is_empty()).collect();
+    while let Some(&seed) = remaining
+        .iter()
+        .max_by_key(|&&i| (adj[i].len(), std::cmp::Reverse(entities[i].id.as_str())))
+    {
+        let mut queue = VecDeque::new();
+        queue.push_back(seed);
+        seen[seed] = true;
+        remaining.remove(&seed);
+        while let Some(i) = queue.pop_front() {
+            slot.push(i);
+            for &j in &adj[i] {
+                if !seen[j] {
+                    seen[j] = true;
+                    remaining.remove(&j);
+                    queue.push_back(j);
                 }
             }
         }
     }
-
-    // --- park the unrelated entities ----------------------------------------
-    //
-    // They belong in the diagram -- an entity with no relationships is part of
-    // the model, not an orphan to hide -- but they carry no edges, so their
-    // position says nothing. A tidy row under the connected model reads as
-    // exactly what it is: the things that stand alone, listed together, out of
-    // the way of the structure that has something to show.
-    if !parked.is_empty() {
-        let (mut min_x, mut max_x, mut max_y) = (f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
-        for &i in &sim {
-            min_x = min_x.min(px[i] - widths[i] / 2.0);
-            max_x = max_x.max(px[i] + widths[i] / 2.0);
-            max_y = max_y.max(py[i] + heights[i] / 2.0);
+    for (i, placed) in seen.iter().enumerate() {
+        if !placed {
+            slot.push(i);
         }
-        let row_width = if min_x.is_finite() {
-            (max_x - min_x).max(1.0)
-        } else {
-            // Nothing connected at all: the parked block IS the diagram, so it
-            // wraps to a roughly square shape of its own rather than becoming
-            // one very long column.
-            min_x = 0.0;
-            max_y = 0.0;
-            let total: f64 = parked.iter().map(|&i| widths[i] * heights[i]).sum();
-            (total * 1.6).sqrt().max(
-                parked.iter().map(|&i| widths[i]).fold(0.0_f64, f64::max),
-            )
-        };
+    }
 
-        let mut cursor_x = min_x;
-        let mut row_top = max_y + BOX_CLEARANCE * 2.0;
-        let mut row_tallest = 0.0_f64;
-        for &i in &parked {
-            // Wrap to a new row rather than running off past the connected
-            // model's width, so the block stays as wide as the diagram already
-            // is instead of stretching the canvas sideways.
-            if cursor_x > min_x && cursor_x + widths[i] > min_x + row_width {
-                cursor_x = min_x;
-                row_top += row_tallest + BOX_CLEARANCE;
-                row_tallest = 0.0;
+    // Undirected edge list, used to score an arrangement.
+    let mut pairs: Vec<(usize, usize)> = Vec::new();
+    for (i, entity) in entities.iter().enumerate() {
+        for rel in &entity.relationships {
+            if let Some(&j) = index_of.get(rel.to.as_str()) {
+                if i != j {
+                    pairs.push((i.min(j), i.max(j)));
+                }
             }
-            px[i] = cursor_x + widths[i] / 2.0;
-            py[i] = row_top + heights[i] / 2.0;
-            cursor_x += widths[i] + BOX_CLEARANCE;
-            row_tallest = row_tallest.max(heights[i]);
         }
+    }
+    pairs.sort_unstable();
+    pairs.dedup();
+
+    // Cost of an arrangement: total edge length in cell space, with a mild
+    // superlinear term so one very long edge is worse than two short ones --
+    // a single line crossing the whole diagram is what costs a reader most.
+    let arrangement_cost = |cell_of: &[usize]| -> f64 {
+        let cell_xy = |c: usize| ((c % n_cols) as f64, (c / n_cols) as f64);
+        let mut cost: f64 = pairs
+            .iter()
+            .map(|&(i, j)| {
+                let ((xi, yi), (xj, yj)) = (cell_xy(cell_of[i]), cell_xy(cell_of[j]));
+                let d = ((xi - xj).powi(2) + (yi - yj).powi(2)).sqrt();
+                d * d.sqrt()
+            })
+            .sum();
+
+        // Crossings, estimated in cell space. Length alone is a decent proxy
+        // but it is not the same objective: two short edges can still cross,
+        // and a crossing costs a reader more than a little extra length. Scored
+        // here so the arrangement is chosen for legibility rather than only for
+        // compactness.
+        for a in 0..pairs.len() {
+            for b in (a + 1)..pairs.len() {
+                let (p1, p2) = (pairs[a], pairs[b]);
+                if p1.0 == p2.0 || p1.0 == p2.1 || p1.1 == p2.0 || p1.1 == p2.1 {
+                    continue; // shares an entity: they meet at a box, not in space
+                }
+                let (a1, a2) = (cell_xy(cell_of[p1.0]), cell_xy(cell_of[p1.1]));
+                let (b1, b2) = (cell_xy(cell_of[p2.0]), cell_xy(cell_of[p2.1]));
+                if segments_cross_xy(a1, a2, b1, b2) {
+                    cost += CROSSING_PENALTY;
+                }
+            }
+        }
+        cost
+    };
+
+    let mut cell_of: Vec<usize> = vec![0; n];
+    for (cell, &e) in slot.iter().enumerate() {
+        cell_of[e] = cell;
+    }
+
+    // Improve by swapping pairs of cells, keeping only strict improvements so
+    // the pass cannot oscillate. Deterministic: fixed order, fixed pass count.
+    let mut best = arrangement_cost(&cell_of);
+    for _ in 0..ARRANGEMENT_PASSES {
+        let mut improved = false;
+        for a in 0..n {
+            for b in (a + 1)..n {
+                let (ea, eb) = (slot[a], slot[b]);
+                cell_of[ea] = b;
+                cell_of[eb] = a;
+                let c = arrangement_cost(&cell_of);
+                if c < best - 1e-9 {
+                    best = c;
+                    slot.swap(a, b);
+                    improved = true;
+                } else {
+                    cell_of[ea] = a;
+                    cell_of[eb] = b;
+                }
+            }
+        }
+        if !improved {
+            break;
+        }
+    }
+
+    // --- cell geometry -------------------------------------------------------
+    // Column widths and row heights come from the widest and tallest box in
+    // each, so a 15-attribute entity never overlaps its neighbour and the grid
+    // still reads as aligned.
+    let n_rows = n.div_ceil(n_cols);
+    let mut col_w = vec![0.0_f64; n_cols];
+    let mut row_h = vec![0.0_f64; n_rows];
+    for (cell, &e) in slot.iter().enumerate() {
+        let (c, r) = (cell % n_cols, cell / n_cols);
+        col_w[c] = col_w[c].max(widths[e]);
+        row_h[r] = row_h[r].max(heights[e]);
+    }
+
+    let mut col_x = Vec::with_capacity(n_cols);
+    let mut acc = 0.0;
+    for w in &col_w {
+        col_x.push(acc);
+        acc += w + GRID_GAP_X;
+    }
+    let mut row_y = Vec::with_capacity(n_rows);
+    acc = 0.0;
+    for h in &row_h {
+        row_y.push(acc);
+        acc += h + GRID_GAP_Y;
+    }
+
+    let mut px = vec![0.0_f64; n];
+    let mut py = vec![0.0_f64; n];
+    for (cell, &e) in slot.iter().enumerate() {
+        let (c, r) = (cell % n_cols, cell / n_cols);
+        // Centred in its cell, so uneven box sizes still read as a grid.
+        px[e] = col_x[c] + (col_w[c] - widths[e]) / 2.0 + widths[e] / 2.0;
+        py[e] = row_y[r] + (row_h[r] - heights[e]) / 2.0 + heights[e] / 2.0;
     }
 
     // --- geometry ------------------------------------------------------------
@@ -724,7 +691,14 @@ fn self_loop_path(b: &ErBox) -> Vec<Point> {
 /// Straight first, because it is shortest and bend-free and wins whenever it is
 /// clear. The orthogonal variants exist so the router has something to buy with
 /// the bend cost when straight would cut through a box.
-fn candidate_shapes(a: &Point, b: &Point, sa: Side, sb: Side) -> Vec<Vec<Point>> {
+fn candidate_shapes(
+    a: &Point,
+    b: &Point,
+    sa: Side,
+    sb: Side,
+    ba: &ErBox,
+    bb: &ErBox,
+) -> Vec<Vec<Point>> {
     let mut out = vec![vec![a.clone(), b.clone()]];
 
     // Two L shapes: turn on one axis first, then the other.
@@ -751,6 +725,34 @@ fn candidate_shapes(a: &Point, b: &Point, sa: Side, sb: Side) -> Vec<Vec<Point>>
                 b.clone(),
             ]);
         }
+    }
+    // Gutter detours. On a grid, two entities several cells apart have other
+    // entities BETWEEN them, and every shape above goes directly -- so the best
+    // available path still crossed a box. The grid's gaps are uniform empty
+    // lanes, so a path can leave the direct line, run the gutter clear of
+    // everything, and come back. This is what the bend cost is for.
+    let gap_y = GRID_GAP_Y / 2.0;
+    let gap_x = GRID_GAP_X / 2.0;
+    let above = ba.y.min(bb.y) - gap_y;
+    let below = (ba.y + ba.height).max(bb.y + bb.height) + gap_y;
+    let left = ba.x.min(bb.x) - gap_x;
+    let right = (ba.x + ba.width).max(bb.x + bb.width) + gap_x;
+
+    for via_y in [above, below] {
+        out.push(vec![
+            a.clone(),
+            Point { x: a.x, y: via_y },
+            Point { x: b.x, y: via_y },
+            b.clone(),
+        ]);
+    }
+    for via_x in [left, right] {
+        out.push(vec![
+            a.clone(),
+            Point { x: via_x, y: a.y },
+            Point { x: via_x, y: b.y },
+            b.clone(),
+        ]);
     }
     out
 }
@@ -914,7 +916,7 @@ pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
                 return self_loop_path(&boxes[i]);
             }
             let (sa, sb) = sides[pi];
-            candidate_shapes(&anchor(&boxes[i], sa), &anchor(&boxes[j], sb), sa, sb)
+            candidate_shapes(&anchor(&boxes[i], sa), &anchor(&boxes[j], sb), sa, sb, &boxes[i], &boxes[j])
                 .into_iter()
                 .next()
                 .unwrap_or_default()
@@ -932,7 +934,7 @@ pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
             for &sa in &SIDES {
                 for &sb in &SIDES {
                     let (pa, pb) = (anchor(&boxes[i], sa), anchor(&boxes[j], sb));
-                    for shape in candidate_shapes(&pa, &pb, sa, sb) {
+                    for shape in candidate_shapes(&pa, &pb, sa, sb, &boxes[i], &boxes[j]) {
                         let c = route_cost(&shape, pi, i, j, boxes, &paths, &pending);
                         // Strict improvement only, with the FIRST candidate in a
                         // fixed enumeration order winning ties, so the result
@@ -1030,7 +1032,7 @@ pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
         }
         let (sa, sb) = sides[pi];
         let mut best: Option<(f64, Vec<Point>)> = None;
-        for shape in candidate_shapes(&ports[pi].0, &ports[pi].1, sa, sb) {
+        for shape in candidate_shapes(&ports[pi].0, &ports[pi].1, sa, sb, &boxes[i], &boxes[j]) {
             let c = route_cost(&shape, pi, i, j, boxes, &paths, &pending);
             if best.as_ref().is_none_or(|(bc, _)| c < *bc - 1e-9) {
                 best = Some((c, shape));
@@ -1110,6 +1112,19 @@ fn hop_points(edges: &[ErEdge]) -> Vec<Vec<Point>> {
         });
     }
     hops
+}
+
+/// Do two segments properly cross, in plain (x, y) pairs?
+///
+/// Used on CELL coordinates while arranging the grid, before any real geometry
+/// exists.
+fn segments_cross_xy(a1: (f64, f64), a2: (f64, f64), b1: (f64, f64), b2: (f64, f64)) -> bool {
+    let o = |p: (f64, f64), q: (f64, f64), r: (f64, f64)| {
+        (q.0 - p.0) * (r.1 - p.1) - (q.1 - p.1) * (r.0 - p.0)
+    };
+    let (d1, d2) = (o(a1, a2, b1), o(a1, a2, b2));
+    let (d3, d4) = (o(b1, b2, a1), o(b1, b2, a2));
+    ((d1 > 0.0) != (d2 > 0.0)) && ((d3 > 0.0) != (d4 > 0.0))
 }
 
 /// Intersection of two segments, or None when they do not properly cross.
@@ -1314,10 +1329,30 @@ mod tests {
             .flat_map(|x| b.iter().map(move |y| (x, y)))
             .map(|(x, y)| dist(centre(x), centre(y)))
             .fold(f64::INFINITY, f64::min);
+        // On a grid, clusters occupy contiguous BLOCKS and adjacent blocks
+        // touch, so the widest within-cluster pair is not required to beat the
+        // nearest cross-cluster pair -- that was a force-layout property. What
+        // must hold is that related entities are closer ON AVERAGE, which is
+        // what "related things sit together" actually means here.
+        let mean = |v: Vec<f64>| v.iter().sum::<f64>() / v.len() as f64;
+        let within_mean = mean(
+            a.iter()
+                .flat_map(|x| a.iter().map(move |y| (x, y)))
+                .chain(b.iter().flat_map(|x| b.iter().map(move |y| (x, y))))
+                .filter(|(x, y)| x != y)
+                .map(|(x, y)| dist(centre(x), centre(y)))
+                .collect(),
+        );
+        let between_mean = mean(
+            a.iter()
+                .flat_map(|x| b.iter().map(move |y| (x, y)))
+                .map(|(x, y)| dist(centre(x), centre(y)))
+                .collect(),
+        );
         assert!(
-            within < between,
-            "widest cluster pair {within:.0} should be closer than the nearest \
-             cross-cluster pair {between:.0}"
+            within_mean < between_mean,
+            "related entities should average closer ({within_mean:.0}) than unrelated \
+             ({between_mean:.0}); widest-within was {within:.0}, nearest-between {between:.0}"
         );
     }
 
@@ -1375,6 +1410,56 @@ mod tests {
             let area: f64 = plan.boxes.iter().map(|b| b.width * b.height).sum();
             println!("DIST {name}: {:.0}x{:.0} fill {:.3} nn_mean {:.0} nn_cv {:.2} cells {}/16",
                 cw, ch, area / (cw * ch), mean, sd / mean, occupied);
+        }
+    }
+
+    #[test]
+    fn the_layout_is_balanced() {
+        // The property the grid exists for, and the one fill ratio could not
+        // express. Fill ratio is MAXIMISED by bunching -- boxes crushed into a
+        // corner score beautifully on it -- so it was possible to pass every
+        // test while the diagram had a dense core and a dead rim.
+        //
+        // Balance is measured two ways: spacing between neighbours should be
+        // near-uniform, and no quarter of the canvas should be empty.
+        for (name, input) in [("fixture", realistic_fixture_input()), ("hub", hub_input())] {
+            let plan = plan_er(&input);
+            let c: Vec<(f64, f64)> = plan
+                .boxes
+                .iter()
+                .map(|b| (b.x + b.width / 2.0, b.y + b.height / 2.0))
+                .collect();
+            let nn: Vec<f64> = c
+                .iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    c.iter()
+                        .enumerate()
+                        .filter(|(j, _)| *j != i)
+                        .map(|(_, q)| ((p.0 - q.0).powi(2) + (p.1 - q.1).powi(2)).sqrt())
+                        .fold(f64::INFINITY, f64::min)
+                })
+                .collect();
+            let mean = nn.iter().sum::<f64>() / nn.len() as f64;
+            let sd = (nn.iter().map(|d| (d - mean).powi(2)).sum::<f64>() / nn.len() as f64).sqrt();
+            let cv = sd / mean;
+            assert!(
+                cv <= 0.35,
+                "{name}: nearest-neighbour spacing varies by {cv:.2} of its mean; \
+                 the layout is clumping rather than spreading"
+            );
+
+            // Every quadrant carries something. A layout can be evenly spaced
+            // and still occupy only half the canvas.
+            let (cw, ch) = (plan.canvas_width, plan.canvas_height);
+            for (qx, qy) in [(0, 0), (1, 0), (0, 1), (1, 1)] {
+                let (x0, x1) = (cw * qx as f64 / 2.0, cw * (qx + 1) as f64 / 2.0);
+                let (y0, y1) = (ch * qy as f64 / 2.0, ch * (qy + 1) as f64 / 2.0);
+                let occupied = plan.boxes.iter().any(|b| {
+                    b.x < x1 && x0 < b.x + b.width && b.y < y1 && y0 < b.y + b.height
+                });
+                assert!(occupied, "{name}: quadrant ({qx},{qy}) of the canvas is empty");
+            }
         }
     }
 
@@ -1546,15 +1631,24 @@ mod tests {
             let (x, y) = centre(id);
             ((x - hx).powi(2) + (y - hy).powi(2)).sqrt()
         };
-        let farthest_leaf = d("leaf1").max(d("leaf2"));
+        // On a grid they take the TRAILING cells rather than being flung to the
+        // rim, so the property is about reading order, not distance: everything
+        // with structure to show is laid out first, and the standalone entities
+        // fill what is left. Cell order reads left-to-right, top-to-bottom, so
+        // "later" means further down, or further right on the same row.
+        let after = |id: &str, other: &str| {
+            let (p, q) = (centre(id), centre(other));
+            p.1 > q.1 + 1.0 || ((p.1 - q.1).abs() <= 1.0 && p.0 > q.0)
+        };
         for id in ["rule", "glossary", "note"] {
-            assert!(
-                d(id) > farthest_leaf,
-                "{id} has no relationships and should sit outside the hub's leaves \
-                 ({:.0} vs {farthest_leaf:.0})",
-                d(id)
-            );
+            for connected in ["hub", "leaf1", "leaf2"] {
+                assert!(
+                    after(id, connected),
+                    "{id} has no relationships and should be laid out after {connected}"
+                );
+            }
         }
+        let _ = d("leaf1");
     }
 
     #[test]
