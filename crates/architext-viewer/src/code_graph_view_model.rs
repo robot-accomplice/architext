@@ -269,6 +269,12 @@ fn radius_for(degree: u32) -> f32 {
 /// of an unrelated constant.
 const LOBE_RADIUS_K: f64 = 24.0;
 
+/// Compaction rounds, each followed by re-separation. More rounds squeeze
+/// harder; the packing stops shrinking once separation blocks it.
+const CLUSTER_COMPACTION_PASSES: usize = 24;
+/// How much of the distance to the centroid a round removes.
+const COMPACTION_STEP: f64 = 0.88;
+
 /// Passes that push cluster centres apart until each has room for its members.
 /// Bounded for predictable layout time; exits early once nothing overlaps.
 const CLUSTER_SEPARATION_PASSES: usize = 12;
@@ -278,7 +284,7 @@ const CLUSTER_SEPARATION_PASSES: usize = 12;
 /// Strong enough that lobes separate and stay separated; loose enough that the
 /// graph's own edges still shape what happens inside one. Tuned by looking at
 /// the result, which is the only way this can be judged.
-pub const CLUSTER_PULL: f64 = 0.12;
+pub const CLUSTER_PULL: f64 = 0.5;
 
 /// How many `::` segments of a package path define a cluster.
 ///
@@ -407,6 +413,48 @@ pub fn cluster_anchors(
     // constant can serve both a 400-member cluster and a 1-member one.
     let radius: Vec<f64> =
         sizes.iter().map(|&n| LOBE_RADIUS_K * (n as f64).sqrt().max(1.0)).collect();
+
+    // Compact, then separate, repeatedly.
+    //
+    // Separation alone only enforces a MINIMUM distance -- nothing ever pulls
+    // lobes back in, so the field stayed as wide as the force settle first
+    // flung it and the graph read as sparse dots in empty space. Pulling every
+    // centre toward the centroid and re-separating converges on the tightest
+    // packing that still gives each lobe its room: compaction squeezes until
+    // separation refuses, which is exactly where "tight" is.
+    for _ in 0..CLUSTER_COMPACTION_PASSES {
+        let (cx, cy) = (
+            centres.iter().map(|c| c.0).sum::<f64>() / cluster_count as f64,
+            centres.iter().map(|c| c.1).sum::<f64>() / cluster_count as f64,
+        );
+        for c in centres.iter_mut() {
+            c.0 = cx + (c.0 - cx) * COMPACTION_STEP;
+            c.1 = cy + (c.1 - cy) * COMPACTION_STEP;
+        }
+        for _ in 0..CLUSTER_SEPARATION_PASSES {
+            let mut moved = false;
+            for i in 0..cluster_count {
+                for j in (i + 1)..cluster_count {
+                    let (dx, dy) = (centres[j].0 - centres[i].0, centres[j].1 - centres[i].1);
+                    let d = (dx * dx + dy * dy).sqrt();
+                    let need = radius[i] + radius[j];
+                    if d >= need {
+                        continue;
+                    }
+                    let (ux, uy) = if d > 1e-9 { (dx / d, dy / d) } else { (1.0, 0.0) };
+                    let push = (need - d) / 2.0;
+                    centres[i].0 -= ux * push;
+                    centres[i].1 -= uy * push;
+                    centres[j].0 += ux * push;
+                    centres[j].1 += uy * push;
+                    moved = true;
+                }
+            }
+            if !moved {
+                break;
+            }
+        }
+    }
 
     for _ in 0..CLUSTER_SEPARATION_PASSES {
         let mut moved = false;
