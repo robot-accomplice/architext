@@ -79,6 +79,10 @@ const SIDES: [Side; 4] = [Side::Right, Side::Left, Side::Bottom, Side::Top];
 /// Passes of surface re-selection. Each edge re-picks against the others'
 /// current choices; the loop exits early once a pass changes nothing.
 const SURFACE_PASSES: usize = 3;
+/// Widest half-width a relationship label is assumed to occupy when measuring
+/// the canvas. Generous on purpose: under-measuring clips a label off the edge,
+/// and the cost of over-measuring is a little whitespace.
+const LABEL_MAX_HALF_W: f64 = 60.0;
 /// Half-height of a relationship label, for the clearance test.
 const LABEL_HALF_H: f64 = 9.0;
 /// How many positions either side of the middle to try when a label lands on a
@@ -595,12 +599,60 @@ pub fn plan_er(input: &ErInput) -> ErPlan {
         });
     }
 
-    let canvas_width =
-        boxes.iter().map(|b| b.x + b.width).fold(0.0_f64, f64::max) + MARGIN;
-    let canvas_height =
-        boxes.iter().map(|b| b.y + b.height).fold(0.0_f64, f64::max) + MARGIN;
+    let mut edges = route_edges(&boxes, input);
 
-    let edges = route_edges(&boxes, input);
+    // The canvas has to cover the EDGES too, not just the boxes.
+    //
+    // Routes leave the boxes deliberately: a self-relationship loops 38px above
+    // and right of its entity, and a gutter detour runs outside the outer rows.
+    // Sizing the canvas from box extents alone put anything on the top or left
+    // row into NEGATIVE coordinates -- outside the viewBox, clipped, and
+    // unreachable by scrolling, because there is nothing to scroll to.
+    //
+    // So the whole plan is measured, shifted into positive space, and the
+    // canvas takes the union. Nothing can be laid out where it cannot be seen.
+    let mut min_x = f64::INFINITY;
+    let mut min_y = f64::INFINITY;
+    let mut max_x = f64::NEG_INFINITY;
+    let mut max_y = f64::NEG_INFINITY;
+    for b in &boxes {
+        min_x = min_x.min(b.x);
+        min_y = min_y.min(b.y);
+        max_x = max_x.max(b.x + b.width);
+        max_y = max_y.max(b.y + b.height);
+    }
+    for e in &edges {
+        for p in e.points.iter().chain(e.hops.iter()) {
+            min_x = min_x.min(p.x);
+            min_y = min_y.min(p.y);
+            max_x = max_x.max(p.x);
+            max_y = max_y.max(p.y);
+        }
+        // Labels are drawn centred on their anchor, so they extend either side.
+        min_x = min_x.min(e.label_x - LABEL_MAX_HALF_W);
+        max_x = max_x.max(e.label_x + LABEL_MAX_HALF_W);
+        min_y = min_y.min(e.label_y - LABEL_HALF_H);
+        max_y = max_y.max(e.label_y + LABEL_HALF_H);
+    }
+
+    let (dx, dy) = (MARGIN - min_x, MARGIN - min_y);
+    if dx.abs() > f64::EPSILON || dy.abs() > f64::EPSILON {
+        for b in &mut boxes {
+            b.x += dx;
+            b.y += dy;
+        }
+        for e in &mut edges {
+            for p in e.points.iter_mut().chain(e.hops.iter_mut()) {
+                p.x += dx;
+                p.y += dy;
+            }
+            e.label_x += dx;
+            e.label_y += dy;
+        }
+    }
+
+    let canvas_width = max_x - min_x + MARGIN * 2.0;
+    let canvas_height = max_y - min_y + MARGIN * 2.0;
 
     ErPlan { boxes, edges, canvas_width, canvas_height }
 }
@@ -1410,6 +1462,40 @@ mod tests {
             let area: f64 = plan.boxes.iter().map(|b| b.width * b.height).sum();
             println!("DIST {name}: {:.0}x{:.0} fill {:.3} nn_mean {:.0} nn_cv {:.2} cells {}/16",
                 cw, ch, area / (cw * ch), mean, sd / mean, occupied);
+        }
+    }
+
+    #[test]
+    fn nothing_is_laid_out_beyond_the_canvas() {
+        // REGRESSION: the canvas was measured from BOX extents only, while
+        // routes deliberately leave their boxes -- a self-loop reaches 38px
+        // above and right of its entity, a gutter detour runs outside the outer
+        // rows. Anything on the top or left row landed at NEGATIVE coordinates:
+        // outside the viewBox, clipped, and unreachable by scrolling, because
+        // there is nothing to scroll to.
+        for (name, input) in [
+            ("fixture", realistic_fixture_input()),
+            ("hub", hub_input()),
+            ("shared children", shared_children_input()),
+        ] {
+            let plan = plan_er(&input);
+            let (w, h) = (plan.canvas_width, plan.canvas_height);
+            for b in &plan.boxes {
+                assert!(
+                    b.x >= 0.0 && b.y >= 0.0 && b.x + b.width <= w && b.y + b.height <= h,
+                    "{name}: entity {} at ({},{}) {}x{} falls outside the {w}x{h} canvas",
+                    b.id, b.x, b.y, b.width, b.height
+                );
+            }
+            for e in &plan.edges {
+                for p in e.points.iter().chain(e.hops.iter()) {
+                    assert!(
+                        p.x >= 0.0 && p.y >= 0.0 && p.x <= w && p.y <= h,
+                        "{name}: {} -> {} passes through ({}, {}), outside the {w}x{h} canvas",
+                        e.from, e.to, p.x, p.y
+                    );
+                }
+            }
         }
     }
 

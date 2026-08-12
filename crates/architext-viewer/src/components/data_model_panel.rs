@@ -22,6 +22,11 @@ use crate::state::use_app_state;
 const FOOT_LEN: f64 = 9.0;
 /// Half-height of the crow's-foot spread.
 const FOOT_SPREAD: f64 = 5.0;
+/// Zoom step per button press, and the range the view can be taken to.
+const ZOOM_STEP: f64 = 1.25;
+const ZOOM_MIN: f64 = 0.25;
+const ZOOM_MAX: f64 = 3.0;
+
 /// Radius of the little bridge drawn where one line crosses another.
 const HOP_R: f64 = 5.0;
 /// Padding inside a relationship label's pill.
@@ -176,15 +181,28 @@ fn ErDiagram(plan: architext_routing::plan_er::ErPlan, input: ErInput) -> impl I
     let drag = store_value(None::<(usize, f64, f64)>);
     let svg_ref = create_node_ref::<leptos::svg::Svg>();
     let input = store_value(input);
+    // The ER surface is not one of the shared pan/zoom diagram surfaces, so it
+    // carries its own. Scaling the svg's width/height while leaving the viewBox
+    // alone zooms the VECTOR -- text stays sharp at any level -- and the
+    // scroll container keeps working, which is what makes a diagram larger than
+    // the panel usable at all.
+    let (zoom, set_zoom) = create_signal(1.0_f64);
 
     let canvas_w = plan.canvas_width;
     let canvas_h = plan.canvas_height;
     let view_box = format!("0 0 {canvas_w} {canvas_h}");
 
+    // Pointer coordinates arrive in SCALED screen pixels while boxes live in
+    // unscaled diagram units, so the zoom has to be divided back out or a drag
+    // runs away from the cursor the moment the view is not at 1:1.
     let pointer_pos = move |ev: &web_sys::PointerEvent| -> Option<(f64, f64)> {
         let el = svg_ref.get()?;
         let rect = el.get_bounding_client_rect();
-        Some((ev.client_x() as f64 - rect.left(), ev.client_y() as f64 - rect.top()))
+        let z = zoom.get_untracked().max(0.01);
+        Some((
+            (ev.client_x() as f64 - rect.left()) / z,
+            (ev.client_y() as f64 - rect.top()) / z,
+        ))
     };
 
     let on_move = move |ev: web_sys::PointerEvent| {
@@ -202,15 +220,41 @@ fn ErDiagram(plan: architext_routing::plan_er::ErPlan, input: ErInput) -> impl I
     };
     let on_up = move |_ev: web_sys::PointerEvent| drag.set_value(None);
 
+    let fit = move || {
+        if let Some(el) = svg_ref.get() {
+            if let Some(parent) = el.parent_element() {
+                let r = parent.get_bounding_client_rect();
+                let by_w = (r.width() - 24.0) / canvas_w;
+                let by_h = (r.height() - 24.0) / canvas_h;
+                set_zoom.set(by_w.min(by_h).clamp(ZOOM_MIN, ZOOM_MAX));
+            }
+        }
+    };
+
     view! {
         <div class="data-model-panel__canvas">
+            <div class="canvas-panel__controls data-model-panel__zoom">
+                <button
+                    title="Zoom out"
+                    on:click=move |_| set_zoom.update(|z| *z = (*z / ZOOM_STEP).max(ZOOM_MIN))
+                >
+                    "−"
+                </button>
+                <button title="Fit to view" on:click=move |_| fit()>"⤢"</button>
+                <button
+                    title="Zoom in"
+                    on:click=move |_| set_zoom.update(|z| *z = (*z * ZOOM_STEP).min(ZOOM_MAX))
+                >
+                    "+"
+                </button>
+            </div>
             <svg
                 node_ref=svg_ref
                 class="er-diagram"
                 class:is-dragging=move || drag.with_value(|d| d.is_some())
                 viewBox=view_box
-                width=canvas_w
-                height=canvas_h
+                width=move || canvas_w * zoom.get()
+                height=move || canvas_h * zoom.get()
                 xmlns="http://www.w3.org/2000/svg"
                 on:pointermove=on_move
                 on:pointerup=on_up
@@ -255,6 +299,8 @@ fn ErDiagram(plan: architext_routing::plan_er::ErPlan, input: ErInput) -> impl I
                                             ev.client_x() as f64 - rect.left(),
                                             ev.client_y() as f64 - rect.top(),
                                         );
+                                        let z = zoom.get_untracked().max(0.01);
+                                        let (x, y) = (x / z, y / z);
                                         let b = &boxes.get_untracked()[i];
                                         drag.set_value(Some((i, x - b.x, y - b.y)));
                                     }

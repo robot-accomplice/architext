@@ -3604,3 +3604,16 @@ button.blast-chip { cursor: pointer; }
   height: 0;
   border-top: 2px solid var(--er-stroke, var(--line-strong));
 }
+
+/* The ER surface carries its own zoom controls: it is not one of the shared
+   pan/zoom diagram surfaces, so the canvas-panel set never applied to it. */
+.data-model-panel__canvas {
+  position: relative;
+}
+
+.data-model-panel__zoom {
+  position: absolute;
+  top: var(--pad-tight);
+  right: var(--pad-tight);
+  z-index: 2;
+}
