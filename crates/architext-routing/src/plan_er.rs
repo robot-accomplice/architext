@@ -30,6 +30,7 @@ use std::collections::{BTreeMap, BTreeSet};
 use serde::{Deserialize, Serialize};
 
 use crate::model::Point;
+use crate::route_constants::MOUNT_COST;
 
 // ---------------------------------------------------------------------------
 // Layout constants
@@ -62,6 +63,15 @@ const BOX_CLEARANCE: f64 = 44.0;
 /// entities sit closer than unrelated ones; that proximity is what carries the
 /// structure now that there are no columns to read it from.
 const IDEAL_EDGE_GAP: f64 = 55.0;
+
+/// Every face a line may attach to, in a fixed order so scoring ties resolve
+/// the same way on every run.
+const SIDES: [Side; 4] = [Side::Right, Side::Left, Side::Bottom, Side::Top];
+/// Passes of surface re-selection. Each edge re-picks against the others'
+/// current choices; the loop exits early once a pass changes nothing.
+const SURFACE_PASSES: usize = 3;
+/// Clearance a path keeps from a box it is routing around.
+const DETOUR_CLEARANCE: f64 = 18.0;
 
 /// How far in from a box's top and bottom corners the outermost edge port sits,
 /// so a line never appears to attach to the corner itself.
@@ -563,23 +573,120 @@ fn feet(cardinality: &str) -> (ErFoot, ErFoot) {
     }
 }
 
-/// A straight run between two assigned ports, plus the label anchor.
+/// The path shapes worth considering between two ports on two given faces.
 ///
-/// No bends. Orthogonal routing earns its place when boxes sit on fixed tracks
-/// -- a grid, or the columns this engine used to impose -- because a line then
-/// has channels to follow and corners to turn. Nothing here is on a track:
-/// placement is free, so the shortest path between two ports is the straight
-/// one, and every bend was decoration that added length and crossings.
+/// Straight first, because it is shortest and bend-free and wins whenever it is
+/// clear. The orthogonal variants exist so the router has something to buy with
+/// the bend cost when straight would cut through a box.
+fn candidate_shapes(a: &Point, b: &Point, sa: Side, sb: Side) -> Vec<Vec<Point>> {
+    let mut out = vec![vec![a.clone(), b.clone()]];
+
+    // Two L shapes: turn on one axis first, then the other.
+    out.push(vec![a.clone(), Point { x: b.x, y: a.y }, b.clone()]);
+    out.push(vec![a.clone(), Point { x: a.x, y: b.y }, b.clone()]);
+
+    // A Z that splits the gap, which is what leaves a face cleanly when both
+    // ends use opposing faces.
+    if sa.is_horizontal_face() == sb.is_horizontal_face() {
+        if sa.is_horizontal_face() {
+            let mid = (a.y + b.y) / 2.0;
+            out.push(vec![
+                a.clone(),
+                Point { x: a.x, y: mid },
+                Point { x: b.x, y: mid },
+                b.clone(),
+            ]);
+        } else {
+            let mid = (a.x + b.x) / 2.0;
+            out.push(vec![
+                a.clone(),
+                Point { x: mid, y: a.y },
+                Point { x: mid, y: b.y },
+                b.clone(),
+            ]);
+        }
+    }
+    out
+}
+
+/// Score a candidate path with the crate's established mount weights.
 ///
-/// The port assignment is what makes this work. Ports are already spread along
-/// the face pointing at the other box, so parallel lines stay separated without
-/// needing a jog to hold them apart.
-fn route(start: &Point, end: &Point) -> (Vec<Point>, f64, f64) {
-    (
-        vec![start.clone(), end.clone()],
-        (start.x + end.x) / 2.0,
-        (start.y + end.y) / 2.0,
-    )
+/// The weights are not re-invented here: `MOUNT_COST` already encodes that a
+/// box traversal is fatal (1e9), a crossing is expensive (3000), a bend is real
+/// but affordable (900), and length is a tiebreaker (6). Using them keeps ER
+/// consistent with how every other diagram in the product is judged.
+fn route_cost(
+    path: &[Point],
+    self_pi: usize,
+    from_i: usize,
+    to_i: usize,
+    boxes: &[ErBox],
+    others: &[Vec<Point>],
+    pending: &[(usize, usize, &ErRelationshipInput)],
+) -> f64 {
+    let mut cost = 0.0;
+
+    // Length and bends.
+    let mut len = 0.0;
+    for w in path.windows(2) {
+        len += ((w[1].x - w[0].x).powi(2) + (w[1].y - w[0].y).powi(2)).sqrt();
+    }
+    cost += len * MOUNT_COST.length;
+    cost += (path.len().saturating_sub(2)) as f64 * MOUNT_COST.bend;
+
+    // Passing through any box that is not one of its own endpoints. This is the
+    // term the greedy version violated ten times over.
+    for (bi, b) in boxes.iter().enumerate() {
+        if bi == from_i || bi == to_i {
+            continue;
+        }
+        if path.windows(2).any(|w| segment_hits_rect(&w[0], &w[1], b)) {
+            cost += MOUNT_COST.collision;
+        }
+    }
+
+    // Crossing another edge, ignoring pairs that share an entity: those meet at
+    // a box by construction, not in open space.
+    for (oi, other) in others.iter().enumerate() {
+        if oi == self_pi || other.len() < 2 {
+            continue;
+        }
+        let (oi_from, oi_to, _) = pending[oi];
+        if oi_from == from_i || oi_to == to_i || oi_from == to_i || oi_to == from_i {
+            continue;
+        }
+        let crossings = path
+            .windows(2)
+            .flat_map(|w| other.windows(2).map(move |o| (w, o)))
+            .filter(|(w, o)| segment_intersection(&w[0], &w[1], &o[0], &o[1]).is_some())
+            .count();
+        cost += crossings as f64 * MOUNT_COST.crossing;
+    }
+
+    cost
+}
+
+/// Whether a segment touches a rectangle's interior, with a little clearance so
+/// a line does not graze a box it is meant to be avoiding.
+fn segment_hits_rect(p: &Point, q: &Point, b: &ErBox) -> bool {
+    let (x0, y0) = (b.x - DETOUR_CLEARANCE, b.y - DETOUR_CLEARANCE);
+    let (x1, y1) = (
+        b.x + b.width + DETOUR_CLEARANCE,
+        b.y + b.height + DETOUR_CLEARANCE,
+    );
+    let inside = |pt: &Point| pt.x > x0 && pt.x < x1 && pt.y > y0 && pt.y < y1;
+    if inside(p) || inside(q) {
+        return true;
+    }
+    let corners = [
+        (Point { x: x0, y: y0 }, Point { x: x1, y: y0 }),
+        (Point { x: x1, y: y0 }, Point { x: x1, y: y1 }),
+        (Point { x: x1, y: y1 }, Point { x: x0, y: y1 }),
+        (Point { x: x0, y: y1 }, Point { x: x0, y: y0 }),
+    ];
+    corners
+        .iter()
+        .any(|(c, d)| segment_intersection(p, q, c, d).is_some())
 }
 
 /// Build every edge for a set of PLACED boxes.
@@ -609,22 +716,40 @@ pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
         }
     }
 
-    // Which face of each box an edge leaves from and arrives at, decided by
-    // where the other box actually IS. Dominant axis wins: a neighbour mostly
-    // to the right is met on the right face, one mostly below on the bottom
-    // face. That is only possible without columns -- when everything was in a
-    // column, every line had to leave sideways however its target was placed.
-    let sides: Vec<(Side, Side)> = pending
+    // --- surface selection: scored per PAIR, not guessed per box ------------
+    //
+    // Which face a line leaves from cannot be decided box by box. Picking the
+    // face that merely points at the other entity is a greedy local choice, and
+    // on Architext's own model it drove ten of sixteen lines straight THROUGH
+    // other entities -- the one thing the cost model treats as fatal
+    // (`MOUNT_COST.collision` is 1e9).
+    //
+    // So each edge is scored over all sixteen face pairs and a few path shapes
+    // each, against the crate's existing weights: a box traversal is
+    // effectively forbidden, a crossing costs 3000, a bend 900, and length 6
+    // per unit. A bend is not banned and not free -- it is worth paying when it
+    // buys avoiding a crossing or a box, which is exactly what those weights
+    // say.
+    //
+    // Cost depends on where the OTHER edges went, so this iterates: every edge
+    // re-picks against the current choices of the rest, in a fixed order, for a
+    // bounded number of passes.
+    let anchor = |b: &ErBox, side: Side| -> Point {
+        match side {
+            Side::Right => Point { x: b.x + b.width, y: b.y + b.height / 2.0 },
+            Side::Left => Point { x: b.x, y: b.y + b.height / 2.0 },
+            Side::Bottom => Point { x: b.x + b.width / 2.0, y: b.y + b.height },
+            Side::Top => Point { x: b.x + b.width / 2.0, y: b.y },
+        }
+    };
+
+    let mut sides: Vec<(Side, Side)> = pending
         .iter()
         .map(|&(i, j, _)| {
             let (a, b) = (&boxes[i], &boxes[j]);
             let dx = (b.x + b.width / 2.0) - (a.x + a.width / 2.0);
             let dy = (b.y + b.height / 2.0) - (a.y + a.height / 2.0);
-            // Compare each axis against the boxes' own extent, so a wide pair
-            // that is slightly offset vertically still meets face to face.
-            let span_x = (a.width + b.width) / 2.0;
-            let span_y = (a.height + b.height) / 2.0;
-            let from = if (dx.abs() / span_x.max(1.0)) >= (dy.abs() / span_y.max(1.0)) {
+            let from = if dx.abs() >= dy.abs() {
                 if dx >= 0.0 { Side::Right } else { Side::Left }
             } else if dy >= 0.0 {
                 Side::Bottom
@@ -635,33 +760,89 @@ pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
         })
         .collect();
 
-    // Order the ports on each (box, side) by where the other end sits, so the
-    // lines fan without crossing each other on the way out. Sorted by the other
-    // box's centre with an id tie-break, so the result is deterministic.
+    let mut paths: Vec<Vec<Point>> = pending
+        .iter()
+        .enumerate()
+        .map(|(pi, &(i, j, _))| {
+            let (sa, sb) = sides[pi];
+            candidate_shapes(&anchor(&boxes[i], sa), &anchor(&boxes[j], sb), sa, sb)
+                .into_iter()
+                .next()
+                .unwrap_or_default()
+        })
+        .collect();
+
+    for _ in 0..SURFACE_PASSES {
+        let mut improved = false;
+        for pi in 0..pending.len() {
+            let (i, j, _) = pending[pi];
+            let mut best: Option<(f64, (Side, Side), Vec<Point>)> = None;
+            for &sa in &SIDES {
+                for &sb in &SIDES {
+                    let (pa, pb) = (anchor(&boxes[i], sa), anchor(&boxes[j], sb));
+                    for shape in candidate_shapes(&pa, &pb, sa, sb) {
+                        let c = route_cost(&shape, pi, i, j, boxes, &paths, &pending);
+                        // Strict improvement only, with the FIRST candidate in a
+                        // fixed enumeration order winning ties, so the result
+                        // cannot depend on evaluation order.
+                        if best.as_ref().is_none_or(|(bc, _, _)| c < *bc - 1e-9) {
+                            best = Some((c, (sa, sb), shape));
+                        }
+                    }
+                }
+            }
+            if let Some((_, chosen_sides, chosen_path)) = best {
+                if chosen_sides != sides[pi] {
+                    improved = true;
+                }
+                sides[pi] = chosen_sides;
+                paths[pi] = chosen_path;
+            }
+        }
+        if !improved {
+            break;
+        }
+    }
+
+    // --- mount order on each surface ----------------------------------------
+    //
+    // Ports are not just spread along a face, they are ORDERED. Two lines
+    // leaving the same face cross each other at the box unless the one whose
+    // target sits further along the face's tangent mounts further along it too.
+    // Sorting by that projection is what makes a hub's fan open cleanly instead
+    // of braiding at the surface.
     let mut slots: BTreeMap<(usize, Side), Vec<usize>> = BTreeMap::new();
     for (pi, &(i, j, _)) in pending.iter().enumerate() {
         slots.entry((i, sides[pi].0)).or_default().push(pi);
         slots.entry((j, sides[pi].1)).or_default().push(pi);
     }
+
     let mut ports: Vec<(Point, Point)> = vec![
         (Point { x: 0.0, y: 0.0 }, Point { x: 0.0, y: 0.0 });
         pending.len()
     ];
     for ((owner, side), mut members) in slots {
-        members.sort_by(|&a, &b| {
-            let other = |pi: usize| {
-                let (i, j, _) = pending[pi];
-                if i == owner { j } else { i }
-            };
-            let (oa, ob) = (other(a), other(b));
-            let (ca, cb) =
-                (boxes[oa].y + boxes[oa].height / 2.0, boxes[ob].y + boxes[ob].height / 2.0);
-            ca.partial_cmp(&cb)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then(entities[oa].id.cmp(&entities[ob].id))
-        });
         let b = &boxes[owner];
         let horizontal = side.is_horizontal_face();
+        // Project the far end onto the face's tangent, then mount in that
+        // order. Tie-broken by entity id so the layout is reproducible.
+        members.sort_by(|&a, &b2| {
+            let key = |pi: usize| {
+                let (i, j, _) = pending[pi];
+                let other = if i == owner { j } else { i };
+                let ob = &boxes[other];
+                let along = if horizontal {
+                    ob.x + ob.width / 2.0
+                } else {
+                    ob.y + ob.height / 2.0
+                };
+                (along, pending[pi].2.to.as_str())
+            };
+            let (ka, ida) = key(a);
+            let (kb, idb) = key(b2);
+            ka.partial_cmp(&kb).unwrap_or(std::cmp::Ordering::Equal).then(ida.cmp(idb))
+        });
+
         let extent = if horizontal { b.width } else { b.height };
         let span = (extent - PORT_INSET * 2.0).max(0.0);
         let n_ports = members.len();
@@ -674,8 +855,6 @@ pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
                 Side::Top => Point { x: b.x + along, y: b.y },
             };
             let (i, _, _) = pending[pi];
-            // An edge could start and end on the same box (a self
-            // relationship), so the "from" slot is only claimed once.
             let unset = ports[pi].0.x == 0.0 && ports[pi].0.y == 0.0;
             if i == owner && sides[pi].0 == side && unset {
                 ports[pi].0 = point;
@@ -685,10 +864,37 @@ pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
         }
     }
 
+    // Re-pick the path shape for the REAL ports. Sides and mount order are
+    // settled; this only chooses how to get between the two points now that
+    // they have moved off the face centres the scoring used.
+    for pi in 0..pending.len() {
+        let (i, j, _) = pending[pi];
+        let (sa, sb) = sides[pi];
+        let mut best: Option<(f64, Vec<Point>)> = None;
+        for shape in candidate_shapes(&ports[pi].0, &ports[pi].1, sa, sb) {
+            let c = route_cost(&shape, pi, i, j, boxes, &paths, &pending);
+            if best.as_ref().is_none_or(|(bc, _)| c < *bc - 1e-9) {
+                best = Some((c, shape));
+            }
+        }
+        if let Some((_, shape)) = best {
+            paths[pi] = shape;
+        }
+    }
+
     let mut edges = Vec::new();
     for (pi, &(i, _, rel)) in pending.iter().enumerate() {
         let (from_foot, to_foot) = feet(&rel.cardinality);
-        let (points, label_x, label_y) = route(&ports[pi].0, &ports[pi].1);
+        let points = paths[pi].clone();
+        let mid = points.len() / 2;
+        let (label_x, label_y) = if points.len().is_multiple_of(2) {
+            (
+                (points[mid - 1].x + points[mid].x) / 2.0,
+                (points[mid - 1].y + points[mid].y) / 2.0,
+            )
+        } else {
+            (points[mid].x, points[mid].y)
+        };
         edges.push(ErEdge {
             from: entities[i].id.clone(),
             to: rel.to.clone(),
@@ -1026,6 +1232,69 @@ mod tests {
             plan.canvas_width,
             plan.canvas_height
         );
+    }
+
+    #[test]
+    fn no_edge_is_routed_through_an_entity() {
+        // REGRESSION, and the reason surface selection is scored rather than
+        // guessed. Picking the face that merely points at the other box is a
+        // greedy local choice: on Architext's own model it drove TEN of sixteen
+        // lines straight through other entities -- violating the most expensive
+        // term in the cost model (MOUNT_COST.collision is 1e9) ten times over.
+        //
+        // Checked with real segment-vs-rectangle intersection. A bounding-box
+        // test passes diagonals it should catch, which is how the earlier
+        // measurement read zero while the diagram was full of them.
+        for (name, input) in [
+            ("fixture", realistic_fixture_input()),
+            ("hub", hub_input()),
+            ("shared children", shared_children_input()),
+        ] {
+            let plan = plan_er(&input);
+            for e in &plan.edges {
+                for b in &plan.boxes {
+                    if b.id == e.from || b.id == e.to {
+                        continue;
+                    }
+                    let hits = e
+                        .points
+                        .windows(2)
+                        .any(|w| segment_hits_rect_bare(&w[0], &w[1], b));
+                    assert!(
+                        !hits,
+                        "{name}: {} -> {} is routed through {}",
+                        e.from, e.to, b.id
+                    );
+                }
+            }
+        }
+    }
+
+    /// Segment vs the box itself, with no routing clearance -- the render-time
+    /// question of whether a line visibly crosses a box.
+    fn segment_hits_rect_bare(p: &Point, q: &Point, b: &ErBox) -> bool {
+        let inside = |pt: &Point| {
+            pt.x > b.x + 1.0
+                && pt.x < b.x + b.width - 1.0
+                && pt.y > b.y + 1.0
+                && pt.y < b.y + b.height - 1.0
+        };
+        if inside(p) || inside(q) {
+            return true;
+        }
+        let c = [
+            (Point { x: b.x, y: b.y }, Point { x: b.x + b.width, y: b.y }),
+            (
+                Point { x: b.x + b.width, y: b.y },
+                Point { x: b.x + b.width, y: b.y + b.height },
+            ),
+            (
+                Point { x: b.x + b.width, y: b.y + b.height },
+                Point { x: b.x, y: b.y + b.height },
+            ),
+            (Point { x: b.x, y: b.y + b.height }, Point { x: b.x, y: b.y }),
+        ];
+        c.iter().any(|(u, v)| segment_intersection(p, q, u, v).is_some())
     }
 
     #[test]
