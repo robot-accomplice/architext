@@ -608,6 +608,44 @@ impl Simulation {
         true
     }
 
+    /// Build a LIVE simulation over positions that already exist, rather than
+    /// the seeded circle `new` starts from.
+    ///
+    /// Required because the common load path never runs a settle at all: a
+    /// layout-cache hit has final positions and no simulation, so without this
+    /// the first node grabbed on a cached graph would have nothing to grab.
+    /// `anchors` must be the same cluster anchors the settle used, or the
+    /// lobes would slowly dissolve while the graph is being handled.
+    pub fn from_positions(
+        positions: &[(f32, f32)],
+        edges: &[(usize, usize)],
+        anchors: &[(f64, f64)],
+        cfg: &ForceConfig,
+    ) -> Self {
+        let bodies: Vec<Body> =
+            positions.iter().map(|&(x, y)| Body { x: x as f64, y: y as f64 }).collect();
+        let node_count = bodies.len();
+        Self {
+            vel: vec![(0.0, 0.0); node_count],
+            bodies,
+            edges: edges.to_vec(),
+            cfg: *cfg,
+            gravity: cfg.gravity * node_count as f64,
+            initial_temperature: cfg.k * 2.0,
+            tick: 0,
+            converged: false,
+            anchors: anchors.to_vec(),
+            live: true,
+            pin: None,
+            extra_ticks: 0,
+        }
+    }
+
+    /// Whether this simulation is in interaction mode.
+    pub fn is_live(&self) -> bool {
+        self.live
+    }
+
     /// Switch between the settle integrator and the INTERACTION one.
     ///
     /// Enabling reopens the simulation (a settled one is `converged`, and

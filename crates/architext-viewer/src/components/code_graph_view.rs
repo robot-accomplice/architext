@@ -116,6 +116,13 @@ const STALL_RESUME_THRESHOLD_MS: f64 = 500.0;
 /// (~16ms) and below the point a user perceives a delay as unexplained.
 const PROGRESS_PANEL_REVEAL_MS: f64 = 200.0;
 
+/// Screen-space radius, in canvas pixels, within which a pointer resolves to a
+/// node — for BOTH selection and grabbing. One constant because a click and a
+/// grab that disagree about which node is under the cursor is a defect the
+/// user experiences as the graph picking up the wrong thing. Was two inline
+/// terms (`6.0 / zoom + 20.0 / zoom`) at the click site.
+const GRAB_RADIUS_PX: f32 = 26.0;
+
 /// `prefers-reduced-motion: reduce` — read once per tier (re)seed and stashed
 /// on `ViewState`, never polled per frame. Motion-reduced users fall back to
 /// the pre-rework "instant reveal" (see `code_graph_view_model::Wavefront`'s
@@ -1271,23 +1278,43 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 if let Some(d) = drv_guard.as_mut() {
                     if !d.is_done() {
                         ticked = true;
+                        // A LIVE driver is the user's hand on the graph, not a
+                        // settle. `layout_settling` used to gate three separate
+                        // things at once -- the camera refit, the "click-to-
+                        // select deferred" status, and the click handler -- and
+                        // live mode wants none of them: the camera must hold
+                        // still under a drag, the graph is not settling, and
+                        // clicking must keep working while it moves.
+                        let live_now = d.is_live();
                         let done =
                             d.step_within(LAYOUT_FRAME_BUDGET_MS, || {
                                 perf.as_ref().map(|p| p.now()).unwrap_or(0.0)
                             });
                         let positions = d.positions_f32();
-                        if done {
+                        // Only a SETTLE produces a cacheable layout. Caching a
+                        // live frame would persist wherever the user happened
+                        // to have dragged something.
+                        if done && !live_now {
                             positions_for_cache = Some(positions.clone());
                         }
                         let (ticks, max) = (d.ticks_run(), d.max_ticks());
-                        // Never stomp a camera the user already moved.
-                        let refit = !user_moved_camera.get();
+                        // Never stomp a camera the user already moved -- and
+                        // never re-frame mid-drag, which would yank the view
+                        // out from under the hand that is moving the node.
+                        let refit = !user_moved_camera.get() && !live_now;
+                        // The graph is moving, so the hit tree has to move with
+                        // it: a grab resolved against settled positions would
+                        // pick up whichever node USED to be under the cursor.
+                        let live_tree = live_now.then(|| d.hit_tree());
                         // Build the status line INSIDE the borrow but set the
                         // signal AFTER it is released — a signal write runs
                         // dependent effects synchronously, and one of those
                         // borrowing `vs` here would double-borrow the RefCell.
                         let frame_facts = if let Some(v) = vs.borrow_mut().as_mut() {
                             v.positions = positions;
+                            if let Some(tree) = live_tree {
+                                v.tree = tree;
+                            }
                             // Re-fit the camera on EVERY ticked frame, not
                             // just tick 0 and the final settle: the sim's
                             // footprint moves a great deal across the whole
@@ -1311,15 +1338,23 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                                     v.pan_y = pan_y;
                                 }
                             }
-                            Some((
-                                format!(
-                                    "{} nodes / {} edges — settling layout (tick {ticks}/{max}) — click-to-select deferred",
+                            if live_now {
+                                // Nothing to report: the graph is being
+                                // handled, not settled. The settle status here
+                                // would announce "click-to-select deferred"
+                                // while clicking works perfectly well.
+                                None
+                            } else {
+                                Some((
+                                    format!(
+                                        "{} nodes / {} edges — settling layout (tick {ticks}/{max}) — click-to-select deferred",
+                                        v.graph.node_count(),
+                                        v.graph.directed_edges.len()
+                                    ),
                                     v.graph.node_count(),
-                                    v.graph.directed_edges.len()
-                                ),
-                                v.graph.node_count(),
-                                v.graph.directed_edges.len(),
-                            ))
+                                    v.graph.directed_edges.len(),
+                                ))
+                            }
                         } else {
                             None
                         };
@@ -1344,7 +1379,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                                 }));
                             }
                         }
-                        if done {
+                        if done && !live_now {
                             settled_ticks = Some(ticks);
                             let tree = d.hit_tree();
                             if let Some(v) = vs.borrow_mut().as_mut() {
@@ -1598,19 +1633,148 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     let moved: Rc<Cell<bool>> = Rc::new(Cell::new(false));
     let last: Rc<Cell<(f64, f64)>> = Rc::new(Cell::new((0.0, 0.0)));
 
+    // The node currently held under the cursor. `None` means the drag is a
+    // camera pan, which is what every drag used to be.
+    let grabbed: Rc<Cell<Option<usize>>> = Rc::new(Cell::new(None));
+
+    /// Cursor (client px) → world coordinates, the conversion every hit-test
+    /// and pin needs. Lifted out of `on_click`, which had it inline, so the
+    /// grab path cannot drift from the selection path — two copies of this
+    /// arithmetic is how a click and a grab end up disagreeing about which
+    /// node is under the pointer.
+    fn cursor_world(
+        canvas: &web_sys::HtmlCanvasElement,
+        v: &ViewState,
+        client_x: f64,
+        client_y: f64,
+    ) -> (f64, f64) {
+        let rect = canvas.get_bounding_client_rect();
+        let scale_x = canvas.width() as f64 / rect.width();
+        let scale_y = canvas.height() as f64 / rect.height();
+        let sx = (client_x - rect.left()) * scale_x;
+        let sy = (client_y - rect.top()) * scale_y;
+        (
+            ((sx as f32 - v.pan_x) / v.zoom) as f64,
+            ((sy as f32 - v.pan_y) / v.zoom) as f64,
+        )
+    }
+
     let on_mouse_down = {
         let (dragging, moved, last) = (dragging.clone(), moved.clone(), last.clone());
+        let (vs, layout, grabbed) = (vs.clone(), layout.clone(), grabbed.clone());
         move |ev: ev::MouseEvent| {
+            // Text selection during a canvas drag is suppressed in CSS
+            // (`user-select: none` on `.code-graph-view__canvas`), NOT with
+            // `prevent_default()` here: leptos registers these listeners
+            // delegated and PASSIVE, so the call is a no-op that only logs
+            // "Unable to preventDefault inside passive event listener".
             dragging.set(true);
             moved.set(false);
             last.set((ev.client_x() as f64, ev.client_y() as f64));
+            grabbed.set(None);
+
+            // Is there a node under the cursor? A hit GRABS it; a miss falls
+            // through to the camera pan below, so dragging empty space is
+            // unchanged. Never while settling: the hit tree still covers
+            // pre-settle positions, so a grab would seize the wrong node --
+            // the same reason selection is deferred there.
+            let Some(canvas) = canvas_ref.get_untracked() else {
+                diagnostics::record(diag_instance, "grab_bail", Some("reason=no_canvas".into()));
+                return;
+            };
+            let hit = {
+                let Ok(guard) = vs.try_borrow() else {
+                    // `try_borrow`, never `borrow`: the RAF loop holds `vs`
+                    // mutably while it ticks, and a panic in wasm traps the
+                    // WHOLE instance — the same hazard the click path documents.
+                    diagnostics::record(diag_instance, "grab_bail", Some("reason=vs_busy".into()));
+                    return;
+                };
+                let Some(v) = guard.as_ref() else {
+                    diagnostics::record(diag_instance, "grab_bail", Some("reason=no_view_state".into()));
+                    return;
+                };
+                if v.layout_settling {
+                    diagnostics::record(diag_instance, "grab_bail", Some("reason=settling".into()));
+                    return;
+                }
+                let (gx, gy) = cursor_world(&canvas, v, ev.client_x() as f64, ev.client_y() as f64);
+                v.tree
+                    .query_point(gx, gy, (GRAB_RADIUS_PX / v.zoom) as f64)
+                    .filter(|&i| v.cull.filter_visible[i])
+                    .map(|i| (i, gx, gy))
+            };
+            let Some((node, gx, gy)) = hit else {
+                // A miss is the camera-pan gesture, not a fault — but it is
+                // also indistinguishable from a grab that silently failed, so
+                // it is recorded. Rule 13: a new interaction surface ships
+                // with the state needed to explain it afterwards.
+                diagnostics::record(diag_instance, "grab_missed", None);
+                return;
+            };
+
+            // A cache-sourced layout has no simulation at all, so build one
+            // over the positions on screen. Reduced motion gets the pin
+            // WITHOUT the physics: the node follows the cursor, the web does
+            // not spring, because a graph that keeps moving is precisely what
+            // that setting asks us not to do.
+            let mut drv = layout.borrow_mut();
+            if drv.is_none() {
+                if let Some(v) = vs.borrow().as_ref() {
+                    if !v.reduced_motion {
+                        *drv = Some(LayoutDriver::live_from_positions(
+                            &v.positions,
+                            &v.graph.layout_edges,
+                            // The SAME anchors the settle used — deterministic
+                            // from the cluster graph, so the lobes hold their
+                            // territory while the graph is being handled
+                            // instead of slowly dissolving toward the origin.
+                            &cluster_anchors(
+                                &v.graph.clusters,
+                                v.graph.cluster_count,
+                                &v.graph.layout_edges,
+                                &ForceConfig::default(),
+                            ),
+                            &ForceConfig::default(),
+                        ));
+                    }
+                }
+            }
+            let live = drv.as_ref().map(|d| d.is_live()).unwrap_or(false);
+            if let Some(d) = drv.as_mut() {
+                d.set_pin(Some((node, gx, gy)));
+            }
+            diagnostics::record(
+                diag_instance,
+                "node_grabbed",
+                Some(format!("node={node} at=({gx:.0},{gy:.0}) live={live}")),
+            );
+            grabbed.set(Some(node));
+            dragging.set(false); // this gesture moves a NODE, not the camera
         }
     };
     let on_mouse_move = {
         let vs = vs.clone();
         let user_moved_camera = user_moved_camera.clone();
         let (dragging, moved, last) = (dragging.clone(), moved.clone(), last.clone());
+        let (layout, grabbed) = (layout.clone(), grabbed.clone());
         move |ev: ev::MouseEvent| {
+            // Holding a node: move the PIN, not the camera. The simulation
+            // does the rest -- neighbours are pulled along by the same edge
+            // forces that laid the graph out.
+            if let Some(node) = grabbed.get() {
+                moved.set(true);
+                if let (Some(canvas), Some(v)) =
+                    (canvas_ref.get_untracked(), vs.borrow().as_ref())
+                {
+                    let (gx, gy) =
+                        cursor_world(&canvas, v, ev.client_x() as f64, ev.client_y() as f64);
+                    if let Some(d) = layout.borrow_mut().as_mut() {
+                        d.set_pin(Some((node, gx, gy)));
+                    }
+                }
+                return;
+            }
             if !dragging.get() {
                 return;
             }
@@ -1623,8 +1787,9 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             }
             last.set((cx, cy));
             if let (Some(canvas), Some(v)) = (canvas_ref.get_untracked(), vs.borrow_mut().as_mut()) {
-                // CSS px → backing-store px (the canvas is 1600x1000
-                // intrinsic, stretched to its CSS box).
+                // CSS px → backing-store px. Since the bitmap tracks the box
+                // at device-pixel ratio these differ only by the DPR, but the
+                // conversion stays explicit rather than assuming it.
                 let rect = canvas.get_bounding_client_rect();
                 let scale_x = canvas.width() as f64 / rect.width();
                 let scale_y = canvas.height() as f64 / rect.height();
@@ -1633,7 +1798,22 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             }
         }
     };
-    let end_drag = { let dragging = dragging.clone(); move |_: ev::MouseEvent| dragging.set(false) };
+    let end_drag = {
+        let (dragging, grabbed, layout) = (dragging.clone(), grabbed.clone(), layout.clone());
+        move |_: ev::MouseEvent| {
+            dragging.set(false);
+            // Releasing clears the pin and leaves the simulation running. The
+            // node does NOT stop where it was dropped -- the tension stored in
+            // its edges pulls it back through equilibrium and it rings down to
+            // rest, which is the whole point of the live integrator.
+            if let Some(node) = grabbed.take() {
+                if let Some(d) = layout.borrow_mut().as_mut() {
+                    d.set_pin(None);
+                }
+                diagnostics::record(diag_instance, "node_released", Some(format!("node={node}")));
+            }
+        }
+    };
 
     let on_wheel = {
         let vs = vs.clone();
@@ -1724,7 +1904,7 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 }
                 let gx = ((sx as f32) - v.pan_x) / v.zoom;
                 let gy = ((sy as f32) - v.pan_y) / v.zoom;
-                let hit_r = 6.0 / v.zoom + 20.0 / v.zoom;
+                let hit_r = GRAB_RADIUS_PX / v.zoom;
                 let hit = v
                     .tree
                     .query_point(gx as f64, gy as f64, hit_r as f64)

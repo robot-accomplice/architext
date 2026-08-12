@@ -53,6 +53,32 @@ impl LayoutDriver {
         }
     }
 
+    /// A LIVE driver over positions that already exist — the graph the user is
+    /// looking at, whether it came from a settle or straight from the layout
+    /// cache. See [`Simulation::from_positions`].
+    pub fn live_from_positions(
+        positions: &[(f32, f32)],
+        edges: &[(usize, usize)],
+        anchors: &[(f64, f64)],
+        cfg: &ForceConfig,
+    ) -> Self {
+        Self {
+            sim: Simulation::from_positions(positions, edges, anchors, cfg),
+            max_ticks: cfg.max_ticks,
+        }
+    }
+
+    /// Hold node `i` at a world position, or release it. See
+    /// [`Simulation::set_pin`].
+    pub fn set_pin(&mut self, pin: Option<(usize, f64, f64)>) {
+        self.sim.set_pin(pin);
+    }
+
+    /// Whether this driver is running the interaction integrator.
+    pub fn is_live(&self) -> bool {
+        self.sim.is_live()
+    }
+
     /// Advance the layout until it is done or `now()` reports more than
     /// `budget_ms` elapsed — but ALWAYS at least one tick per call, so a tick
     /// slower than the budget can't starve progress. Returns `true` when the

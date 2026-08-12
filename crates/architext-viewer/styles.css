@@ -2990,7 +2990,11 @@ button.blast-chip { cursor: pointer; }
 /* Canvas wrap — a positioned ancestor so the staged progress panel below can
    float centred OVER the canvas instead of docked in the toolbar chrome. */
 .code-graph-view__canvas-wrap { position: relative; flex: 1; min-height: 0; display: flex; }
-.code-graph-view__canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: grab; background: #08090b; }
+/* `user-select: none` because a drag across the canvas otherwise selects text
+   in the surrounding panels. It cannot be done with `prevent_default()` in the
+   mousedown handler: leptos registers those listeners passive, so the call is
+   a no-op and only logs a console error. */
+.code-graph-view__canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: grab; background: #08090b; user-select: none; }
 .code-graph-view__canvas:active { cursor: grabbing; }
 /* Staged, centred progress panel — the PRIMARY signal that the app is
    working, not broken, while the graph model builds and the force layout
