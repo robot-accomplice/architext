@@ -108,7 +108,38 @@ pub struct NodeView {
 
 /// Render one node card. `selected` toggles the `--accent` state treatment;
 /// `on_select` fires the node id on click so the inspector can bind to it.
+/// Corner radius of a node card. Was an inline "8" on the card rect while the
+/// top bar assumed square corners, which is how the two got out of agreement.
+const CARD_RADIUS: f64 = 8.0;
+/// Thickness of the category bar along the card's top edge.
+const TOPBAR_H: f64 = 2.0;
+
+/// The category bar as a band that follows the card's rounded top edge.
+///
+/// It used to be a full-width square `rect` laid over an `rx=8` card. At the
+/// card's top the rounded corner is inset by the full radius, so the bar's
+/// square ends hung outside the card silhouette -- 8px per side at the very
+/// top, tapering to 2.7px at its lower edge. The geometry was identical on
+/// every node; what varied was how visible the overhang was against each
+/// category colour, which is what made the bar look differently placed from
+/// one node to the next.
+///
+/// The band is bounded left and right by the card's own corner arcs, so it can
+/// no longer disagree with the shape it sits on.
+fn topbar_path(width: f64) -> String {
+    let r = CARD_RADIUS;
+    let t = TOPBAR_H.min(r);
+    // Horizontal inset of the card's edge at the bar's lower edge.
+    let inset = r - (r * r - (r - t) * (r - t)).sqrt();
+    format!(
+        "M{r} 0 H{top_right} A{r} {r} 0 0 1 {bottom_right} {t} H{inset} A{r} {r} 0 0 1 {r} 0 Z",
+        top_right = width - r,
+        bottom_right = width - inset,
+    )
+}
+
 #[component]
+
 pub fn DiagramNode(
     node: NodeView,
     #[prop(into)] selected: Signal<bool>,
@@ -159,9 +190,10 @@ pub fn DiagramNode(
             on:click=move |_| on_select.call(id_for_click.clone())
         >
             // Card body — 8px radius via --node-card-radius (set in CSS).
-            <rect class="flow-node__card" width=width height=height rx="8" ry="8"></rect>
-            // 2px category top-bar in the node's role color (single source).
-            <rect class="flow-node__topbar" width=width height="2" fill=role.clone()></rect>
+            <rect class="flow-node__card" width=width height=height rx=CARD_RADIUS ry=CARD_RADIUS></rect>
+            // 2px category top-bar in the node's role color (single source),
+            // following the card's rounded top edge rather than squaring it off.
+            <path class="flow-node__topbar" d=topbar_path(width) fill=role.clone()></path>
             // Upper-left type glyph, tinted to the SAME role token as the bar.
             <g class="flow-node__icon" transform=icon_transform style=("color", icon_color)>
                 <path d=icon_d></path>
@@ -295,5 +327,38 @@ mod wrap_tests {
     fn empty_or_single_word_never_dropped() {
         assert_eq!(wrap_name("", W), vec![""]);
         assert_eq!(wrap_name("Supercalifragilistic", W).len(), 1);
+    }
+}
+
+#[cfg(test)]
+mod topbar_tests {
+    use super::*;
+
+    #[test]
+    fn the_category_bar_stays_inside_the_cards_rounded_corners() {
+        // REGRESSION: the bar was a full-width square rect over an rx=8 card,
+        // so its ends hung outside the card outline -- 8px per side at the top.
+        // The geometry was the same on every node; only how visible the
+        // overhang was changed with the category colour, which is what made it
+        // look inconsistently placed.
+        let d = topbar_path(136.0);
+        // Starts at the radius, not at zero.
+        assert!(d.starts_with("M8 0 "), "band must start at the corner radius: {d}");
+        // Never reaches the card's outer edge at the top.
+        assert!(!d.contains("H136"), "band must not span the full width: {d}");
+        // Its lower edge is inset by the corner arc, not square.
+        let inset = 8.0 - (64.0f64 - 36.0).sqrt();
+        assert!(
+            d.contains(&format!("{inset}")),
+            "band's lower edge should be inset by {inset:.4}: {d}"
+        );
+    }
+
+    #[test]
+    fn the_band_scales_with_the_card_width() {
+        // Parked cards render at natural size and scale, and C4 cards differ in
+        // width, so the band is computed rather than fixed.
+        assert_ne!(topbar_path(136.0), topbar_path(200.0));
+        assert!(topbar_path(200.0).contains("H192"));
     }
 }
