@@ -112,6 +112,17 @@
   --sev-medium:   #ffd21f;
   --sev-low:      #849495;   /* lowest — fades to dim */
 
+  /* ── Cardinality hues (ER relationships) — a NOMINAL set, not a ramp ──────
+     Cardinality has no order: many-to-many is not "more" than one-to-one, so
+     these are three distinct hues rather than a scale. Deliberately far apart
+     on the wheel (cyan / amber / violet) so they separate at a 1.25px stroke
+     and for the common forms of colour blindness. Colour is the THIRD channel
+     here -- the crow's foot and the label already carry the meaning -- so it
+     reinforces rather than being the only cue. */
+  --er-one-to-one:   #00e5ff;
+  --er-one-to-many:  #ffd21f;
+  --er-many-to-many: #a855ff;
+
   /* ── Sensitivity scale (data classification) — its own ordinal ramp ──────── */
   --sens-high:   #ff5c7a;
   --sens-medium: #ffd21f;
@@ -216,6 +227,11 @@
   --c4-module: #0f8a55;
   --c4-system: #0a86a6;
   --c4-queue: #c26a09;
+
+  /* Cardinality hues, darkened for the light canvas at the same separation. */
+  --er-one-to-one:   #0a86a6;
+  --er-one-to-many:  #a87800;
+  --er-many-to-many: #7c3aed;
 
   --sev-critical: #d3253f;
   --sev-high:     #c26a09;
@@ -3487,12 +3503,22 @@ button.blast-chip { cursor: pointer; }
   font-style: italic;
 }
 
+/* Each relationship line, its crow's feet and its label pill all carry the
+   cardinality hue, so the three parts of one relationship read as one thing. */
 .er-edge__line,
 .er-edge__foot {
   fill: none;
-  stroke: var(--line-strong);
+  stroke: var(--er-stroke, var(--line-strong));
   stroke-width: 1.25;
 }
+
+.er-edge--one-to-one { --er-stroke: var(--er-one-to-one); }
+.er-edge--one-to-many { --er-stroke: var(--er-one-to-many); }
+.er-edge--many-to-many { --er-stroke: var(--er-many-to-many); }
+
+.er-edge__label-group--one-to-one { --er-stroke: var(--er-one-to-one); }
+.er-edge__label-group--one-to-many { --er-stroke: var(--er-one-to-many); }
+.er-edge__label-group--many-to-many { --er-stroke: var(--er-many-to-many); }
 
 .er-edge__label {
   fill: var(--dim);
@@ -3523,8 +3549,8 @@ button.blast-chip { cursor: pointer; }
    where they overlap, so it gets its own ground. */
 .er-edge__label-pill {
   fill: var(--panel);
-  stroke: var(--line);
-  stroke-width: 0.75;
+  stroke: var(--er-stroke, var(--line));
+  stroke-width: 1;
 }
 
 /* Entities can be dragged, so say so on hover and while moving. */
@@ -3552,4 +3578,29 @@ button.blast-chip { cursor: pointer; }
 .repo-tree--previewing .repo-row__time,
 .repo-tree--previewing .repo-row__owner {
   display: none;
+}
+
+/* Cardinality legend. Colour that cannot be decoded is decoration, so the key
+   is on screen rather than in documentation. */
+.data-model-panel__legend {
+  display: flex;
+  align-items: center;
+  gap: var(--pad);
+  margin-left: auto;
+  color: var(--dim);
+  font-size: var(--overline-size);
+  letter-spacing: var(--overline-tracking);
+  text-transform: uppercase;
+}
+
+.data-model-panel__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.data-model-panel__legend-swatch {
+  width: 18px;
+  height: 0;
+  border-top: 2px solid var(--er-stroke, var(--line-strong));
 }

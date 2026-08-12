@@ -92,6 +92,29 @@ pub fn to_er_input(doc: &EntitiesDoc) -> ErInput {
     }
 }
 
+/// The three cardinalities, with the label and modifier each one renders with.
+///
+/// Nominal, not ordinal: many-to-many is not "more" than one-to-one, so these
+/// get distinct hues rather than positions on a ramp. Kept in one place so the
+/// legend and the edges cannot disagree about which colour means what.
+pub const CARDINALITIES: [(&str, &str); 3] = [
+    ("one-to-one", "1:1"),
+    ("one-to-many", "1:N"),
+    ("many-to-many", "N:N"),
+];
+
+/// CSS modifier suffix for a cardinality, or None if the value is unrecognised.
+///
+/// Returns None rather than guessing: `cardinality` is an enumerated field, so
+/// an unknown value means the document is ahead of this build, and an unhued
+/// line is a better answer than a wrong hue.
+pub fn cardinality_modifier(cardinality: &str) -> Option<&'static str> {
+    CARDINALITIES
+        .iter()
+        .find(|(id, _)| *id == cardinality)
+        .map(|(id, _)| *id)
+}
+
 /// The short glyph shown in an attribute row's key column.
 pub fn key_glyph(key: Option<&str>) -> &'static str {
     match key {
@@ -245,6 +268,19 @@ mod tests {
             );
         }
         assert!(Projection::Schema.unavailable_reason().is_none());
+    }
+
+    #[test]
+    fn every_pinned_cardinality_has_a_hue_and_unknown_values_get_none() {
+        // WHY: cardinality is one of the few things the schema pins, precisely
+        // because the renderer draws something specific per value. If a pinned
+        // value had no modifier it would render unhued while the legend claimed
+        // otherwise -- the legend and the edges must agree.
+        for (id, short) in CARDINALITIES {
+            assert_eq!(cardinality_modifier(id), Some(id), "{id} must have a hue");
+            assert!(!short.is_empty());
+        }
+        assert_eq!(cardinality_modifier("one-to-none"), None);
     }
 
     #[test]

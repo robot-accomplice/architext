@@ -13,7 +13,8 @@ use architext_routing::plan_er::{
 };
 
 use crate::data_model_view_model::{
-    fk_annotation, fk_tooltip, key_glyph, to_er_input, Projection,
+    cardinality_modifier, fk_annotation, fk_tooltip, key_glyph, to_er_input, Projection,
+    CARDINALITIES,
 };
 use crate::state::use_app_state;
 
@@ -62,6 +63,21 @@ pub fn DataModelPanel() -> impl IntoView {
                         }
                     })
                     .collect_view()}
+                <div class="data-model-panel__legend" aria-label="Cardinality key">
+                    {CARDINALITIES
+                        .iter()
+                        .map(|(id, short)| {
+                            view! {
+                                <span class=format!(
+                                    "data-model-panel__legend-item er-edge__label-group--{id}"
+                                )>
+                                    <span class="data-model-panel__legend-swatch"></span>
+                                    {*short}
+                                </span>
+                            }
+                        })
+                        .collect_view()}
+                </div>
             </div>
 
             {move || {
@@ -209,8 +225,11 @@ fn ErDiagram(plan: architext_routing::plan_er::ErPlan, input: ErInput) -> impl I
                                 let d = path_with_hops(&e);
                                 let feet = foot_paths(&e);
                                 let _ = &e.label;
+                                let hue = cardinality_modifier(&e.cardinality)
+                                    .map(|m| format!("er-edge--{m}"))
+                                    .unwrap_or_default();
                                 view! {
-                                    <g class="er-edge">
+                                    <g class=format!("er-edge {hue}")>
                                         <path class="er-edge__line" d=d/>
                                         {feet
                                             .into_iter()
@@ -261,8 +280,11 @@ fn ErDiagram(plan: architext_routing::plan_er::ErPlan, input: ErInput) -> impl I
                                 let text = e.label.clone()?;
                                 let (lx, ly) = (e.label_x, e.label_y);
                                 let w = text.chars().count() as f64 * CHAR_W + PILL_PAD_X * 2.0;
+                                let hue = cardinality_modifier(&e.cardinality)
+                                    .map(|m| format!("er-edge__label-group--{m}"))
+                                    .unwrap_or_default();
                                 Some(view! {
-                                    <g class="er-edge__label-group">
+                                    <g class=format!("er-edge__label-group {hue}")>
                                         <rect
                                             class="er-edge__label-pill"
                                             x=lx - w / 2.0
