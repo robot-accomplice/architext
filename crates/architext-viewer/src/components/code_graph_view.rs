@@ -147,6 +147,93 @@ fn should_await_warm(tier: Tier, warm: &CodeGraphWarm, cg_sha: &str, cg_tree: &s
         }
 }
 
+/// The backing-store (bitmap) size a canvas whose CSS box is `css_w` x
+/// `css_h` must carry on a display of ratio `dpr`.
+///
+/// A `<canvas>` has TWO sizes: the bitmap it draws into (`width`/`height`
+/// attributes) and the box CSS lays out. The browser scales the first onto
+/// the second INDEPENDENTLY PER AXIS, so any mismatch in aspect is a silent
+/// anisotropic distortion of everything drawn — circles become ellipses and
+/// the whole graph squashes. This view previously hardcoded a 1600x1000
+/// bitmap into a fluid flex box, which distorted by exactly
+/// `backing_aspect / box_aspect` (measured: 2.08x in a narrow pane, and
+/// changing with every resize).
+///
+/// Device pixels, not CSS pixels: the camera fit, `uResolution` and the
+/// mouse CSS-to-canvas conversion all read `canvas.width()`/`height()`, so
+/// the whole pipeline is already in this space and gets HiDPI sharpness for
+/// free. Floored at 1 so a collapsed pane cannot produce a zero-sized
+/// bitmap (invalid, and a divide-by-zero in the clip-space transform).
+fn backing_store_size(css_w: f64, css_h: f64, dpr: f64) -> (u32, u32) {
+    let px = |v: f64| ((v * dpr).round() as u32).max(1);
+    (px(css_w), px(css_h))
+}
+
+/// The size to assign, or `None` when the bitmap already matches. Assigning
+/// `canvas.width` reallocates AND clears the bitmap, so the RAF loop must
+/// only do it on a real change.
+fn backing_store_resize(
+    current: (u32, u32),
+    css_w: f64,
+    css_h: f64,
+    dpr: f64,
+) -> Option<(u32, u32)> {
+    let target = backing_store_size(css_w, css_h, dpr);
+    (target != current).then_some(target)
+}
+
+#[cfg(test)]
+mod backing_store_tests {
+    use super::*;
+
+    #[test]
+    fn a_canvas_box_of_any_shape_gets_a_backing_store_of_the_same_shape() {
+        // WHY: a <canvas> whose bitmap aspect differs from its CSS box aspect
+        // is stretched PER AXIS by the browser, which distorts the graph
+        // silently — it still renders, just wrong, and the wrongness changes
+        // with the pane. Measured live at a 132x174 box against the old
+        // hardcoded 1600x1000 bitmap: 0.083 on x, 0.173 on y, a 2.08x squash.
+        // The invariant that kills that class of defect is aspect equality.
+        for (w, h) in [(1098.0, 714.0), (132.0, 174.0), (1600.0, 1000.0), (400.0, 400.0)] {
+            let (bw, bh) = backing_store_size(w, h, 2.0);
+            let box_aspect = w / h;
+            let backing_aspect = bw as f64 / bh as f64;
+            assert!(
+                (backing_aspect - box_aspect).abs() / box_aspect < 0.01,
+                "{w}x{h} box got a {bw}x{bh} bitmap: aspect {backing_aspect} vs {box_aspect}"
+            );
+        }
+    }
+
+    #[test]
+    fn the_backing_store_is_sized_in_device_pixels() {
+        // WHY: at dpr 2 a CSS-pixel-sized bitmap is upscaled by the browser,
+        // so the graph renders soft on every HiDPI display. Everything
+        // downstream (fit_camera, uResolution, the mouse scale_x/scale_y
+        // conversion) already reads canvas.width()/height(), so device pixels
+        // are self-consistent — pan/zoom simply live in that space.
+        assert_eq!(backing_store_size(800.0, 600.0, 2.0), (1600, 1200));
+        assert_eq!(backing_store_size(800.0, 600.0, 1.0), (800, 600));
+    }
+
+    #[test]
+    fn a_collapsed_pane_never_yields_a_zero_dimension_bitmap() {
+        // WHY: a hidden/collapsed panel reports a 0-height box. A 0-sized
+        // backing store is an invalid canvas and divides by zero in the
+        // clip-space transform (`screen.y / uResolution.y`).
+        let (w, h) = backing_store_size(0.0, 0.0, 2.0);
+        assert!(w >= 1 && h >= 1, "got {w}x{h}");
+    }
+
+    #[test]
+    fn an_unchanged_box_reports_no_resize_so_the_bitmap_is_not_cleared_per_frame() {
+        // WHY: this runs in the RAF loop. Assigning canvas.width reallocates
+        // and CLEARS the bitmap, so it must happen only on a real change.
+        assert_eq!(backing_store_resize((1600, 1200), 800.0, 600.0, 2.0), None);
+        assert_eq!(backing_store_resize((1600, 1000), 800.0, 600.0, 2.0), Some((1600, 1200)));
+    }
+}
+
 #[cfg(test)]
 mod should_await_warm_tests {
     use super::*;
@@ -1382,6 +1469,25 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                         let fps = (ft.len() as f64 - 1.0) / (span / 1000.0);
                         fps_label.set(format!("{fps:.0} fps"));
                     }
+                }
+            }
+            // Keep the BITMAP in lockstep with the CSS box. Unconditional --
+            // not gated on `user_moved_camera` -- because a mismatch is not a
+            // framing choice, it is the browser stretching the render per
+            // axis. This is also what makes the reframe below fire at all:
+            // it compares canvas.width()/height(), which were previously
+            // hardcoded constants that never changed.
+            if let Some(canvas) = canvas_ref.get_untracked() {
+                let rect = canvas.get_bounding_client_rect();
+                let dpr = web_sys::window().map(|w| w.device_pixel_ratio()).unwrap_or(1.0);
+                if let Some((w, h)) = backing_store_resize(
+                    (canvas.width(), canvas.height()),
+                    rect.width(),
+                    rect.height(),
+                    dpr,
+                ) {
+                    canvas.set_width(w);
+                    canvas.set_height(h);
                 }
             }
             // Reframe when the canvas is a different size than the camera was
