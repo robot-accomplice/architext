@@ -1830,6 +1830,20 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                         on:input=move |e| filter.update(|f| f.show_dead = event_target_checked(&e))/>
                     "Dead (candidates)"
                 </label>
+                // Split out of "Dead (candidates)": an exported symbol's callers
+                // can live outside the analysed module, so it gets a class of
+                // its own rather than being asserted dead. Its own toggle so
+                // narrowing `dead` never silently loses a node.
+                <label
+                    class="code-graph-view__check"
+                    title="Exported, with no caller found inside the analysed module. \
+                           Not a dead-code candidate — this analysis cannot show a public \
+                           function is unused."
+                >
+                    <input type="checkbox" prop:checked=move || filter.get().show_public_unreferenced
+                        on:input=move |e| filter.update(|f| f.show_public_unreferenced = event_target_checked(&e))/>
+                    "Public, unreferenced"
+                </label>
                 <label class="code-graph-view__check">
                     <input type="checkbox" prop:checked=move || filter.get().show_test_only
                         on:input=move |e| filter.update(|f| f.show_test_only = event_target_checked(&e))/>

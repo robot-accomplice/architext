@@ -184,10 +184,13 @@ pub struct GraphModel {
     pub labels: Vec<String>,
     pub degree: Vec<u32>,
     pub radius: Vec<f32>,
-    // The four reachability-class slices `FilterState::visible_nodes`
+    // The five reachability-class slices `FilterState::visible_nodes`
     // consumes, in that order.
     pub prod_reachable: Vec<bool>,
     pub dead: Vec<bool>,
+    /// Exported and unreached. Split out of `dead` because the analysis
+    /// cannot see a public symbol's callers — see `Reach::PublicUnreferenced`.
+    pub public_unreferenced: Vec<bool>,
     pub test_only: Vec<bool>,
     pub generated: Vec<bool>,
     /// Entrypoint indices (function tier only) — the `Roots` animation seeds.
@@ -490,6 +493,7 @@ pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
     let mut degree = Vec::new();
     let mut prod_reachable = Vec::new();
     let mut dead = Vec::new();
+    let mut public_unreferenced = Vec::new();
     let mut test_only = Vec::new();
     let mut generated = Vec::new();
     let mut roots = Vec::new();
@@ -512,6 +516,10 @@ pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
                 // filter only has bite at the function tier (spike behaviour).
                 prod_reachable.push(true);
                 dead.push(m.counts.dead > 0 && m.counts.dead == m.counts.functions);
+                // Module `counts` carry no export breakdown (contract:
+                // `functions` / `dead` / `test_only` only), so the split has
+                // no bite at this tier and every module stays out of the class.
+                public_unreferenced.push(false);
                 test_only.push(m.counts.test_only > 0 && m.counts.test_only == m.counts.functions);
                 generated.push(false);
             }
@@ -534,7 +542,8 @@ pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
                 labels.push(f.symbol.clone());
                 degree.push(f.fan_in + f.fan_out);
                 prod_reachable.push(f.prod_reachable);
-                dead.push(!f.reachable);
+                dead.push(!f.reachable && !f.exported);
+                public_unreferenced.push(!f.reachable && f.exported);
                 test_only.push(f.test);
                 generated.push(f.generated);
                 if f.root {
@@ -577,6 +586,7 @@ pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
         radius,
         prod_reachable,
         dead,
+        public_unreferenced,
         test_only,
         generated,
         roots,
@@ -649,6 +659,7 @@ pub fn cull(graph: &GraphModel, filter: &FilterState, wave: Option<Wavefront>) -
     let filter_visible = filter.visible_nodes(
         &graph.prod_reachable,
         &graph.dead,
+        &graph.public_unreferenced,
         &graph.test_only,
         &graph.generated,
     );
@@ -1384,6 +1395,38 @@ mod tests {
         assert!(g.neighbors[1].contains(&0) && g.neighbors[1].contains(&2));
     }
 
+    /// One unreferenced function per export status, and nothing else — the
+    /// minimum graph that can tell the two apart.
+    fn unreferenced_pair() -> CodeGraph {
+        serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1", "generator": "magma",
+            "language": "rust", "module": "architext", "sha": "a",
+            "tree": "clean", "fidelity": "rta", "computable": true,
+            "functions": [
+                {"id": "priv", "symbol": "srv::helper", "pkg": "srv", "file": "h.rs", "line": 1,
+                 "kind": "func", "exported": false, "test": false, "root": false,
+                 "generated": false, "reachable": false, "prod_reachable": false,
+                 "signature": {"params": [], "results": []}, "fan_in": 0, "fan_out": 0},
+                {"id": "pub", "symbol": "entries_map::serialize", "pkg": "srv", "file": "m.rs", "line": 9,
+                 "kind": "func", "exported": true, "test": false, "root": false,
+                 "generated": false, "reachable": false, "prod_reachable": false,
+                 "signature": {"params": [], "results": []}, "fan_in": 0, "fan_out": 0}
+            ],
+            "calls": []
+        }))
+        .expect("fixture parses")
+    }
+
+    #[test]
+    fn build_graph_never_puts_an_exported_function_in_the_dead_class() {
+        // WHY: the `dead` slice is what the "Dead (candidates)" toggle shows,
+        // so a public function landing in it is the viewer ASSERTING dead code
+        // the analyser cannot prove — six such functions in Architext's own
+        // graph are `#[serde(with = "...")]` fns that the build needs.
+        let g = build_graph(&unreferenced_pair(), Tier::Functions);
+        assert_eq!(g.dead, vec![true, false], "only the private one is asserted dead");
+    }
+
     #[test]
     fn default_filter_culls_to_prod_reachable_and_drops_their_edges() {
         // THE required behaviour change: culling REMOVES, it does not fade.
@@ -1397,14 +1440,7 @@ mod tests {
     #[test]
     fn edge_kind_filter_culls_dynamic_edges() {
         let g = build_graph(&fixture(), Tier::Functions);
-        let mut f = FilterState {
-            show_prod_reachable: true,
-            show_dead: true,
-            show_test_only: true,
-            show_generated: true,
-            show_static: true,
-            show_dynamic: true,
-        };
+        let mut f = show_everything();
         assert_eq!(cull(&g, &f, None).edges.len(), 3, "everything shown");
         f.show_dynamic = false;
         let c = cull(&g, &f, None);
@@ -2110,6 +2146,7 @@ mod tests {
         FilterState {
             show_prod_reachable: true,
             show_dead: true,
+            show_public_unreferenced: true,
             show_test_only: true,
             show_generated: true,
             show_static: true,

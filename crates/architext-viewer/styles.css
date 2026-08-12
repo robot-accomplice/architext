@@ -135,6 +135,9 @@
   --reach-generated: #7a8699;
   --reach-test-only: #c9963f;
   --reach-dead: #c2564b;
+  /* "Public, unreferenced" is a FACT, not a dead-code verdict, so it sits on
+     the informational blue rather than anywhere near --reach-dead's red. */
+  --reach-public-unreferenced: #5b8ec4;
 
   /* ── State / accent treatment (DESIGN.md rule 1) ──────────────────────────
      STATE (active / selected / primary action) is a dedicated signal — a
@@ -245,6 +248,7 @@
   --reach-generated: #5a6870;
   --reach-test-only: #8a6423;
   --reach-dead: #a83f36;
+  --reach-public-unreferenced: #2f6ba3;
 
   --accent-base: #0a9e72;
   --accent: var(--accent-base);
