@@ -2996,6 +2996,25 @@ button.blast-chip { cursor: pointer; }
    a no-op and only logs a console error. */
 .code-graph-view__canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: grab; background: #08090b; user-select: none; }
 .code-graph-view__canvas:active { cursor: grabbing; }
+/* Node labels, drawn as DOM over the canvas (see `code_graph_labels`).
+   `pointer-events: none` on BOTH the layer and the text is load-bearing: the
+   canvas below owns click-to-select and grab-to-drag, and a label swallowing a
+   mousedown would make nodes randomly ungrabbable wherever text overlapped
+   them. Positioned by the same `world * zoom + pan` the vertex shader uses, so
+   text tracks its dot exactly; `translate(-50%, -50%)` centres it on the node
+   rather than hanging off the corner. Muted, with the node's own colour, so
+   the accent stays reserved for selection. */
+.code-graph-view__labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.code-graph-view__label-text {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-dim, #7a8699);
+  text-shadow: 0 0 3px #08090b, 0 0 3px #08090b;
+}
 /* Staged, centred progress panel — the PRIMARY signal that the app is
    working, not broken, while the graph model builds and the force layout
    settles (the 11px status line alone was not enough: see the

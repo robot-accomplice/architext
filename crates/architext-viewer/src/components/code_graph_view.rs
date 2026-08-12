@@ -72,9 +72,10 @@ use crate::code_graph_provenance::{
     stale_generator_warning,
 };
 use crate::code_graph_layout::LayoutDriver;
+use crate::code_graph_labels::{placed_labels, LabelCamera, MAX_LABELS};
 use crate::code_graph_view_model::{
-    build_graph, camera_fit_detail, cluster_anchors, fit_camera, AnimMode,
-    GraphModel, Tier, ViewState, CLUSTER_PULL, LAYOUT_SEED,
+    build_graph, camera_fit_detail, cluster_anchors, fit_camera, AnimMode, GraphModel, Tier,
+    ViewState, CLUSTER_PULL, LAYOUT_SEED,
 };
 use crate::data::models::CodeGraph;
 use crate::diagnostics;
@@ -429,6 +430,9 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
     let tier = create_rw_signal(Tier::Functions);
     let status = create_rw_signal(String::new());
     let fps_label = create_rw_signal(String::from("— fps"));
+    // Labels to draw over the canvas: `(node, text, css_x, css_y)`. Empty at
+    // overview zoom, which is the point — see `code_graph_labels`.
+    let node_labels = create_rw_signal::<Vec<(usize, String, f64, f64)>>(Vec::new());
     let gl_error = create_rw_signal::<Option<String>>(None);
     let selected_label = create_rw_signal::<Option<(String, u32)>>(None);
     // (visible nodes, total nodes, visible edges, total edges) — the
@@ -1555,6 +1559,50 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
             {
                 g.draw(&canvas, v.pan_x, v.pan_y, v.zoom);
                 drew = true;
+
+                // Labels ride the same frame as the draw, using the SAME
+                // camera the shader just used, so text cannot lag the dot it
+                // names by a frame. Positions come back in backing-store px
+                // and are converted to CSS for the DOM overlay.
+                let rect = canvas.get_bounding_client_rect();
+                let placed = placed_labels(
+                    &v.positions,
+                    &v.graph.degree,
+                    &v.cull.filter_visible,
+                    LabelCamera {
+                        pan_x: v.pan_x,
+                        pan_y: v.pan_y,
+                        zoom: v.zoom,
+                        width: canvas.width() as f32,
+                        height: canvas.height() as f32,
+                    },
+                    MAX_LABELS,
+                );
+                // Skip the write when there is nothing to say AND nothing was
+                // being said: at overview zoom this runs every frame forever,
+                // and a signal write re-renders the whole overlay.
+                if *alive.borrow()
+                    && !(placed.is_empty() && node_labels.get_untracked().is_empty())
+                {
+                    let to_css = if canvas.width() > 0 {
+                        rect.width() / canvas.width() as f64
+                    } else {
+                        1.0
+                    };
+                    node_labels.set(
+                        placed
+                            .into_iter()
+                            .map(|l| {
+                                (
+                                    l.node,
+                                    v.graph.labels.get(l.node).cloned().unwrap_or_default(),
+                                    l.x as f64 * to_css,
+                                    l.y as f64 * to_css,
+                                )
+                            })
+                            .collect(),
+                    );
+                }
             }
             if drew && !first_paint_logged.get() && layout_t0.get() > 0.0 {
                 first_paint_logged.set(true);
@@ -2199,6 +2247,22 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                 </Show>
             </div>
             <div class="code-graph-view__canvas-wrap">
+                // Text as DOM over the canvas rather than glyphs in WebGL: at
+                // most MAX_LABELS are on screen at once, so this is a few dozen
+                // absolutely-positioned spans instead of a font atlas, and it
+                // stays crisp at any device-pixel ratio for free.
+                <div class="code-graph-view__labels" aria-hidden="true">
+                    <For
+                        each=move || node_labels.get()
+                        key=|(node, _, _, _)| *node
+                        let:label
+                    >
+                        <span
+                            class="code-graph-view__label-text"
+                            style=move || format!("left:{:.1}px;top:{:.1}px", label.2, label.3)
+                        >{label.1.clone()}</span>
+                    </For>
+                </div>
                 <canvas
                     node_ref=canvas_ref
                     width="1600"

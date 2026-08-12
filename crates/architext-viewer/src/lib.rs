@@ -18,6 +18,7 @@
 //!   [`architext_diagnostics`] below.
 pub mod blast_radius;
 pub mod code_graph_graph;
+pub mod code_graph_labels;
 pub mod code_graph_layout;
 pub mod code_graph_paths;
 pub mod code_graph_provenance;
