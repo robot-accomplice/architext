@@ -268,15 +268,10 @@ fn radius_for(degree: u32) -> f32 {
 /// of an unrelated constant.
 const LOBE_RADIUS_K: f64 = 24.0;
 
-/// Compaction rounds, each followed by re-separation. More rounds squeeze
-/// harder; the packing stops shrinking once separation blocks it.
-const CLUSTER_COMPACTION_PASSES: usize = 24;
-/// How much of the distance to the centroid a round removes.
-const COMPACTION_STEP: f64 = 0.88;
-
-/// Passes that push cluster centres apart until each has room for its members.
-/// Bounded for predictable layout time; exits early once nothing overlaps.
-const CLUSTER_SEPARATION_PASSES: usize = 12;
+// The compaction and separation passes that used to tidy up force-settled
+// cluster centres are gone with the simulation that needed them: a shelf pack
+// cannot overlap and has no slack to squeeze out, so both were solving
+// problems that the ordered placement does not create.
 
 /// How firmly a node is held toward its cluster anchor.
 ///
@@ -369,16 +364,124 @@ pub fn cluster_ids(cg: &CodeGraph, tier: Tier) -> (Vec<usize>, usize) {
 /// cluster's position. The member simulation still runs in full, so structure
 /// inside a lobe is the real graph -- the anchor only decides which
 /// neighbourhood it occupies.
+/// Where each lobe SITS, as a deliberate arrangement rather than wherever a
+/// simulation drifted to.
+///
+/// Maintainer, 2026-08-13, on why the previous force-settled placement had to
+/// go: "the shape itself — blobby, organic, no order." A second force
+/// simulation over the cluster graph produces an amorphous constellation, and
+/// no amount of tightening makes an accident look composed.
+///
+/// So: lobes are laid out LARGEST FIRST, shelf-packed left-to-right into rows
+/// at a target aspect. That reads as deliberate (size descending, rows
+/// aligned), it is dense by construction (a shelf leaves only the ragged edge
+/// empty), and it is perfectly deterministic — the same graph always yields
+/// the same composition, with no seed involved.
+///
+/// `order` decides which lobe lands where, and it must carry ADJACENCY — see
+/// [`cluster_adjacency_order`]. A first attempt packed them by size alone and
+/// measurably made the picture worse: connected lobes ended up at opposite
+/// corners, so the canvas filled with long edges crossing everything. Order in
+/// the arrangement and locality in the graph are both required; either alone
+/// looks like noise.
+fn ordered_cluster_centres(sizes: &[usize], order: &[usize], aspect: f64) -> Vec<(f64, f64)> {
+    let radii: Vec<f64> =
+        sizes.iter().map(|&s| LOBE_RADIUS_K * (s as f64).sqrt().max(1.0)).collect();
+    // Row width that makes the whole arrangement land near `aspect`, derived
+    // from the total area the lobes need rather than picked.
+    let total_area: f64 = radii.iter().map(|r| (2.0 * r) * (2.0 * r)).sum();
+    let target_w = (total_area * aspect).sqrt().max(1.0);
+
+    let mut centres = vec![(0.0, 0.0); sizes.len()];
+    let (mut x, mut y, mut row_h) = (0.0_f64, 0.0_f64, 0.0_f64);
+    for &i in order {
+        let d = 2.0 * radii[i];
+        if x > 0.0 && x + d > target_w {
+            x = 0.0;
+            y += row_h;
+            row_h = 0.0;
+        }
+        centres[i] = (x + radii[i], y + radii[i]);
+        x += d;
+        row_h = row_h.max(d);
+    }
+
+    // Centre the composition on the origin so the camera fit and the origin
+    // gravity agree about where the graph is.
+    let (w, h) = (target_w, y + row_h);
+    for c in centres.iter_mut() {
+        c.0 -= w / 2.0;
+        c.1 -= h / 2.0;
+    }
+    centres
+}
+
+/// The order lobes are packed in: a breadth-first walk of the CLUSTER graph
+/// from the largest lobe, taking neighbours largest-first.
+///
+/// This is the piece that makes an ordered arrangement legible instead of
+/// merely tidy. Packing by size alone put `architext-routing`'s lobe in one
+/// corner and the lobe it calls in another, and the canvas filled with long
+/// edges crossing the middle — visibly worse than the organic layout it
+/// replaced, even though every lobe was neatly aligned. A BFS keeps callers
+/// and callees adjacent in reading order, so most edges stay short and local.
+///
+/// Deterministic: ties break on size then index, never on a seed. Clusters in
+/// separate components are appended largest-first, so a disconnected lobe sits
+/// after the structure rather than splitting it.
+fn cluster_adjacency_order(sizes: &[usize], cluster_edges: &[(usize, usize)]) -> Vec<usize> {
+    let n = sizes.len();
+    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for &(a, b) in cluster_edges {
+        if a < n && b < n && a != b {
+            adj[a].push(b);
+            adj[b].push(a);
+        }
+    }
+    let by_size = |a: &usize, b: &usize| sizes[*b].cmp(&sizes[*a]).then(a.cmp(b));
+    for list in adj.iter_mut() {
+        list.sort_by(by_size);
+        list.dedup();
+    }
+    let mut seeds: Vec<usize> = (0..n).collect();
+    seeds.sort_by(by_size);
+
+    let mut seen = vec![false; n];
+    let mut order = Vec::with_capacity(n);
+    for seed in seeds {
+        if seen[seed] {
+            continue;
+        }
+        seen[seed] = true;
+        let mut queue = std::collections::VecDeque::from([seed]);
+        while let Some(c) = queue.pop_front() {
+            order.push(c);
+            for &next in &adj[c] {
+                if !seen[next] {
+                    seen[next] = true;
+                    queue.push_back(next);
+                }
+            }
+        }
+    }
+    order
+}
+
 pub fn cluster_anchors(
     clusters: &[usize],
     cluster_count: usize,
     edges: &[(usize, usize)],
-    cfg: &ForceConfig,
+    _cfg: &ForceConfig,
 ) -> Vec<(f64, f64)> {
     if cluster_count <= 1 {
         return Vec::new();
     }
-    // Aggregate member edges into cluster-to-cluster edges.
+    let mut sizes = vec![0usize; cluster_count];
+    for &c in clusters {
+        sizes[c] += 1;
+    }
+    // Member edges aggregated into cluster-to-cluster ones: which lobes call
+    // which is what decides the packing order.
     let mut pairs: std::collections::BTreeSet<(usize, usize)> = Default::default();
     for &(a, b) in edges {
         let (ca, cb) = (clusters[a], clusters[b]);
@@ -387,115 +490,10 @@ pub fn cluster_anchors(
         }
     }
     let cluster_edges: Vec<(usize, usize)> = pairs.into_iter().collect();
-
-    // Spread the clusters far enough apart that their members do not merge
-    // back into one mass: the ideal separation scales with how many members
-    // the biggest lobe has to hold.
-    let mut sizes = vec![0usize; cluster_count];
-    for &c in clusters {
-        sizes[c] += 1;
-    }
-    // Space the clusters by the TYPICAL lobe, not the largest one. Sizing off
-    // the biggest cluster spread 86 lobes across ~10,000 units, so each lobe
-    // rendered as a dot in mostly empty space -- the separation was real and
-    // useless. The mean keeps lobes large relative to the whole.
-    let mean_size = (clusters.len() as f64 / cluster_count as f64).max(1.0);
-    let cluster_cfg = ForceConfig {
-        k: cfg.k * mean_size.sqrt().max(2.0),
-        cluster_pull: 0.0,
-        ..*cfg
-    };
-    let settled = crate::force_layout::simulate(
-        cluster_count,
-        &cluster_edges,
-        LAYOUT_SEED ^ 0x5EED_C105,
-        &cluster_cfg,
-    );
-    let mut centres = settled.positions;
-
-    // Give every lobe the room its membership needs.
-    //
-    // Members repel each other against a central spring, so a lobe's natural
-    // radius already grows as sqrt(members) -- the same law the seed circle
-    // uses. The CLUSTER layout did not know that: it spaced all 86 centres
-    // uniformly, so `architext_viewer::components` (hundreds of functions) got
-    // the same allowance as a singleton. The big lobe swallowed its
-    // neighbours and everything else scattered thin.
-    //
-    // Separating centres by the sum of their radii makes each territory
-    // proportional to what it holds, which is the whole of the fix: no
-    // constant can serve both a 400-member cluster and a 1-member one.
-    let radius: Vec<f64> =
-        sizes.iter().map(|&n| LOBE_RADIUS_K * (n as f64).sqrt().max(1.0)).collect();
-
-    // Compact, then separate, repeatedly.
-    //
-    // Separation alone only enforces a MINIMUM distance -- nothing ever pulls
-    // lobes back in, so the field stayed as wide as the force settle first
-    // flung it and the graph read as sparse dots in empty space. Pulling every
-    // centre toward the centroid and re-separating converges on the tightest
-    // packing that still gives each lobe its room: compaction squeezes until
-    // separation refuses, which is exactly where "tight" is.
-    for _ in 0..CLUSTER_COMPACTION_PASSES {
-        let (cx, cy) = (
-            centres.iter().map(|c| c.0).sum::<f64>() / cluster_count as f64,
-            centres.iter().map(|c| c.1).sum::<f64>() / cluster_count as f64,
-        );
-        for c in centres.iter_mut() {
-            c.0 = cx + (c.0 - cx) * COMPACTION_STEP;
-            c.1 = cy + (c.1 - cy) * COMPACTION_STEP;
-        }
-        for _ in 0..CLUSTER_SEPARATION_PASSES {
-            let mut moved = false;
-            for i in 0..cluster_count {
-                for j in (i + 1)..cluster_count {
-                    let (dx, dy) = (centres[j].0 - centres[i].0, centres[j].1 - centres[i].1);
-                    let d = (dx * dx + dy * dy).sqrt();
-                    let need = radius[i] + radius[j];
-                    if d >= need {
-                        continue;
-                    }
-                    let (ux, uy) = if d > 1e-9 { (dx / d, dy / d) } else { (1.0, 0.0) };
-                    let push = (need - d) / 2.0;
-                    centres[i].0 -= ux * push;
-                    centres[i].1 -= uy * push;
-                    centres[j].0 += ux * push;
-                    centres[j].1 += uy * push;
-                    moved = true;
-                }
-            }
-            if !moved {
-                break;
-            }
-        }
-    }
-
-    for _ in 0..CLUSTER_SEPARATION_PASSES {
-        let mut moved = false;
-        for i in 0..cluster_count {
-            for j in (i + 1)..cluster_count {
-                let (dx, dy) = (centres[j].0 - centres[i].0, centres[j].1 - centres[i].1);
-                let d = (dx * dx + dy * dy).sqrt();
-                let need = radius[i] + radius[j];
-                if d >= need {
-                    continue;
-                }
-                // Coincident centres have no direction to separate along, so
-                // pick a deterministic one rather than dividing by zero.
-                let (ux, uy) = if d > 1e-9 { (dx / d, dy / d) } else { (1.0, 0.0) };
-                let push = (need - d) / 2.0;
-                centres[i].0 -= ux * push;
-                centres[i].1 -= uy * push;
-                centres[j].0 += ux * push;
-                centres[j].1 += uy * push;
-                moved = true;
-            }
-        }
-        if !moved {
-            break;
-        }
-    }
-
+    let order = cluster_adjacency_order(&sizes, &cluster_edges);
+    // 1.6 ≈ a landscape canvas, so the arrangement fills the frame rather
+    // than leaving bands of empty space above and below it.
+    let centres = ordered_cluster_centres(&sizes, &order, 1.6);
     clusters.iter().map(|&c| centres[c]).collect()
 }
 
@@ -1595,6 +1593,76 @@ mod tests {
     /// thinner than a pixel. If the summary did not separate the robust box
     /// from the full extent, or did not carry the on-screen edge width, the
     /// recorded state would be no more use than the screenshot.
+    #[test]
+    fn lobes_are_laid_out_in_deliberate_order_without_overlapping() {
+        // WHY: maintainer, 2026-08-13 — "the shape itself: blobby, organic, no
+        // order". A force-settled cluster graph produces an amorphous
+        // constellation, so placement is now a shelf pack, largest lobe first.
+        // The three properties that make it read as composed rather than
+        // spilled are asserted here.
+        let sizes: Vec<usize> = vec![400, 9, 120, 1, 64, 250, 16, 36];
+        let order: Vec<usize> = (0..sizes.len()).collect();
+        let centres = ordered_cluster_centres(&sizes, &order, 1.6);
+        let radius = |s: usize| LOBE_RADIUS_K * (s as f64).sqrt().max(1.0);
+
+        // 1. No lobe overlaps another — the shelf guarantees it, where the
+        //    force placement needed repeated separation passes to approximate.
+        for i in 0..sizes.len() {
+            for j in (i + 1)..sizes.len() {
+                let (dx, dy) = (centres[j].0 - centres[i].0, centres[j].1 - centres[i].1);
+                let gap = (dx * dx + dy * dy).sqrt();
+                assert!(
+                    gap >= radius(sizes[i]) + radius(sizes[j]) - 1e-6,
+                    "lobes {i} and {j} overlap: gap {gap:.1} < {:.1}",
+                    radius(sizes[i]) + radius(sizes[j])
+                );
+            }
+        }
+
+        // 2. The first lobe in `order` opens the composition, so the caller
+        //    controls the reading order. Compared by top/left EDGE, not
+        //    centre: with variable radii a small lobe in the same row has a
+        //    smaller centre-y than a big one, so centres would answer a
+        //    different question than the one asked.
+        let edge = |i: usize| (centres[i].1 - radius(sizes[i]), centres[i].0 - radius(sizes[i]));
+        let top_left = (0..sizes.len())
+            .min_by(|&a, &b| edge(a).partial_cmp(&edge(b)).unwrap_or(std::cmp::Ordering::Equal))
+            .unwrap();
+        assert_eq!(top_left, order[0], "the first lobe in order must open the composition");
+
+        // 3. Deterministic — no seed, no simulation, same graph same picture.
+        assert_eq!(centres, ordered_cluster_centres(&sizes, &order, 1.6));
+    }
+
+    #[test]
+    fn lobes_that_call_each_other_are_packed_next_to_each_other() {
+        // WHY: this is the property the FIRST attempt at ordered placement
+        // lacked, and losing it was visible immediately — packing purely by
+        // size put connected lobes at opposite corners and filled the canvas
+        // with long edges crossing the middle, which read as MORE chaotic than
+        // the organic layout it replaced. Tidiness without locality is not
+        // order, it is just alignment.
+        //
+        // Two chains that never touch: 0-1-2 and 3-4-5. A size-only packing
+        // would interleave them (sizes alternate deliberately); an adjacency
+        // walk must emit each chain contiguously.
+        let sizes = vec![100, 90, 80, 95, 85, 75];
+        let edges = vec![(0, 1), (1, 2), (3, 4), (4, 5)];
+        let order = cluster_adjacency_order(&sizes, &edges);
+        assert_eq!(order.len(), sizes.len(), "every lobe is placed exactly once");
+
+        let pos = |c: usize| order.iter().position(|&x| x == c).unwrap();
+        let chain_a = [pos(0), pos(1), pos(2)];
+        let chain_b = [pos(3), pos(4), pos(5)];
+        let (a_lo, a_hi) = (chain_a.iter().min().unwrap(), chain_a.iter().max().unwrap());
+        let (b_lo, b_hi) = (chain_b.iter().min().unwrap(), chain_b.iter().max().unwrap());
+        assert!(
+            a_hi < b_lo || b_hi < a_lo,
+            "connected chains must not interleave: {order:?}"
+        );
+        assert_eq!(order[0], 0, "the walk starts from the largest lobe");
+    }
+
     #[test]
     fn the_opening_view_puts_every_single_node_on_screen() {
         // WHY: maintainer, 2026-08-13 — "it should start zoomed out to see the
