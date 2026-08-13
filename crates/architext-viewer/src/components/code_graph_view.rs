@@ -74,8 +74,7 @@ use crate::code_graph_provenance::{
 use crate::code_graph_layout::LayoutDriver;
 use crate::code_graph_labels::{placed_labels, LabelCamera, MAX_LABELS};
 use crate::code_graph_view_model::{
-    build_graph, camera_fit_detail, cluster_anchors, fit_camera, AnimMode, GraphModel, Tier,
-    ViewState, CLUSTER_PULL, LAYOUT_SEED,
+    build_graph, camera_fit_detail, fit_camera, AnimMode, GraphModel, Tier, ViewState, LAYOUT_SEED,
 };
 use crate::data::models::CodeGraph;
 use crate::diagnostics;
@@ -902,24 +901,16 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
         move |t: Tier, graph: GraphModel, w: f32, h: f32, build_ms: f64| {
             let n = graph.node_count();
             let edge_count = graph.directed_edges.len();
-            // Cluster this settle too. The worker warm and this local settle
-            // are separate paths to the same picture, so anchoring only one of
-            // them leaves the view unclustered whenever the local path runs.
-            let cfg = ForceConfig { cluster_pull: CLUSTER_PULL, ..ForceConfig::default() };
-            let anchors =
-                cluster_anchors(&graph.clusters, graph.cluster_count, &graph.layout_edges, &cfg);
-            diagnostics::record(
-                diag_instance,
-                "layout_clustering",
-                Some(format!(
-                    "source=local tier={t:?} nodes={n} clusters={} anchors={} pull={}",
-                    graph.cluster_count,
-                    anchors.len(),
-                    cfg.cluster_pull
-                )),
-            );
-            let driver =
-                LayoutDriver::new_clustered(n, &graph.layout_edges, &anchors, LAYOUT_SEED, &cfg);
+            // CLUSTERING REMOVED as a variable (maintainer, 2026-08-13). The
+            // reference this is measured against has no clustering at all --
+            // no anchors, no lobes, no packed arrangement -- and every one of
+            // those mechanisms was pushing the picture toward discrete blobs
+            // in a field, which is the opposite of the continuous elastic web
+            // it is supposed to resemble. One plain force simulation, as
+            // Obsidian does it. Reinstating means restoring `cluster_anchors`
+            // from history and passing its result here.
+            let cfg = ForceConfig::default();
+            let driver = LayoutDriver::new(n, &graph.layout_edges, LAYOUT_SEED, &cfg);
             let max_ticks = driver.max_ticks();
             // Tick-0 positions (the seeded circle) upload IMMEDIATELY so the
             // first frame paints a real graph, not a spinner.
@@ -1782,16 +1773,10 @@ fn CodeGraphViewCanvas(cg: CodeGraph) -> impl IntoView {
                         *drv = Some(LayoutDriver::live_from_positions(
                             &v.positions,
                             &v.graph.layout_edges,
-                            // The SAME anchors the settle used — deterministic
-                            // from the cluster graph, so the lobes hold their
-                            // territory while the graph is being handled
-                            // instead of slowly dissolving toward the origin.
-                            &cluster_anchors(
-                                &v.graph.clusters,
-                                v.graph.cluster_count,
-                                &v.graph.layout_edges,
-                                &ForceConfig::default(),
-                            ),
+                            // No anchors: the settle has none either, so a grab
+                            // must not introduce a force the layout was never
+                            // shaped by.
+                            &[],
                             &ForceConfig::default(),
                         ));
                     }

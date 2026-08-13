@@ -53,7 +53,7 @@ use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{MessageEvent, Worker};
 
 use crate::code_graph_view_model::{
-    build_graph, cluster_anchors, Tier, CLUSTER_PULL, LAYOUT_SEED,
+    build_graph, Tier, LAYOUT_SEED,
 };
 use crate::data::models::CodeGraph;
 use crate::diagnostics;
@@ -399,9 +399,10 @@ pub fn warm_function_tier(state: AppState, cg: &CodeGraph) {
     // 3,638 functions into 306 modules never fixed that -- it changed the node
     // count, not the shape -- because a system where everything repels
     // everything has exactly one resting form.
-    let cfg = ForceConfig { cluster_pull: CLUSTER_PULL, ..ForceConfig::default() };
-    let anchors =
-        cluster_anchors(&graph.clusters, graph.cluster_count, &graph.layout_edges, &cfg);
+    // No clustering: see the note at the local settle in `code_graph_view.rs`.
+    // One plain force simulation, which is what the reference actually does.
+    let cfg = ForceConfig::default();
+    let anchors: Vec<(f64, f64)> = Vec::new();
 
     // Diagnostics module doc item 4 ("whether the layout came from
     // cache/worker/local"): this is the ONLY producer of the "worker" source
