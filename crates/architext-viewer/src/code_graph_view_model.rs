@@ -281,9 +281,24 @@ const CLUSTER_SEPARATION_PASSES: usize = 12;
 /// How firmly a node is held toward its cluster anchor.
 ///
 /// Strong enough that lobes separate and stay separated; loose enough that the
-/// graph's own edges still shape what happens inside one. Tuned by looking at
-/// the result, which is the only way this can be judged.
-pub const CLUSTER_PULL: f64 = 0.5;
+/// graph's own edges still shape what happens inside one.
+///
+/// Raised 0.5 -> 1.0 on 2026-08-13 ("it's still too sparse"). MEASURED by the
+/// `measure_cluster_separation` sweep over this repo's own graph, which is why
+/// this is not a tuned-by-eye number any more:
+///
+/// | pull | mean within-lobe radius | field extent |
+/// | --- | --- | --- |
+/// | 0.05 | 485 | 3219 |
+/// | 0.25 | 243 | 2306 |
+/// | 0.50 (was) | 192 | 2114 |
+/// | 1.00 (now) | 154 | 1994 |
+///
+/// It tightens lobes AND shrinks the whole field, so the graph occupies more
+/// of the ink and less of the gap. Higher still trades away the intra-lobe
+/// structure this exists to preserve: at that point the anchor, not the
+/// graph's own edges, is deciding where a node sits.
+pub const CLUSTER_PULL: f64 = 1.0;
 
 /// How many `::` segments of a package path define a cluster.
 ///
@@ -1082,12 +1097,33 @@ pub fn weighted_centre(positions: &[(f32, f32)], weights: &[f32]) -> (f32, f32) 
 /// `robust_bounds`' doc describes. Centring on the mass (pan) and framing
 /// the extent (zoom) stay different jobs — do not unify them back into one
 /// statistic; conflating them is exactly what produced the original bug.
-pub fn fit_camera(positions: &[(f32, f32)], weights: &[f32], w: f32, h: f32) -> (f32, f32, f32) {
-    let (lo_x, hi_x, lo_y, hi_y) = robust_bounds(positions);
+pub fn fit_camera(positions: &[(f32, f32)], _weights: &[f32], w: f32, h: f32) -> (f32, f32, f32) {
+    // THE FULL EXTENT, not `robust_bounds`. A 10th/90th-percentile box
+    // excludes about a fifth of the nodes PER AXIS by construction, so fitting
+    // it means the view can never open on the whole graph -- which is what the
+    // maintainer asked for, and what an overview is FOR. On this repo's own
+    // graph the full extent is only 1.44x the robust box (the `spread` figure
+    // in the trail), so honesty here costs 1.44x of zoom, not an empty canvas.
+    //
+    // Centred on the box, not on `weighted_centre`: the weighted centre pulls
+    // toward the dense hub, which is right when framing a REGION and wrong
+    // when the requirement is that nothing falls off the edge. `_weights` is
+    // kept in the signature because every caller has the radii to hand and a
+    // later region-fit will want them.
+    let (mut lo_x, mut hi_x, mut lo_y, mut hi_y) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
+    for &(x, y) in positions {
+        lo_x = lo_x.min(x);
+        hi_x = hi_x.max(x);
+        lo_y = lo_y.min(y);
+        hi_y = hi_y.max(y);
+    }
+    if positions.is_empty() {
+        (lo_x, hi_x, lo_y, hi_y) = (0.0, 0.0, 0.0, 0.0);
+    }
     let box_w = (hi_x - lo_x).max(1.0);
     let box_h = (hi_y - lo_y).max(1.0);
     let zoom = (w / (box_w * 1.1)).min(h / (box_h * 1.1)).clamp(0.02, 3.0);
-    let (cx, cy) = weighted_centre(positions, weights);
+    let (cx, cy) = ((lo_x + hi_x) / 2.0, (lo_y + hi_y) / 2.0);
     let pan_x = w / 2.0 - cx * zoom;
     let pan_y = h / 2.0 - cy * zoom;
     (zoom, pan_x, pan_y)
@@ -1560,6 +1596,32 @@ mod tests {
     /// from the full extent, or did not carry the on-screen edge width, the
     /// recorded state would be no more use than the screenshot.
     #[test]
+    fn the_opening_view_puts_every_single_node_on_screen() {
+        // WHY: maintainer, 2026-08-13 — "it should start zoomed out to see the
+        // whole graph". `fit_camera` fitted `robust_bounds`, a
+        // 10th/90th-percentile box that excludes ~20% of nodes PER AXIS by
+        // construction, so the opening frame ALWAYS cut some off. Asserted
+        // over every node rather than over a summary statistic, because a
+        // statistic is exactly what hid this.
+        let mut positions: Vec<(f32, f32)> = (0..200)
+            .map(|i| ((i % 20) as f32 * 12.0, (i / 20) as f32 * 12.0))
+            .collect();
+        // Outliers in all four directions — the nodes a percentile box drops.
+        positions.extend([(-4000.0, 0.0), (4000.0, 0.0), (0.0, -3000.0), (0.0, 3000.0)]);
+        let weights = vec![1.0; positions.len()];
+        let (w, h) = (1600.0_f32, 1000.0_f32);
+        let (zoom, pan_x, pan_y) = fit_camera(&positions, &weights, w, h);
+
+        for (i, &(x, y)) in positions.iter().enumerate() {
+            let (sx, sy) = (x * zoom + pan_x, y * zoom + pan_y);
+            assert!(
+                sx >= 0.0 && sx <= w && sy >= 0.0 && sy <= h,
+                "node {i} at {x},{y} landed off-screen at {sx:.0},{sy:.0} (viewport {w}x{h})"
+            );
+        }
+    }
+
+    #[test]
     fn camera_fit_detail_exposes_outlier_spread_and_sub_pixel_edges() {
         // A compact 100-node mass plus 6 nodes flung 1000 units out: too few
         // to move the 10th/90th-percentile box, far enough to dominate what
@@ -1654,8 +1716,13 @@ mod tests {
         let (cx, cy) = centroid(&positions);
         let screen_x = cx * zoom + pan_x;
         let screen_y = cy * zoom + pan_y;
-        assert!((screen_x - 800.0).abs() < 1.0, "content centre x at {screen_x}, want 800");
-        assert!((screen_y - 500.0).abs() < 1.0, "content centre y at {screen_y}, want 500");
+        // Within half a node's spacing of the viewport centre. The reference
+        // point is the BOX centre now rather than the centroid (see
+        // `fit_camera`); on a block with a ragged last row the two differ by
+        // about a pixel, and the fact under test — content is centred, not the
+        // origin — is satisfied by either.
+        assert!((screen_x - 800.0).abs() < 3.0, "content centre x at {screen_x}, want ~800");
+        assert!((screen_y - 500.0).abs() < 3.0, "content centre y at {screen_y}, want ~500");
     }
 
     #[test]
@@ -1710,27 +1777,39 @@ mod tests {
     /// `robust_bounds`' doc) sit alongside a tight, ≥1000-node cluster.
     /// Neither the zoom nor the pan may be dictated by the outliers — both
     /// must still frame the cluster.
+    /// REVERSED 2026-08-13, and deliberately so. This test used to assert the
+    /// opposite — that a handful of far outliers must NOT drag the zoom out,
+    /// because a percentile-trimmed box keeps the dense mass legible. The
+    /// maintainer's instruction supersedes it: "it should start zoomed out to
+    /// see the whole graph."
+    ///
+    /// The tradeoff is real and is accepted, not hidden: a layout with a few
+    /// nodes flung far away now opens zoomed far out, where the old behaviour
+    /// would have framed the mass and quietly left those nodes off-screen. On
+    /// Architext's own graph the full extent is 1.44x the trimmed box, so the
+    /// cost is 1.44x of zoom; the benefit is that "the overview" means all of
+    /// it. If a real graph ever does open uselessly small, the fix is to
+    /// surface the outliers (a "N nodes far from the rest" affordance), NOT to
+    /// go back to silently cropping them.
     #[test]
-    fn fit_camera_outliers_dont_dictate_the_framing() {
+    fn far_outliers_are_framed_rather_than_silently_cropped() {
         let mut positions: Vec<(f32, f32)> =
             (0..1000).map(|i| ((i % 40) as f32 - 20.0, (i / 40) as f32 - 12.0)).collect();
-        // <1% of the node count — enough to previously wreck the fit, not
-        // enough to survive the 90th-percentile trim.
         for k in 0..5 {
             positions.push((5000.0 + k as f32, -5000.0 - k as f32));
         }
-        let weights = vec![1.0; positions.len()]; // uniform: not a weighting test
-        let (zoom, pan_x, pan_y) = fit_camera(&positions, &weights, 1600.0, 1000.0);
-        // The cluster spans roughly 40x24 units, which fits well past the
-        // 3.0 zoom ceiling — so a trimmed box should clamp at the max. If
-        // the outliers dictated the box instead, zoom would collapse to
-        // ~0.16 (fitting a ~10,000-unit span) — nowhere near the clamp.
-        assert_eq!(zoom, 3.0, "outliers must not crush the zoom below the clamp max, got {zoom}");
-        let (cx, cy) = centroid(&positions);
-        let screen_x = cx * zoom + pan_x;
-        let screen_y = cy * zoom + pan_y;
-        assert!((screen_x - 800.0).abs() < 1.0, "cluster centre x at {screen_x}, want 800");
-        assert!((screen_y - 500.0).abs() < 1.0, "cluster centre y at {screen_y}, want 500");
+        let weights = vec![1.0; positions.len()];
+        let (w, h) = (1600.0_f32, 1000.0_f32);
+        let (zoom, pan_x, pan_y) = fit_camera(&positions, &weights, w, h);
+
+        assert!(zoom < 3.0, "the outliers must widen the framing, got the clamp max {zoom}");
+        for (i, &(x, y)) in positions.iter().enumerate() {
+            let (sx, sy) = (x * zoom + pan_x, y * zoom + pan_y);
+            assert!(
+                sx >= 0.0 && sx <= w && sy >= 0.0 && sy <= h,
+                "node {i} at {x},{y} was cropped out of the opening frame"
+            );
+        }
     }
 
     /// A dense hub cluster (850 nodes, tightly packed near the origin) plus
@@ -1762,50 +1841,34 @@ mod tests {
     /// median x/y) is not — it stays on the hub, which is the visual mass
     /// the user is actually looking at. Expresses the INTENT (the dense
     /// mass is centred), not just a magic screen coordinate.
+    /// ALSO REVERSED 2026-08-13. This asserted that the density centre (median)
+    /// beats the box centre on a hub-and-ring, keeping the visual mass centred
+    /// while the one-sided ring pulled the box. That is the right target when
+    /// framing a REGION, and the wrong one when the requirement is that
+    /// nothing falls off the edge: centring on the mass necessarily pushes the
+    /// far side of the ring out of view. The hard case is kept — hub-and-ring
+    /// is exactly where a fit goes wrong — but what it now asserts is the
+    /// current contract.
     #[test]
-    fn fit_camera_density_centring_beats_box_centring_on_hub_and_ring() {
+    fn a_hub_and_ring_graph_fits_entirely_on_screen() {
         let positions = hub_and_ring_positions();
-        // Uniform weights: this test is about the median beating the box
-        // on NODE COUNT alone, the property that motivated `density_centre`
-        // in the first place — unrelated to the degree-weighting this
-        // change adds on top. With equal weights `weighted_centre` and
-        // `density_centre` coincide exactly (see the invariant test), so
-        // this keeps asserting the same fact it always did.
         let weights = vec![1.0; positions.len()];
         let (w, h) = (1600.0_f32, 1000.0_f32);
         let (zoom, pan_x, pan_y) = fit_camera(&positions, &weights, w, h);
-
-        let (mx, my) = density_centre(&positions);
-        let screen_mx = mx * zoom + pan_x;
-        let screen_my = my * zoom + pan_y;
-        assert!(
-            (screen_mx - w / 2.0).abs() < 2.0,
-            "density centre x at {screen_mx}, want ~{}",
-            w / 2.0
-        );
-        assert!(
-            (screen_my - h / 2.0).abs() < 2.0,
-            "density centre y at {screen_my}, want ~{}",
-            h / 2.0
-        );
-
-        // The box centre must still be measurably off-centre on THIS
-        // fixture — proving the two statistics genuinely diverge here, not
-        // that the fixture happens to make them coincide.
-        let (bx, _by) = centroid(&positions);
-        let screen_bx = bx * zoom + pan_x;
-        let box_err = (screen_bx - w / 2.0).abs();
-        assert!(
-            box_err > 50.0,
-            "box centre should be measurably dragged off-centre by the ring, got err {box_err}"
-        );
+        for (i, &(x, y)) in positions.iter().enumerate() {
+            let (sx, sy) = (x * zoom + pan_x, y * zoom + pan_y);
+            assert!(
+                sx >= 0.0 && sx <= w && sy >= 0.0 && sy <= h,
+                "node {i} of the hub-and-ring landed off-screen at {sx:.0},{sy:.0}"
+            );
+        }
     }
 
-    /// The zoom bound (10th/90th-percentile box) must be untouched by the
-    /// pan-target change: every ring node — the outliers the box's extent
-    /// was sized to admit — must still land inside the viewport once
-    /// panned to the density centre, proving the centring fix did not
-    /// shrink the frame to compensate.
+    /// Every ring node — the outliers a percentile box was sized to admit —
+    /// must land inside the viewport. Unchanged in intent by the 2026-08-13
+    /// full-extent fit; it is now the weaker of the two statements, since
+    /// `a_hub_and_ring_graph_fits_entirely_on_screen` asserts it for ALL
+    /// nodes, but it is kept because it names the ring specifically.
     #[test]
     fn fit_camera_outliers_still_land_in_viewport_after_density_centring() {
         let positions = hub_and_ring_positions();
