@@ -447,23 +447,50 @@ fn truncate_to_box(text: &str, box_width: f64) -> String {
 /// crossing from a join. A small arc at each crossing says "over", which is the
 /// convention every schematic uses and costs nothing to draw.
 fn path_with_hops(edge: &ErEdge) -> String {
-    let (a, b) = (&edge.points[0], &edge.points[edge.points.len() - 1]);
-    let (dx, dy) = (b.x - a.x, b.y - a.y);
-    let len = (dx * dx + dy * dy).sqrt();
-    if len < 1e-9 || edge.hops.is_empty() {
+    if edge.hops.is_empty() || edge.points.len() < 2 {
         return path_d(&edge.points);
     }
-    let (ux, uy) = (dx / len, dy / len);
-    let mut d = format!("M{} {}", a.x, a.y);
-    for h in &edge.hops {
-        let (bx, by) = (h.x - ux * HOP_R, h.y - uy * HOP_R);
-        let (ax, ay) = (h.x + ux * HOP_R, h.y + uy * HOP_R);
-        // Sweep 1 keeps every bridge bowing the same way along the line.
-        d.push_str(&format!(
-            " L{bx} {by} A{HOP_R} {HOP_R} 0 0 1 {ax} {ay}"
-        ));
+    // Walked LEG BY LEG. Routes are orthogonal polylines, so collapsing them to
+    // first-point→last-point (as this did) replaces the whole route with a
+    // diagonal — through exactly the boxes the bends were bought to avoid — and
+    // puts every arc on a line the reader is not looking at. Each hop is placed
+    // on the leg it actually lies on, oriented along THAT leg.
+    let mut d = format!("M{} {}", edge.points[0].x, edge.points[0].y);
+    for w in edge.points.windows(2) {
+        let (a, b) = (&w[0], &w[1]);
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let len = (dx * dx + dy * dy).sqrt();
+        if len < 1e-9 {
+            continue;
+        }
+        let (ux, uy) = (dx / len, dy / len);
+        let mut on_leg: Vec<(f64, &Point)> = edge
+            .hops
+            .iter()
+            .filter_map(|h| {
+                // Distance along the leg, and distance off it. A hop belongs to
+                // this leg only if it is both within the span and ON the line —
+                // an orthogonal route doubling back would otherwise claim a hop
+                // that belongs to its other leg.
+                let along = (h.x - a.x) * ux + (h.y - a.y) * uy;
+                if along < 0.0 || along > len {
+                    return None;
+                }
+                let (px, py) = (a.x + ux * along, a.y + uy * along);
+                let off = ((h.x - px).powi(2) + (h.y - py).powi(2)).sqrt();
+                (off < 1e-6).then_some((along, h))
+            })
+            .collect();
+        on_leg.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        for (_, h) in on_leg {
+            let (bx, by) = (h.x - ux * HOP_R, h.y - uy * HOP_R);
+            let (ax, ay) = (h.x + ux * HOP_R, h.y + uy * HOP_R);
+            // Sweep 1 keeps every bridge bowing the same way along the line.
+            d.push_str(&format!(" L{bx} {by} A{HOP_R} {HOP_R} 0 0 1 {ax} {ay}"));
+        }
+        d.push_str(&format!(" L{} {}", b.x, b.y));
     }
-    d.push_str(&format!(" L{} {}", b.x, b.y));
     d
 }
 
@@ -614,6 +641,40 @@ mod tests {
         // Approaches the crossing, bridges it, then carries on to the end.
         assert!(bridged.starts_with("M0 0"));
         assert!(bridged.ends_with("L100 0"));
+    }
+
+    #[test]
+    fn a_hopped_orthogonal_route_keeps_every_one_of_its_bends() {
+        // WHY: this collapsed the polyline to first-point → last-point and drew
+        // a STRAIGHT line with arcs on it, throwing every bend away. It was
+        // invisible only because hops were almost never populated (detection
+        // read one leg per route); the moment detection was fixed, every
+        // hopped route would have rendered as a diagonal through the boxes the
+        // orthogonal routing existed to avoid.
+        let edge = ErEdge {
+            from: "a".into(),
+            to: "b".into(),
+            label: None,
+            cardinality: "one-to-one".into(),
+            // L: right along y=0, then down at x=100.
+            points: vec![
+                Point { x: 0.0, y: 0.0 },
+                Point { x: 100.0, y: 0.0 },
+                Point { x: 100.0, y: 100.0 },
+            ],
+            from_foot: ErFoot::One,
+            to_foot: ErFoot::One,
+            label_x: 0.0,
+            label_y: 0.0,
+            // A crossing on the SECOND leg.
+            hops: vec![Point { x: 100.0, y: 50.0 }],
+        };
+        let d = path_with_hops(&edge);
+        assert!(d.contains('A'), "the crossing must still draw an arc: {d}");
+        assert!(d.contains("L100 0"), "the corner must survive: {d}");
+        assert!(d.ends_with("L100 100"), "and the route must end where it ends: {d}");
+        // The arc belongs on the vertical leg, so it is offset in Y, not X.
+        assert!(d.contains("L100 4") || d.contains("L100 3"), "arc entered along the leg: {d}");
     }
 
     #[test]

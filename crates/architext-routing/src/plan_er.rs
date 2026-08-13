@@ -1161,13 +1161,18 @@ fn hop_points(edges: &[ErEdge]) -> Vec<Vec<Point>> {
             {
                 continue;
             }
-            if let Some(p) = segment_intersection(
-                &edges[i].points[0],
-                &edges[i].points[1],
-                &edges[j].points[0],
-                &edges[j].points[1],
-            ) {
-                hops[i].push(p);
+            // EVERY leg against every leg. Routes are orthogonal polylines --
+            // L (3 points), Z (4), gutter detours -- and a straight two-point
+            // run only survives when the ports already line up. Testing
+            // `points[0]..points[1]` alone therefore checked the first leg and
+            // ignored the rest, which is most of the route and where most
+            // crossings are.
+            for wa in edges[i].points.windows(2) {
+                for wb in edges[j].points.windows(2) {
+                    if let Some(p) = segment_intersection(&wa[0], &wa[1], &wb[0], &wb[1]) {
+                        hops[i].push(p);
+                    }
+                }
             }
         }
         // Along the line, so the renderer can walk them in order.
@@ -1893,6 +1898,44 @@ mod tests {
             canvas_height: 100.0,
         };
         assert_eq!(count_crossings(&plan), 1, "an X must count as one crossing");
+    }
+
+    #[test]
+    fn a_crossing_on_a_later_leg_of_an_orthogonal_route_still_hops() {
+        // WHY: maintainer, 2026-08-13 — "no line hopping". Routes here are
+        // ORTHOGONAL polylines: `candidate_shapes` returns L shapes (3 points),
+        // Z shapes (4) and gutter detours, and a straight 2-point run only
+        // survives when the two ports already line up. `hop_points` tested
+        // `points[0]`..`points[1]` alone, so it saw the FIRST LEG of each route
+        // and nothing else — which is why crossings stopped being marked the
+        // moment routing went orthogonal. Most crossings are on a middle leg.
+        let p = |x: f64, y: f64| Point { x, y };
+        let mk = |from: &str, to: &str, points: Vec<Point>| ErEdge {
+            from: from.into(),
+            to: to.into(),
+            label: None,
+            cardinality: "one-to-one".into(),
+            points,
+            from_foot: ErFoot::One,
+            to_foot: ErFoot::One,
+            label_x: 0.0,
+            label_y: 0.0,
+            hops: Vec::new(),
+        };
+        // A: an L whose SECOND leg is the vertical run x=100, y from 0 to 100.
+        // B: a horizontal run at y=50 straight through it at (100, 50).
+        let edges = vec![
+            mk("a", "b", vec![p(0.0, 0.0), p(100.0, 0.0), p(100.0, 100.0)]),
+            mk("c", "d", vec![p(50.0, 50.0), p(150.0, 50.0)]),
+        ];
+        let hops = hop_points(&edges);
+        assert_eq!(hops[1].len(), 1, "the later edge must hop where it crosses A's second leg");
+        let h = &hops[1][0];
+        assert!(
+            (h.x - 100.0).abs() < 1e-6 && (h.y - 50.0).abs() < 1e-6,
+            "hop at {:?}, want (100, 50)",
+            (h.x, h.y)
+        );
     }
 
     #[test]
