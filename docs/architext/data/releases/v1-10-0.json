@@ -2,12 +2,12 @@
   "id": "v1-10-0",
   "version": "1.10.0",
   "name": "Architext 1.10.0 Data Model",
-  "status": "implementing",
-  "posture": "release-candidate",
+  "status": "completed",
+  "posture": "shipped",
   "summary": "Adds Data Model mode, which renders a repository's persistence model from an optional hand-authored entities.json, and takes the already-shipped Code Graph mode through the legibility and liveness work that separates it from the reference graph it is measured against. Data schema 1.8.0 registers entities.json additively, so every artifact valid under 1.7.0 stays valid. The through-line is dogfooding: Architext now ships its own entities.json and its own code-graph.json, and every defect fixed here except one was found by looking at Architext's own model rather than at a fixture.",
   "targetDate": "2026-08-13",
-  "lastUpdated": "2026-08-13T13:30:00.000Z",
-  "updateSource": "Code complete on the feature branch (PR #299) with all five CI gates green locally. Not yet shipped: not merged to develop, no merge to main, no v1.10.0 tag.",
+  "lastUpdated": "2026-08-13T14:49:31Z",
+  "updateSource": "Shipped 2026-08-13: GitHub release v1.10.0 published at 2026-08-13T14:49:31Z from main badd4f0, with all five platform binaries and SHA256SUMS attached by publish.yml. Verified as INSTALLED rather than as a green workflow: the darwin-arm64 binary was downloaded from the release, checksum-verified against the published SHA256SUMS, and run \u2014 it reports 1.10.0. The tag was confirmed to point at main HEAD before publishing, since the recipe tags main's current HEAD and a mismatch fails the version guard.",
   "scope": {
     "required": [
       {
@@ -18,7 +18,9 @@
         "owner": "maintainer",
         "priority": "high",
         "summary": "Renders a repository's persistence model as an ER diagram from an optional, hand-authored entities.json. Slice 1 of three is the Schema projection; the Ownership, Sensitivity and Usage controls ship VISIBLY DISABLED with a reason on each, so the mode is honest about what is not there yet rather than hiding it.",
-        "evidence": ["pr-298"],
+        "evidence": [
+          "pr-298"
+        ],
         "dependsOn": [],
         "source": "ad-hoc",
         "workstreamId": "data-model"
@@ -31,7 +33,9 @@
         "owner": "maintainer",
         "priority": "high",
         "summary": "Pin only what we own and what is finite: attributes[].type is an unconstrained string because the producing database's vocabulary is unbounded, while key and cardinality are enumerated because the renderer draws a specific glyph per value. Validation enforces that a declared relationship resolves to a real entity, so the diagram cannot claim a link the product does not check.",
-        "evidence": ["pr-298"],
+        "evidence": [
+          "pr-298"
+        ],
         "dependsOn": [],
         "source": "ad-hoc",
         "workstreamId": "data-model"
@@ -44,7 +48,9 @@
         "owner": "maintainer",
         "priority": "high",
         "summary": "ER layout lives in architext-routing beside plan(), not forked into the viewer, so the one routing source of truth still holds. Surface selection is scored against the crate's existing MOUNT_COST weights rather than guessed per box.",
-        "evidence": ["pr-298"],
+        "evidence": [
+          "pr-298"
+        ],
         "dependsOn": [],
         "source": "ad-hoc",
         "workstreamId": "data-model"
@@ -57,7 +63,9 @@
         "owner": "maintainer",
         "priority": "medium",
         "summary": "Registers entities.json as an optional manifest file. Additive: no newly-required fields and no removed properties, so every artifact valid under 1.7.0 stays valid. Doctor's additive-migration repair bumps manifest.schemaVersion for consuming repos.",
-        "evidence": ["pr-298"],
+        "evidence": [
+          "pr-298"
+        ],
         "dependsOn": [],
         "source": "ad-hoc",
         "workstreamId": "data-model"
@@ -69,9 +77,14 @@
         "status": "complete",
         "owner": "maintainer",
         "priority": "high",
-        "summary": "The force layout was optimising the wrong objective — physics minimises ENERGY, and a settled energy minimum for a hub is a dense core with a sparse rim, so no constant-tuning could fix the bunching. A grid gives even spacing by construction; what is optimised is which entity goes in which cell. Fill 0.19 -> 0.37, spacing variance 0.07 -> 0.04, labels landing on boxes 3 -> 0. Routing: edges driven straight through other entities 10 of 16 -> 1. Self-relationships now loop outside their box instead of through it.",
-        "evidence": ["pr-299", "er-measured-live"],
-        "dependsOn": ["data-model-mode"],
+        "summary": "The force layout was optimising the wrong objective \u2014 physics minimises ENERGY, and a settled energy minimum for a hub is a dense core with a sparse rim, so no constant-tuning could fix the bunching. A grid gives even spacing by construction; what is optimised is which entity goes in which cell. Fill 0.19 -> 0.37, spacing variance 0.07 -> 0.04, labels landing on boxes 3 -> 0. Routing: edges driven straight through other entities 10 of 16 -> 1. Self-relationships now loop outside their box instead of through it.",
+        "evidence": [
+          "pr-299",
+          "er-measured-live"
+        ],
+        "dependsOn": [
+          "data-model-mode"
+        ],
         "source": "ad-hoc",
         "workstreamId": "data-model"
       },
@@ -82,9 +95,13 @@
         "status": "complete",
         "owner": "maintainer",
         "priority": "medium",
-        "summary": "16 documents derived from viewer/schema/*.json and the references validator, not from prose. Every relationship recorded is one the validator already enforces. Went in through the real user path: doctor offered the registration, applied it, validated, and converged. note.target_id is deliberately left without a references clause because it is polymorphic — naming one entity would record something untrue to earn an annotation.",
-        "evidence": ["pr-299"],
-        "dependsOn": ["entities-schema-and-validation"],
+        "summary": "16 documents derived from viewer/schema/*.json and the references validator, not from prose. Every relationship recorded is one the validator already enforces. Went in through the real user path: doctor offered the registration, applied it, validated, and converged. note.target_id is deliberately left without a references clause because it is polymorphic \u2014 naming one entity would record something untrue to earn an annotation.",
+        "evidence": [
+          "pr-299"
+        ],
+        "dependsOn": [
+          "entities-schema-and-validation"
+        ],
         "source": "ad-hoc",
         "workstreamId": "data-model"
       },
@@ -95,8 +112,11 @@
         "status": "complete",
         "owner": "maintainer",
         "priority": "high",
-        "summary": "Four separate defects behind one symptom. Edges rendered as nothing because ink is specified in WORLD units: the camera framing 3,638 nodes drew every edge 0.068px wide, sub-pixel coverage became alpha, and alpha met the fragment shader's discard floor — fixed with a one-device-pixel screen-space floor. The canvas carried a hardcoded 1600x1000 bitmap in a fluid box, which the browser scales per axis INDEPENDENTLY, measured at 2.08x squash in a narrow pane. 13,148 of 17,247 edges are unresolved dynamic calls, 84% of them cross-cluster, so they were most of the ink and the least trustworthy thing on screen; static is now the default. Labels are level-of-detail, revealed on zoom, as the reference does it.",
-        "evidence": ["pr-299", "code-graph-measured-live"],
+        "summary": "Four separate defects behind one symptom. Edges rendered as nothing because ink is specified in WORLD units: the camera framing 3,638 nodes drew every edge 0.068px wide, sub-pixel coverage became alpha, and alpha met the fragment shader's discard floor \u2014 fixed with a one-device-pixel screen-space floor. The canvas carried a hardcoded 1600x1000 bitmap in a fluid box, which the browser scales per axis INDEPENDENTLY, measured at 2.08x squash in a narrow pane. 13,148 of 17,247 edges are unresolved dynamic calls, 84% of them cross-cluster, so they were most of the ink and the least trustworthy thing on screen; static is now the default. Labels are level-of-detail, revealed on zoom, as the reference does it.",
+        "evidence": [
+          "pr-299",
+          "code-graph-measured-live"
+        ],
         "dependsOn": [],
         "source": "ad-hoc",
         "workstreamId": "code-graph-parity"
@@ -108,8 +128,11 @@
         "status": "complete",
         "owner": "maintainer",
         "priority": "high",
-        "summary": "The settle integrator cannot rebound at any setting: step moves a body straight down the force direction capped by temperature, with no velocity in the state, so energy is never stored and a body can only approach equilibrium. Rebound IS overshoot, and overshoot needs momentum. Live mode adds a velocity-carrying integrator; mousedown hit-tests the quadtree and pins the node under the cursor, a miss falls through to camera pan. Measured at ~8ms/tick for 3,638 nodes in a release build, inside the existing LAYOUT_FRAME_BUDGET_MS of 12. Liveness is RE-HEAT ON INTERACTION, not perpetual motion — a damped body under constant force settles at terminal velocity, not at zero, which is why the first cut animated forever.",
-        "evidence": ["pr-299", "code-graph-measured-live"],
+        "summary": "The settle integrator cannot rebound at any setting: step moves a body straight down the force direction capped by temperature, with no velocity in the state, so energy is never stored and a body can only approach equilibrium. Rebound IS overshoot, and overshoot needs momentum. Live mode adds a velocity-carrying integrator; mousedown hit-tests the quadtree and pins the node under the cursor, a miss falls through to camera pan. Measured at ~8ms/tick for 3,638 nodes in a release build, inside the existing LAYOUT_FRAME_BUDGET_MS of 12. Liveness is RE-HEAT ON INTERACTION, not perpetual motion \u2014 a damped body under constant force settles at terminal velocity, not at zero, which is why the first cut animated forever.",
+        "evidence": [
+          "pr-299",
+          "code-graph-measured-live"
+        ],
         "dependsOn": [],
         "source": "ad-hoc",
         "workstreamId": "code-graph-parity"
@@ -121,8 +144,10 @@
         "status": "complete",
         "owner": "maintainer",
         "priority": "high",
-        "summary": "dead was !reachable, so any exported symbol whose callers the analyser cannot see was asserted dead. On Architext's own graph that named six #[serde(with = \"...\")] module functions whose deletion breaks the build — serde's derive machinery calls them and no resolvable call site exists. The class is split rather than suppressed: !reachable && !exported stays dead, !reachable && exported becomes public-unreferenced with its own badge, colour and toggle. A blanket 'public is never dead' rule was rejected because all crates here are publish = false.",
-        "evidence": ["pr-299"],
+        "summary": "dead was !reachable, so any exported symbol whose callers the analyser cannot see was asserted dead. On Architext's own graph that named six #[serde(with = \"...\")] module functions whose deletion breaks the build \u2014 serde's derive machinery calls them and no resolvable call site exists. The class is split rather than suppressed: !reachable && !exported stays dead, !reachable && exported becomes public-unreferenced with its own badge, colour and toggle. A blanket 'public is never dead' rule was rejected because all crates here are publish = false.",
+        "evidence": [
+          "pr-299"
+        ],
         "dependsOn": [],
         "source": "ad-hoc",
         "workstreamId": "code-graph-parity"
@@ -135,7 +160,9 @@
         "owner": "maintainer",
         "priority": "medium",
         "summary": "Registers code-graph.json and ships the graph it points at: 3,638 functions, 17,307 calls, 306 modules. Manifest entry and data land together, because architext validate reads every file the manifest registers and a registered-but-absent file is a broken install.",
-        "evidence": ["pr-299"],
+        "evidence": [
+          "pr-299"
+        ],
         "dependsOn": [],
         "source": "ad-hoc",
         "workstreamId": "code-graph-parity"
@@ -147,8 +174,11 @@
         "status": "complete",
         "owner": "maintainer",
         "priority": "high",
-        "summary": "An activation bar is an opaque surface-filled rect, and the body layers painted frames BEFORE activations, so any bar crossing a fragment's top-left corner erased the interaction operator in the tab there — the full 10px bar width over the full 18px tab height, twice on the corpus, with 'transaction' rendering visibly cut mid-word. Fixed by paint order, not geometry, because the geometry is correct: a participant can legitimately be executing while an enclosing fragment begins on its column. Two other measured overlaps were deliberately NOT changed and are recorded as such — nested activation bars overlap by 2px because UML draws nested execution occurrences offset and overlapping, and an action label crossing a bar keeps ~15:1 contrast.",
-        "evidence": ["pr-299", "sequence-collision-audit"],
+        "summary": "An activation bar is an opaque surface-filled rect, and the body layers painted frames BEFORE activations, so any bar crossing a fragment's top-left corner erased the interaction operator in the tab there \u2014 the full 10px bar width over the full 18px tab height, twice on the corpus, with 'transaction' rendering visibly cut mid-word. Fixed by paint order, not geometry, because the geometry is correct: a participant can legitimately be executing while an enclosing fragment begins on its column. Two other measured overlaps were deliberately NOT changed and are recorded as such \u2014 nested activation bars overlap by 2px because UML draws nested execution occurrences offset and overlapping, and an action label crossing a bar keeps ~15:1 contrast.",
+        "evidence": [
+          "pr-299",
+          "sequence-collision-audit"
+        ],
         "dependsOn": [],
         "source": "ad-hoc",
         "workstreamId": "viewer-defects"
@@ -161,7 +191,9 @@
         "owner": "maintainer",
         "priority": "medium",
         "summary": "Two separate bugs. The CSS already claimed that with no file selected the table reclaims the full width, and it did not: the preview was hidden but its 52rem cap stayed in force, so in the state the tree opens in, a third of the panel sat empty. Separately both panes were flex: 1 1 0, so a file list and a source file got identical width.",
-        "evidence": ["pr-299"],
+        "evidence": [
+          "pr-299"
+        ],
         "dependsOn": [],
         "source": "ad-hoc",
         "workstreamId": "viewer-defects"
@@ -174,7 +206,9 @@
         "owner": "maintainer",
         "priority": "low",
         "summary": "A full-width square rect over an rx=8 card, so its ends hung 8px outside the card outline per side. The geometry was identical on all 18 nodes; only how visible the overhang was changed with each category colour, which is what made it read as inconsistently placed.",
-        "evidence": ["pr-299"],
+        "evidence": [
+          "pr-299"
+        ],
         "dependsOn": [],
         "source": "ad-hoc",
         "workstreamId": "viewer-defects"
@@ -187,7 +221,9 @@
         "owner": "maintainer",
         "priority": "high",
         "summary": "Reported from a consuming repository. c4_drilldown_type(\"c4-component\") returns \"c4-code\", so doctor demanded the view, while c4_type_expectations had no arm for it and the same module reported it unsupported. A test asserted the bad behaviour, which held the contradiction in place. A new structural test walks every parent level asserting its drilldown target is supported and has a density budget, so the two halves cannot disagree again.",
-        "evidence": ["pr-299"],
+        "evidence": [
+          "pr-299"
+        ],
         "dependsOn": [],
         "source": "ad-hoc",
         "workstreamId": "viewer-defects"
@@ -204,7 +240,9 @@
         "owner": "maintainer",
         "priority": "medium",
         "summary": "sequence.rs computes rows, activation bars and frame boxes; sequence_svg.rs then invents the action label, step chip and operator tab geometry the layout never sees. A layout that cannot see an element's extent cannot avoid colliding with it, which is why the fragment guard still overprints the first bracketed row's action label. The constants are also mutually load-bearing: FRAME_Y_LIFT is pinned at 30 by the header-band clip, and lift + tail must stay under row_height 56 to keep sequential fragments disjoint.",
-        "evidence": ["sequence-collision-audit"],
+        "evidence": [
+          "sequence-collision-audit"
+        ],
         "dependsOn": [],
         "source": "ad-hoc",
         "deferredReason": "SCOPE. Maintainer decision 2026-08-13: ship 1.10.0 with the severe occlusion fixed and do the extent work next. The residual defect is a hairline overlap of two labels in one corpus flow, whereas the fix is a design change to the sequence layout rather than a release-prep patch, and folding it in would hold a complete release behind unstarted design work."
@@ -218,7 +256,9 @@
         "priority": "medium",
         "summary": "Slice 2 (Ownership and Sensitivity) is tints and filters over data slice 1 already carries, with no schema change. Slice 3 (Usage) adds optional reads/writes to flow steps plus the projection, an additive schema change.",
         "evidence": [],
-        "dependsOn": ["data-model-mode"],
+        "dependsOn": [
+          "data-model-mode"
+        ],
         "source": "ad-hoc",
         "deferredReason": "SEQUENCING. Slice 1 is a coherent shippable projection on its own, and the deferral is disclosed IN THE PRODUCT rather than only here: the three controls render visibly disabled with a reason on each, so no user is told the mode does more than it does."
       },
@@ -231,9 +271,11 @@
         "priority": "low",
         "summary": "The last step of the Obsidian-parity sequence, after opening at rest, live grab-and-drag, labels on zoom, and edge legibility.",
         "evidence": [],
-        "dependsOn": ["code-graph-live-layout"],
+        "dependsOn": [
+          "code-graph-live-layout"
+        ],
         "source": "ad-hoc",
-        "deferredReason": "SEQUENCING. The first four steps are complete and independently useful, and the remaining gap to the reference is the FORCE LAW rather than the interaction surface — a Hooke spring moved equilibrium from d=60 to d=94 when tried, and that looser equilibrium is the difference. Shipping the settled four now avoids holding them behind an open question about the integrator."
+        "deferredReason": "SEQUENCING. The first four steps are complete and independently useful, and the remaining gap to the reference is the FORCE LAW rather than the interaction surface \u2014 a Hooke spring moved equilibrium from d=60 to d=94 when tried, and that looser equilibrium is the difference. Shipping the settled four now avoids holding them behind an open question about the integrator."
       }
     ],
     "outOfScope": []
@@ -244,7 +286,7 @@
       "name": "Data Model",
       "owner": "maintainer",
       "status": "complete",
-      "posture": "release-candidate",
+      "posture": "shipped",
       "progress": 100,
       "summary": "A new viewer mode rendering a repository's persistence model from optional hand-authored data, plus the routing sibling and the schema row that carry it.",
       "itemIds": [
@@ -255,14 +297,18 @@
         "er-legibility",
         "architext-entities-dogfood"
       ],
-      "evidence": ["pr-298", "pr-299", "er-measured-live"]
+      "evidence": [
+        "pr-298",
+        "pr-299",
+        "er-measured-live"
+      ]
     },
     {
       "id": "code-graph-parity",
       "name": "Code Graph parity",
       "owner": "maintainer",
       "status": "complete",
-      "posture": "release-candidate",
+      "posture": "shipped",
       "progress": 100,
       "summary": "Closing the gap between the shipped Code Graph mode and the reference graph it is measured against: what it draws, and what kind of object it is.",
       "itemIds": [
@@ -271,14 +317,17 @@
         "code-graph-dead-code-classification",
         "architext-code-graph-dogfood"
       ],
-      "evidence": ["pr-299", "code-graph-measured-live"]
+      "evidence": [
+        "pr-299",
+        "code-graph-measured-live"
+      ]
     },
     {
       "id": "viewer-defects",
       "name": "Viewer defects",
       "owner": "maintainer",
       "status": "complete",
-      "posture": "release-candidate",
+      "posture": "shipped",
       "progress": 100,
       "summary": "Rendering and layout defects found by looking at the product, one of them reported from a consuming repository.",
       "itemIds": [
@@ -287,7 +336,10 @@
         "node-category-bar-geometry",
         "c4-code-view-contradiction"
       ],
-      "evidence": ["pr-299", "sequence-collision-audit"]
+      "evidence": [
+        "pr-299",
+        "sequence-collision-audit"
+      ]
     }
   ],
   "blockers": [],
@@ -330,5 +382,6 @@
       "kind": "test",
       "status": "complete"
     }
-  ]
+  ],
+  "releasedAt": "2026-08-13T14:49:31Z"
 }
