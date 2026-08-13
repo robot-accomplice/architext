@@ -1149,27 +1149,46 @@ pub fn route_edges(boxes: &[ErBox], input: &ErInput) -> Vec<ErEdge> {
 /// join. A hop resolves it. Computed here rather than in the viewer so the
 /// choice of which line hops is deterministic -- always the later edge, by a
 /// fixed order -- instead of depending on paint order.
+/// How close to both routes' ends a meeting has to be to count as a JOIN at a
+/// shared box rather than a crossing. Roughly a port spacing, so two relations
+/// leaving the same face are not bridged over each other on the way out.
+const JOIN_CLEARANCE: f64 = 24.0;
+
 fn hop_points(edges: &[ErEdge]) -> Vec<Vec<Point>> {
     let mut hops: Vec<Vec<Point>> = vec![Vec::new(); edges.len()];
     for i in 0..edges.len() {
         for j in 0..i {
-            // Edges sharing an entity meet at a box, not in open space.
-            if edges[i].from == edges[j].from
+            // Edges sharing an entity converge ON that box, and an arc where
+            // two routes JOIN would be nonsense. But they only converge there:
+            // a hub fans several relations out and they cross other routes far
+            // away, so skipping the whole PAIR — as this did — discarded
+            // exactly the crossings a dense diagram has most of. Instead the
+            // crossings themselves are filtered below, by whether they land
+            // near a shared endpoint.
+            let shared = edges[i].from == edges[j].from
                 || edges[i].to == edges[j].to
                 || edges[i].from == edges[j].to
-                || edges[i].to == edges[j].from
-            {
-                continue;
-            }
+                || edges[i].to == edges[j].from;
             // EVERY leg against every leg. Routes are orthogonal polylines --
             // L (3 points), Z (4), gutter detours -- and a straight two-point
             // run only survives when the ports already line up. Testing
             // `points[0]..points[1]` alone therefore checked the first leg and
             // ignored the rest, which is most of the route and where most
             // crossings are.
+            let near_end = |e: &ErEdge, p: &Point| {
+                let ends = [&e.points[0], &e.points[e.points.len() - 1]];
+                ends.iter().any(|q| {
+                    ((q.x - p.x).powi(2) + (q.y - p.y).powi(2)).sqrt() < JOIN_CLEARANCE
+                })
+            };
             for wa in edges[i].points.windows(2) {
                 for wb in edges[j].points.windows(2) {
                     if let Some(p) = segment_intersection(&wa[0], &wa[1], &wb[0], &wb[1]) {
+                        // A meeting close to where BOTH routes terminate is the
+                        // shared box: they are joining, not crossing.
+                        if shared && near_end(&edges[i], &p) && near_end(&edges[j], &p) {
+                            continue;
+                        }
                         hops[i].push(p);
                     }
                 }
@@ -1936,6 +1955,64 @@ mod tests {
             "hop at {:?}, want (100, 50)",
             (h.x, h.y)
         );
+    }
+
+    #[test]
+    fn two_edges_off_the_same_entity_still_hop_where_they_cross_in_open_space() {
+        // WHY: maintainer, 2026-08-13 — "orthogonal crossing lines are also not
+        // hopping". `hop_points` skipped any PAIR sharing an entity, on the
+        // reasoning that such edges "meet at a box, not in open space". True at
+        // the box, false everywhere else: on a grid an entity fans out several
+        // relations that then cross other routes far from it, and a hub makes
+        // most crossing pairs share an endpoint. The skip threw away exactly
+        // the crossings a dense diagram has most of.
+        let p = |x: f64, y: f64| Point { x, y };
+        let mk = |from: &str, to: &str, points: Vec<Point>| ErEdge {
+            from: from.into(),
+            to: to.into(),
+            label: None,
+            cardinality: "one-to-one".into(),
+            points,
+            from_foot: ErFoot::One,
+            to_foot: ErFoot::One,
+            label_x: 0.0,
+            label_y: 0.0,
+            hops: Vec::new(),
+        };
+        // Both leave entity "a" at the origin, then cross at (100, 50) — a
+        // long way from the box they share.
+        let edges = vec![
+            mk("a", "b", vec![p(0.0, 0.0), p(100.0, 0.0), p(100.0, 100.0)]),
+            mk("a", "c", vec![p(0.0, 0.0), p(0.0, 50.0), p(150.0, 50.0)]),
+        ];
+        let hops = hop_points(&edges);
+        assert_eq!(hops[1].len(), 1, "a crossing away from the shared entity must hop");
+        assert!((hops[1][0].x - 100.0).abs() < 1e-6 && (hops[1][0].y - 50.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn edges_meeting_at_their_shared_box_do_not_hop_there() {
+        // The other half of the same rule: where two routes genuinely converge
+        // on the entity they share, an arc would be nonsense — they are joining,
+        // not crossing.
+        let p = |x: f64, y: f64| Point { x, y };
+        let mk = |from: &str, to: &str, points: Vec<Point>| ErEdge {
+            from: from.into(),
+            to: to.into(),
+            label: None,
+            cardinality: "one-to-one".into(),
+            points,
+            from_foot: ErFoot::One,
+            to_foot: ErFoot::One,
+            label_x: 0.0,
+            label_y: 0.0,
+            hops: Vec::new(),
+        };
+        let edges = vec![
+            mk("a", "b", vec![p(0.0, 0.0), p(100.0, 0.0)]),
+            mk("a", "c", vec![p(0.0, 0.0), p(0.0, 100.0)]),
+        ];
+        assert!(hop_points(&edges)[1].is_empty(), "a shared origin is a join, not a crossing");
     }
 
     #[test]
