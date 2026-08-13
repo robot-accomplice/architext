@@ -70,7 +70,26 @@ async fn bound_server_answers_a_request() {
 
     // Poll until the server is reachable (or give up). `/api/session` needs only
     // a loopback Host header and no data files, so it answers 200 on any target.
-    let deadline = Instant::now() + Duration::from_secs(5);
+    //
+    // The deadline is generous ON PURPOSE, and widening it does not weaken the
+    // guard. The regression being caught is a panic during runtime registration:
+    // the server binds the port and then NEVER accepts a connection, so it fails
+    // at any deadline. A tight deadline therefore adds no detection power — it
+    // only converts a slow machine into a false failure.
+    //
+    // Measured 2026-08-13 across one working session on a dev machine: the poll
+    // loop answered in 1.3s..7.7s. Two runs in five blew past the previous 5s
+    // ceiling (5.6s and 8.4s) while other work shared the box, failing on time
+    // rather than on behaviour, and later runs reached ~7s with the box otherwise
+    // quiet. CI runners are not faster than a laptop, so 5s was a latent red build.
+    //
+    // UNRESOLVED, and deliberately not asserted here: the measured startup drifted
+    // upward over the session rather than staying flat. It correlates with sustained
+    // machine load, but an accumulation effect is not ruled out — one candidate is
+    // that `free_loopback_port` releases its probe port before the server claims it,
+    // so a run can land on a port still in TIME_WAIT. That is a hypothesis, not a
+    // finding; it needs its own measurement rather than a guess encoded in a test.
+    let deadline = Instant::now() + Duration::from_secs(30);
     let mut last_status = None;
     while Instant::now() < deadline {
         if server.is_finished() {
