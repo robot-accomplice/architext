@@ -351,6 +351,10 @@ pub struct Simulation {
     /// The node held under the cursor, and where it is held. One at a time —
     /// a mouse drags one thing.
     pin: Option<(usize, f64, f64)>,
+    /// Live "temperature": scales the force applied per tick and decays toward
+    /// [`Simulation::alpha_target`]. See [`LIVE_ALPHA_DECAY`] — without it a
+    /// live graph never stops moving.
+    alpha: f64,
     /// Ticks granted beyond `cfg.max_ticks` by [`Simulation::reheat`]. Kept
     /// separate from `cfg.max_ticks` because that value is the DENOMINATOR of
     /// the cooling schedule; extending it there would change the settle's
@@ -382,6 +386,28 @@ const LIVE_DAMPING: f64 = 0.12;
 /// because forces are of order `k` (60) at equilibrium, and a body that moves
 /// a full edge length per tick is a body that has exploded.
 const LIVE_STEP: f64 = 0.05;
+
+/// How fast live `alpha` falls toward its target each tick, and the value below
+/// which the simulation is finished.
+///
+/// This is d3-force's alpha model, and live mode does not work without it.
+/// Damping alone CANNOT bring a large graph to rest: every body keeps a
+/// residual repulsion from every other, and a damped body under constant force
+/// settles at terminal velocity, not at zero. Measured: 1,000 nodes were still
+/// moving after 3,000 unattended ticks — the "perpetual animation" a settle
+/// never shows, because a settle's temperature cools to zero and takes
+/// displacement with it.
+///
+/// Alpha is the live equivalent of that cooling: it scales the force applied
+/// each tick, decays geometrically toward `alpha_target`, and stops the
+/// simulation once it drops below `LIVE_ALPHA_MIN`. A hand on the graph holds
+/// the target up; letting go lets it fall.
+const LIVE_ALPHA_DECAY: f64 = 0.02;
+/// Below this, the graph is done moving.
+const LIVE_ALPHA_MIN: f64 = 0.005;
+/// The target alpha while a node is held, so dragging keeps the web responsive
+/// however long it lasts. d3 uses 0.3 for the same purpose.
+const LIVE_ALPHA_DRAGGING: f64 = 0.3;
 
 /// Ceiling on how far a body may move in one live tick, as a multiple of the
 /// ideal edge length. The settle's stability comes from its cooling schedule,
@@ -430,6 +456,7 @@ impl Simulation {
             live: false,
             vel: Vec::new(),
             pin: None,
+            alpha: 1.0,
             extra_ticks: 0,
         }
     }
@@ -471,7 +498,13 @@ impl Simulation {
         // the graph decides when it is finished. `converged` still stops it,
         // so a released graph comes to rest instead of ticking forever.
         if self.live {
-            return self.converged;
+            // Alpha, not `convergence_eps`. A damped body under the constant
+            // residual force every node feels from every other settles at
+            // TERMINAL VELOCITY, so displacement never falls under the epsilon
+            // and a live graph would animate forever (measured: 1,000 nodes
+            // still moving after 3,000 unattended ticks). Alpha is what
+            // guarantees an end.
+            return self.converged || self.alpha < LIVE_ALPHA_MIN;
         }
         self.converged || self.tick >= self.cfg.max_ticks + self.extra_ticks
     }
@@ -563,10 +596,17 @@ impl Simulation {
             // equilibrium still MOVING, carries through it, and is pulled
             // back — the rebound. Speed is clamped at one edge length per
             // tick purely as a blow-up guard; it is not a cooling schedule.
+            // Cool toward the target BEFORE integrating, so a released graph
+            // starts winding down on the very next tick.
+            let target = if self.pin.is_some() { LIVE_ALPHA_DRAGGING } else { 0.0 };
+            self.alpha += (target - self.alpha) * LIVE_ALPHA_DECAY;
+            let alpha = self.alpha;
             for (i, b) in self.bodies.iter_mut().enumerate() {
                 let v = &mut self.vel[i];
-                v.0 = (v.0 + fx[i] * LIVE_STEP) * (1.0 - LIVE_DAMPING);
-                v.1 = (v.1 + fy[i] * LIVE_STEP) * (1.0 - LIVE_DAMPING);
+                // Force scaled by alpha: as it falls, less energy goes in each
+                // tick than damping takes out, so the motion actually ends.
+                v.0 = (v.0 + fx[i] * LIVE_STEP * alpha) * (1.0 - LIVE_DAMPING);
+                v.1 = (v.1 + fy[i] * LIVE_STEP * alpha) * (1.0 - LIVE_DAMPING);
                 let speed = (v.0 * v.0 + v.1 * v.1).sqrt();
                 let max_speed = self.cfg.k * LIVE_MAX_SPEED_K;
                 if speed > max_speed {
@@ -637,6 +677,7 @@ impl Simulation {
             anchors: anchors.to_vec(),
             live: true,
             pin: None,
+            alpha: 1.0,
             extra_ticks: 0,
         }
     }
@@ -658,6 +699,7 @@ impl Simulation {
         if live {
             self.vel.resize(self.bodies.len(), (0.0, 0.0));
             self.converged = false;
+            self.alpha = 1.0;
         } else {
             self.pin = None;
         }
@@ -667,6 +709,12 @@ impl Simulation {
     /// `None` releases it, leaving whatever tension the edges have stored to
     /// pull it back.
     pub fn set_pin(&mut self, pin: Option<(usize, f64, f64)>) {
+        // Grabbing re-heats: a graph that had already cooled to a stop must
+        // respond to the next drag, not sit inert because alpha ran out.
+        if pin.is_some() && self.pin.is_none() {
+            self.alpha = self.alpha.max(LIVE_ALPHA_DRAGGING);
+            self.converged = false;
+        }
         self.pin = pin;
     }
 
@@ -821,6 +869,39 @@ mod tests {
     }
 
     #[test]
+    fn a_released_graph_comes_to_rest_instead_of_animating_forever() {
+        // WHY: maintainer, 2026-08-13 — "it appears to be in a state of
+        // perpetual animation". The settle stops because its TEMPERATURE cools
+        // to zero, which drives displacement to zero with it. Live mode has
+        // only damping, and damping against a constant force settles at
+        // TERMINAL VELOCITY, not at zero — so `max_disp` never falls under
+        // `convergence_eps` and `is_done()` never becomes true. The graph
+        // ticks at ~8ms a frame forever, burning the battery to redraw a
+        // picture that is not changing in any way a person can see.
+        //
+        // Obsidian's model is the fix and was named earlier without being
+        // built: alpha decays toward a target, and the simulation halts below
+        // alphaMin. Dragging holds the target up; releasing lets it fall.
+        let cfg = ForceConfig { max_ticks: 400, ..ForceConfig::default() };
+        let (mut sim, rest) = settled_pair(&cfg);
+        sim.set_live(true);
+        let p = sim.positions();
+        sim.set_pin(Some((1, p[0].0 + rest * 3.0, p[0].1)));
+        for _ in 0..30 {
+            sim.step();
+        }
+        assert!(!sim.is_done(), "a hand on the graph keeps it awake");
+
+        sim.set_pin(None);
+        let mut ticks = 0;
+        while !sim.is_done() && ticks < 5_000 {
+            sim.step();
+            ticks += 1;
+        }
+        assert!(sim.is_done(), "still moving after {ticks} ticks with nothing driving it");
+    }
+
+    #[test]
     fn reheating_reopens_a_finished_simulation() {
         // WHY: `is_done()` is a one-way door today (converged OR max_ticks),
         // and the driver is dropped behind it. Interaction needs a way back in.
@@ -912,6 +993,30 @@ mod tests {
             max_y = max_y.max(y);
         }
         (max_x - min_x, max_y - min_y)
+    }
+
+    #[test]
+    fn a_released_graph_comes_to_rest_at_scale() {
+        // WHY: the two-node version of this passes — at equilibrium two bodies
+        // feel almost no force, so damping alone finishes the job. A thousand
+        // interconnected bodies never reach that state: repulsion from every
+        // other node keeps a residual force on each one, damping settles it at
+        // TERMINAL VELOCITY rather than zero, and `max_disp` never falls under
+        // `convergence_eps`. That is the "perpetual animation" the maintainer
+        // saw, and only scale can show it.
+        let (n, edges) = interconnected(1000, 3);
+        let cfg = ForceConfig { max_ticks: 300, ..ForceConfig::default() };
+        let settled = run_layout(n, &edges, 300);
+        let f32s: Vec<(f32, f32)> = settled.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
+        let mut sim = Simulation::from_positions(&f32s, &edges, &[], &cfg);
+
+        // Nothing is holding it: no pin, no interaction. It must wind down.
+        let mut ticks = 0;
+        while !sim.is_done() && ticks < 3_000 {
+            sim.step();
+            ticks += 1;
+        }
+        assert!(sim.is_done(), "1000 nodes still animating after {ticks} unattended ticks");
     }
 
     #[test]
