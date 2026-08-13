@@ -52,7 +52,9 @@ use leptos::*;
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use web_sys::{MessageEvent, Worker};
 
-use crate::code_graph_view_model::{build_graph, Tier, LAYOUT_SEED};
+use crate::code_graph_view_model::{
+    build_graph, cluster_anchors, Tier, CLUSTER_PULL, LAYOUT_SEED,
+};
 use crate::data::models::CodeGraph;
 use crate::diagnostics;
 use crate::force_layout::ForceConfig;
@@ -78,6 +80,10 @@ const FIELD_K: &str = "k";
 const FIELD_GRAVITY: &str = "gravity";
 const FIELD_CONVERGENCE_EPS: &str = "convergenceEps";
 const FIELD_EDGES: &str = "edges";
+/// Per-node cluster anchors, flattened `[x0, y0, x1, y1, ...]`. Absent or
+/// empty means an unclustered settle.
+const FIELD_ANCHORS: &str = "anchors";
+const FIELD_CLUSTER_PULL: &str = "clusterPull";
 const FIELD_POSITIONS: &str = "positions";
 const FIELD_TICKS_RUN: &str = "ticksRun";
 
@@ -102,6 +108,11 @@ fn flatten_edges(edges: &[(usize, usize)]) -> Vec<u32> {
 
 fn unflatten_edges(flat: &[u32]) -> Vec<(usize, usize)> {
     flat.chunks_exact(2).map(|p| (p[0] as usize, p[1] as usize)).collect()
+}
+
+/// `[x0, y0, x1, y1, ...]` back into anchor pairs.
+fn unflatten_anchors(flat: &[f32]) -> Vec<(f64, f64)> {
+    flat.chunks_exact(2).map(|c| (c[0] as f64, c[1] as f64)).collect()
 }
 
 fn flatten_positions(positions: &[(f32, f32)]) -> Vec<f32> {
@@ -137,6 +148,7 @@ fn encode_request(
     edges: &[(usize, usize)],
     seed: u64,
     cfg: &ForceConfig,
+    anchors: &[(f64, f64)],
 ) -> Result<(Object, Array), JsValue> {
     let edges_arr = Uint32Array::from(flatten_edges(edges).as_slice());
     let (seed_hi, seed_lo) = split_seed(seed);
@@ -151,6 +163,12 @@ fn encode_request(
     Reflect::set(&msg, &FIELD_GRAVITY.into(), &cfg.gravity.into())?;
     Reflect::set(&msg, &FIELD_CONVERGENCE_EPS.into(), &cfg.convergence_eps.into())?;
     Reflect::set(&msg, &FIELD_EDGES.into(), &edges_arr)?;
+    Reflect::set(&msg, &FIELD_CLUSTER_PULL.into(), &cfg.cluster_pull.into())?;
+    if !anchors.is_empty() {
+        let flat: Vec<f32> =
+            anchors.iter().flat_map(|&(x, y)| [x as f32, y as f32]).collect();
+        Reflect::set(&msg, &FIELD_ANCHORS.into(), &Float32Array::from(&flat[..]))?;
+    }
 
     let transfer = Array::new();
     transfer.push(&edges_arr.buffer());
@@ -158,7 +176,7 @@ fn encode_request(
 }
 
 /// `(node_count, edges, seed, config)` — the decoded settle request.
-type SettleRequest = (u32, Vec<(usize, usize)>, u64, ForceConfig);
+type SettleRequest = (u32, Vec<(usize, usize)>, u64, ForceConfig, Vec<(f64, f64)>);
 
 /// Parse an inbound settle request. `pub` — the worker entry point
 /// (`src/bin/layout_worker.rs`, a separate Cargo binary target in this same
@@ -174,10 +192,18 @@ pub fn decode_request(data: &JsValue) -> Result<SettleRequest, JsValue> {
         gravity: get_f64(data, FIELD_GRAVITY)?,
         max_ticks,
         convergence_eps: get_f64(data, FIELD_CONVERGENCE_EPS)?,
+        cluster_pull: get_f64(data, FIELD_CLUSTER_PULL).unwrap_or(0.0),
     };
     let edges_arr: Uint32Array = Reflect::get(data, &FIELD_EDGES.into())?.dyn_into()?;
     let edges = unflatten_edges(&edges_arr.to_vec());
-    Ok((node_count, edges, seed, cfg))
+    // Anchors are optional: an older or unclustered request simply has none,
+    // and the settle behaves exactly as it did before clustering existed.
+    let anchors = Reflect::get(data, &FIELD_ANCHORS.into())
+        .ok()
+        .and_then(|v| v.dyn_into::<Float32Array>().ok())
+        .map(|a| unflatten_anchors(&a.to_vec()))
+        .unwrap_or_default();
+    Ok((node_count, edges, seed, cfg, anchors))
 }
 
 /// Build the settle reply plus its transfer list (the `positions` buffer).
@@ -227,6 +253,7 @@ pub fn spawn_settle(
     edges: &[(usize, usize)],
     seed: u64,
     cfg: &ForceConfig,
+    anchors: &[(f64, f64)],
     on_settled: impl FnOnce(WorkerOutcome) + 'static,
 ) -> Option<Worker> {
     let callback: SettleCallback = Rc::new(RefCell::new(Some(Box::new(on_settled))));
@@ -240,7 +267,7 @@ pub fn spawn_settle(
         }
     };
 
-    let (request_msg, request_transfer) = match encode_request(node_count, edges, seed, cfg) {
+    let (request_msg, request_transfer) = match encode_request(node_count, edges, seed, cfg, anchors) {
         Ok(r) => r,
         Err(e) => {
             leptos::logging::log!("[layout-worker-client] encode_request FAILED: {e:?}");
@@ -367,7 +394,14 @@ pub fn warm_function_tier(state: AppState, cg: &CodeGraph) {
         return; // nothing to warm
     }
     let key = LayoutKey::new(cg.sha.clone(), cg.tree.clone(), Tier::Functions);
-    let cfg = ForceConfig::default();
+    // Cluster the settle: anchor every function near its package group so the
+    // graph resolves into lobes instead of one contiguous sphere. Aggregating
+    // 3,638 functions into 306 modules never fixed that -- it changed the node
+    // count, not the shape -- because a system where everything repels
+    // everything has exactly one resting form.
+    let cfg = ForceConfig { cluster_pull: CLUSTER_PULL, ..ForceConfig::default() };
+    let anchors =
+        cluster_anchors(&graph.clusters, graph.cluster_count, &graph.layout_edges, &cfg);
 
     // Diagnostics module doc item 4 ("whether the layout came from
     // cache/worker/local"): this is the ONLY producer of the "worker" source
@@ -378,11 +412,27 @@ pub fn warm_function_tier(state: AppState, cg: &CodeGraph) {
     let warm_t0 = js_sys::Date::now();
     diagnostics::record(
         diagnostics::NO_INSTANCE,
+        "layout_clustering",
+        Some(format!(
+            "source=worker tier=Functions nodes={node_count} clusters={} anchors={} pull={}",
+            graph.cluster_count,
+            anchors.len(),
+            cfg.cluster_pull
+        )),
+    );
+    diagnostics::record(
+        diagnostics::NO_INSTANCE,
         "layout_settle_start",
         Some(format!("source=worker tier=Functions nodes={node_count}")),
     );
 
-    let worker = spawn_settle(node_count as u32, &graph.layout_edges, LAYOUT_SEED, &cfg, move |outcome| {
+    let worker = spawn_settle(
+        node_count as u32,
+        &graph.layout_edges,
+        LAYOUT_SEED,
+        &cfg,
+        &anchors,
+        move |outcome| {
         match outcome {
             WorkerOutcome::Settled { positions, ticks_run } => {
                 leptos::logging::log!(

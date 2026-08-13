@@ -1213,6 +1213,49 @@ fn same_summary(left: &Value, right: &Value) -> bool {
 
 #[cfg(test)]
 mod tests {
+
+    /// Reported from another project: the index aggregate disagreed with the
+    /// release detail. This pins WHY the two can differ.
+    ///
+    /// `counts` recognises two kinds, `feature` and `bug-fix`, while the detail
+    /// schema's `kind` enum has six. Items that are `documentation`,
+    /// `architecture`, `test` or `chore` therefore land in NO kind bucket: they
+    /// are counted by status, so they move `complete`, but they are invisible
+    /// to `features + bugFixes`. Any ratio built from those two under-reports
+    /// the release by exactly the number of such items.
+    ///
+    /// Not asserted as correct-or-incorrect here -- widening it is a schema
+    /// change, and `counts` is `additionalProperties: false`, so this test
+    /// exists to make the gap explicit rather than to bless it.
+    #[test]
+    fn counts_recognise_only_two_of_the_six_item_kinds() {
+        let detail = json!({
+            "scope": {
+                "required": [
+                    { "id": "a", "kind": "feature",       "status": "complete" },
+                    { "id": "b", "kind": "bug-fix",       "status": "complete" },
+                    { "id": "c", "kind": "documentation", "status": "complete" },
+                    { "id": "d", "kind": "architecture",  "status": "complete" },
+                    { "id": "e", "kind": "test",          "status": "complete" },
+                    { "id": "f", "kind": "chore",         "status": "complete" }
+                ]
+            }
+        });
+        let counts = derive_release_counts(&detail);
+
+        assert_eq!(counts["complete"], 6, "all six items are complete");
+        assert_eq!(counts["features"], 1);
+        assert_eq!(counts["bugFixes"], 1);
+
+        // The gap, stated as a number: four items are counted by status and by
+        // no kind at all.
+        let by_kind = counts["features"].as_u64().unwrap() + counts["bugFixes"].as_u64().unwrap();
+        assert_eq!(
+            counts["complete"].as_u64().unwrap() - by_kind,
+            4,
+            "four of six kinds have no bucket in the index counts"
+        );
+    }
     use super::*;
     use serde_json::json;
 

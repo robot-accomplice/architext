@@ -1,0 +1,558 @@
+{
+  "entities": [
+    {
+      "id": "account",
+      "name": "Account",
+      "summary": "A person or organisation that can sign in and transact.",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "email",
+          "type": "citext",
+          "key": "unique",
+          "required": true
+        },
+        {
+          "name": "display_name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "account_status",
+          "required": true
+        },
+        {
+          "name": "created_at",
+          "type": "timestamptz",
+          "required": true
+        },
+        {
+          "name": "deleted_at",
+          "type": "timestamptz"
+        }
+      ],
+      "relationships": [
+        {
+          "to": "order",
+          "cardinality": "one-to-many",
+          "label": "places"
+        },
+        {
+          "to": "invoice",
+          "cardinality": "one-to-many",
+          "label": "is billed"
+        },
+        {
+          "to": "address",
+          "cardinality": "one-to-many",
+          "label": "has"
+        },
+        {
+          "to": "session",
+          "cardinality": "one-to-many",
+          "label": "opens"
+        },
+        {
+          "to": "audit_event",
+          "cardinality": "one-to-many",
+          "label": "generates"
+        },
+        {
+          "to": "api_token",
+          "cardinality": "one-to-many",
+          "label": "issues"
+        }
+      ]
+    },
+    {
+      "id": "order",
+      "name": "Order",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "account_id",
+          "type": "uuid",
+          "key": "foreign",
+          "required": true,
+          "references": "account"
+        },
+        {
+          "name": "placed_at",
+          "type": "timestamptz",
+          "required": true
+        },
+        {
+          "name": "total_cents",
+          "type": "bigint",
+          "required": true
+        },
+        {
+          "name": "currency",
+          "type": "char(3)",
+          "required": true
+        }
+      ],
+      "relationships": [
+        {
+          "to": "order_line",
+          "cardinality": "one-to-many",
+          "label": "contains"
+        },
+        {
+          "to": "shipment",
+          "cardinality": "one-to-many",
+          "label": "ships as"
+        }
+      ]
+    },
+    {
+      "id": "order_line",
+      "name": "Order Line",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "order_id",
+          "type": "uuid",
+          "key": "foreign",
+          "required": true,
+          "references": "order"
+        },
+        {
+          "name": "product_id",
+          "type": "uuid",
+          "key": "foreign",
+          "required": true,
+          "references": "product"
+        },
+        {
+          "name": "quantity",
+          "type": "integer",
+          "required": true
+        },
+        {
+          "name": "unit_price_cents",
+          "type": "bigint",
+          "required": true
+        }
+      ],
+      "relationships": [
+        {
+          "to": "product",
+          "cardinality": "one-to-one",
+          "label": "is for"
+        }
+      ]
+    },
+    {
+      "id": "product",
+      "name": "Product",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "sku",
+          "type": "text",
+          "key": "unique",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "category_id",
+          "type": "uuid",
+          "key": "foreign",
+          "references": "category"
+        },
+        {
+          "name": "attributes",
+          "type": "jsonb"
+        }
+      ],
+      "relationships": [
+        {
+          "to": "category",
+          "cardinality": "one-to-one",
+          "label": "belongs to"
+        },
+        {
+          "to": "inventory_item",
+          "cardinality": "one-to-many",
+          "label": "stocked as"
+        }
+      ]
+    },
+    {
+      "id": "category",
+      "name": "Category",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "parent_id",
+          "type": "uuid",
+          "key": "foreign",
+          "references": "category"
+        }
+      ]
+    },
+    {
+      "id": "inventory_item",
+      "name": "Inventory Item",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "product_id",
+          "type": "uuid",
+          "key": "foreign",
+          "required": true,
+          "references": "product"
+        },
+        {
+          "name": "warehouse_id",
+          "type": "uuid",
+          "key": "foreign",
+          "required": true,
+          "references": "warehouse"
+        },
+        {
+          "name": "on_hand",
+          "type": "integer",
+          "required": true
+        }
+      ],
+      "relationships": [
+        {
+          "to": "warehouse",
+          "cardinality": "one-to-one",
+          "label": "held at"
+        }
+      ]
+    },
+    {
+      "id": "warehouse",
+      "name": "Warehouse",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "code",
+          "type": "text",
+          "key": "unique",
+          "required": true
+        },
+        {
+          "name": "region",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "shipment",
+      "name": "Shipment",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "order_id",
+          "type": "uuid",
+          "key": "foreign",
+          "required": true,
+          "references": "order"
+        },
+        {
+          "name": "carrier",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "tracking_number",
+          "type": "text"
+        },
+        {
+          "name": "shipped_at",
+          "type": "timestamptz"
+        }
+      ]
+    },
+    {
+      "id": "invoice",
+      "name": "Invoice",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "account_id",
+          "type": "uuid",
+          "key": "foreign",
+          "required": true,
+          "references": "account"
+        },
+        {
+          "name": "issued_at",
+          "type": "timestamptz",
+          "required": true
+        },
+        {
+          "name": "due_at",
+          "type": "timestamptz",
+          "required": true
+        },
+        {
+          "name": "amount_cents",
+          "type": "bigint",
+          "required": true
+        }
+      ],
+      "relationships": [
+        {
+          "to": "payment",
+          "cardinality": "one-to-many",
+          "label": "settled by"
+        }
+      ]
+    },
+    {
+      "id": "payment",
+      "name": "Payment",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "invoice_id",
+          "type": "uuid",
+          "key": "foreign",
+          "required": true,
+          "references": "invoice"
+        },
+        {
+          "name": "method",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "captured_at",
+          "type": "timestamptz"
+        }
+      ]
+    },
+    {
+      "id": "address",
+      "name": "Address",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "account_id",
+          "type": "uuid",
+          "key": "foreign",
+          "required": true,
+          "references": "account"
+        },
+        {
+          "name": "line1",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "city",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "country",
+          "type": "char(2)",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "session",
+      "name": "Session",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "account_id",
+          "type": "uuid",
+          "key": "foreign",
+          "required": true,
+          "references": "account"
+        },
+        {
+          "name": "started_at",
+          "type": "timestamptz",
+          "required": true
+        },
+        {
+          "name": "expires_at",
+          "type": "timestamptz",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "api_token",
+      "name": "API Token",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "account_id",
+          "type": "uuid",
+          "key": "foreign",
+          "required": true,
+          "references": "account"
+        },
+        {
+          "name": "name",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "last_used_at",
+          "type": "timestamptz"
+        }
+      ]
+    },
+    {
+      "id": "audit_event",
+      "name": "Audit Event",
+      "ownerNodeId": "system",
+      "dataClassIds": [
+        "public"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "uuid",
+          "key": "primary"
+        },
+        {
+          "name": "account_id",
+          "type": "uuid",
+          "key": "foreign",
+          "references": "account"
+        },
+        {
+          "name": "kind",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "payload",
+          "type": "jsonb"
+        },
+        {
+          "name": "occurred_at",
+          "type": "timestamptz",
+          "required": true
+        }
+      ]
+    }
+  ]
+}

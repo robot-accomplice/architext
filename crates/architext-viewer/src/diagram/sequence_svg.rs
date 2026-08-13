@@ -113,14 +113,24 @@ pub fn SequenceSvg(
                 <g class="sequence-lifelines">
                     {lifelines.into_iter().map(|l| view! { <SeqLifeline line=l/> }).collect_view()}
                 </g>
-                // Body layers (frames / activations / messages) clipped to below
+                // Body layers (activations / frames / messages) clipped to below
                 // the header band — keeps stray top-row labels out of the header.
                 <g class="sequence-body" clip-path="url(#sequence-body-clip)">
-                    <g class="sequence-frames">
-                        {frames.into_iter().map(|f| view! { <SeqFrame frame=f/> }).collect_view()}
-                    </g>
                     <g class="sequence-activations">
                         {bars.into_iter().map(|b| view! { <SeqActivationBar bar=b/> }).collect_view()}
+                    </g>
+                    // Frames paint AFTER activations. An activation bar is an
+                    // OPAQUE `fill: var(--surface)` rect, so with frames first any
+                    // bar crossing a fragment's top-left corner erased the UML
+                    // interaction operator sitting there (measured on the corpus:
+                    // the full 10px bar width over the full 18px tab height, twice
+                    // on `hub-fan-dense` — "transaction" rendered cut mid-word).
+                    // Safe to reorder because `.sequence-frame__box` is `fill: none`:
+                    // only the 1px border and the operator tab paint over a bar, and
+                    // a combined fragment drawn over the executions it encloses is
+                    // what UML depicts anyway.
+                    <g class="sequence-frames">
+                        {frames.into_iter().map(|f| view! { <SeqFrame frame=f/> }).collect_view()}
                     </g>
                     <g class="sequence-messages">
                         {messages.into_iter().map(|m| {

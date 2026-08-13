@@ -23,6 +23,21 @@ fn c4_type_expectations(view_type: &str) -> Option<&'static [&'static str]> {
             "actor", "client", "service", "module", "worker", "data-store",
             "queue", "external-service",
         ]),
+        // Code is the fourth C4 level and the drilldown this very module asks
+        // for: `c4_drilldown_type("c4-component")` returns "c4-code". Leaving it
+        // out made the checker contradict itself -- doctor demanded a code view
+        // for a decomposable component, then reported the view it had asked for
+        // as "unsupported C4 view type c4-code". The schema enum has always
+        // allowed it and the managed contract in CLAUDE.md asks for it, so the
+        // checker was the stale side.
+        //
+        // Modules are what a code-level view is made of; the collaborators it
+        // may show alongside them are the same ones a component view allows,
+        // minus the actor -- a person does not appear at code level.
+        "c4-code" => Some(&[
+            "module", "service", "client", "worker", "data-store", "queue",
+            "external-service",
+        ]),
         _ => None,
     }
 }
@@ -33,6 +48,10 @@ fn c4_density_budget(view_type: &str) -> Option<(u64, u64)> {
         "c4-context" => Some((14, 18)),
         "c4-container" => Some((14, 24)),
         "c4-component" => Some((14, 28)),
+        // Code views are the most detailed level, so they carry the loosest
+        // budget; without an entry here a c4-code view got no density check at
+        // all, which is how an unsupported type degrades silently.
+        "c4-code" => Some((16, 32)),
         _ => None,
     }
 }
@@ -545,11 +564,44 @@ mod tests {
 
     #[test]
     fn issues_unsupported_view_type() {
-        let view = simple_view("v3", "c4-code", vec!["n1"]);
+        // A type that is genuinely outside C4. `c4-code` used to be asserted
+        // here, which PINNED the contradiction: this module asks for a c4-code
+        // drilldown from a component, so the test was holding the checker to
+        // rejecting the view it had just demanded.
+        let view = simple_view("v3", "dataflow", vec!["n1"]);
         let nodes = vec![json!({"id": "n1", "type": "actor"})];
         let map = make_map(&nodes);
         let issues = c4_issues_for_view(&view, &map);
-        assert!(issues.iter().any(|i| i.contains("unsupported C4 view type c4-code")));
+        assert!(issues.iter().any(|i| i.contains("unsupported C4 view type dataflow")));
+    }
+
+    #[test]
+    fn a_code_view_is_supported_because_the_checker_asks_for_one() {
+        // REGRESSION: doctor demanded a c4-code drilldown for a decomposable
+        // component and then reported that same view as unsupported. Reported
+        // from a real project, reproduced here.
+        let view = simple_view("v-code", "c4-code", vec!["n1"]);
+        let nodes = vec![json!({"id": "n1", "type": "module"})];
+        let map = make_map(&nodes);
+        let issues = c4_issues_for_view(&view, &map);
+        assert!(
+            !issues.iter().any(|i| i.contains("unsupported C4 view type")),
+            "c4-code is what c4_drilldown_type asks for; it cannot also be unsupported: {issues:?}"
+        );
+
+        // And the contradiction is structural, so assert the two tables agree
+        // rather than only this one case.
+        for parent in ["c4-context", "c4-container", "c4-component"] {
+            let child = c4_drilldown_type(parent).expect("parent has a drilldown");
+            assert!(
+                c4_type_expectations(child).is_some(),
+                "{parent} drills down to {child}, which the checker calls unsupported"
+            );
+            assert!(
+                c4_density_budget(child).is_some(),
+                "{parent} drills down to {child}, which has no density budget"
+            );
+        }
     }
 
     #[test]

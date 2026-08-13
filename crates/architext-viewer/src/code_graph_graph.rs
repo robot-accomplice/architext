@@ -120,6 +120,11 @@ impl GraphIndex {
 pub struct FilterState {
     pub show_prod_reachable: bool,
     pub show_dead: bool,
+    /// Exported and unreferenced — split out of `show_dead` so the two claims
+    /// can be looked at separately. Its own toggle, hidden by default like the
+    /// other non-prod classes, so narrowing `dead` never makes a node vanish
+    /// with no way to get it back.
+    pub show_public_unreferenced: bool,
     pub show_test_only: bool,
     pub show_generated: bool,
     pub show_static: bool,
@@ -131,22 +136,29 @@ impl Default for FilterState {
         Self {
             show_prod_reachable: true,
             show_dead: false,
+            show_public_unreferenced: false,
             show_test_only: false,
             show_generated: false,
             show_static: true,
-            show_dynamic: true,
+            // Resolved calls only. The 13,148 `dynamic` edges on this repo's
+            // own graph are the analyser's guesses, 84% of them cross-cluster,
+            // and they outnumber the facts 3:1 — drawing them by default is
+            // what made 17,247 edges read as haze instead of structure. Opt-in,
+            // exactly like `dead` and the other unproven classes above.
+            show_dynamic: false,
         }
     }
 }
 
 impl FilterState {
     /// Per-node visibility: a node is visible if it matches ANY class this
-    /// state currently shows. The four slices are parallel, index-aligned
+    /// state currently shows. The five slices are parallel, index-aligned
     /// with the node list (same shape as the spike's `GraphData` flags).
     pub fn visible_nodes(
         &self,
         prod_reachable: &[bool],
         dead: &[bool],
+        public_unreferenced: &[bool],
         test_only: &[bool],
         generated: &[bool],
     ) -> Vec<bool> {
@@ -155,6 +167,7 @@ impl FilterState {
             .map(|i| {
                 (self.show_prod_reachable && prod_reachable[i])
                     || (self.show_dead && dead[i])
+                    || (self.show_public_unreferenced && public_unreferenced[i])
                     || (self.show_test_only && test_only[i])
                     || (self.show_generated && generated[i])
             })
@@ -184,6 +197,13 @@ pub enum Reach {
     Generated,
     TestOnly,
     Dead,
+    /// Exported, and no static caller found. Deliberately NOT a dead-code
+    /// candidate: an exported symbol's callers can live outside the analysed
+    /// module entirely, and the producer's own `limitations` say derive
+    /// machinery and dynamic dispatch are never resolved — so "unreferenced"
+    /// is the strongest claim the evidence supports. This is a FACT about
+    /// what was found, where `Dead` is an inference about what exists.
+    PublicUnreferenced,
 }
 
 impl Reach {
@@ -193,6 +213,7 @@ impl Reach {
             Reach::Generated => "generated",
             Reach::TestOnly => "test-only",
             Reach::Dead => "dead",
+            Reach::PublicUnreferenced => "public, unreferenced",
         }
     }
 
@@ -207,6 +228,7 @@ impl Reach {
             Reach::Generated => "var(--reach-generated)",
             Reach::TestOnly => "var(--reach-test-only)",
             Reach::Dead => "var(--reach-dead)",
+            Reach::PublicUnreferenced => "var(--reach-public-unreferenced)",
         }
     }
 
@@ -220,6 +242,10 @@ impl Reach {
                 interfaces, cgo and external entrypoints can hide production callers.",
             Reach::Dead => "CANDIDATE: no static caller found. Reflection, encoding/json \
                 interfaces, cgo and external entrypoints can hide callers — verify before deleting.",
+            Reach::PublicUnreferenced => "FACT, not a dead-code candidate: exported, and no \
+                caller was found inside the analysed module. Public symbols are called from \
+                outside it, and derive machinery and dynamic dispatch are never resolved — so \
+                this analysis cannot show a public function is unused.",
         }
     }
 }
@@ -232,6 +258,15 @@ impl Reach {
 
 /// The candidate classifications for one function, per the contract's own
 /// predicates (`dead` and `test_only` are Magma's definitions — do not drift).
+///
+/// One deliberate NARROWING of the contract's `dead`: an unreached function
+/// that is `exported` becomes [`Reach::PublicUnreferenced`] instead. That is
+/// not a drift in the producer's data — `reachable` is reported and used
+/// verbatim — but a refusal to state an INFERENCE the producer's own
+/// `limitations` rule out. Blanket-suppressing `dead` for `pub` items was
+/// rejected: in a `publish = false` workspace `pub` mostly means "pub across
+/// modules", so suppression would hide genuinely dead code. Splitting instead
+/// keeps every function visible under some class.
 pub fn reach_badges(f: &CodeGraphFunction) -> Vec<Reach> {
     let mut out = Vec::new();
     if f.root {
@@ -241,7 +276,7 @@ pub fn reach_badges(f: &CodeGraphFunction) -> Vec<Reach> {
         out.push(Reach::Generated);
     }
     if !f.reachable && !f.generated && !f.root {
-        out.push(Reach::Dead);
+        out.push(if f.exported { Reach::PublicUnreferenced } else { Reach::Dead });
     }
     if f.reachable && !f.prod_reachable && !f.test && !f.root && !f.generated {
         out.push(Reach::TestOnly);
@@ -355,33 +390,71 @@ mod tests {
     #[test]
     fn visible_nodes_matches_any_shown_class() {
         // node 0: prod-reachable only; node 1: dead only; node 2: test-only;
-        // node 3: generated; node 4: none of the four (e.g. root-only).
-        let prod = vec![true, false, false, false, false];
-        let dead = vec![false, true, false, false, false];
-        let test_only = vec![false, false, true, false, false];
-        let generated = vec![false, false, false, true, false];
+        // node 3: generated; node 4: none of the five (e.g. root-only);
+        // node 5: public-unreferenced only.
+        let prod = vec![true, false, false, false, false, false];
+        let dead = vec![false, true, false, false, false, false];
+        let public = vec![false, false, false, false, false, true];
+        let test_only = vec![false, false, true, false, false, false];
+        let generated = vec![false, false, false, true, false, false];
 
-        let default_visible = FilterState::default().visible_nodes(&prod, &dead, &test_only, &generated);
-        assert_eq!(default_visible, vec![true, false, false, false, false]);
+        let default_visible =
+            FilterState::default().visible_nodes(&prod, &dead, &public, &test_only, &generated);
+        assert_eq!(default_visible, vec![true, false, false, false, false, false]);
 
         let show_all = FilterState {
             show_prod_reachable: true,
             show_dead: true,
+            show_public_unreferenced: true,
             show_test_only: true,
             show_generated: true,
             show_static: true,
             show_dynamic: true,
         };
-        let all_visible = show_all.visible_nodes(&prod, &dead, &test_only, &generated);
-        assert_eq!(all_visible, vec![true, true, true, true, false]);
+        let all_visible = show_all.visible_nodes(&prod, &dead, &public, &test_only, &generated);
+        assert_eq!(all_visible, vec![true, true, true, true, false, true]);
+    }
+
+    #[test]
+    fn public_unreferenced_has_its_own_toggle_so_narrowing_dead_hides_nothing() {
+        // WHY: `dead` narrowed to `!reachable && !exported`. Without a toggle
+        // of its own the exported half would be unreachable from the UI —
+        // ticking "Dead (candidates)" would silently show fewer nodes than
+        // before with no way to get the rest back.
+        let public = vec![true];
+        let none = vec![false];
+        let mut f = FilterState { show_prod_reachable: false, ..FilterState::default() };
+        assert_eq!(f.visible_nodes(&none, &none, &public, &none, &none), vec![false]);
+        f.show_dead = true;
+        assert_eq!(
+            f.visible_nodes(&none, &none, &public, &none, &none),
+            vec![false],
+            "the dead toggle must not drag the public class back in"
+        );
+        f.show_public_unreferenced = true;
+        assert_eq!(f.visible_nodes(&none, &none, &public, &none, &none), vec![true]);
     }
 
     #[test]
     fn edge_visible_respects_static_and_dynamic_flags() {
         let mut f = FilterState::default();
-        assert!(f.edge_visible(false) && f.edge_visible(true), "both kinds shown by default");
-        f.show_dynamic = false;
-        assert!(f.edge_visible(false) && !f.edge_visible(true));
+        assert!(f.edge_visible(false), "resolved calls are shown by default");
+        f.show_dynamic = true;
+        assert!(f.edge_visible(true), "and the guesses can be turned on");
+    }
+
+    #[test]
+    fn the_default_view_draws_resolved_calls_and_not_the_analysers_guesses() {
+        // WHY: on Architext's own graph 13,148 of 17,247 edges are `dynamic` —
+        // calls the analyser could not resolve — and 84% of those cross
+        // between clusters, so they are most of the ink AND the least
+        // trustworthy thing on screen. Drawing them by default buries the
+        // 4,159 resolved calls, which are 80% intra-cluster and are what makes
+        // the structure legible. They stay one toggle away; this is about what
+        // the view ASSERTS when you open it.
+        let f = FilterState::default();
+        assert!(f.show_static);
+        assert!(!f.show_dynamic, "guesses are opt-in, like every other unproven class here");
     }
 
     // --- Reach / reach_badges / format_signature (from the retired code_graph_model.rs) ---
@@ -390,10 +463,12 @@ mod tests {
     fn reach_badges_follow_the_contract_predicates() {
         // WHY: these predicates are the contract's, not ours — dead and
         // test_only are defined by Magma and must not drift.
+        // `exported` is false throughout: the exported half of the unreached
+        // set is a class of its own now, covered by the test below.
         let f = |reachable, prod, test, root, generated| {
             let v = serde_json::json!({
                 "id": "f", "symbol": "F", "pkg": "p", "file": "f.go", "line": 1,
-                "kind": "func", "exported": true, "test": test, "root": root,
+                "kind": "func", "exported": false, "test": test, "root": root,
                 "generated": generated, "reachable": reachable, "prod_reachable": prod,
                 "signature": {"params": [], "results": []}, "fan_in": 0, "fan_out": 0
             });
@@ -412,6 +487,44 @@ mod tests {
         // markers
         assert!(f(true, true, false, true, false).contains(&Reach::Root));
         assert!(f(true, true, false, false, true).contains(&Reach::Generated));
+    }
+
+    #[test]
+    fn an_exported_unreachable_function_is_not_badged_dead() {
+        // WHY: the analyzer cannot prove a PUBLIC function dead — its own
+        // `limitations` say derive machinery and dynamic dispatch are not
+        // resolved, so no call site exists to find. On Architext's own graph
+        // six of these are `#[serde(with = "...")]` module functions whose
+        // deletion breaks the build. `dead` is an assertion; it must not be
+        // made about a function the analysis cannot see the callers of.
+        let f: CodeGraphFunction = serde_json::from_value(serde_json::json!({
+            "id": "s", "symbol": "entries_map::serialize", "pkg": "routing", "file": "m.rs",
+            "line": 1, "kind": "func", "exported": true, "test": false, "root": false,
+            "generated": false, "reachable": false, "prod_reachable": false,
+            "signature": {"params": [], "results": []}, "fan_in": 0, "fan_out": 0
+        }))
+        .unwrap();
+        assert!(!reach_badges(&f).contains(&Reach::Dead), "a public function is never asserted dead");
+        assert_eq!(reach_badges(&f), vec![Reach::PublicUnreferenced], "it still gets a class");
+    }
+
+    #[test]
+    fn root_and_generated_still_win_over_the_public_class() {
+        // WHY: the split narrows `dead`; it must not widen the set of
+        // unreached functions that earn a reachability class at all. A root is
+        // invoked from outside by definition, and generated code was already
+        // excluded — neither becomes "unreferenced" just for being `pub`.
+        let f = |root, generated| {
+            let v = serde_json::json!({
+                "id": "f", "symbol": "F", "pkg": "p", "file": "f.rs", "line": 1,
+                "kind": "func", "exported": true, "test": false, "root": root,
+                "generated": generated, "reachable": false, "prod_reachable": false,
+                "signature": {"params": [], "results": []}, "fan_in": 0, "fan_out": 0
+            });
+            reach_badges(&serde_json::from_value::<CodeGraphFunction>(v).unwrap())
+        };
+        assert!(!f(true, false).contains(&Reach::PublicUnreferenced), "a root is not unreferenced");
+        assert!(!f(false, true).contains(&Reach::PublicUnreferenced), "generated stays excluded");
     }
 
     #[test]
@@ -443,7 +556,9 @@ mod tests {
             assert!(t.contains("candidate"), "{:?} tooltip must say candidate: {t}", r);
             assert!(t.contains("reflection"), "{:?} tooltip must name a blind spot: {t}", r);
         }
-        for r in [Reach::Root, Reach::Generated, Reach::TestOnly, Reach::Dead] {
+        for r in
+            [Reach::Root, Reach::Generated, Reach::TestOnly, Reach::Dead, Reach::PublicUnreferenced]
+        {
             assert!(!r.label().is_empty());
             assert!(r.color_var().starts_with("var(--reach-"), "{:?} needs its own scale", r);
         }

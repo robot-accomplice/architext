@@ -18,12 +18,14 @@
 //!   [`architext_diagnostics`] below.
 pub mod blast_radius;
 pub mod code_graph_graph;
+pub mod code_graph_labels;
 pub mod code_graph_layout;
 pub mod code_graph_paths;
 pub mod code_graph_provenance;
 pub mod code_graph_view_model;
 pub mod components;
 pub mod data;
+pub mod data_model_view_model;
 pub mod diagnostics;
 pub mod diagram;
 pub mod flow_step_display;

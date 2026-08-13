@@ -830,7 +830,9 @@ mod tests {
         // must render `reach_badges` output unfiltered, and every badge's
         // hover text is `Reach::tooltip()` verbatim — the inferred ones name
         // the blind spots so the badge never reads as a verdict.
-        let dead = function(serde_json::json!({"reachable": false, "prod_reachable": false}));
+        let dead = function(serde_json::json!({
+            "exported": false, "reachable": false, "prod_reachable": false
+        }));
         let d = code_graph_function_detail(&dead, &[], "rta");
         assert_eq!(d.badges, reach_badges(&dead), "no filtering/relabeling on the way out");
         assert_eq!(d.badges, vec![Reach::Dead]);
@@ -840,13 +842,32 @@ mod tests {
     }
 
     #[test]
+    fn an_unreferenced_exported_function_is_badged_public_not_dead() {
+        // WHY: this is the badge a maintainer reads before deleting something.
+        // On Architext's own graph six `#[serde(with = "...")]` functions were
+        // badged `dead` while the build depends on them — the inspector must
+        // say "unreferenced", which is what was measured, not "dead", which is
+        // an inference the analysis cannot support for an exported symbol.
+        let public = function(serde_json::json!({
+            "exported": true, "reachable": false, "prod_reachable": false
+        }));
+        let d = code_graph_function_detail(&public, &[], "rta");
+        assert_eq!(d.badges, vec![Reach::PublicUnreferenced]);
+        assert!(!d.badges.contains(&Reach::Dead));
+        let t = Reach::PublicUnreferenced.tooltip();
+        assert!(!t.starts_with("CANDIDATE"), "this is a fact, not a dead-code candidate: {t}");
+        assert!(t.to_lowercase().contains("outside"), "tooltip must say why: {t}");
+    }
+
+    #[test]
     fn function_detail_carries_kind_so_init_nodes_get_weaker_evidence_tooltips() {
         // WHY: a `kind: "init"` node (Rust const/static initialiser) is never
         // called, so its Dead badge is structurally weaker evidence than a
         // function's — the detail must carry `kind` through so the view can
         // ask for the kind-aware tooltip instead of the generic one.
         let dead_init = function(serde_json::json!({
-            "kind": "init", "reachable": false, "prod_reachable": false, "root": false
+            "kind": "init", "exported": false,
+            "reachable": false, "prod_reachable": false, "root": false
         }));
         let d = code_graph_function_detail(&dead_init, &[], "rta");
         assert_eq!(d.kind, "init");
@@ -856,7 +877,9 @@ mod tests {
         assert!(tooltip.to_lowercase().contains("initialiser"));
 
         // An ordinary function keeps the generic tooltip.
-        let dead_func = function(serde_json::json!({"reachable": false, "prod_reachable": false}));
+        let dead_func = function(serde_json::json!({
+            "exported": false, "reachable": false, "prod_reachable": false
+        }));
         let d2 = code_graph_function_detail(&dead_func, &[], "rta");
         assert_eq!(Reach::Dead.tooltip_for_kind(&d2.kind), Reach::Dead.tooltip());
     }

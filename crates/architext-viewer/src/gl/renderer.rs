@@ -39,7 +39,57 @@ const COLOR_NODE: [f32; 3] = [0x7a as f32 / 255.0, 0x86 as f32 / 255.0, 0x99 as 
 const COLOR_EDGE: [f32; 3] = [0x3b as f32 / 255.0, 0x49 as f32 / 255.0, 0x4b as f32 / 255.0];
 const COLOR_ACCENT: [f32; 3] = [0x19 as f32 / 255.0, 0xf2 as f32 / 255.0, 0xc4 as f32 / 255.0];
 
-const EDGE_HALF_WIDTH: f32 = 0.55; // world units
+/// Half an edge's drawn width, in WORLD units -- so an edge shrinks with the
+/// camera like the graph it belongs to. Public because the on-screen width
+/// this yields at a given zoom is a diagnostic fact the view layer records
+/// (`code_graph_view_model.rs`'s `camera_fit_detail`); that must read the
+/// real constant rather than restate it.
+pub const EDGE_HALF_WIDTH: f32 = 0.55; // world units
+
+/// The narrowest an edge or a node may be drawn ON SCREEN, in device pixels.
+///
+/// Everything this renderer draws is sized in WORLD units, which is right for
+/// a graph that zooms: a lobe should get bigger as you zoom into it. It is
+/// wrong for the INK, because ink has a floor the world does not -- below one
+/// pixel a line cannot be drawn at all, it can only be drawn fainter, and
+/// fainter runs into the fragment shaders' `discard`.
+///
+/// Measured on Architext's own function tier: 3,638 nodes settle into a
+/// ~3,500-unit field, which frames at zoom 0.06 and drew every one of 17,247
+/// edges **0.068 px** wide. Multiplied by the 0.05 base alpha a dense tier
+/// gets, that is far below the 0.003 alpha `EDGE_FS` discards at -- so the
+/// view reported 17,247 edges drawn and showed a starfield. The edges were
+/// never mis-placed; there was nothing wide enough to put colour in.
+///
+/// Held at 1.0 rather than lower because a sub-pixel line is not a thin line:
+/// it is a line whose coverage the rasteriser turns into alpha, which is the
+/// same trade this floor exists to stop making.
+///
+/// CSS pixels, NOT device pixels — the callers below multiply by the device
+/// pixel ratio. As device pixels this was a 0.5-CSS-px hairline on any 2x
+/// display: half the ink the reference draws, and half of what "one pixel"
+/// means to the person looking at it.
+pub const MIN_INK_WIDTH_PX: f32 = 1.0;
+
+/// The half-width to extrude an edge by at `zoom`, in WORLD units: the
+/// world-space width, floored so the result is never thinner than
+/// [`MIN_INK_WIDTH_PX`] on screen.
+///
+/// Zoomed IN this returns [`EDGE_HALF_WIDTH`] unchanged, so edges keep
+/// growing with the graph and the floor costs nothing. Zoomed OUT it holds
+/// them at a pixel instead of letting them vanish.
+pub fn edge_half_width_world(zoom: f32, dpr: f32) -> f32 {
+    let floor_world = MIN_INK_WIDTH_PX * dpr.max(1.0) / 2.0 / zoom.max(1e-6);
+    EDGE_HALF_WIDTH.max(floor_world)
+}
+
+/// The minimum node radius in WORLD units at `zoom` -- the same screen-space
+/// floor as [`edge_half_width_world`], applied per-node in `NODE_VS` because
+/// node radius is PER-INSTANCE static buffer data (degree-derived) and must
+/// not be rewritten every time the camera moves.
+pub fn min_node_radius_world(zoom: f32, dpr: f32) -> f32 {
+    MIN_INK_WIDTH_PX * dpr.max(1.0) / 2.0 / zoom.max(1e-6)
+}
 
 fn compile_shader(gl: &Gl, kind: u32, src: &str) -> Result<web_sys::WebGlShader, String> {
     let shader = gl.create_shader(kind).ok_or("create_shader failed")?;
@@ -268,7 +318,7 @@ impl Renderer {
     /// pan`); the viewport and `uResolution` come from the canvas's intrinsic
     /// (backing-store) size, which the caller keeps in sync with its CSS size
     /// and device pixel ratio.
-    pub fn draw(&self, canvas: &HtmlCanvasElement, pan_x: f32, pan_y: f32, zoom: f32) {
+    pub fn draw(&self, canvas: &HtmlCanvasElement, pan_x: f32, pan_y: f32, zoom: f32, dpr: f32) {
         let gl = &self.gl;
         gl.viewport(0, 0, canvas.width() as i32, canvas.height() as i32);
         gl.clear_color(COLOR_CANVAS[0], COLOR_CANVAS[1], COLOR_CANVAS[2], 1.0);
@@ -284,7 +334,7 @@ impl Renderer {
         let loc = gl.get_uniform_location(&self.edge_program, "uZoom");
         gl.uniform1f(loc.as_ref(), zoom);
         let loc = gl.get_uniform_location(&self.edge_program, "uHalfWidth");
-        gl.uniform1f(loc.as_ref(), EDGE_HALF_WIDTH);
+        gl.uniform1f(loc.as_ref(), edge_half_width_world(zoom, dpr));
         let loc = gl.get_uniform_location(&self.edge_program, "uColorBase");
         gl.uniform3f(loc.as_ref(), COLOR_EDGE[0], COLOR_EDGE[1], COLOR_EDGE[2]);
         let loc = gl.get_uniform_location(&self.edge_program, "uColorAccent");
@@ -301,6 +351,8 @@ impl Renderer {
         gl.uniform2f(loc.as_ref(), pan_x, pan_y);
         let loc = gl.get_uniform_location(&self.node_program, "uZoom");
         gl.uniform1f(loc.as_ref(), zoom);
+        let loc = gl.get_uniform_location(&self.node_program, "uMinRadius");
+        gl.uniform1f(loc.as_ref(), min_node_radius_world(zoom, dpr));
         let loc = gl.get_uniform_location(&self.node_program, "uColorBase");
         gl.uniform3f(loc.as_ref(), COLOR_NODE[0], COLOR_NODE[1], COLOR_NODE[2]);
         let loc = gl.get_uniform_location(&self.node_program, "uColorAccent");
@@ -308,5 +360,43 @@ impl Renderer {
         if self.node_count > 0 {
             gl.draw_arrays_instanced(Gl::TRIANGLE_STRIP, 0, 4, self.node_count);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// WHY: the whole point of the floor is that it binds at the zoom the
+    /// graph is actually READ at and disappears everywhere else. A floor that
+    /// also applied when zoomed in would freeze edge width, breaking the
+    /// "edges grow with the graph" behaviour that makes zooming legible; a
+    /// floor that failed to bind at the measured overview zoom would leave
+    /// the sub-pixel defect exactly where it was found.
+    #[test]
+    fn the_ink_floor_binds_only_where_the_world_width_goes_sub_pixel() {
+        // The zoom Architext's own function tier frames at, recorded by the
+        // `camera_fit` trail: 3,638 nodes across a ~3,500-unit field.
+        let overview = 0.0619_f32;
+        let drawn_px = 2.0 * edge_half_width_world(overview, 1.0) * overview;
+        assert!(
+            (drawn_px - MIN_INK_WIDTH_PX).abs() < 1e-3,
+            "at the measured overview zoom an edge must be held at the floor, got {drawn_px} px"
+        );
+        // Without the floor this is what the view was drawing.
+        assert!(2.0 * EDGE_HALF_WIDTH * overview < 0.1, "premise: the unfloored width is sub-pixel");
+
+        // Zoomed in far enough that the world width already exceeds a pixel,
+        // the floor must be inert -- edges scale with the graph again.
+        let close = 4.0_f32;
+        assert_eq!(
+            edge_half_width_world(close, 1.0),
+            EDGE_HALF_WIDTH,
+            "the floor must not cap edge width once the camera is close"
+        );
+
+        // A degenerate zoom must not divide by zero into an infinite quad.
+        assert!(edge_half_width_world(0.0, 1.0).is_finite());
+        assert!(min_node_radius_world(0.0, 1.0).is_finite());
     }
 }

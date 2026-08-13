@@ -27,6 +27,7 @@ pub fn validate_data_dir(data_dir: &Path, schema_dir: &Path) -> ValidationOutcom
     validation::references::validate_references(data_dir, &mut errors);
     validation::code_graph::validate_code_graph(data_dir, &mut errors);
     validation::slop_ferret::validate_slop_ferret(data_dir, &mut errors);
+    validation::entities::validate_entities(data_dir, &mut errors);
 
     // Load manifest to check for optional releases/roadmap sections.
     let manifest = read_manifest(data_dir);
@@ -327,5 +328,127 @@ mod tests {
         // The self-hosted data dir has no code-graph.json; validate must pass.
         let outcome = validate_data_dir(&repo_data_dir(), &schema_dir());
         assert!(outcome.ok, "absent code-graph must pass; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn entities_absent_passes() {
+        // WHY: entities.json is OPTIONAL. Every repository that does not model a
+        // persistence model must keep validating exactly as it did before this
+        // file existed. The self-hosted data dir has no entities.json.
+        let outcome = validate_data_dir(&repo_data_dir(), &schema_dir());
+        assert!(outcome.ok, "absent entities must pass; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn valid_entities_passes() {
+        // WHY: proves the schema accepts the documented shape AND that
+        // `manifest.files` (additionalProperties: false) admits the new key.
+        // The fixture deliberately carries a foreign key (`release.plan_id ->
+        // plan`) with no matching relationship: per the design that resolves,
+        // draws no edge, and is NOT an error.
+        let outcome = validate_data_dir(&fixture("valid-entities"), &schema_dir());
+        assert!(outcome.ok, "expected pass; errors: {:?}", outcome.errors);
+    }
+
+    #[test]
+    fn entities_unknown_key_value_is_rejected() {
+        // WHY: `key` is one of the few things we pin, because the renderer draws
+        // a specific glyph per value and an unknown value has no rendering. This
+        // guards the pin against being loosened by accident.
+        let outcome = validate_data_dir(&fixture("invalid-entities-bad-key"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection of key: \"pk\"");
+        // Assert the SPECIFIC error. Before `entities` was declared in
+        // manifest.files, this test passed for the wrong reason -- the manifest
+        // key was rejected and the enum was never reached. Asserting the text
+        // is what stops it silently going vacuous again.
+        assert!(
+            outcome.errors.iter().any(|e| e.contains("attributes/0/key")
+                && e.contains("is not one of")),
+            "expected the key enum to reject \"pk\"; got: {:?}",
+            outcome.errors
+        );
+    }
+
+    // --- entities referential integrity -----------------------------------
+    // Every failure mode of a hand-authored file is a dangling reference, so
+    // each rule gets a fixture and an assertion on its SPECIFIC error text.
+    // Asserting only `!ok` would let one rule's error satisfy another's test.
+
+    #[test]
+    fn entities_dangling_owner_node_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-entities-dangling-owner"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "entity release.ownerNodeId references unknown node id \"node-ghost\""),
+            "expected dangling-owner error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn entities_dangling_data_class_is_rejected() {
+        let outcome =
+            validate_data_dir(&fixture("invalid-entities-dangling-data-class"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "entity release.dataClassIds references unknown data class id \"data-ghost\""),
+            "expected dangling-data-class error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn entities_dangling_relationship_is_rejected() {
+        let outcome =
+            validate_data_dir(&fixture("invalid-entities-dangling-relationship"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "entity release.relationships.to references unknown entity id \"ghost_table\""),
+            "expected dangling-relationship error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn entities_dangling_foreign_key_is_rejected() {
+        // WHY THIS IS THE HIGHEST-VALUE CHECK: it is the ER equivalent of a
+        // code-graph `evidenced_by` pointing at an absent disclosure -- a claim
+        // whose referent does not exist, rendering as a relationship to
+        // nowhere. It is also the error a hand-authored file will actually
+        // make. Note this is distinct from a foreign key that RESOLVES but has
+        // no matching relationship: that is valid and draws no edge, and
+        // `valid_entities_passes` pins that case.
+        let outcome = validate_data_dir(&fixture("invalid-entities-dangling-fk"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "entity release attribute \"plan_id\" references unknown entity id \"ghost_table\""),
+            "expected dangling-fk error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn entities_duplicate_id_is_rejected() {
+        let outcome = validate_data_dir(&fixture("invalid-entities-duplicate-id"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e| e == "entities contains duplicate id \"release\""),
+            "expected duplicate-id error; got: {:?}", outcome.errors
+        );
+    }
+
+    #[test]
+    fn entities_duplicate_attribute_name_is_rejected() {
+        // WHY: two columns of the same name cannot both render in one box, and
+        // the second silently wins. A schema cannot express "unique within the
+        // parent array", so this is a referential-layer job.
+        let outcome =
+            validate_data_dir(&fixture("invalid-entities-duplicate-attribute"), &schema_dir());
+        assert!(!outcome.ok, "expected rejection; errors: {:?}", outcome.errors);
+        assert!(
+            outcome.errors.iter().any(|e|
+                e == "entity release contains duplicate attribute name \"version\""),
+            "expected duplicate-attribute error; got: {:?}", outcome.errors
+        );
     }
 }

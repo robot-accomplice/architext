@@ -27,7 +27,7 @@ use crate::domain::release_recovery::{
 use crate::domain::{c4_quality, instruction_rules, schema_migration};
 use crate::json_write::{read_json, write_json};
 
-pub const DATA_SCHEMA_VERSION: &str = "1.7.0";
+pub const DATA_SCHEMA_VERSION: &str = "1.8.0";
 
 /// A single repair action applied (extends the JS `{ category, file, summary }`
 /// shape with an additive `status`/`error`: a failed write must never be
@@ -449,12 +449,36 @@ pub const DEFAULT_CODE_GRAPH_FILE: &str = "code-graph.json";
 pub const CODE_GRAPH_REGISTER_SUMMARY: &str =
     "register manifest.files.codeGraph for present code-graph.json";
 
-/// Register `manifest.files.codeGraph` when `code-graph.json` is present on disk
-/// but unlisted. Never creates or rewrites the code-graph file — Magma owns it.
-pub fn repair_code_graph_registration(target: &Path, dry_run: bool) -> Vec<RepairOutcome> {
+/// Default filename for the optional entities document (relative to the data
+/// dir). Shared with `status.rs`, same contract as the code-graph pair above.
+pub const DEFAULT_ENTITIES_FILE: &str = "entities.json";
+
+/// Summary text for the entities registration repair. Shared with `status.rs`
+/// so the advertisement and the applied repair agree verbatim.
+pub const ENTITIES_REGISTER_SUMMARY: &str =
+    "register manifest.files.entities for present entities.json";
+
+/// Register an optional document's `manifest.files.<key>` when the file is
+/// present on disk but unlisted.
+///
+/// Shared by every optional document rather than copied per key. The repair is
+/// a no-op when the file is absent OR the key is already set, which is what
+/// makes it CONVERGE: a second doctor/sync run advertises and writes nothing.
+/// Registration repairs have looped before (the instruction-rules phantom
+/// repair), so this is the property to hold onto.
+///
+/// Never creates or rewrites the document itself — its producer or author owns
+/// the content.
+fn repair_optional_registration(
+    target: &Path,
+    dry_run: bool,
+    manifest_key: &str,
+    filename: &str,
+    summary: &str,
+) -> Vec<RepairOutcome> {
     let dir = data_dir(target);
     let manifest_path = dir.join("manifest.json");
-    let file_present = dir.join(DEFAULT_CODE_GRAPH_FILE).exists();
+    let file_present = dir.join(filename).exists();
 
     let manifest = match read_json(&manifest_path) {
         Some(m) => m,
@@ -462,7 +486,7 @@ pub fn repair_code_graph_registration(target: &Path, dry_run: bool) -> Vec<Repai
     };
     let already = manifest
         .get("files")
-        .and_then(|f| f.get("codeGraph"))
+        .and_then(|f| f.get(manifest_key))
         .and_then(Value::as_str)
         .is_some();
 
@@ -470,21 +494,45 @@ pub fn repair_code_graph_registration(target: &Path, dry_run: bool) -> Vec<Repai
         return vec![]; // nothing to register
     }
 
-    let summary = CODE_GRAPH_REGISTER_SUMMARY.to_string();
     let mut error = None;
     if !dry_run {
         let mut new_manifest = manifest.clone();
         if let Some(files) = new_manifest["files"].as_object_mut() {
-            files.insert(
-                "codeGraph".to_string(),
-                Value::String(DEFAULT_CODE_GRAPH_FILE.to_string()),
-            );
+            files.insert(manifest_key.to_string(), Value::String(filename.to_string()));
             error = write_json(&manifest_path, &new_manifest).err().map(|e| e.to_string());
         } else {
             error = Some("manifest.files is not an object".to_string());
         }
     }
-    vec![RepairOutcome { summary, error, file: Some(DEFAULT_CODE_GRAPH_FILE.to_string()) }]
+    vec![RepairOutcome {
+        summary: summary.to_string(),
+        error,
+        file: Some(filename.to_string()),
+    }]
+}
+
+/// Register `manifest.files.codeGraph` when `code-graph.json` is present on disk
+/// but unlisted. Never creates or rewrites the code-graph file — Magma owns it.
+pub fn repair_code_graph_registration(target: &Path, dry_run: bool) -> Vec<RepairOutcome> {
+    repair_optional_registration(
+        target,
+        dry_run,
+        "codeGraph",
+        DEFAULT_CODE_GRAPH_FILE,
+        CODE_GRAPH_REGISTER_SUMMARY,
+    )
+}
+
+/// Register `manifest.files.entities` when `entities.json` is present on disk
+/// but unlisted. Never creates or rewrites the file — it is hand-authored.
+pub fn repair_entities_registration(target: &Path, dry_run: bool) -> Vec<RepairOutcome> {
+    repair_optional_registration(
+        target,
+        dry_run,
+        "entities",
+        DEFAULT_ENTITIES_FILE,
+        ENTITIES_REGISTER_SUMMARY,
+    )
 }
 
 // ─── repairInstructionRules ───────────────────────────────────────────────────
@@ -651,6 +699,7 @@ pub fn apply_doctor_repairs(
             "release-truth" => data_dir(target).join("releases").join("index.json").to_string_lossy().to_string(),
             "instruction-rules" => data_dir(target).join("rules.json").to_string_lossy().to_string(),
             "code-graph" => data_dir(target).join("code-graph.json").to_string_lossy().to_string(),
+            "entities" => data_dir(target).join("entities.json").to_string_lossy().to_string(),
             other => data_dir(target).join(other).to_string_lossy().to_string(),
         }
     };
@@ -664,6 +713,7 @@ pub fn apply_doctor_repairs(
             "release-truth" => repair_release_truth_data(target, dry_run),
             "instruction-rules" => repair_instruction_rules(target, dry_run),
             "code-graph" => repair_code_graph_registration(target, dry_run),
+            "entities" => repair_entities_registration(target, dry_run),
             _ => vec![],
         };
         let default_file = repair_files(category);
@@ -942,6 +992,73 @@ mod tests {
 
         let after = std::fs::read_to_string(root.join("docs/architext/data/manifest.json")).unwrap();
         assert_eq!(before, after, "manifest must be byte-unchanged when already registered");
+    }
+
+    #[test]
+    fn registers_entities_when_file_present_and_unlisted() {
+        let dir = temp_dir();
+        let root = dir.path();
+        write(root, "docs/architext/data/manifest.json",
+            r#"{"schemaVersion":"1.8.0","project":{"id":"x","name":"X","summary":"s"},"generatedAt":"2026-01-01T00:00:00.000Z","defaultViewId":"v","files":{"nodes":"nodes.json"}}"#);
+        write(root, "docs/architext/data/entities.json", r#"{"entities":[]}"#);
+
+        let out = repair_entities_registration(root, false);
+        assert_eq!(out.len(), 1, "expected one repair; got {:?}", out);
+        assert!(out[0].error.is_none(), "repair errored: {:?}", out[0].error);
+
+        let manifest: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join("docs/architext/data/manifest.json")).unwrap()).unwrap();
+        assert_eq!(manifest["files"]["entities"], "entities.json");
+    }
+
+    #[test]
+    fn entities_registration_converges_on_a_second_run() {
+        // WHY THIS TEST EXISTS: a registration repair that re-advertises after
+        // it has been applied is a phantom-repair loop -- doctor keeps offering
+        // work that is already done. The instruction-rules repair shipped with
+        // exactly that defect. Applying twice and asserting the second run is
+        // silent AND byte-identical is what proves convergence; asserting only
+        // that the first run works would not have caught it.
+        let dir = temp_dir();
+        let root = dir.path();
+        write(root, "docs/architext/data/manifest.json",
+            r#"{"schemaVersion":"1.8.0","project":{"id":"x","name":"X","summary":"s"},"generatedAt":"2026-01-01T00:00:00.000Z","defaultViewId":"v","files":{"nodes":"nodes.json"}}"#);
+        write(root, "docs/architext/data/entities.json", r#"{"entities":[]}"#);
+
+        let first = repair_entities_registration(root, false);
+        assert_eq!(first.len(), 1, "first run should register");
+        let after_first =
+            std::fs::read_to_string(root.join("docs/architext/data/manifest.json")).unwrap();
+
+        let second = repair_entities_registration(root, false);
+        assert!(second.is_empty(), "second run must advertise nothing; got {:?}", second);
+        let after_second =
+            std::fs::read_to_string(root.join("docs/architext/data/manifest.json")).unwrap();
+        assert_eq!(after_first, after_second, "second run must not rewrite the manifest");
+    }
+
+    #[test]
+    fn no_entities_repair_when_file_absent() {
+        let dir = temp_dir();
+        let root = dir.path();
+        write(root, "docs/architext/data/manifest.json",
+            r#"{"schemaVersion":"1.8.0","project":{"id":"x","name":"X","summary":"s"},"generatedAt":"2026-01-01T00:00:00.000Z","defaultViewId":"v","files":{"nodes":"nodes.json"}}"#);
+        assert!(repair_entities_registration(root, false).is_empty());
+    }
+
+    #[test]
+    fn entities_registration_dry_run_does_not_write() {
+        let dir = temp_dir();
+        let root = dir.path();
+        write(root, "docs/architext/data/manifest.json",
+            r#"{"schemaVersion":"1.8.0","project":{"id":"x","name":"X","summary":"s"},"generatedAt":"2026-01-01T00:00:00.000Z","defaultViewId":"v","files":{"nodes":"nodes.json"}}"#);
+        write(root, "docs/architext/data/entities.json", r#"{"entities":[]}"#);
+
+        let out = repair_entities_registration(root, true);
+        assert_eq!(out.len(), 1, "dry run must still report the intended repair");
+        let manifest: serde_json::Value = serde_json::from_str(
+            &std::fs::read_to_string(root.join("docs/architext/data/manifest.json")).unwrap()).unwrap();
+        assert!(manifest["files"]["entities"].is_null(), "dry run must not write");
     }
 
     #[test]

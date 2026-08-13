@@ -781,6 +781,74 @@ mod tests {
     }
 
     #[test]
+    fn an_open_activation_crosses_a_later_frame_tab_so_frames_must_paint_last() {
+        // WHY this test exists: an activation bar is an OPAQUE `fill: var(--surface)`
+        // rect. While `sequence_svg` painted frames BEFORE activations, any bar
+        // crossing a fragment's top-left corner erased the UML interaction operator
+        // sitting in the tab there — measured on the routing corpus `hub-fan-dense`
+        // as the full 10px bar width over the full 18px tab height, twice, with
+        // "transaction" rendering visibly cut mid-word.
+        //
+        // The geometry itself is CORRECT and stays: a participant can legitimately
+        // be executing while an enclosing fragment begins on its column. So the
+        // resolution is paint order, and this test pins the premise — if a change
+        // ever made bars and tabs disjoint, the ordering comment in `sequence_svg`
+        // would be silently stale and this test says so.
+        //
+        // Tab geometry is re-stated from `sequence_svg` (FRAME_TAB_CHAR_W = 6.2,
+        // FRAME_TAB_PAD = 14.0, FRAME_TAB_HEIGHT = 18.0), the same idiom
+        // `first_action_label_clears_header_band` uses for renderer constants.
+        const TAB_CHAR_W: f64 = 6.2;
+        const TAB_PAD: f64 = 14.0;
+        const TAB_HEIGHT: f64 = 18.0;
+
+        // `b` is called at row 0 and only answers at row 4, so its activation is
+        // open across the whole flow; the fragment brackets row 3, where `b` is the
+        // leftmost participant — so the fragment's tab lands on `b`'s column.
+        let flow = Flow {
+            id: "f".into(),
+            name: "f".into(),
+            status: None,
+            summary: None,
+            trigger: None,
+            steps: vec![
+                step("s1", "a", "b", "call", None),
+                step("s2", "b", "c", "delegate", None),
+                step("s3", "c", "b", "reply", None),
+                step("s4", "b", "c", "again", None),
+                step("s5", "b", "a", "done", None),
+            ],
+            sequence_frames: vec![SequenceFrame {
+                id: "fr".into(),
+                frame_type: "transaction".into(),
+                label: None,
+                step_ids: vec!["s4".into()],
+            }],
+        };
+        let nodes = vec![node("a", "A", "actor"), node("b", "B", "service"), node("c", "C", "data")];
+        let by_id: HashMap<&str, &Node> = nodes.iter().map(|n| (n.id.as_str(), n)).collect();
+        let layout = build_sequence_layout(&flow, &by_id, &SequenceConfig::default());
+
+        let frame = &layout.frames[0];
+        let tab_w = (frame.frame_type.chars().count() as f64) * TAB_CHAR_W + TAB_PAD;
+        let bar = layout
+            .activation_bars
+            .iter()
+            .find(|b| b.id == "activation-s1")
+            .expect("s1 opens an activation on b");
+
+        let overlap_x = (frame.x + tab_w).min(bar.x + bar.width) - frame.x.max(bar.x);
+        let overlap_y = (frame.y + TAB_HEIGHT).min(bar.y + bar.height) - frame.y.max(bar.y);
+        assert!(
+            overlap_x > 0.0 && overlap_y > 0.0,
+            "activation bar {bar:?} must intersect frame tab (x {} w {tab_w}, y {} h {TAB_HEIGHT}) \
+             — the premise for painting frames after activations",
+            frame.x,
+            frame.y,
+        );
+    }
+
+    #[test]
     fn config_from_diagram_reads_sequence_block() {
         let diagram = serde_json::json!({
             "sequence": { "participantWidth": 200, "rowHeight": 40, "marginX": 10 }

@@ -1,5 +1,5 @@
 {
-  "currentReleaseId": "v1-9-0",
+  "currentReleaseId": "v1-10-0",
   "releases": [
     {
       "id": "v1-1-2",
@@ -753,10 +753,11 @@
       "id": "v1-9-0",
       "version": "1.9.0",
       "name": "Architext 1.9.0 Enrichment Controls",
-      "status": "implementing",
-      "posture": "release-candidate",
+      "status": "completed",
+      "posture": "shipped",
       "targetDate": "2026-08-08",
-      "lastUpdated": "2026-08-08T11:24:13.000Z",
+      "releasedAt": "2026-08-08T11:41:45Z",
+      "lastUpdated": "2026-08-08T11:41:45Z",
       "summary": "Makes the two enrichment modes usable without a terminal, and makes them honest about the tools they depend on. Code Graph and Slop Detection are the only modes whose data Architext does not produce itself; their empty state now names the tool, reports whether it is installed, links the repository, and offers to RUN it. Also consumes Magma's limitations[] and disclosure, so a producer that admits it over-reports live code can no longer have an empty dead-code result read as a clean bill of health. Data schema 1.7.0: two schemas gained optional fields, additively, so every artifact valid under 1.8.0 stays valid.",
       "counts": {
         "features": 4,
@@ -769,6 +770,27 @@
         "stretch": 0
       },
       "file": "v1-9-0.json"
+    },
+    {
+      "id": "v1-10-0",
+      "version": "1.10.0",
+      "name": "Architext 1.10.0 Data Model",
+      "status": "implementing",
+      "posture": "release-candidate",
+      "targetDate": "2026-08-13",
+      "lastUpdated": "2026-08-13T13:30:00.000Z",
+      "summary": "Adds Data Model mode, which renders a repository's persistence model from an optional hand-authored entities.json, and takes the already-shipped Code Graph mode through the legibility and liveness work that separates it from the reference graph it is measured against. Data schema 1.8.0 registers entities.json additively, so every artifact valid under 1.7.0 stays valid. The through-line is dogfooding: Architext now ships its own entities.json and its own code-graph.json, and every defect fixed here except one was found by looking at Architext's own model rather than at a fixture.",
+      "counts": {
+        "features": 6,
+        "bugFixes": 7,
+        "workstreams": 3,
+        "blockers": 0,
+        "complete": 14,
+        "inProgress": 0,
+        "planned": 0,
+        "stretch": 0
+      },
+      "file": "v1-10-0.json"
     }
   ]
 }

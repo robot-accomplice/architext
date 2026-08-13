@@ -52,11 +52,20 @@ layout(location=2) in vec4 aState;     // alpha, glow, colorMix, hopAge
 uniform vec2 uResolution;
 uniform vec2 uPan;
 uniform float uZoom;
+uniform float uMinRadius;
 out vec2 vCorner;
 out vec4 vState;
 void main() {
     float pad = 1.0 + aState.y * 0.9;
-    vec2 world = aPosRadius.xy + aCorner * aPosRadius.z * pad;
+    // Screen-space floor on the ink (see `gl/renderer.rs`'s
+    // `MIN_INK_WIDTH_PX`): `uMinRadius` is that floor expressed in WORLD
+    // units for the current zoom, so a node keeps its degree-derived size
+    // whenever that is the larger of the two and stops shrinking once it
+    // would otherwise go sub-pixel. Applied here rather than on the CPU
+    // because radius is per-instance STATIC buffer data -- flooring it in
+    // Rust would mean rewriting every node's radius on every camera move.
+    float radius = max(aPosRadius.z, uMinRadius);
+    vec2 world = aPosRadius.xy + aCorner * radius * pad;
     vec2 screen = world * uZoom + uPan;
     vec2 clip = vec2(screen.x / uResolution.x * 2.0 - 1.0, 1.0 - screen.y / uResolution.y * 2.0);
     gl_Position = vec4(clip, 0.0, 1.0);

@@ -24,7 +24,7 @@ use wasm_bindgen::closure::Closure;
 use wasm_bindgen::{JsCast, JsValue};
 use web_sys::{DedicatedWorkerGlobalScope, MessageEvent};
 
-use architext_viewer::force_layout::simulate;
+use architext_viewer::force_layout::simulate_clustered;
 use architext_viewer::layout_worker_client::{decode_request, encode_result};
 
 fn main() {
@@ -34,7 +34,7 @@ fn main() {
     let scope_for_reply = scope.clone();
 
     let onmessage = Closure::wrap(Box::new(move |ev: MessageEvent| {
-        let (node_count, edges, seed, cfg) = match decode_request(&ev.data()) {
+        let (node_count, edges, seed, cfg, anchors) = match decode_request(&ev.data()) {
             Ok(req) => req,
             Err(e) => {
                 web_sys::console::error_2(&"[layout-worker] bad request:".into(), &e);
@@ -42,7 +42,7 @@ fn main() {
             }
         };
 
-        let result = simulate(node_count as usize, &edges, seed, &cfg);
+        let result = simulate_clustered(node_count as usize, &edges, seed, &cfg, &anchors);
         let positions: Vec<(f32, f32)> =
             result.positions.iter().map(|&(x, y)| (x as f32, y as f32)).collect();
 

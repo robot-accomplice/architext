@@ -1185,3 +1185,53 @@ pub struct SlopFerretCandidate {
     #[serde(default)]
     pub bar: String,
 }
+
+// ─── entities.json (the persistence model) ─────────────────────────────────
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct EntitiesDoc {
+    #[serde(default)]
+    pub entities: Vec<Entity>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Entity {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub summary: Option<String>,
+    #[serde(default)]
+    pub owner_node_id: Option<String>,
+    #[serde(default)]
+    pub data_class_ids: Vec<String>,
+    #[serde(default)]
+    pub attributes: Vec<EntityAttribute>,
+    #[serde(default)]
+    pub relationships: Vec<EntityRelationship>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct EntityAttribute {
+    pub name: String,
+    /// The producing database's own type string, rendered verbatim. Deliberately
+    /// not an enum: that vocabulary is unbounded (`uuid`, `jsonb`,
+    /// `NUMBER(10)`, a Postgres domain type), and pinning it would let one
+    /// unrecognised value invalidate the whole document instead of degrading.
+    #[serde(rename = "type")]
+    pub type_name: String,
+    #[serde(default)]
+    pub key: Option<String>,
+    #[serde(default)]
+    pub required: bool,
+    #[serde(default)]
+    pub references: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Deserialize)]
+pub struct EntityRelationship {
+    pub to: String,
+    pub cardinality: String,
+    #[serde(default)]
+    pub label: Option<String>,
+}

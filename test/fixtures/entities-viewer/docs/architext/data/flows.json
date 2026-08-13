@@ -1,0 +1,27 @@
+{
+  "flows": [
+    {
+      "id": "main",
+      "name": "Main flow",
+      "status": "implemented",
+      "summary": "A placeholder flow.",
+      "trigger": "Manual",
+      "actors": ["system"],
+      "steps": [
+        {
+          "id": "start",
+          "from": "system",
+          "to": "system",
+          "action": "start",
+          "summary": "Start the flow.",
+          "data": []
+        }
+      ],
+      "guarantees": [],
+      "failureBehavior": [],
+      "observability": [],
+      "verification": [],
+      "knownGaps": []
+    }
+  ]
+}
