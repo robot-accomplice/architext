@@ -1,0 +1,685 @@
+{
+  "entities": [
+    {
+      "id": "manifest",
+      "name": "Manifest",
+      "summary": "The document registry. manifest.files maps each logical key to a filename, and validation loads only what is registered here.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "schema_version",
+          "type": "semver",
+          "required": true
+        },
+        {
+          "name": "project_id",
+          "type": "string",
+          "key": "primary"
+        },
+        {
+          "name": "generated_at",
+          "type": "iso8601"
+        },
+        {
+          "name": "default_view_id",
+          "type": "string",
+          "key": "foreign",
+          "references": "view"
+        },
+        {
+          "name": "files",
+          "type": "map<string,filename>",
+          "required": true
+        }
+      ],
+      "relationships": [
+        {
+          "to": "view",
+          "cardinality": "one-to-one",
+          "label": "opens on"
+        }
+      ]
+    },
+    {
+      "id": "node",
+      "name": "Node",
+      "summary": "An architecture element: service, module, actor, data store, or deployment unit. The centre of the model -- most other documents point at it.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "type",
+          "type": "enum",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "summary",
+          "type": "text"
+        },
+        {
+          "name": "owner",
+          "type": "string"
+        },
+        {
+          "name": "runtime",
+          "type": "string"
+        },
+        {
+          "name": "source_paths",
+          "type": "string[]"
+        }
+      ],
+      "relationships": [
+        {
+          "to": "node",
+          "cardinality": "many-to-many",
+          "label": "depends on"
+        },
+        {
+          "to": "data_class",
+          "cardinality": "many-to-many",
+          "label": "handles"
+        },
+        {
+          "to": "flow",
+          "cardinality": "many-to-many",
+          "label": "participates in"
+        },
+        {
+          "to": "decision",
+          "cardinality": "many-to-many",
+          "label": "informed by"
+        },
+        {
+          "to": "risk",
+          "cardinality": "many-to-many",
+          "label": "carries"
+        }
+      ]
+    },
+    {
+      "id": "flow",
+      "name": "Flow",
+      "summary": "An ordered interaction across nodes. Steps are nested inside the flow document rather than stored separately.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "trigger",
+          "type": "string"
+        },
+        {
+          "name": "status",
+          "type": "enum"
+        },
+        {
+          "name": "actors",
+          "type": "slug[]",
+          "key": "foreign",
+          "references": "node"
+        }
+      ],
+      "relationships": [
+        {
+          "to": "flow_step",
+          "cardinality": "one-to-many",
+          "label": "has"
+        }
+      ]
+    },
+    {
+      "id": "flow_step",
+      "name": "Flow Step",
+      "summary": "One numbered step. Nested in flows.json; it has no file of its own, and its id is unique only within its flow.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "from",
+          "type": "slug",
+          "key": "foreign",
+          "required": true,
+          "references": "node"
+        },
+        {
+          "name": "to",
+          "type": "slug",
+          "key": "foreign",
+          "required": true,
+          "references": "node"
+        },
+        {
+          "name": "label",
+          "type": "string"
+        },
+        {
+          "name": "kind",
+          "type": "enum"
+        },
+        {
+          "name": "outcome",
+          "type": "string"
+        },
+        {
+          "name": "return_of",
+          "type": "slug",
+          "key": "foreign",
+          "references": "flow_step"
+        },
+        {
+          "name": "data",
+          "type": "slug[]",
+          "key": "foreign",
+          "references": "data_class"
+        }
+      ],
+      "relationships": [
+        {
+          "to": "node",
+          "cardinality": "many-to-many",
+          "label": "connects"
+        },
+        {
+          "to": "data_class",
+          "cardinality": "many-to-many",
+          "label": "carries"
+        },
+        {
+          "to": "flow_step",
+          "cardinality": "one-to-one",
+          "label": "returns to"
+        }
+      ]
+    },
+    {
+      "id": "view",
+      "name": "View",
+      "summary": "A projection: system map, C4 level, deployment, or workflow. Selects which nodes render and how.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "kind",
+          "type": "enum",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "scope_node_id",
+          "type": "slug",
+          "key": "foreign",
+          "references": "node"
+        }
+      ],
+      "relationships": [
+        {
+          "to": "node",
+          "cardinality": "many-to-many",
+          "label": "shows"
+        }
+      ]
+    },
+    {
+      "id": "data_class",
+      "name": "Data Class",
+      "summary": "A privacy/handling classification. NOT a schema -- it carries sensitivity and handling, never attributes or keys. This gap is why entities.json exists.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "sensitivity",
+          "type": "enum",
+          "required": true
+        },
+        {
+          "name": "handling",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "decision",
+      "name": "Decision",
+      "summary": "A recorded architecture decision and its status.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "enum"
+        },
+        {
+          "name": "context",
+          "type": "text"
+        }
+      ],
+      "relationships": [
+        {
+          "to": "flow",
+          "cardinality": "many-to-many",
+          "label": "affects"
+        }
+      ]
+    },
+    {
+      "id": "risk",
+      "name": "Risk",
+      "summary": "A known risk, ranked by severity.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "severity",
+          "type": "enum",
+          "required": true
+        },
+        {
+          "name": "mitigation",
+          "type": "text"
+        }
+      ],
+      "relationships": [
+        {
+          "to": "flow",
+          "cardinality": "many-to-many",
+          "label": "threatens"
+        }
+      ]
+    },
+    {
+      "id": "rule",
+      "name": "Rule",
+      "summary": "A project rule. Ranked by criticality and order, never alphabetically. protection guards it from casual edit or delete.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "category",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "criticality",
+          "type": "enum",
+          "required": true
+        },
+        {
+          "name": "order",
+          "type": "integer"
+        },
+        {
+          "name": "protection",
+          "type": "object"
+        }
+      ]
+    },
+    {
+      "id": "glossary_term",
+      "name": "Glossary Term",
+      "summary": "A project term and its definition.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "term",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "definition",
+          "type": "text",
+          "required": true
+        }
+      ]
+    },
+    {
+      "id": "note",
+      "name": "Note",
+      "summary": "A maintainer annotation on any element. target_id is POLYMORPHIC -- what it resolves against is decided by target_kind -- so it names no single entity and is deliberately left without a references clause.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "target_kind",
+          "type": "enum",
+          "required": true
+        },
+        {
+          "name": "target_id",
+          "type": "slug",
+          "required": true
+        },
+        {
+          "name": "category",
+          "type": "enum",
+          "required": true
+        },
+        {
+          "name": "body",
+          "type": "text",
+          "required": true
+        },
+        {
+          "name": "created_at",
+          "type": "iso8601"
+        },
+        {
+          "name": "updated_at",
+          "type": "iso8601"
+        }
+      ]
+    },
+    {
+      "id": "roadmap_item",
+      "name": "Roadmap Item",
+      "summary": "Planned scope. Promoted into a release plan on approval.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "title",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "enum"
+        },
+        {
+          "name": "target_release_id",
+          "type": "slug",
+          "key": "foreign",
+          "references": "release_summary"
+        }
+      ],
+      "relationships": [
+        {
+          "to": "release_summary",
+          "cardinality": "one-to-one",
+          "label": "targets"
+        }
+      ]
+    },
+    {
+      "id": "release_summary",
+      "name": "Release Summary",
+      "summary": "One row of releases/index.json. Its summary text is regenerated from the detail file, so a hand-edited summary is rejected as stale.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "version",
+          "type": "semver",
+          "required": true
+        },
+        {
+          "name": "status",
+          "type": "enum",
+          "required": true
+        },
+        {
+          "name": "released_at",
+          "type": "iso8601"
+        },
+        {
+          "name": "summary",
+          "type": "text"
+        },
+        {
+          "name": "file",
+          "type": "filename",
+          "key": "foreign",
+          "references": "release_detail"
+        }
+      ],
+      "relationships": [
+        {
+          "to": "release_detail",
+          "cardinality": "one-to-one",
+          "label": "detailed by"
+        }
+      ]
+    },
+    {
+      "id": "release_detail",
+      "name": "Release Detail",
+      "summary": "The reviewed release record: workstreams, blockers, deferrals, and next actions. The index is derived from this, not the reverse.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "workstreams",
+          "type": "object[]"
+        },
+        {
+          "name": "blockers",
+          "type": "object[]"
+        },
+        {
+          "name": "complete",
+          "type": "object[]"
+        },
+        {
+          "name": "in_progress",
+          "type": "object[]"
+        }
+      ]
+    },
+    {
+      "id": "entity",
+      "name": "Entity",
+      "summary": "This document. Optional and hand-authored; owner_node_id is a real cross-document reference into nodes.json.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "id",
+          "type": "slug",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "name",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "owner_node_id",
+          "type": "slug",
+          "key": "foreign",
+          "references": "node"
+        },
+        {
+          "name": "attributes",
+          "type": "object[]",
+          "required": true
+        },
+        {
+          "name": "relationships",
+          "type": "object[]"
+        }
+      ],
+      "relationships": [
+        {
+          "to": "node",
+          "cardinality": "one-to-one",
+          "label": "owned by"
+        }
+      ]
+    },
+    {
+      "id": "code_graph",
+      "name": "Code Graph",
+      "summary": "Optional, produced by Magma under contract magma-code-graph/1. Its ids live in their own id-space and never join the architecture model, so it declares no relationships here.",
+      "ownerNodeId": "target-data-files",
+      "dataClassIds": [
+        "architecture-model"
+      ],
+      "attributes": [
+        {
+          "name": "contract_version",
+          "type": "string",
+          "key": "primary",
+          "required": true
+        },
+        {
+          "name": "generator",
+          "type": "string",
+          "required": true
+        },
+        {
+          "name": "computable",
+          "type": "boolean",
+          "required": true
+        },
+        {
+          "name": "functions",
+          "type": "object[]"
+        },
+        {
+          "name": "calls",
+          "type": "object[]"
+        }
+      ]
+    }
+  ]
+}

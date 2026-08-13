@@ -112,6 +112,17 @@
   --sev-medium:   #ffd21f;
   --sev-low:      #849495;   /* lowest — fades to dim */
 
+  /* ── Cardinality hues (ER relationships) — a NOMINAL set, not a ramp ──────
+     Cardinality has no order: many-to-many is not "more" than one-to-one, so
+     these are three distinct hues rather than a scale. Deliberately far apart
+     on the wheel (cyan / amber / violet) so they separate at a 1.25px stroke
+     and for the common forms of colour blindness. Colour is the THIRD channel
+     here -- the crow's foot and the label already carry the meaning -- so it
+     reinforces rather than being the only cue. */
+  --er-one-to-one:   #00e5ff;
+  --er-one-to-many:  #ffd21f;
+  --er-many-to-many: #a855ff;
+
   /* ── Sensitivity scale (data classification) — its own ordinal ramp ──────── */
   --sens-high:   #ff5c7a;
   --sens-medium: #ffd21f;
@@ -124,6 +135,9 @@
   --reach-generated: #7a8699;
   --reach-test-only: #c9963f;
   --reach-dead: #c2564b;
+  /* "Public, unreferenced" is a FACT, not a dead-code verdict, so it sits on
+     the informational blue rather than anywhere near --reach-dead's red. */
+  --reach-public-unreferenced: #5b8ec4;
 
   /* ── State / accent treatment (DESIGN.md rule 1) ──────────────────────────
      STATE (active / selected / primary action) is a dedicated signal — a
@@ -217,6 +231,11 @@
   --c4-system: #0a86a6;
   --c4-queue: #c26a09;
 
+  /* Cardinality hues, darkened for the light canvas at the same separation. */
+  --er-one-to-one:   #0a86a6;
+  --er-one-to-many:  #a87800;
+  --er-many-to-many: #7c3aed;
+
   --sev-critical: #d3253f;
   --sev-high:     #c26a09;
   --sev-medium:   #a87800;
@@ -229,6 +248,7 @@
   --reach-generated: #5a6870;
   --reach-test-only: #8a6423;
   --reach-dead: #a83f36;
+  --reach-public-unreferenced: #2f6ba3;
 
   --accent-base: #0a9e72;
   --accent: var(--accent-base);
@@ -1546,11 +1566,17 @@ button.c4-breadcrumb__crumb:hover {
 /* Same fluid-canvas contract as the flows SVG. Message lines reuse --edge +
    non-scaling-stroke so they stay a constant ~1.5px in screen space at any
    zoom (never thinning to sub-pixel like the flows-edge fix). */
+/* A lifeline is STRUCTURE -- the participant's axis, the thing every message
+   attaches to -- so it is drawn in the same stroke family as other structure.
+   It previously stacked three separate reductions on one element: the faintest
+   token (--line), 60% opacity, AND a sparse 2/4 dash, which left it barely
+   visible in either theme. Dashed still reads as "not a message"; it no longer
+   has to be nearly invisible to say so. */
 .sequence-lifeline {
-  stroke: var(--line);
-  stroke-width: 1;
-  stroke-dasharray: 2 4;
-  opacity: 0.6;
+  stroke: var(--line-strong);
+  stroke-width: 1.25;
+  stroke-dasharray: 3 3;
+  opacity: 0.85;
   vector-effect: non-scaling-stroke;
 }
 /* Open (stick) arrowhead for return/async replies — UML: filled head = sync call,
@@ -1797,15 +1823,30 @@ button.c4-breadcrumb__crumb:hover {
    cap lives on .repo-tree__body inside it, so the table stays compact while
    this column still yields its slack to the preview pane. */
 .repo-tree__main {
-  flex: 1 1 0;
-  min-width: 0;
-  max-width: 52rem;       /* mirrors the F16 body cap: on a wide center the table stops here and the preview takes the freed width; on a narrow center the two panes share 50/50 instead of the table starving the preview */
+  /* Both panes used to be `flex: 1 1 0`, which splits the row evenly however
+     little either side needs -- a file list and a source file given identical
+     width, serving neither. While a file is open the tree is navigation and the
+     file is the thing being read, so the tree takes a fixed share and the
+     preview takes everything left. It can still shrink on a narrow panel, and
+     it goes back to full width the moment nothing is selected. */
+  flex: 0 1 28rem;
+  min-width: 18rem;
   overflow: auto;
 }
 /* No file selected → the preview collapses and the table reclaims the full
    width (the F16 layout). Clicking a file reveals the preview and the panes
    share the row. */
 .repo-tree:not(.repo-tree--previewing) .repo-file-preview { display: none; }
+
+/* ...and the cap has to lift with it. Hiding the preview freed the space but
+   the 52rem cap above still applied, so with nothing selected -- the state the
+   tree opens in -- roughly a third of the panel sat empty and the table never
+   actually reclaimed anything. The cap exists to stop the table starving the
+   preview, so it only belongs while the preview is on screen. */
+.repo-tree:not(.repo-tree--previewing) .repo-tree__main {
+  flex: 1 1 auto;
+  max-width: none;
+}
 /* Right pane: the file preview, filling the width the F16 cap freed up. A
    hairline border separates it from the table; it scrolls on its own. */
 .repo-file-preview {
@@ -1939,12 +1980,21 @@ button.c4-breadcrumb__crumb:hover {
   margin: 0 0 var(--pad-tight);
 }
 
-/* The tree caps its width so the metadata gutter sits near the names instead
-   of being flung to the far edge of a wide panel (the "extraordinary
-   whitespace"). Header + rows share this cap, so their columns stay aligned. */
+/* The tree fills the panel.
+   It used to cap at 52rem so the metadata gutter sat near the names, but that
+   only moved the whitespace: instead of a gap between name and metadata there
+   was a dead third of the panel to the right of the whole block. Name left,
+   metadata right, full width is what every file browser does; the striping
+   below is what makes a row trackable across the gap. */
 .repo-tree__body {
-  --repo-tree-max-width: 52rem;
-  max-width: var(--repo-tree-max-width);
+  width: 100%;
+}
+
+/* Alternating row tint, so the eye can follow a filename across to its size
+   and owner without a ruler. Hover stays a step stronger so it still reads as
+   the active row on a striped background. */
+.repo-row:nth-of-type(even) {
+  background: var(--panel);
 }
 
 /* A tree row: a 3px left rail (owner color on files), then a grid of
@@ -2940,8 +2990,31 @@ button.blast-chip { cursor: pointer; }
 /* Canvas wrap — a positioned ancestor so the staged progress panel below can
    float centred OVER the canvas instead of docked in the toolbar chrome. */
 .code-graph-view__canvas-wrap { position: relative; flex: 1; min-height: 0; display: flex; }
-.code-graph-view__canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: grab; background: #08090b; }
+/* `user-select: none` because a drag across the canvas otherwise selects text
+   in the surrounding panels. It cannot be done with `prevent_default()` in the
+   mousedown handler: leptos registers those listeners passive, so the call is
+   a no-op and only logs a console error. */
+.code-graph-view__canvas { flex: 1; min-height: 0; width: 100%; display: block; cursor: grab; background: #08090b; user-select: none; }
 .code-graph-view__canvas:active { cursor: grabbing; }
+/* Node labels, drawn as DOM over the canvas (see `code_graph_labels`).
+   `pointer-events: none` on BOTH the layer and the text is load-bearing: the
+   canvas below owns click-to-select and grab-to-drag, and a label swallowing a
+   mousedown would make nodes randomly ungrabbable wherever text overlapped
+   them. Positioned by the same `world * zoom + pan` the vertex shader uses, so
+   text tracks its dot exactly; `translate(-50%, -50%)` centres it on the node
+   rather than hanging off the corner. Muted, with the node's own colour, so
+   the accent stays reserved for selection. */
+.code-graph-view__labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.code-graph-view__label-text {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--text-dim, #7a8699);
+  text-shadow: 0 0 3px #08090b, 0 0 3px #08090b;
+}
 /* Staged, centred progress panel — the PRIMARY signal that the app is
    working, not broken, while the graph model builds and the force layout
    settles (the 11px status line alone was not enough: see the
@@ -3413,10 +3486,14 @@ button.blast-chip { cursor: pointer; }
 
 /* --- the diagram --- */
 
+/* Natural size, deliberately NOT scaled to fit.
+   `max-width: 100%` shrank the whole diagram into the panel -- a 1541px map in
+   a 654px panel rendered at 42%, which turned 11px attribute text into 5px and
+   made the entities unreadable specks. The panel scrolls instead; a diagram is
+   allowed to be bigger than the window. Print re-enables fitting, because paper
+   genuinely cannot scroll. */
 .er-diagram {
   display: block;
-  max-width: 100%;
-  height: auto;
 }
 
 .er-box__frame {
@@ -3459,12 +3536,22 @@ button.blast-chip { cursor: pointer; }
   font-style: italic;
 }
 
+/* Each relationship line, its crow's feet and its label pill all carry the
+   cardinality hue, so the three parts of one relationship read as one thing. */
 .er-edge__line,
 .er-edge__foot {
   fill: none;
-  stroke: var(--line-strong);
+  stroke: var(--er-stroke, var(--line-strong));
   stroke-width: 1.25;
 }
+
+.er-edge--one-to-one { --er-stroke: var(--er-one-to-one); }
+.er-edge--one-to-many { --er-stroke: var(--er-one-to-many); }
+.er-edge--many-to-many { --er-stroke: var(--er-many-to-many); }
+
+.er-edge__label-group--one-to-one { --er-stroke: var(--er-one-to-one); }
+.er-edge__label-group--one-to-many { --er-stroke: var(--er-one-to-many); }
+.er-edge__label-group--many-to-many { --er-stroke: var(--er-many-to-many); }
 
 .er-edge__label {
   fill: var(--dim);
@@ -3489,4 +3576,77 @@ button.blast-chip { cursor: pointer; }
     max-width: 100%;
     height: auto;
   }
+}
+
+/* Relationship label pills. A label sitting directly on a line is hard to read
+   where they overlap, so it gets its own ground. */
+.er-edge__label-pill {
+  fill: var(--panel);
+  stroke: var(--er-stroke, var(--line));
+  stroke-width: 1;
+}
+
+/* Entities can be dragged, so say so on hover and while moving. */
+.er-box {
+  cursor: grab;
+}
+
+.er-diagram.is-dragging .er-box {
+  cursor: grabbing;
+}
+
+.er-box:hover .er-box__frame {
+  stroke: var(--accent-ring);
+}
+
+/* While a file is open the tree is a navigator, not a table. At that width the
+   size/modified/owner columns cost roughly 180px of a 392px pane and push the
+   filenames -- the only thing being scanned -- into ellipsis. They come back
+   the moment the preview closes and the full width is available again. */
+.repo-tree--previewing .repo-row {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.repo-tree--previewing .repo-row__size,
+.repo-tree--previewing .repo-row__time,
+.repo-tree--previewing .repo-row__owner {
+  display: none;
+}
+
+/* Cardinality legend. Colour that cannot be decoded is decoration, so the key
+   is on screen rather than in documentation. */
+.data-model-panel__legend {
+  display: flex;
+  align-items: center;
+  gap: var(--pad);
+  margin-left: auto;
+  color: var(--dim);
+  font-size: var(--overline-size);
+  letter-spacing: var(--overline-tracking);
+  text-transform: uppercase;
+}
+
+.data-model-panel__legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.data-model-panel__legend-swatch {
+  width: 18px;
+  height: 0;
+  border-top: 2px solid var(--er-stroke, var(--line-strong));
+}
+
+/* The ER surface carries its own zoom controls: it is not one of the shared
+   pan/zoom diagram surfaces, so the canvas-panel set never applied to it. */
+.data-model-panel__canvas {
+  position: relative;
+}
+
+.data-model-panel__zoom {
+  position: absolute;
+  top: var(--pad-tight);
+  right: var(--pad-tight);
+  z-index: 2;
 }

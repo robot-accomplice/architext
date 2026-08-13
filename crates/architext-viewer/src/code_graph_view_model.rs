@@ -20,6 +20,7 @@
 //!
 //! Traversal/filter primitives are Task 2's (`code_graph_graph::GraphIndex`,
 //! `bfs`, `FilterState`) — used, never reimplemented.
+use crate::force_layout::ForceConfig;
 use crate::code_graph_graph::{Direction, FilterState, GraphIndex};
 use crate::data::models::CodeGraph;
 use crate::force_layout::QuadTree;
@@ -155,15 +156,11 @@ pub enum Tier {
 /// but not cache-shareable) layout.
 pub const LAYOUT_SEED: u64 = 1_469_598_103_934_665_603;
 
-/// Whether entering `tier` should auto-play the roots animation once its
-/// layout settles. Maintainer spec: the function tier only — modules stay
-/// static (small and legible without a wavefront). Pulled out as its own
-/// pure predicate so the trigger condition is unit-testable without a
-/// browser: the view (`code_graph_view.rs`) calls this instead of inlining
-/// the tier comparison at the RAF-loop settle site.
-pub fn should_autoplay(tier: Tier) -> bool {
-    tier == Tier::Functions
-}
+// `should_autoplay` lived here: entering the function tier auto-played the
+// roots wavefront once its layout settled. Removed 2026-08-12 — the wavefront
+// leaves every node it reaches at PEAK ACCENT, so arrival painted the entire
+// graph in the colour reserved for "this one, selected". No predicate replaces
+// it: arrival is unconditionally at rest, and the sweep is a button.
 
 /// Call-order animation wavefront: `Roots` sweeps from the entrypoints,
 /// `Outbound`/`Inbound` sweep from the selected node (callees / callers).
@@ -183,10 +180,13 @@ pub struct GraphModel {
     pub labels: Vec<String>,
     pub degree: Vec<u32>,
     pub radius: Vec<f32>,
-    // The four reachability-class slices `FilterState::visible_nodes`
+    // The five reachability-class slices `FilterState::visible_nodes`
     // consumes, in that order.
     pub prod_reachable: Vec<bool>,
     pub dead: Vec<bool>,
+    /// Exported and unreached. Split out of `dead` because the analysis
+    /// cannot see a public symbol's callers — see `Reach::PublicUnreferenced`.
+    pub public_unreferenced: Vec<bool>,
     pub test_only: Vec<bool>,
     pub generated: Vec<bool>,
     /// Entrypoint indices (function tier only) — the `Roots` animation seeds.
@@ -200,6 +200,15 @@ pub struct GraphModel {
     pub neighbors: Vec<Vec<usize>>,
     /// Directed adjacency for BFS wavefronts (Task 2's index).
     pub index: GraphIndex,
+    /// Which cluster each node belongs to, and how many clusters there are.
+    ///
+    /// Carried ON the model because the layout is settled in two separate
+    /// places -- the worker warm and the view's local settle -- and both need
+    /// it. Deriving it at each call site meant wiring one and forgetting the
+    /// other, which left the view rendering an unclustered sphere while the
+    /// code read as though clustering had shipped.
+    pub clusters: Vec<usize>,
+    pub cluster_count: usize,
 }
 
 impl GraphModel {
@@ -246,11 +255,254 @@ fn radius_for(degree: u32) -> f32 {
 }
 
 /// Build one tier's [`GraphModel`] from the Magma document.
+/// Radius a lobe is allotted per sqrt(member).
+///
+/// NOT `k`. `k` is the ideal EDGE length (60), and using it here reserved
+/// about two and a half times the room a lobe actually settles into: a
+/// 634-member cluster claimed a 1,511-unit radius to hold members that occupy
+/// roughly 600. Multiplied across 86 lobes the field inflated until the graph
+/// read as a star chart -- correctly separated, and far too sparse to use.
+///
+/// Calibrated against the radius members really occupy under the anchor
+/// spring, so a territory is the size of its contents rather than a multiple
+/// of an unrelated constant.
+const LOBE_RADIUS_K: f64 = 24.0;
+
+// The compaction and separation passes that used to tidy up force-settled
+// cluster centres are gone with the simulation that needed them: a shelf pack
+// cannot overlap and has no slack to squeeze out, so both were solving
+// problems that the ordered placement does not create.
+
+/// How firmly a node is held toward its cluster anchor.
+///
+/// Strong enough that lobes separate and stay separated; loose enough that the
+/// graph's own edges still shape what happens inside one.
+///
+/// Raised 0.5 -> 1.0 on 2026-08-13 ("it's still too sparse"). MEASURED by the
+/// `measure_cluster_separation` sweep over this repo's own graph, which is why
+/// this is not a tuned-by-eye number any more:
+///
+/// | pull | mean within-lobe radius | field extent |
+/// | --- | --- | --- |
+/// | 0.05 | 485 | 3219 |
+/// | 0.25 | 243 | 2306 |
+/// | 0.50 (was) | 192 | 2114 |
+/// | 1.00 (now) | 154 | 1994 |
+///
+/// It tightens lobes AND shrinks the whole field, so the graph occupies more
+/// of the ink and less of the gap. Higher still trades away the intra-lobe
+/// structure this exists to preserve: at that point the anchor, not the
+/// graph's own edges, is deciding where a node sits.
+pub const CLUSTER_PULL: f64 = 1.0;
+
+/// How many `::` segments of a package path define a cluster.
+///
+/// Depth 2 gives 86 groups over Architext's 306 modules -- lobes of roughly
+/// forty functions, which is a readable size. Depth 1 collapses to the five
+/// crates (too coarse to navigate), depth 3 fragments into 242 (barely
+/// coarser than the modules themselves).
+const CLUSTER_PKG_DEPTH: usize = 2;
+
+/// The cluster each node belongs to, plus the cluster count.
+///
+/// Clusters are what turn the graph from one contiguous sphere into lobes.
+/// Both tiers use the same key -- a package prefix -- so a module and the
+/// functions inside it land in the same neighbourhood at either zoom level,
+/// and moving between tiers does not rearrange the reader's mental map.
+///
+/// Node ORDER mirrors `build_graph` exactly (`modules.iter()` /
+/// `functions.iter()`); the two are read together and must stay in step.
+pub fn cluster_ids(cg: &CodeGraph, tier: Tier) -> (Vec<usize>, usize) {
+    let prefix = |pkg: &str| -> String {
+        pkg.split("::").take(CLUSTER_PKG_DEPTH).collect::<Vec<_>>().join("::")
+    };
+    let mut keys: Vec<String> = Vec::new();
+    let empty_m = Vec::new();
+    let modules = cg.modules.as_ref().unwrap_or(&empty_m);
+
+    match tier {
+        Tier::Modules => {
+            for m in modules {
+                keys.push(prefix(&m.pkg));
+            }
+        }
+        Tier::Functions => {
+            // Functions carry a symbol, not a package, so ownership comes from
+            // the module that lists them. A function no module claims gets its
+            // own key rather than being lumped into someone else's lobe.
+            let mut owner: std::collections::HashMap<&str, String> =
+                std::collections::HashMap::new();
+            for m in modules {
+                for fid in &m.function_ids {
+                    owner.insert(fid.as_str(), prefix(&m.pkg));
+                }
+            }
+            let empty_f = Vec::new();
+            for f in cg.functions.as_ref().unwrap_or(&empty_f) {
+                keys.push(owner.get(f.id.as_str()).cloned().unwrap_or_else(|| f.id.clone()));
+            }
+        }
+    }
+
+    // Stable numbering by first appearance, so the same graph always yields
+    // the same cluster ids and therefore the same layout.
+    let mut seen: std::collections::HashMap<&str, usize> = std::collections::HashMap::new();
+    let mut ids = Vec::with_capacity(keys.len());
+    for k in &keys {
+        let next = seen.len();
+        ids.push(*seen.entry(k.as_str()).or_insert(next));
+    }
+    let count = seen.len();
+    (ids, count)
+}
+
+/// Per-node anchor points, one per node, derived by laying the CLUSTERS out
+/// against each other first.
+///
+/// This is the two-level part: clusters are settled as their own small graph
+/// (86 nodes rather than 3,638), then every member is anchored to its
+/// cluster's position. The member simulation still runs in full, so structure
+/// inside a lobe is the real graph -- the anchor only decides which
+/// neighbourhood it occupies.
+/// Where each lobe SITS, as a deliberate arrangement rather than wherever a
+/// simulation drifted to.
+///
+/// Maintainer, 2026-08-13, on why the previous force-settled placement had to
+/// go: "the shape itself — blobby, organic, no order." A second force
+/// simulation over the cluster graph produces an amorphous constellation, and
+/// no amount of tightening makes an accident look composed.
+///
+/// So: lobes are laid out LARGEST FIRST, shelf-packed left-to-right into rows
+/// at a target aspect. That reads as deliberate (size descending, rows
+/// aligned), it is dense by construction (a shelf leaves only the ragged edge
+/// empty), and it is perfectly deterministic — the same graph always yields
+/// the same composition, with no seed involved.
+///
+/// `order` decides which lobe lands where, and it must carry ADJACENCY — see
+/// [`cluster_adjacency_order`]. A first attempt packed them by size alone and
+/// measurably made the picture worse: connected lobes ended up at opposite
+/// corners, so the canvas filled with long edges crossing everything. Order in
+/// the arrangement and locality in the graph are both required; either alone
+/// looks like noise.
+fn ordered_cluster_centres(sizes: &[usize], order: &[usize], aspect: f64) -> Vec<(f64, f64)> {
+    let radii: Vec<f64> =
+        sizes.iter().map(|&s| LOBE_RADIUS_K * (s as f64).sqrt().max(1.0)).collect();
+    // Row width that makes the whole arrangement land near `aspect`, derived
+    // from the total area the lobes need rather than picked.
+    let total_area: f64 = radii.iter().map(|r| (2.0 * r) * (2.0 * r)).sum();
+    let target_w = (total_area * aspect).sqrt().max(1.0);
+
+    let mut centres = vec![(0.0, 0.0); sizes.len()];
+    let (mut x, mut y, mut row_h) = (0.0_f64, 0.0_f64, 0.0_f64);
+    for &i in order {
+        let d = 2.0 * radii[i];
+        if x > 0.0 && x + d > target_w {
+            x = 0.0;
+            y += row_h;
+            row_h = 0.0;
+        }
+        centres[i] = (x + radii[i], y + radii[i]);
+        x += d;
+        row_h = row_h.max(d);
+    }
+
+    // Centre the composition on the origin so the camera fit and the origin
+    // gravity agree about where the graph is.
+    let (w, h) = (target_w, y + row_h);
+    for c in centres.iter_mut() {
+        c.0 -= w / 2.0;
+        c.1 -= h / 2.0;
+    }
+    centres
+}
+
+/// The order lobes are packed in: a breadth-first walk of the CLUSTER graph
+/// from the largest lobe, taking neighbours largest-first.
+///
+/// This is the piece that makes an ordered arrangement legible instead of
+/// merely tidy. Packing by size alone put `architext-routing`'s lobe in one
+/// corner and the lobe it calls in another, and the canvas filled with long
+/// edges crossing the middle — visibly worse than the organic layout it
+/// replaced, even though every lobe was neatly aligned. A BFS keeps callers
+/// and callees adjacent in reading order, so most edges stay short and local.
+///
+/// Deterministic: ties break on size then index, never on a seed. Clusters in
+/// separate components are appended largest-first, so a disconnected lobe sits
+/// after the structure rather than splitting it.
+fn cluster_adjacency_order(sizes: &[usize], cluster_edges: &[(usize, usize)]) -> Vec<usize> {
+    let n = sizes.len();
+    let mut adj: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for &(a, b) in cluster_edges {
+        if a < n && b < n && a != b {
+            adj[a].push(b);
+            adj[b].push(a);
+        }
+    }
+    let by_size = |a: &usize, b: &usize| sizes[*b].cmp(&sizes[*a]).then(a.cmp(b));
+    for list in adj.iter_mut() {
+        list.sort_by(by_size);
+        list.dedup();
+    }
+    let mut seeds: Vec<usize> = (0..n).collect();
+    seeds.sort_by(by_size);
+
+    let mut seen = vec![false; n];
+    let mut order = Vec::with_capacity(n);
+    for seed in seeds {
+        if seen[seed] {
+            continue;
+        }
+        seen[seed] = true;
+        let mut queue = std::collections::VecDeque::from([seed]);
+        while let Some(c) = queue.pop_front() {
+            order.push(c);
+            for &next in &adj[c] {
+                if !seen[next] {
+                    seen[next] = true;
+                    queue.push_back(next);
+                }
+            }
+        }
+    }
+    order
+}
+
+pub fn cluster_anchors(
+    clusters: &[usize],
+    cluster_count: usize,
+    edges: &[(usize, usize)],
+    _cfg: &ForceConfig,
+) -> Vec<(f64, f64)> {
+    if cluster_count <= 1 {
+        return Vec::new();
+    }
+    let mut sizes = vec![0usize; cluster_count];
+    for &c in clusters {
+        sizes[c] += 1;
+    }
+    // Member edges aggregated into cluster-to-cluster ones: which lobes call
+    // which is what decides the packing order.
+    let mut pairs: std::collections::BTreeSet<(usize, usize)> = Default::default();
+    for &(a, b) in edges {
+        let (ca, cb) = (clusters[a], clusters[b]);
+        if ca != cb {
+            pairs.insert((ca.min(cb), ca.max(cb)));
+        }
+    }
+    let cluster_edges: Vec<(usize, usize)> = pairs.into_iter().collect();
+    let order = cluster_adjacency_order(&sizes, &cluster_edges);
+    // 1.6 ≈ a landscape canvas, so the arrangement fills the frame rather
+    // than leaving bands of empty space above and below it.
+    let centres = ordered_cluster_centres(&sizes, &order, 1.6);
+    clusters.iter().map(|&c| centres[c]).collect()
+}
+
 pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
     let mut labels = Vec::new();
     let mut degree = Vec::new();
     let mut prod_reachable = Vec::new();
     let mut dead = Vec::new();
+    let mut public_unreferenced = Vec::new();
     let mut test_only = Vec::new();
     let mut generated = Vec::new();
     let mut roots = Vec::new();
@@ -273,6 +525,10 @@ pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
                 // filter only has bite at the function tier (spike behaviour).
                 prod_reachable.push(true);
                 dead.push(m.counts.dead > 0 && m.counts.dead == m.counts.functions);
+                // Module `counts` carry no export breakdown (contract:
+                // `functions` / `dead` / `test_only` only), so the split has
+                // no bite at this tier and every module stays out of the class.
+                public_unreferenced.push(false);
                 test_only.push(m.counts.test_only > 0 && m.counts.test_only == m.counts.functions);
                 generated.push(false);
             }
@@ -295,7 +551,8 @@ pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
                 labels.push(f.symbol.clone());
                 degree.push(f.fan_in + f.fan_out);
                 prod_reachable.push(f.prod_reachable);
-                dead.push(!f.reachable);
+                dead.push(!f.reachable && !f.exported);
+                public_unreferenced.push(!f.reachable && f.exported);
                 test_only.push(f.test);
                 generated.push(f.generated);
                 if f.root {
@@ -329,12 +586,16 @@ pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
         &directed_edges.iter().map(|&(a, b, _)| (a, b)).collect::<Vec<_>>(),
     );
 
+    // Cluster membership travels with the model so every settle path gets it.
+    let (clusters, cluster_count) = cluster_ids(cg, tier);
+
     GraphModel {
         labels,
         degree,
         radius,
         prod_reachable,
         dead,
+        public_unreferenced,
         test_only,
         generated,
         roots,
@@ -342,6 +603,8 @@ pub fn build_graph(cg: &CodeGraph, tier: Tier) -> GraphModel {
         directed_edges,
         neighbors,
         index,
+        clusters,
+        cluster_count,
     }
 }
 
@@ -405,6 +668,7 @@ pub fn cull(graph: &GraphModel, filter: &FilterState, wave: Option<Wavefront>) -
     let filter_visible = filter.visible_nodes(
         &graph.prod_reachable,
         &graph.dead,
+        &graph.public_unreferenced,
         &graph.test_only,
         &graph.generated,
     );
@@ -539,9 +803,34 @@ pub fn node_state(
     out
 }
 
+/// A resting edge's alpha on a tier dense enough that edges overlap heavily.
+///
+/// Low because overlap composites: inside a lobe twenty edges may cross the
+/// same pixel, and `1 - (1 - a)^20` saturates long before `a` is large, which
+/// is what makes a lobe read as a solid disc rather than a scribble. High
+/// enough that a LONE edge -- the handful of bridges between lobes, the ones
+/// worth following -- still carries colour on its own.
+///
+/// Raised from the 0.05 the spike used because 0.05 was chosen while edges
+/// were being drawn 0.068 px wide (see `gl/renderer.rs`'s `MIN_INK_WIDTH_PX`):
+/// at that width the alpha was academic, since the fragment shader discarded
+/// the fragments regardless. Now that an edge is at least a pixel, this is
+/// the number that decides whether the graph reads as a web or a wash, so it
+/// is a value to look at the result of -- not one to derive.
+///
+/// Judged against `COLOR_EDGE` (#3b494b) on `COLOR_CANVAS` (#08090b), which
+/// is a dark line on a nearly black ground: 0.16 composites to about #0f1214
+/// and disappears, and a lone bridge between two lobes is exactly the edge
+/// that has no overlap to help it.
+const DENSE_EDGE_ALPHA: f32 = 0.4;
+
+/// A resting edge's alpha when few enough edges are shown that they rarely
+/// overlap, so each has to carry itself. Unchanged from the spike.
+const SPARSE_EDGE_ALPHA: f32 = 0.28;
+
 /// Per-uploaded-edge `[alpha, colorMix, progress, hopAge]`. The base alpha
 /// drops at scale (>4000 visible edges) so a dense tier stays readable —
-/// same threshold as the spike. `progress` (slot 2, previously always-zero
+/// same threshold as the spike; see [`DENSE_EDGE_ALPHA`]. `progress` (slot 2, previously always-zero
 /// padding — see `gl/shaders.rs`'s `EDGE_VS`) is the GPU interpolation
 /// factor the vertex shader draws the line to, `mix(loDepthEnd, hiDepthEnd,
 /// progress)`: `1.0` for every edge outside an active animation (fully
@@ -572,7 +861,7 @@ pub fn edge_state(
     hop_progress: f32,
     reduced_motion: bool,
 ) -> Vec<f32> {
-    let base = if c.edges.len() > 4000 { 0.05 } else { 0.28 };
+    let base = if c.edges.len() > 4000 { DENSE_EDGE_ALPHA } else { SPARSE_EDGE_ALPHA };
     let mut out = Vec::with_capacity(c.edges.len() * 4);
     for &(a, b, _) in &c.edges {
         let (mut alpha, mut mix, mut progress, mut age) = (base, 0.0_f32, 1.0_f32, 0.0_f32);
@@ -806,15 +1095,87 @@ pub fn weighted_centre(positions: &[(f32, f32)], weights: &[f32]) -> (f32, f32) 
 /// `robust_bounds`' doc describes. Centring on the mass (pan) and framing
 /// the extent (zoom) stay different jobs — do not unify them back into one
 /// statistic; conflating them is exactly what produced the original bug.
-pub fn fit_camera(positions: &[(f32, f32)], weights: &[f32], w: f32, h: f32) -> (f32, f32, f32) {
-    let (lo_x, hi_x, lo_y, hi_y) = robust_bounds(positions);
+pub fn fit_camera(positions: &[(f32, f32)], _weights: &[f32], w: f32, h: f32) -> (f32, f32, f32) {
+    // THE FULL EXTENT, not `robust_bounds`. A 10th/90th-percentile box
+    // excludes about a fifth of the nodes PER AXIS by construction, so fitting
+    // it means the view can never open on the whole graph -- which is what the
+    // maintainer asked for, and what an overview is FOR. On this repo's own
+    // graph the full extent is only 1.44x the robust box (the `spread` figure
+    // in the trail), so honesty here costs 1.44x of zoom, not an empty canvas.
+    //
+    // Centred on the box, not on `weighted_centre`: the weighted centre pulls
+    // toward the dense hub, which is right when framing a REGION and wrong
+    // when the requirement is that nothing falls off the edge. `_weights` is
+    // kept in the signature because every caller has the radii to hand and a
+    // later region-fit will want them.
+    let (mut lo_x, mut hi_x, mut lo_y, mut hi_y) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
+    for &(x, y) in positions {
+        lo_x = lo_x.min(x);
+        hi_x = hi_x.max(x);
+        lo_y = lo_y.min(y);
+        hi_y = hi_y.max(y);
+    }
+    if positions.is_empty() {
+        (lo_x, hi_x, lo_y, hi_y) = (0.0, 0.0, 0.0, 0.0);
+    }
     let box_w = (hi_x - lo_x).max(1.0);
     let box_h = (hi_y - lo_y).max(1.0);
     let zoom = (w / (box_w * 1.1)).min(h / (box_h * 1.1)).clamp(0.02, 3.0);
-    let (cx, cy) = weighted_centre(positions, weights);
+    let (cx, cy) = ((lo_x + hi_x) / 2.0, (lo_y + hi_y) / 2.0);
     let pan_x = w / 2.0 - cx * zoom;
     let pan_y = h / 2.0 - cy * zoom;
     (zoom, pan_x, pan_y)
+}
+
+/// One-line camera-fit summary for the diagnostics trail (Rule 13): what
+/// `fit_camera` framed, and what that framing does to the two quantities the
+/// picture is actually made of.
+///
+/// Recorded because every camera defect so far has been invisible from the
+/// screen alone -- "the graph is a speck" and "the edges are missing" look
+/// identical whether the cause is the layout, the fit, or the ink width, and
+/// three rounds of tuning-by-eye moved numbers without moving the picture.
+/// The four facts below separate those causes at a glance:
+///
+/// - `zoom` / `robust` -- the box `fit_camera` actually fitted.
+/// - `full` / `spread` -- the FULL extent including outliers, and how many
+///   times wider than the robust box it is. `spread=1.0x` is a graph that
+///   ends where the framing does; a large `spread` means the reader is
+///   looking at empty space around a scattered minority that did not dictate
+///   the zoom. Deliberately NOT a count of nodes outside the box: a
+///   10th/90th-percentile box excludes about a fifth of the nodes per axis
+///   BY CONSTRUCTION, so that count sits near a third of the graph however
+///   compact or scattered the layout is -- it reads like a finding while
+///   being incapable of reporting one.
+/// - `edge_px` -- the on-screen WIDTH of an edge at this zoom, since edge
+///   half-width is specified in WORLD units ([`EDGE_HALF_WIDTH`]) and so
+///   shrinks with the camera. Below about one pixel an edge cannot render at
+///   full strength no matter what alpha it is given, which is a different
+///   defect from "the layout put them somewhere wrong".
+pub fn camera_fit_detail(positions: &[(f32, f32)], zoom: f32, w: f32, h: f32, dpr: f32) -> String {
+    let (lo_x, hi_x, lo_y, hi_y) = robust_bounds(positions);
+    let (mut fx0, mut fx1, mut fy0, mut fy1) = (f32::MAX, f32::MIN, f32::MAX, f32::MIN);
+    for &(x, y) in positions {
+        fx0 = fx0.min(x);
+        fx1 = fx1.max(x);
+        fy0 = fy0.min(y);
+        fy1 = fy1.max(y);
+    }
+    let (full_w, full_h) = if positions.is_empty() { (0.0, 0.0) } else { (fx1 - fx0, fy1 - fy0) };
+    let (robust_w, robust_h) = (hi_x - lo_x, hi_y - lo_y);
+    let spread = (full_w / robust_w.max(1.0)).max(full_h / robust_h.max(1.0)).max(1.0);
+    // The width actually DRAWN, plus whether the screen-space floor is what
+    // is holding it there. `floored` marks the regime where the camera is far
+    // enough out that ink no longer scales with the graph -- which is the
+    // fact worth knowing, not the world-space width it would have had.
+    let unfloored_px = 2.0 * crate::gl::renderer::EDGE_HALF_WIDTH * zoom;
+    let drawn_px = 2.0 * crate::gl::renderer::edge_half_width_world(zoom, dpr) * zoom;
+    let floored = if drawn_px > unfloored_px { " floored" } else { "" };
+    format!(
+        "zoom={zoom:.4} viewport={w:.0}x{h:.0} robust={robust_w:.0}x{robust_h:.0} \
+         full={full_w:.0}x{full_h:.0} spread={spread:.2}x edge_px={drawn_px:.3}{floored} \
+         (world={unfloored_px:.3})"
+    )
 }
 
 /// The imperative per-frame state. Kept out of Leptos signals by the view —
@@ -1064,6 +1425,38 @@ mod tests {
         assert!(g.neighbors[1].contains(&0) && g.neighbors[1].contains(&2));
     }
 
+    /// One unreferenced function per export status, and nothing else — the
+    /// minimum graph that can tell the two apart.
+    fn unreferenced_pair() -> CodeGraph {
+        serde_json::from_value(serde_json::json!({
+            "contract_version": "magma-code-graph/1", "generator": "magma",
+            "language": "rust", "module": "architext", "sha": "a",
+            "tree": "clean", "fidelity": "rta", "computable": true,
+            "functions": [
+                {"id": "priv", "symbol": "srv::helper", "pkg": "srv", "file": "h.rs", "line": 1,
+                 "kind": "func", "exported": false, "test": false, "root": false,
+                 "generated": false, "reachable": false, "prod_reachable": false,
+                 "signature": {"params": [], "results": []}, "fan_in": 0, "fan_out": 0},
+                {"id": "pub", "symbol": "entries_map::serialize", "pkg": "srv", "file": "m.rs", "line": 9,
+                 "kind": "func", "exported": true, "test": false, "root": false,
+                 "generated": false, "reachable": false, "prod_reachable": false,
+                 "signature": {"params": [], "results": []}, "fan_in": 0, "fan_out": 0}
+            ],
+            "calls": []
+        }))
+        .expect("fixture parses")
+    }
+
+    #[test]
+    fn build_graph_never_puts_an_exported_function_in_the_dead_class() {
+        // WHY: the `dead` slice is what the "Dead (candidates)" toggle shows,
+        // so a public function landing in it is the viewer ASSERTING dead code
+        // the analyser cannot prove — six such functions in Architext's own
+        // graph are `#[serde(with = "...")]` fns that the build needs.
+        let g = build_graph(&unreferenced_pair(), Tier::Functions);
+        assert_eq!(g.dead, vec![true, false], "only the private one is asserted dead");
+    }
+
     #[test]
     fn default_filter_culls_to_prod_reachable_and_drops_their_edges() {
         // THE required behaviour change: culling REMOVES, it does not fade.
@@ -1077,14 +1470,7 @@ mod tests {
     #[test]
     fn edge_kind_filter_culls_dynamic_edges() {
         let g = build_graph(&fixture(), Tier::Functions);
-        let mut f = FilterState {
-            show_prod_reachable: true,
-            show_dead: true,
-            show_test_only: true,
-            show_generated: true,
-            show_static: true,
-            show_dynamic: true,
-        };
+        let mut f = show_everything();
         assert_eq!(cull(&g, &f, None).edges.len(), 3, "everything shown");
         f.show_dynamic = false;
         let c = cull(&g, &f, None);
@@ -1201,6 +1587,167 @@ mod tests {
         assert_eq!(&ee[0..4], &[0.0, 0.0, 10.0, 0.0], "main→handler endpoints");
     }
 
+    /// WHY: the trail exists to tell apart two failures that look identical
+    /// on screen -- a graph framed too wide because a scattered minority sits
+    /// far out, and edges that cannot draw because the camera made them
+    /// thinner than a pixel. If the summary did not separate the robust box
+    /// from the full extent, or did not carry the on-screen edge width, the
+    /// recorded state would be no more use than the screenshot.
+    #[test]
+    fn lobes_are_laid_out_in_deliberate_order_without_overlapping() {
+        // WHY: maintainer, 2026-08-13 — "the shape itself: blobby, organic, no
+        // order". A force-settled cluster graph produces an amorphous
+        // constellation, so placement is now a shelf pack, largest lobe first.
+        // The three properties that make it read as composed rather than
+        // spilled are asserted here.
+        let sizes: Vec<usize> = vec![400, 9, 120, 1, 64, 250, 16, 36];
+        let order: Vec<usize> = (0..sizes.len()).collect();
+        let centres = ordered_cluster_centres(&sizes, &order, 1.6);
+        let radius = |s: usize| LOBE_RADIUS_K * (s as f64).sqrt().max(1.0);
+
+        // 1. No lobe overlaps another — the shelf guarantees it, where the
+        //    force placement needed repeated separation passes to approximate.
+        for i in 0..sizes.len() {
+            for j in (i + 1)..sizes.len() {
+                let (dx, dy) = (centres[j].0 - centres[i].0, centres[j].1 - centres[i].1);
+                let gap = (dx * dx + dy * dy).sqrt();
+                assert!(
+                    gap >= radius(sizes[i]) + radius(sizes[j]) - 1e-6,
+                    "lobes {i} and {j} overlap: gap {gap:.1} < {:.1}",
+                    radius(sizes[i]) + radius(sizes[j])
+                );
+            }
+        }
+
+        // 2. The first lobe in `order` opens the composition, so the caller
+        //    controls the reading order. Compared by top/left EDGE, not
+        //    centre: with variable radii a small lobe in the same row has a
+        //    smaller centre-y than a big one, so centres would answer a
+        //    different question than the one asked.
+        let edge = |i: usize| (centres[i].1 - radius(sizes[i]), centres[i].0 - radius(sizes[i]));
+        let top_left = (0..sizes.len())
+            .min_by(|&a, &b| edge(a).partial_cmp(&edge(b)).unwrap_or(std::cmp::Ordering::Equal))
+            .unwrap();
+        assert_eq!(top_left, order[0], "the first lobe in order must open the composition");
+
+        // 3. Deterministic — no seed, no simulation, same graph same picture.
+        assert_eq!(centres, ordered_cluster_centres(&sizes, &order, 1.6));
+    }
+
+    #[test]
+    fn lobes_that_call_each_other_are_packed_next_to_each_other() {
+        // WHY: this is the property the FIRST attempt at ordered placement
+        // lacked, and losing it was visible immediately — packing purely by
+        // size put connected lobes at opposite corners and filled the canvas
+        // with long edges crossing the middle, which read as MORE chaotic than
+        // the organic layout it replaced. Tidiness without locality is not
+        // order, it is just alignment.
+        //
+        // Two chains that never touch: 0-1-2 and 3-4-5. A size-only packing
+        // would interleave them (sizes alternate deliberately); an adjacency
+        // walk must emit each chain contiguously.
+        let sizes = vec![100, 90, 80, 95, 85, 75];
+        let edges = vec![(0, 1), (1, 2), (3, 4), (4, 5)];
+        let order = cluster_adjacency_order(&sizes, &edges);
+        assert_eq!(order.len(), sizes.len(), "every lobe is placed exactly once");
+
+        let pos = |c: usize| order.iter().position(|&x| x == c).unwrap();
+        let chain_a = [pos(0), pos(1), pos(2)];
+        let chain_b = [pos(3), pos(4), pos(5)];
+        let (a_lo, a_hi) = (chain_a.iter().min().unwrap(), chain_a.iter().max().unwrap());
+        let (b_lo, b_hi) = (chain_b.iter().min().unwrap(), chain_b.iter().max().unwrap());
+        assert!(
+            a_hi < b_lo || b_hi < a_lo,
+            "connected chains must not interleave: {order:?}"
+        );
+        assert_eq!(order[0], 0, "the walk starts from the largest lobe");
+    }
+
+    #[test]
+    fn the_opening_view_puts_every_single_node_on_screen() {
+        // WHY: maintainer, 2026-08-13 — "it should start zoomed out to see the
+        // whole graph". `fit_camera` fitted `robust_bounds`, a
+        // 10th/90th-percentile box that excludes ~20% of nodes PER AXIS by
+        // construction, so the opening frame ALWAYS cut some off. Asserted
+        // over every node rather than over a summary statistic, because a
+        // statistic is exactly what hid this.
+        let mut positions: Vec<(f32, f32)> = (0..200)
+            .map(|i| ((i % 20) as f32 * 12.0, (i / 20) as f32 * 12.0))
+            .collect();
+        // Outliers in all four directions — the nodes a percentile box drops.
+        positions.extend([(-4000.0, 0.0), (4000.0, 0.0), (0.0, -3000.0), (0.0, 3000.0)]);
+        let weights = vec![1.0; positions.len()];
+        let (w, h) = (1600.0_f32, 1000.0_f32);
+        let (zoom, pan_x, pan_y) = fit_camera(&positions, &weights, w, h);
+
+        for (i, &(x, y)) in positions.iter().enumerate() {
+            let (sx, sy) = (x * zoom + pan_x, y * zoom + pan_y);
+            assert!(
+                sx >= 0.0 && sx <= w && sy >= 0.0 && sy <= h,
+                "node {i} at {x},{y} landed off-screen at {sx:.0},{sy:.0} (viewport {w}x{h})"
+            );
+        }
+    }
+
+    #[test]
+    fn camera_fit_detail_exposes_outlier_spread_and_sub_pixel_edges() {
+        // A compact 100-node mass plus 6 nodes flung 1000 units out: too few
+        // to move the 10th/90th-percentile box, far enough to dominate what
+        // the reader sees.
+        let mut positions: Vec<(f32, f32)> =
+            (0..100).map(|i| ((i % 10) as f32, (i / 10) as f32)).collect();
+        positions.extend([
+            (-1000.0, 0.0),
+            (1000.0, 0.0),
+            (0.0, -1000.0),
+            (0.0, 1000.0),
+            (900.0, 900.0),
+            (-900.0, -900.0),
+        ]);
+        let weights = vec![5.0_f32; positions.len()];
+        let (zoom, _, _) = fit_camera(&positions, &weights, 1600.0, 1000.0);
+        let detail = camera_fit_detail(&positions, zoom, 1600.0, 1000.0, 1.0);
+
+        assert!(detail.contains("full=2000x2000"), "full extent must report the outliers: {detail}");
+        assert!(
+            detail.contains("robust=9x9"),
+            "the robust box must stay on the mass, not the outliers: {detail}"
+        );
+        assert!(
+            detail.contains("spread=222.22x"),
+            "spread is what separates a scattered layout from a compact one: {detail}"
+        );
+
+        // The discriminating half of that claim: a layout with NO outliers
+        // must report a spread near 1, or the number says "scattered" about
+        // everything and reports nothing.
+        let compact: Vec<(f32, f32)> =
+            (0..100).map(|i| ((i % 10) as f32, (i / 10) as f32)).collect();
+        let compact_detail = camera_fit_detail(&compact, 1.0, 1600.0, 1000.0, 1.0);
+        assert!(
+            compact_detail.contains("spread=1.29x"),
+            "a compact layout must not read as scattered: {compact_detail}"
+        );
+
+        // Same layout at a zoom that would starve the edges: 0.02 is
+        // `fit_camera`'s floor, where the world width is 1.1 * 0.02 px. The
+        // trail must report the pixel actually drawn AND say the floor is
+        // what is holding it there -- reporting only the world width would
+        // describe ink the renderer no longer puts down.
+        let starved = camera_fit_detail(&positions, 0.02, 1600.0, 1000.0, 1.0);
+        assert!(
+            starved.contains("edge_px=1.000 floored") && starved.contains("(world=0.022)"),
+            "a floored edge must report both the drawn width and the regime: {starved}"
+        );
+
+        // Zoomed in, the floor is inert and the two agree.
+        let close = camera_fit_detail(&positions, 4.0, 1600.0, 1000.0, 1.0);
+        assert!(
+            close.contains("edge_px=4.400 (world=4.400)") && !close.contains("floored"),
+            "an unfloored edge must not claim a regime it is not in: {close}"
+        );
+    }
+
     #[test]
     fn fit_camera_is_bounded_and_handles_empty_input() {
         // Uniform weights here: this test is about the zoom/pan MECHANICS
@@ -1237,8 +1784,13 @@ mod tests {
         let (cx, cy) = centroid(&positions);
         let screen_x = cx * zoom + pan_x;
         let screen_y = cy * zoom + pan_y;
-        assert!((screen_x - 800.0).abs() < 1.0, "content centre x at {screen_x}, want 800");
-        assert!((screen_y - 500.0).abs() < 1.0, "content centre y at {screen_y}, want 500");
+        // Within half a node's spacing of the viewport centre. The reference
+        // point is the BOX centre now rather than the centroid (see
+        // `fit_camera`); on a block with a ragged last row the two differ by
+        // about a pixel, and the fact under test — content is centred, not the
+        // origin — is satisfied by either.
+        assert!((screen_x - 800.0).abs() < 3.0, "content centre x at {screen_x}, want ~800");
+        assert!((screen_y - 500.0).abs() < 3.0, "content centre y at {screen_y}, want ~500");
     }
 
     #[test]
@@ -1293,27 +1845,39 @@ mod tests {
     /// `robust_bounds`' doc) sit alongside a tight, ≥1000-node cluster.
     /// Neither the zoom nor the pan may be dictated by the outliers — both
     /// must still frame the cluster.
+    /// REVERSED 2026-08-13, and deliberately so. This test used to assert the
+    /// opposite — that a handful of far outliers must NOT drag the zoom out,
+    /// because a percentile-trimmed box keeps the dense mass legible. The
+    /// maintainer's instruction supersedes it: "it should start zoomed out to
+    /// see the whole graph."
+    ///
+    /// The tradeoff is real and is accepted, not hidden: a layout with a few
+    /// nodes flung far away now opens zoomed far out, where the old behaviour
+    /// would have framed the mass and quietly left those nodes off-screen. On
+    /// Architext's own graph the full extent is 1.44x the trimmed box, so the
+    /// cost is 1.44x of zoom; the benefit is that "the overview" means all of
+    /// it. If a real graph ever does open uselessly small, the fix is to
+    /// surface the outliers (a "N nodes far from the rest" affordance), NOT to
+    /// go back to silently cropping them.
     #[test]
-    fn fit_camera_outliers_dont_dictate_the_framing() {
+    fn far_outliers_are_framed_rather_than_silently_cropped() {
         let mut positions: Vec<(f32, f32)> =
             (0..1000).map(|i| ((i % 40) as f32 - 20.0, (i / 40) as f32 - 12.0)).collect();
-        // <1% of the node count — enough to previously wreck the fit, not
-        // enough to survive the 90th-percentile trim.
         for k in 0..5 {
             positions.push((5000.0 + k as f32, -5000.0 - k as f32));
         }
-        let weights = vec![1.0; positions.len()]; // uniform: not a weighting test
-        let (zoom, pan_x, pan_y) = fit_camera(&positions, &weights, 1600.0, 1000.0);
-        // The cluster spans roughly 40x24 units, which fits well past the
-        // 3.0 zoom ceiling — so a trimmed box should clamp at the max. If
-        // the outliers dictated the box instead, zoom would collapse to
-        // ~0.16 (fitting a ~10,000-unit span) — nowhere near the clamp.
-        assert_eq!(zoom, 3.0, "outliers must not crush the zoom below the clamp max, got {zoom}");
-        let (cx, cy) = centroid(&positions);
-        let screen_x = cx * zoom + pan_x;
-        let screen_y = cy * zoom + pan_y;
-        assert!((screen_x - 800.0).abs() < 1.0, "cluster centre x at {screen_x}, want 800");
-        assert!((screen_y - 500.0).abs() < 1.0, "cluster centre y at {screen_y}, want 500");
+        let weights = vec![1.0; positions.len()];
+        let (w, h) = (1600.0_f32, 1000.0_f32);
+        let (zoom, pan_x, pan_y) = fit_camera(&positions, &weights, w, h);
+
+        assert!(zoom < 3.0, "the outliers must widen the framing, got the clamp max {zoom}");
+        for (i, &(x, y)) in positions.iter().enumerate() {
+            let (sx, sy) = (x * zoom + pan_x, y * zoom + pan_y);
+            assert!(
+                sx >= 0.0 && sx <= w && sy >= 0.0 && sy <= h,
+                "node {i} at {x},{y} was cropped out of the opening frame"
+            );
+        }
     }
 
     /// A dense hub cluster (850 nodes, tightly packed near the origin) plus
@@ -1345,50 +1909,34 @@ mod tests {
     /// median x/y) is not — it stays on the hub, which is the visual mass
     /// the user is actually looking at. Expresses the INTENT (the dense
     /// mass is centred), not just a magic screen coordinate.
+    /// ALSO REVERSED 2026-08-13. This asserted that the density centre (median)
+    /// beats the box centre on a hub-and-ring, keeping the visual mass centred
+    /// while the one-sided ring pulled the box. That is the right target when
+    /// framing a REGION, and the wrong one when the requirement is that
+    /// nothing falls off the edge: centring on the mass necessarily pushes the
+    /// far side of the ring out of view. The hard case is kept — hub-and-ring
+    /// is exactly where a fit goes wrong — but what it now asserts is the
+    /// current contract.
     #[test]
-    fn fit_camera_density_centring_beats_box_centring_on_hub_and_ring() {
+    fn a_hub_and_ring_graph_fits_entirely_on_screen() {
         let positions = hub_and_ring_positions();
-        // Uniform weights: this test is about the median beating the box
-        // on NODE COUNT alone, the property that motivated `density_centre`
-        // in the first place — unrelated to the degree-weighting this
-        // change adds on top. With equal weights `weighted_centre` and
-        // `density_centre` coincide exactly (see the invariant test), so
-        // this keeps asserting the same fact it always did.
         let weights = vec![1.0; positions.len()];
         let (w, h) = (1600.0_f32, 1000.0_f32);
         let (zoom, pan_x, pan_y) = fit_camera(&positions, &weights, w, h);
-
-        let (mx, my) = density_centre(&positions);
-        let screen_mx = mx * zoom + pan_x;
-        let screen_my = my * zoom + pan_y;
-        assert!(
-            (screen_mx - w / 2.0).abs() < 2.0,
-            "density centre x at {screen_mx}, want ~{}",
-            w / 2.0
-        );
-        assert!(
-            (screen_my - h / 2.0).abs() < 2.0,
-            "density centre y at {screen_my}, want ~{}",
-            h / 2.0
-        );
-
-        // The box centre must still be measurably off-centre on THIS
-        // fixture — proving the two statistics genuinely diverge here, not
-        // that the fixture happens to make them coincide.
-        let (bx, _by) = centroid(&positions);
-        let screen_bx = bx * zoom + pan_x;
-        let box_err = (screen_bx - w / 2.0).abs();
-        assert!(
-            box_err > 50.0,
-            "box centre should be measurably dragged off-centre by the ring, got err {box_err}"
-        );
+        for (i, &(x, y)) in positions.iter().enumerate() {
+            let (sx, sy) = (x * zoom + pan_x, y * zoom + pan_y);
+            assert!(
+                sx >= 0.0 && sx <= w && sy >= 0.0 && sy <= h,
+                "node {i} of the hub-and-ring landed off-screen at {sx:.0},{sy:.0}"
+            );
+        }
     }
 
-    /// The zoom bound (10th/90th-percentile box) must be untouched by the
-    /// pan-target change: every ring node — the outliers the box's extent
-    /// was sized to admit — must still land inside the viewport once
-    /// panned to the density centre, proving the centring fix did not
-    /// shrink the frame to compensate.
+    /// Every ring node — the outliers a percentile box was sized to admit —
+    /// must land inside the viewport. Unchanged in intent by the 2026-08-13
+    /// full-extent fit; it is now the weaker of the two statements, since
+    /// `a_hub_and_ring_graph_fits_entirely_on_screen` asserts it for ALL
+    /// nodes, but it is kept because it names the ring specifically.
     #[test]
     fn fit_camera_outliers_still_land_in_viewport_after_density_centring() {
         let positions = hub_and_ring_positions();
@@ -1540,17 +2088,12 @@ mod tests {
         assert_eq!(vs.anim_current_depth, 0);
     }
 
-    #[test]
-    fn should_autoplay_arms_only_the_function_tier() {
-        // Maintainer spec, shipped-but-unverified until now: entering the
-        // function tier auto-plays the roots animation; modules stay static
-        // (small and legible without a wavefront). `code_graph_view.rs`
-        // calls this exact predicate at the layout-settle site instead of
-        // inlining the tier comparison, so the trigger condition is
-        // unit-testable without a browser.
-        assert!(should_autoplay(Tier::Functions));
-        assert!(!should_autoplay(Tier::Modules));
-    }
+    // `should_autoplay_arms_only_the_function_tier` lived here. Deleted with
+    // the predicate it covered (see the note where it was defined). NOT
+    // replaced with a `ViewState::new` "starts at rest" assertion: that would
+    // pass whether or not the view re-armed auto-play at its own call site,
+    // so it could not fail for the change it claims to guard. Arrival-at-rest
+    // is verified in the live UI instead.
 
     #[test]
     fn advance_hop_reaches_a_hop_boundary_in_the_expected_frame_count() {
@@ -1725,6 +2268,7 @@ mod tests {
         FilterState {
             show_prod_reachable: true,
             show_dead: true,
+            show_public_unreferenced: true,
             show_test_only: true,
             show_generated: true,
             show_static: true,
@@ -1758,12 +2302,18 @@ mod tests {
         for &(a, b, _) in &c.edges {
             assert!(c.visible[a] && c.visible[b], "edge endpoint was culled but the edge survived");
         }
+        // Both gates, not just the endpoints: an edge survives when its two
+        // endpoints survive AND the filter shows its kind. Written against
+        // endpoints alone this passed only because `show_dynamic` used to
+        // default on — the default now draws resolved calls only.
+        let filter = FilterState::default();
         let expected_edges = g
             .directed_edges
             .iter()
-            .filter(|&&(a, b, _)| c.visible[a] && c.visible[b])
+            .filter(|&&(a, b, dynamic)| c.visible[a] && c.visible[b] && filter.edge_visible(dynamic))
             .count();
-        assert_eq!(c.edges.len(), expected_edges, "cull drops exactly the endpoint-culled edges");
+        assert_eq!(c.edges.len(), expected_edges, "cull drops exactly the endpoint- and kind-culled edges");
+        assert!(expected_edges > 0, "premise: the default filter still leaves edges to draw");
     }
 
     #[test]
@@ -2197,5 +2747,95 @@ mod tests {
         // not sail far past it — that is what `RADIUS_PX_PER_DOUBLING` buys.
         assert_eq!(radius_for(888), RADIUS_MAX);
         assert!(radius_for(444) < RADIUS_MAX, "the ceiling should be reached at the tail, not before it");
+    }
+}
+
+#[cfg(test)]
+mod cluster_tests {
+    use super::*;
+
+    /// Load Architext's own code graph, which is the artifact the viewer shows.
+    fn real_graph() -> Option<CodeGraph> {
+        let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../docs/architext/data/code-graph.json");
+        let text = std::fs::read_to_string(path).ok()?;
+        serde_json::from_str(&text).ok()
+    }
+
+    #[test]
+    fn measure_cluster_separation() {
+        let Some(cg) = real_graph() else { return };
+        let graph = build_graph(&cg, Tier::Functions);
+        let (ids, count) = cluster_ids(&cg, Tier::Functions);
+        for pull in [0.05_f64, 0.12, 0.25, 0.5, 1.0] {
+            let cfg = ForceConfig { cluster_pull: pull, ..ForceConfig::default() };
+            let anchors = cluster_anchors(&ids, count, &graph.layout_edges, &cfg);
+            let r = crate::force_layout::simulate_clustered(
+                graph.node_count(), &graph.layout_edges, LAYOUT_SEED, &cfg, &anchors);
+            let p = &r.positions;
+            // mean within-cluster radius vs overall extent
+            let mut sum_c = vec![(0.0_f64, 0.0_f64); count];
+            let mut n_c = vec![0usize; count];
+            for (i, &(x, y)) in p.iter().enumerate() {
+                sum_c[ids[i]].0 += x; sum_c[ids[i]].1 += y; n_c[ids[i]] += 1;
+            }
+            let cen: Vec<(f64,f64)> = sum_c.iter().zip(&n_c)
+                .map(|(&(sx,sy), &n)| if n>0 {(sx/n as f64, sy/n as f64)} else {(0.0,0.0)}).collect();
+            let within: f64 = p.iter().enumerate()
+                .map(|(i,&(x,y))| {let c=cen[ids[i]]; ((x-c.0).powi(2)+(y-c.1).powi(2)).sqrt()})
+                .sum::<f64>() / p.len() as f64;
+            let ext = p.iter().map(|&(x,y)| x.abs().max(y.abs())).fold(0.0_f64, f64::max);
+            let lobe_area: f64 = (0..count)
+                .map(|c| {
+                    let n = n_c[c] as f64;
+                    std::f64::consts::PI * (LOBE_RADIUS_K * n.sqrt()).powi(2)
+                })
+                .sum();
+            let field = (2.0 * ext).powi(2);
+            println!(
+                "PULL {pull}: within {within:.0}  extent {ext:.0}  ratio {:.3}  packing {:.3}",
+                within / ext.max(1.0),
+                lobe_area / field.max(1.0)
+            );
+        }
+    }
+
+    #[test]
+    fn clustering_actually_partitions_the_real_graph() {
+        // Guards the thing three rebuilds failed to change on screen: if
+        // cluster_ids returns one cluster (or one per node) the anchors are
+        // useless and the layout is the old sphere, with nothing in the code
+        // to say so.
+        let Some(cg) = real_graph() else {
+            eprintln!("no code-graph.json checked in; skipping");
+            return;
+        };
+        for tier in [Tier::Modules, Tier::Functions] {
+            let (ids, count) = cluster_ids(&cg, tier);
+            assert!(!ids.is_empty(), "{tier:?}: no cluster ids");
+            assert!(count > 1, "{tier:?}: only {count} cluster — nothing to separate");
+            assert!(
+                count < ids.len() / 2,
+                "{tier:?}: {count} clusters over {} nodes is barely a partition",
+                ids.len()
+            );
+            let anchors = cluster_anchors(
+                &ids,
+                count,
+                &build_graph(&cg, tier).layout_edges,
+                &ForceConfig { cluster_pull: CLUSTER_PULL, ..ForceConfig::default() },
+            );
+            assert_eq!(anchors.len(), ids.len(), "{tier:?}: one anchor per node");
+            let distinct: std::collections::BTreeSet<(i64, i64)> = anchors
+                .iter()
+                .map(|&(x, y)| ((x * 10.0) as i64, (y * 10.0) as i64))
+                .collect();
+            assert!(
+                distinct.len() > 1,
+                "{tier:?}: every anchor is the same point, so nothing is pulled apart"
+            );
+            println!("CLUSTERS {tier:?}: {count} clusters, {} nodes, {} distinct anchors",
+                ids.len(), distinct.len());
+        }
     }
 }

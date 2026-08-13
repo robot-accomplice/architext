@@ -88,5 +88,20 @@ fn asset_response(path: &FsPath, body: Vec<u8>) -> Response {
     response
         .headers_mut()
         .insert("content-type", HeaderValue::from_static(content_type));
+    // Never let a browser reuse a viewer asset across a rebuild.
+    //
+    // Trunk content-hashes the main bundle, so its URL changes and a reload
+    // picks it up. It does NOT hash the layout worker: `layout_worker.js` and
+    // `layout_worker_bg.wasm` keep the same URL forever, and with no
+    // cache-control the browser applied heuristic caching and kept running the
+    // OLD worker. A layout change shipped three rebuilds running while the
+    // screen never changed, and nothing in the code could explain it -- the
+    // new code was correct and simply never fetched.
+    //
+    // This is a localhost viewer, so revalidating every asset costs nothing
+    // next to a change that silently does not ship.
+    response
+        .headers_mut()
+        .insert("cache-control", HeaderValue::from_static("no-store"));
     response
 }

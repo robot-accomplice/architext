@@ -17,7 +17,9 @@
     "glossary": "glossary.json",
     "rules": "rules.json",
     "roadmap": "roadmap.json",
-    "releases": "releases/index.json"
+    "releases": "releases/index.json",
+    "entities": "entities.json",
+    "codeGraph": "code-graph.json"
   },
   "notes": [
     "This self-hosted model describes Architext itself after the 1.4 Rules and Release Truth work.",

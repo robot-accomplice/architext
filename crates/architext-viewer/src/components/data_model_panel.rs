@@ -8,12 +8,13 @@ use leptos::*;
 
 use architext_routing::model::Point;
 use architext_routing::plan_er::{
-    plan_er, ErBox, ErEdge, ErFoot, ErPlan, BOX_PAD_X, BOX_PAD_Y, CHAR_W, HEADER_H, ROW_H,
-    ROW_TEXT_X,
+    plan_er, route_edges, ErBox, ErEdge, ErFoot, ErInput, BOX_PAD_X, BOX_PAD_Y, CHAR_W, HEADER_H,
+    ROW_H, ROW_TEXT_X,
 };
 
 use crate::data_model_view_model::{
-    fk_annotation, fk_tooltip, key_glyph, to_er_input, Projection,
+    cardinality_modifier, fk_annotation, fk_tooltip, key_glyph, to_er_input, Projection,
+    CARDINALITIES,
 };
 use crate::state::use_app_state;
 
@@ -21,6 +22,16 @@ use crate::state::use_app_state;
 const FOOT_LEN: f64 = 9.0;
 /// Half-height of the crow's-foot spread.
 const FOOT_SPREAD: f64 = 5.0;
+/// Zoom step per button press, and the range the view can be taken to.
+const ZOOM_STEP: f64 = 1.25;
+const ZOOM_MIN: f64 = 0.25;
+const ZOOM_MAX: f64 = 3.0;
+
+/// Radius of the little bridge drawn where one line crosses another.
+const HOP_R: f64 = 5.0;
+/// Padding inside a relationship label's pill.
+const PILL_PAD_X: f64 = 6.0;
+const PILL_H: f64 = 15.0;
 
 #[component]
 pub fn DataModelPanel() -> impl IntoView {
@@ -57,6 +68,21 @@ pub fn DataModelPanel() -> impl IntoView {
                         }
                     })
                     .collect_view()}
+                <div class="data-model-panel__legend" aria-label="Cardinality key">
+                    {CARDINALITIES
+                        .iter()
+                        .map(|(id, short)| {
+                            view! {
+                                <span class=format!(
+                                    "data-model-panel__legend-item er-edge__label-group--{id}"
+                                )>
+                                    <span class="data-model-panel__legend-swatch"></span>
+                                    {*short}
+                                </span>
+                            }
+                        })
+                        .collect_view()}
+                </div>
             </div>
 
             {move || {
@@ -75,8 +101,9 @@ pub fn DataModelPanel() -> impl IntoView {
                         view! { <DataModelEmptyState/> }.into_view()
                     }
                     Some(d) => {
-                        let plan = plan_er(&to_er_input(&d));
-                        view! { <ErDiagram plan=plan/> }.into_view()
+                        let input = to_er_input(&d);
+                        let plan = plan_er(&input);
+                        view! { <ErDiagram plan=plan input=input/> }.into_view()
                     }
                 }
             }}
@@ -142,54 +169,189 @@ r#"{
 }
 
 #[component]
-fn ErDiagram(plan: ErPlan) -> impl IntoView {
-    let view_box = format!("0 0 {} {}", plan.canvas_width, plan.canvas_height);
-    let edges: Vec<ErEdge> = plan.edges.clone();
-    let boxes: Vec<ErBox> = plan.boxes.clone();
+fn ErDiagram(plan: architext_routing::plan_er::ErPlan, input: ErInput) -> impl IntoView {
+    // Boxes and edges are STATE, not fixed props, because entities can be
+    // dragged. Edges are rebuilt through `route_edges` on every move rather
+    // than nudged, so a dragged box re-picks which face each line leaves from,
+    // redistributes the ports on it, and recomputes hops -- the same code the
+    // initial layout used, so a dragged diagram cannot drift from a planned one.
+    let (boxes, set_boxes) = create_signal(plan.boxes.clone());
+    let (edges, set_edges) = create_signal(plan.edges.clone());
+    // (index, pointer-to-box offset)
+    let drag = store_value(None::<(usize, f64, f64)>);
+    let svg_ref = create_node_ref::<leptos::svg::Svg>();
+    let input = store_value(input);
+    // The ER surface is not one of the shared pan/zoom diagram surfaces, so it
+    // carries its own. Scaling the svg's width/height while leaving the viewBox
+    // alone zooms the VECTOR -- text stays sharp at any level -- and the
+    // scroll container keeps working, which is what makes a diagram larger than
+    // the panel usable at all.
+    let (zoom, set_zoom) = create_signal(1.0_f64);
+
+    let canvas_w = plan.canvas_width;
+    let canvas_h = plan.canvas_height;
+    let view_box = format!("0 0 {canvas_w} {canvas_h}");
+
+    // Pointer coordinates arrive in SCALED screen pixels while boxes live in
+    // unscaled diagram units, so the zoom has to be divided back out or a drag
+    // runs away from the cursor the moment the view is not at 1:1.
+    let pointer_pos = move |ev: &web_sys::PointerEvent| -> Option<(f64, f64)> {
+        let el = svg_ref.get()?;
+        let rect = el.get_bounding_client_rect();
+        let z = zoom.get_untracked().max(0.01);
+        Some((
+            (ev.client_x() as f64 - rect.left()) / z,
+            (ev.client_y() as f64 - rect.top()) / z,
+        ))
+    };
+
+    let on_move = move |ev: web_sys::PointerEvent| {
+        let Some((idx, ox, oy)) = drag.get_value() else { return };
+        let Some((x, y)) = pointer_pos(&ev) else { return };
+        set_boxes.update(|bs| {
+            if let Some(b) = bs.get_mut(idx) {
+                // Clamped to the canvas so a box cannot be dragged out of the
+                // scrollable area and become unreachable.
+                b.x = (x - ox).clamp(0.0, (canvas_w - b.width).max(0.0));
+                b.y = (y - oy).clamp(0.0, (canvas_h - b.height).max(0.0));
+            }
+        });
+        set_edges.set(route_edges(&boxes.get_untracked(), &input.get_value()));
+    };
+    let on_up = move |_ev: web_sys::PointerEvent| drag.set_value(None);
+
+    let fit = move || {
+        if let Some(el) = svg_ref.get() {
+            if let Some(parent) = el.parent_element() {
+                let r = parent.get_bounding_client_rect();
+                let by_w = (r.width() - 24.0) / canvas_w;
+                let by_h = (r.height() - 24.0) / canvas_h;
+                set_zoom.set(by_w.min(by_h).clamp(ZOOM_MIN, ZOOM_MAX));
+            }
+        }
+    };
 
     view! {
         <div class="data-model-panel__canvas">
+            <div class="canvas-panel__controls data-model-panel__zoom">
+                <button
+                    title="Zoom out"
+                    on:click=move |_| set_zoom.update(|z| *z = (*z / ZOOM_STEP).max(ZOOM_MIN))
+                >
+                    "−"
+                </button>
+                <button title="Fit to view" on:click=move |_| fit()>"⤢"</button>
+                <button
+                    title="Zoom in"
+                    on:click=move |_| set_zoom.update(|z| *z = (*z * ZOOM_STEP).min(ZOOM_MAX))
+                >
+                    "+"
+                </button>
+            </div>
             <svg
+                node_ref=svg_ref
                 class="er-diagram"
+                class:is-dragging=move || drag.with_value(|d| d.is_some())
                 viewBox=view_box
-                width=plan.canvas_width
-                height=plan.canvas_height
+                width=move || canvas_w * zoom.get()
+                height=move || canvas_h * zoom.get()
                 xmlns="http://www.w3.org/2000/svg"
+                on:pointermove=on_move
+                on:pointerup=on_up
+                on:pointerleave=on_up
             >
                 <g class="er-diagram__edges">
-                    {edges
-                        .into_iter()
-                        .map(|e| {
-                            let d = path_d(&e.points);
-                            let feet = foot_paths(&e);
-                            let label = e.label.clone();
-                            view! {
-                                <g class="er-edge">
-                                    <path class="er-edge__line" d=d/>
-                                    {feet
-                                        .into_iter()
-                                        .map(|fd| view! { <path class="er-edge__foot" d=fd/> })
-                                        .collect_view()}
-                                    {label
-                                        .map(|text| {
-                                            view! {
-                                                <text
-                                                    class="er-edge__label"
-                                                    x=e.label_x
-                                                    y=e.label_y
-                                                    text-anchor="middle"
-                                                >
-                                                    {text}
-                                                </text>
-                                            }
-                                        })}
-                                </g>
-                            }
-                        })
-                        .collect_view()}
+                    {move || {
+                        edges
+                            .get()
+                            .into_iter()
+                            .map(|e| {
+                                let d = path_with_hops(&e);
+                                let feet = foot_paths(&e);
+                                let _ = &e.label;
+                                let hue = cardinality_modifier(&e.cardinality)
+                                    .map(|m| format!("er-edge--{m}"))
+                                    .unwrap_or_default();
+                                view! {
+                                    <g class=format!("er-edge {hue}")>
+                                        <path class="er-edge__line" d=d/>
+                                        {feet
+                                            .into_iter()
+                                            .map(|fd| view! { <path class="er-edge__foot" d=fd/> })
+                                            .collect_view()}
+                                    </g>
+                                }
+                            })
+                            .collect_view()
+                    }}
                 </g>
                 <g class="er-diagram__boxes">
-                    {boxes.into_iter().map(|b| view! { <EntityBox entity=b/> }).collect_view()}
+                    {move || {
+                        boxes
+                            .get()
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, b)| {
+                                let on_down = move |ev: web_sys::PointerEvent| {
+                                    if let Some(el) = svg_ref.get() {
+                                        let rect = el.get_bounding_client_rect();
+                                        let (x, y) = (
+                                            ev.client_x() as f64 - rect.left(),
+                                            ev.client_y() as f64 - rect.top(),
+                                        );
+                                        let z = zoom.get_untracked().max(0.01);
+                                        let (x, y) = (x / z, y / z);
+                                        let b = &boxes.get_untracked()[i];
+                                        drag.set_value(Some((i, x - b.x, y - b.y)));
+                                    }
+                                    ev.prevent_default();
+                                };
+                                view! { <EntityBox entity=b on_pointer_down=on_down/> }
+                            })
+                            .collect_view()
+                    }}
+                </g>
+                // Labels are painted LAST, in their own layer.
+                // Inside the edge group they were drawn before the boxes, so
+                // any box overlapping a label's midpoint covered it -- on
+                // Architext's own model that hid "depends on", "participates
+                // in" and "returns to" behind entities. A label is never worth
+                // less than the box it lands on.
+                <g class="er-diagram__labels">
+                    {move || {
+                        edges
+                            .get()
+                            .into_iter()
+                            .filter_map(|e| {
+                                let text = e.label.clone()?;
+                                let (lx, ly) = (e.label_x, e.label_y);
+                                let w = text.chars().count() as f64 * CHAR_W + PILL_PAD_X * 2.0;
+                                let hue = cardinality_modifier(&e.cardinality)
+                                    .map(|m| format!("er-edge__label-group--{m}"))
+                                    .unwrap_or_default();
+                                Some(view! {
+                                    <g class=format!("er-edge__label-group {hue}")>
+                                        <rect
+                                            class="er-edge__label-pill"
+                                            x=lx - w / 2.0
+                                            y=ly - PILL_H / 2.0
+                                            width=w
+                                            height=PILL_H
+                                            rx=PILL_H / 2.0
+                                        />
+                                        <text
+                                            class="er-edge__label"
+                                            x=lx
+                                            y=ly + 3.5
+                                            text-anchor="middle"
+                                        >
+                                            {text}
+                                        </text>
+                                    </g>
+                                })
+                            })
+                            .collect_view()
+                    }}
                 </g>
             </svg>
         </div>
@@ -197,13 +359,16 @@ fn ErDiagram(plan: ErPlan) -> impl IntoView {
 }
 
 #[component]
-fn EntityBox(entity: ErBox) -> impl IntoView {
+fn EntityBox(
+    entity: ErBox,
+    #[prop(into)] on_pointer_down: Callback<web_sys::PointerEvent>,
+) -> impl IntoView {
     let rows_top = entity.y + HEADER_H + BOX_PAD_Y;
     let x_text = entity.x + 10.0;
     let header_baseline = entity.y + HEADER_H - 8.0;
 
     view! {
-        <g class="er-box">
+        <g class="er-box" on:pointerdown=move |ev| on_pointer_down.call(ev)>
             <rect
                 class="er-box__frame"
                 x=entity.x
@@ -276,7 +441,60 @@ fn truncate_to_box(text: &str, box_width: f64) -> String {
     format!("{kept}\u{2026}")
 }
 
-/// Orthogonal polyline as an SVG path.
+/// The edge as an SVG path, bridging over every line it crosses.
+///
+/// Two lines meeting at a point are ambiguous -- a reader cannot tell a
+/// crossing from a join. A small arc at each crossing says "over", which is the
+/// convention every schematic uses and costs nothing to draw.
+fn path_with_hops(edge: &ErEdge) -> String {
+    if edge.hops.is_empty() || edge.points.len() < 2 {
+        return path_d(&edge.points);
+    }
+    // Walked LEG BY LEG. Routes are orthogonal polylines, so collapsing them to
+    // first-point→last-point (as this did) replaces the whole route with a
+    // diagonal — through exactly the boxes the bends were bought to avoid — and
+    // puts every arc on a line the reader is not looking at. Each hop is placed
+    // on the leg it actually lies on, oriented along THAT leg.
+    let mut d = format!("M{} {}", edge.points[0].x, edge.points[0].y);
+    for w in edge.points.windows(2) {
+        let (a, b) = (&w[0], &w[1]);
+        let (dx, dy) = (b.x - a.x, b.y - a.y);
+        let len = (dx * dx + dy * dy).sqrt();
+        if len < 1e-9 {
+            continue;
+        }
+        let (ux, uy) = (dx / len, dy / len);
+        let mut on_leg: Vec<(f64, &Point)> = edge
+            .hops
+            .iter()
+            .filter_map(|h| {
+                // Distance along the leg, and distance off it. A hop belongs to
+                // this leg only if it is both within the span and ON the line —
+                // an orthogonal route doubling back would otherwise claim a hop
+                // that belongs to its other leg.
+                let along = (h.x - a.x) * ux + (h.y - a.y) * uy;
+                if along < 0.0 || along > len {
+                    return None;
+                }
+                let (px, py) = (a.x + ux * along, a.y + uy * along);
+                let off = ((h.x - px).powi(2) + (h.y - py).powi(2)).sqrt();
+                (off < 1e-6).then_some((along, h))
+            })
+            .collect();
+        on_leg.sort_by(|x, y| x.0.partial_cmp(&y.0).unwrap_or(std::cmp::Ordering::Equal));
+
+        for (_, h) in on_leg {
+            let (bx, by) = (h.x - ux * HOP_R, h.y - uy * HOP_R);
+            let (ax, ay) = (h.x + ux * HOP_R, h.y + uy * HOP_R);
+            // Sweep 1 keeps every bridge bowing the same way along the line.
+            d.push_str(&format!(" L{bx} {by} A{HOP_R} {HOP_R} 0 0 1 {ax} {ay}"));
+        }
+        d.push_str(&format!(" L{} {}", b.x, b.y));
+    }
+    d
+}
+
+/// Polyline as an SVG path.
 fn path_d(points: &[Point]) -> String {
     let mut d = String::new();
     for (i, p) in points.iter().enumerate() {
@@ -396,6 +614,67 @@ mod tests {
         let exact: String = "x".repeat(n);
         let width = ROW_TEXT_X + n as f64 * CHAR_W + BOX_PAD_X;
         assert_eq!(truncate_to_box(&exact, width), exact, "an exactly-fitting row must not clip");
+    }
+
+    #[test]
+    fn a_crossing_draws_a_bridge_and_a_clear_line_does_not() {
+        // WHY: two lines meeting at a point read as a join. The arc is what
+        // says "over". A hop list that stopped reaching the path would silently
+        // return the diagram to ambiguous crossings.
+        let mk = |hops: Vec<Point>| ErEdge {
+            from: "a".into(),
+            to: "b".into(),
+            label: None,
+            cardinality: "one-to-one".into(),
+            points: vec![Point { x: 0.0, y: 0.0 }, Point { x: 100.0, y: 0.0 }],
+            from_foot: ErFoot::One,
+            to_foot: ErFoot::One,
+            label_x: 50.0,
+            label_y: 0.0,
+            hops,
+        };
+        let clear = path_with_hops(&mk(Vec::new()));
+        assert!(!clear.contains('A'), "no crossings, so no arc: {clear}");
+
+        let bridged = path_with_hops(&mk(vec![Point { x: 50.0, y: 0.0 }]));
+        assert!(bridged.contains('A'), "a crossing must draw an arc: {bridged}");
+        // Approaches the crossing, bridges it, then carries on to the end.
+        assert!(bridged.starts_with("M0 0"));
+        assert!(bridged.ends_with("L100 0"));
+    }
+
+    #[test]
+    fn a_hopped_orthogonal_route_keeps_every_one_of_its_bends() {
+        // WHY: this collapsed the polyline to first-point → last-point and drew
+        // a STRAIGHT line with arcs on it, throwing every bend away. It was
+        // invisible only because hops were almost never populated (detection
+        // read one leg per route); the moment detection was fixed, every
+        // hopped route would have rendered as a diagonal through the boxes the
+        // orthogonal routing existed to avoid.
+        let edge = ErEdge {
+            from: "a".into(),
+            to: "b".into(),
+            label: None,
+            cardinality: "one-to-one".into(),
+            // L: right along y=0, then down at x=100.
+            points: vec![
+                Point { x: 0.0, y: 0.0 },
+                Point { x: 100.0, y: 0.0 },
+                Point { x: 100.0, y: 100.0 },
+            ],
+            from_foot: ErFoot::One,
+            to_foot: ErFoot::One,
+            label_x: 0.0,
+            label_y: 0.0,
+            // A crossing on the SECOND leg.
+            hops: vec![Point { x: 100.0, y: 50.0 }],
+        };
+        let d = path_with_hops(&edge);
+        assert!(d.contains('A'), "the crossing must still draw an arc: {d}");
+        assert!(d.contains("L100 0"), "the corner must survive: {d}");
+        assert!(d.ends_with("L100 100"), "and the route must end where it ends: {d}");
+        // The arc belongs on the vertical leg, so it is offset in Y, not X.
+        assert!(d.contains("L100 4") || d.contains("L100 3"), "arc entered along the leg: {d}");
     }
 
     #[test]
