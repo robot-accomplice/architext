@@ -43,7 +43,7 @@ impl LayoutKey {
 
 /// Bumped whenever the layout changes shape. 1 = the original unclustered
 /// force settle; 2 = cluster-anchored lobes.
-pub const LAYOUT_ALGORITHM: u32 = 4;
+pub const LAYOUT_ALGORITHM: u32 = 3;
 
 /// This is a viewer SESSION cache, not a persistent store: it holds at most
 /// `MAX_ENTRIES` settled layouts, enough to cover both tiers (modules +
